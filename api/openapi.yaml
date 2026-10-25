@@ -1,0 +1,50 @@
+openapi: 3.1.0
+info:
+  title: OnlineJudge Bootstrap API
+  version: 0.1.0
+  description: 仅提供 API 进程存活检查；不代表数据库、Worker、沙箱或判题就绪。未定义路径返回 404，已定义路径的不支持方法返回 405，错误体采用 Problem。
+paths:
+  /api/v1/healthz:
+    get:
+      operationId: getProcessHealth
+      responses:
+        '200':
+          description: API 进程可处理请求
+          headers:
+            Cache-Control:
+              schema:
+                const: no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [status, service, scope]
+                properties:
+                  status:
+                    const: ok
+                  service:
+                    const: api
+                  scope:
+                    const: process
+components:
+  responses:
+    MethodNotAllowed:
+      description: 已定义路径的不支持方法返回 405（由路由层返回）
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type:
+          const: about:blank
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string

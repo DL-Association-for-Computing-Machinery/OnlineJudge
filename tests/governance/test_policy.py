@@ -170,6 +170,21 @@ class PolicyTests(unittest.TestCase):
                 self.policy("bootstrap-ci", succeeds=False)
                 path.unlink()
 
+    def test_application_workflow_runs_real_checks(self):
+        # Guard the bootstrap transition: code must not replace the fail-closed
+        # gate with skip-on-missing manifests or a successful placeholder job.
+        workflow = (SOURCE / ".github/workflows/governance.yml").read_text()
+        self.assertNotIn("repo_policy.py bootstrap-ci", workflow)
+        for step in ("name: backend", "name: frontend", "make go-check go-build",
+                     "make web-check", "--frozen-lockfile"):
+            self.assertIn(step, workflow)
+        makefile = (SOURCE / "Makefile").read_text()
+        for command in ("go vet ./...", "go test -race ./...", "./cmd/api",
+                        "./cmd/worker", "web lint", "web typecheck", "web test", "web build"):
+            self.assertIn(command, makefile)
+        self.assertNotIn("--if-present", workflow + makefile)
+        self.assertNotIn("continue-on-error", workflow)
+
     def test_installer_preserves_existing_configuration(self):
         self.install_fixture()
         self.run_git("config", "core.hooksPath", "custom-hooks")
