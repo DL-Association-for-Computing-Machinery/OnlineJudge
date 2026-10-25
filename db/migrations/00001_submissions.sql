@@ -36,6 +36,9 @@ CREATE TABLE judge_tasks (
 
 -- +goose Down
 -- Experimental schema only. Refuse destructive rollback once data is accepted.
+-- The migration advisory lock does not serialize API writes. Wait for them
+-- before taking the emptiness snapshot, and block new writers until commit.
+LOCK TABLE submissions IN ACCESS EXCLUSIVE MODE;
 -- +goose StatementBegin
 DO $$ BEGIN
     IF EXISTS (SELECT 1 FROM submissions) THEN

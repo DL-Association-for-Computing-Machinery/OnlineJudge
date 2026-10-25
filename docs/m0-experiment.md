@@ -42,7 +42,9 @@ make db-test
 
 `go test -race -count=1 -tags=integration ./tests/integration -v` 必须明确提供指向空白临时库的 `OJ_TEST_DATABASE_URL`；缺少配置或 public schema 非空会失败，不静默跳过。套件会注入故障/未来模式版本，不得用于真实数据库。
 
-独立命令已在临时数据库实际执行：`.local/bin/migrate up`、`fixture` 及重复运行；由 `OJ_DATABASE_URL` 注入连接配置，不回显连接串。`down` 仅允许尚无提交的数据模式，已接受数据时数据库事务拒绝回退；真实系统应向前修复，不恢复旧数据库来覆盖新提交。API 模式版本不匹配时拒绝启动实验服务，默认健康服务不自动升级数据库。
+独立命令已在临时数据库实际执行：`.local/bin/migrate up`、`fixture` 及重复运行；由 `OJ_DATABASE_URL` 注入连接配置，不回显连接串。`down` 先在同一迁移事务内对 `submissions` 获取 ACCESS EXCLUSIVE 表锁，再检查是否为空，锁持有到事务结束。这样会等待在途接收事务，并阻止新读写穿过检查与删除之间的窗口；发现已提交记录则拒绝回退。迁移 advisory lock 只协调迁移进程，不能单独保护 API 写入。回退期间实验接收可能等待或超时，应使用原幂等键核验，不能把 503 当作未提交。真实系统应向前修复，不恢复旧数据库来覆盖新提交。API 模式版本不匹配时拒绝启动实验服务，默认健康服务不自动升级数据库。
+
+PR #1 修复只修改尚未发布的两份实验迁移的 Down 保护，不改 Up、表结构或版本号；已有版本 2 实验库无需执行升级，但执行回退前必须重新构建并使用包含修复的 migrate 二进制。旧二进制仍存在竞态；不能只更新源码后继续使用旧程序，也不应通过回退已接收数据库来升级工具。
 
 `make sqlc` 使用 `.local/bin/sqlc` v1.31.1 生成查询。二进制属于开发工具，不进入发布产物或仓库；PostgreSQL integration job 和生成差异检查已在 PR #1 首轮远端 CI 通过，运行与对应提交见[交付日志](delivery-log.md)。
 
@@ -68,6 +70,10 @@ go-judge 使用 `-no-fallback`，实测 cgroup v2 的 CPU/memory/pids 控制器�
 文本比较按 ASCII 的空格、TAB、LF、VT、FF、CR 分词，只折叠 A-Z；非 ASCII 字符按 UTF-8 字节比较，非法参考文本为系统材料错误，非法选手 UTF-8 为不匹配。检查器独立上限 1 MiB、单 token 64 KiB；输出超限与参考超限分别返回错误。执行层 4096 字节输出上限更早生效。浮点、SPJ 不在本次范围。
 
 ## 验证结果
+
+PR #1 回退并发修复（2026-10-25）：新增真实 PostgreSQL 回归先在旧实现失败，两个 Down 均错误放行，版本 1 删除刚提交的源码/任务；修复后 `make db-test` 通过，验证等待在途写入后拒绝回退，模式版本、源码、任务均保留。原有空库回退/重升和双 API 流程通过。回归见 `tests/integration/migrations_test.go`，本机日志见 `.local/pr1-before-db.log`、`.local/pr1-after-db.log`。此前顺序回退测试不代表并发保证。
+
+以下为首次分项实验的历史结果，后续修复与最新检查见[交付日志](delivery-log.md)：
 
 - `make check`：含新增文本检查器的 Go 格式/vet/race/构建、前端 6 项测试及 lint/类型/构建、23 项治理回归通过。
 - `make db-test`：真实 PostgreSQL 14.19，空库/并发/重复迁移、锁等待超时与恢复、空库回退/重升、含数据回退拒绝、同键并发/冲突、事务失败、未知回执、材料异常、所有权/上下文和未来模式拒绝通过。两个真实 API 子进程的 24 个并发请求只创建 1 个提交，停止并重启其中一个后回执可恢复。

@@ -106,6 +106,8 @@ func TestAcceptance(t *testing.T) {
 		must(t, err)
 	})
 
+	t.Run("rollback serializes concurrent acceptance", func(t *testing.T) { testConcurrentRollback(t, pool, provider) })
+
 	store, err := postgres.New(pool, experiment.Version, experiment.Manifest())
 	must(t, err)
 	request := submission.Request{MaterialVersion: experiment.Version, Language: "gnu++17", Source: "int main() { return 0; }\n"}

@@ -29,6 +29,8 @@ CREATE INDEX judge_attempts_expired ON judge_attempts(lease_until) WHERE state='
 CREATE INDEX judge_tasks_queued ON judge_tasks(submission_id) WHERE state='queued';
 
 -- +goose Down
+-- Serialize the guard with acceptance, not just other migration processes.
+LOCK TABLE submissions IN ACCESS EXCLUSIVE MODE;
 -- +goose StatementBegin
 DO $$ BEGIN
     IF EXISTS (SELECT 1 FROM submissions) THEN
