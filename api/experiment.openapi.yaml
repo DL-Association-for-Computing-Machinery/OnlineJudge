@@ -107,7 +107,7 @@ components:
           type: string
           minLength: 1
           maxLength: 65536
-          description: 单文件 UTF-8 源码，实际按 UTF-8 字节数限制 65536，拒绝 NUL；换行和空格原样保存
+          description: 单文件 UTF-8 源码，实际按 UTF-8 字节数限制 65536，拒绝 NUL 和 JSON 中未配对的 UTF-16 代理项；合法代理对、换行和空格原样解码保存，不以替换字符修复非法输入
     Receipt:
       type: object
       additionalProperties: false

@@ -10,7 +10,6 @@ import (
 	"mime"
 	"net/http"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
 	"github.com/gin-gonic/gin"
@@ -59,8 +58,8 @@ func registerExperiment(router *gin.Engine, cfg Experiment) {
 			problem(c, 400, "INVALID_SUBMISSION", "无法读取提交")
 			return
 		}
-		if !utf8.Valid(body) {
-			problem(c, 400, "INVALID_SUBMISSION", "提交必须使用 UTF-8")
+		if !validJSONUnicode(body) {
+			problem(c, 400, "INVALID_SUBMISSION", "提交必须使用有效的 UTF-8 JSON 与 Unicode 转义")
 			return
 		}
 		decoder := json.NewDecoder(bytes.NewReader(body))

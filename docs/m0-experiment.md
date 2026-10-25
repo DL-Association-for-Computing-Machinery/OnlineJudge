@@ -20,7 +20,7 @@ API 的健康检查仍仅代表进程存活；未启用实验时行为保持原�
 
 提交模块拥有 `submissions`、`judge_tasks`、`judge_attempts`、`worker_nodes` 和实验材料注册表。HTTP 只调用提交用例；SQL 由 sqlc 生成到模块内部。题库模块尚未建立，`submission_materials` 仅用于 M0 固定夹具，不是正式题库发布接口。`fixture` 是显式命令，API 启动不会写材料或执行迁移。
 
-提交固定源码、语言、版本与材料清单哈希。JSON 字段顺序不影响幂等摘要，源码空格/换行影响摘要并原样持久化。单文件源码上限 64 KiB；请求 JSON 上限 394240 字节，允许 JSON 字符转义的体积膨胀。空源码、NUL、非法 UTF-8、未知字段与尾随 JSON 被拒绝。
+提交固定源码、语言、版本与材料清单哈希。JSON 字段顺序不影响幂等摘要，源码空格/换行影响摘要并原样持久化。单文件源码上限 64 KiB；请求 JSON 上限 394240 字节，允许 JSON 字符转义的体积膨胀。空源码、NUL、非法 UTF-8、未配对的 JSON UTF-16 代理项、未知字段与尾随 JSON 被拒绝。解码前由标准库检查 JSON 语法，并单独检查代理项配对，避免 `encoding/json` 将非法代理项静默替换为 U+FFFD；合法代理对、字面量反斜杠及用户原本输入的 U+FFFD 仍允许。
 
 任务状态与判定分开：`queued/running/finished/failed`；只有 `finished` 带判定，系统故障或节点失联耗尽重试后为 `failed`、`verdict=null`，不冒充选手 WA/RE。重判代次、恢复代次与尝试编号分开。每个尝试保存节点凭据版本、随机租约标识、截止时间及已接受结果摘要/载荷；旧代次和旧尝试不能覆盖有效结果。同代次已接受的历史重复回报可确认而不覆盖新尝试。重判及灾备恢复管理用例尚未实现，测试直接修改代次只证明更新条件的隔离能力。
 
@@ -71,7 +71,7 @@ go-judge 使用 `-no-fallback`，实测 cgroup v2 的 CPU/memory/pids 控制器�
 
 ## 验证结果
 
-PR #1 回退并发修复（2026-10-25）：新增真实 PostgreSQL 回归先在旧实现失败，两个 Down 均错误放行，版本 1 删除刚提交的源码/任务；修复后 `make db-test` 通过，验证等待在途写入后拒绝回退，模式版本、源码、任务均保留。原有空库回退/重升和双 API 流程通过。回归见 `tests/integration/migrations_test.go`，本机日志见 `.local/pr1-before-db.log`、`.local/pr1-after-db.log`。此前顺序回退测试不代表并发保证。
+PR #1 审查修复（2026-10-25，验证时为基于 `a31e021` 的未提交工作区，后按修复拆分提交）：先运行新增测试，旧版本在两份 Down 的并发接收场景均错误放行，其中版本 1 删除了刚提交的源码/任务；Unicode 测试的 6 个非法代理项场景返回 202。修复后 `TestExperimentUnicodePreservation` 的 14 个边界用例通过，`make db-test` 覆盖两个 Down 等待在途写入后拒绝回退、版本/源码/任务保留，以及原有空库回退/重升和双 API 流程。回归源码为 `internal/httpapi/experiment_test.go`、`tests/integration/migrations_test.go`，日志为 `.local/pr1-before-db.log`、`.local/pr1-after-db.log`。这补充了旧测试未覆盖的并发窗口，不把此前顺序回退测试通过当作完整并发保证。
 
 以下为首次分项实验的历史结果，后续修复与最新检查见[交付日志](delivery-log.md)：
 
