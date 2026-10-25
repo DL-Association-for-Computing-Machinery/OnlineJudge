@@ -1,0 +1,13 @@
+# Local configuration and generated files
+.env
+.env.*
+!.env.example
+*.local
+*.local.*
+.DS_Store
+__pycache__/
+*.pyc
+node_modules/
+dist/
+coverage/
+.local/

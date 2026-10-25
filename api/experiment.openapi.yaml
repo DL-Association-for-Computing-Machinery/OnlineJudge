@@ -1,0 +1,155 @@
+openapi: 3.1.0
+info:
+  title: OnlineJudge M0 Submission Experiment
+  version: 0.2.0
+  description: >-
+    默认关闭、仅本机受控客户端使用。静态实验主体 m0-operator、上下文 m0-training，
+    不是正式账号 API。接收成功不代表执行完成；Worker HTTP/mTLS 与沙箱尚未接入。
+    必须使用原 Idempotency-Key 核验未知回执，不得换键盲目重发。
+servers:
+  - url: http://127.0.0.1:8080
+security:
+  - experimentBearer: []
+paths:
+  /api/v1/experiments/submissions:
+    post:
+      operationId: acceptExperimentSubmission
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmissionInput'
+      responses:
+        '202':
+          description: 提交与任务同事务持久化；Location 指向提交状态
+          headers:
+            Location:
+              schema: {type: string}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Receipt'}
+        '200':
+          description: 同主体、上下文、幂等键和内容的重复请求，返回原提交
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Receipt'}
+        '400': {$ref: '#/components/responses/Invalid'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/BrowserForbidden'}
+        '409':
+          description: IDEMPOTENCY_CONFLICT，同键不同内容
+          content:
+            application/problem+json:
+              schema: {$ref: './openapi.yaml#/components/schemas/Problem'}
+        '413':
+          description: BODY_TOO_LARGE，JSON 请求体超过 394240 字节
+          content:
+            application/problem+json:
+              schema: {$ref: './openapi.yaml#/components/schemas/Problem'}
+        '415':
+          description: UNSUPPORTED_MEDIA_TYPE，需要 application/json
+          content:
+            application/problem+json:
+              schema: {$ref: './openapi.yaml#/components/schemas/Problem'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/v1/experiments/submission-receipt:
+    get:
+      operationId: getExperimentReceipt
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200': {$ref: '#/components/responses/Receipt'}
+        '400': {$ref: '#/components/responses/Invalid'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/BrowserForbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/v1/experiments/submissions/{id}:
+    get:
+      operationId: getExperimentSubmission
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: {type: string}
+      responses:
+        '200': {$ref: '#/components/responses/Receipt'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/BrowserForbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+components:
+  securitySchemes:
+    experimentBearer:
+      type: http
+      scheme: bearer
+      description: 本机 owner-private 文件注入的随机实验凭据，禁止放入浏览器、仓库或日志
+  parameters:
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9_-]{16,128}$'
+  schemas:
+    SubmissionInput:
+      type: object
+      additionalProperties: false
+      required: [material_version, language, source]
+      properties:
+        material_version: {const: m0-sum-v1}
+        language: {const: 'gnu++17'}
+        source:
+          type: string
+          minLength: 1
+          maxLength: 65536
+          description: 单文件 UTF-8 源码，实际按 UTF-8 字节数限制 65536，拒绝 NUL 和 JSON 中未配对的 UTF-16 代理项；合法代理对、换行和空格原样解码保存，不以替换字符修复非法输入
+    Receipt:
+      type: object
+      additionalProperties: false
+      required: [id, material_version, language, created_at, state, verdict]
+      description: 全部响应 Cache-Control 为 no-store，不返回源码、标准答案或租约凭据
+      properties:
+        id: {type: string}
+        material_version: {type: string}
+        language: {type: string}
+        created_at: {type: string, format: date-time}
+        state: {enum: [queued, running, finished, failed]}
+        verdict:
+          enum: [null, AC, WA, CE, RE, TLE, MLE, OLE, SE]
+          description: queued/running/failed 为 null；failed 表示基础设施尝试耗尽，不计作选手错误
+  responses:
+    Receipt:
+      description: 当前主体的已接收提交
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Receipt'}
+    Invalid:
+      description: INVALID_SUBMISSION，输入或幂等键无效
+      content:
+        application/problem+json:
+          schema: {$ref: './openapi.yaml#/components/schemas/Problem'}
+    Unauthorized:
+      description: UNAUTHENTICATED，缺少或无效实验凭据
+      content:
+        application/problem+json:
+          schema: {$ref: './openapi.yaml#/components/schemas/Problem'}
+    BrowserForbidden:
+      description: EXPERIMENT_ONLY，拒绝带 Origin 的浏览器请求
+      content:
+        application/problem+json:
+          schema: {$ref: './openapi.yaml#/components/schemas/Problem'}
+    NotFound:
+      description: NOT_FOUND，该主体及上下文暂未查到已提交记录，不证明其他在途请求最终不会成功
+      content:
+        application/problem+json:
+          schema: {$ref: './openapi.yaml#/components/schemas/Problem'}
+    Unavailable:
+      description: MATERIAL_UNAVAILABLE 或 ACCEPTANCE_UNKNOWN；保留原幂等键查询，503 不证明事务未提交
+      content:
+        application/problem+json:
+          schema: {$ref: './openapi.yaml#/components/schemas/Problem'}
