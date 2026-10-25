@@ -44,7 +44,7 @@ make db-test
 
 独立命令已在临时数据库实际执行：`.local/bin/migrate up`、`fixture` 及重复运行；由 `OJ_DATABASE_URL` 注入连接配置，不回显连接串。`down` 仅允许尚无提交的数据模式，已接受数据时数据库事务拒绝回退；真实系统应向前修复，不恢复旧数据库来覆盖新提交。API 模式版本不匹配时拒绝启动实验服务，默认健康服务不自动升级数据库。
 
-`make sqlc` 使用 `.local/bin/sqlc` v1.31.1 生成查询。二进制属于开发工具，不进入发布产物或仓库；当前 CI 增加 PostgreSQL integration job 和生成差异检查，远端尚未运行。
+`make sqlc` 使用 `.local/bin/sqlc` v1.31.1 生成查询。二进制属于开发工具，不进入发布产物或仓库；PostgreSQL integration job 和生成差异检查已在 PR #1 首轮远端 CI 通过，运行与对应提交见[交付日志](delivery-log.md)。
 
 ## 本机 Linux 沙箱复现
 

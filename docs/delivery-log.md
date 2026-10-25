@@ -7,7 +7,9 @@
 - 已建立 main 并设为默认分支，启用无旁路的 `main-governance` ruleset（25824684）；PR、最新主线、4 项来源限定的 required checks、讨论解决、线性历史、禁止强推/删除。仅 squash，禁止自动合并，合并后删任务分支。仓库 Actions 只读、不能创建/批准 PR、限定 actions 来源并强制完整 SHA。安全扫描、推送保护及 Dependabot 安全更新已回读为 enabled。配置及控制缺口见 [GitHub 治理](github-governance.md)。
 - `make check` 通过：Go 格式/vet/race/构建、前端 lint/类型/6 项测试/构建、治理检查；新增 PR 标题校验后 25 项治理回归通过。`make sqlc` 重新生成且无内容漂移。
 - `make db-test` 通过：真实 PostgreSQL 事务/迁移/租约测试，两个 API 子进程的 24 个并发请求只创建 1 个提交，重启后回执可恢复。首次受限执行因共享内存被拒绝，按工具权限流程重跑通过，未降低测试。专用特权 VM 未重启，沙箱结果引用此前 M0 记录，不能记为本次重跑。
-- 正常 pre-commit/commit-msg hooks 均通过；没有关闭 hooks、强推或合并。远端 PR 与 CI 结果将在实际执行后补录，不以配置成功替代运行通过。
+- 正常 pre-commit/commit-msg/pre-push hooks 均通过；没有关闭 hooks、强推或合并。[PR #1](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/1) 已创建并关联本次任务。
+- 治理提交 `3c1b3c70cbe8e1b483163cc407f75703919104f4` 的[首轮远端 CI](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/actions/runs/40204905120) 四项全部 success。Ubuntu 24.04 runner 执行治理、Go、前端和真实 PostgreSQL/sqlc 检查；后续文档同步提交仍须独立查看对应运行，不能沿用旧 head 的绿灯。
+- 知识事务 `oj-github-governance-20261025` inspect/apply 完成，更新工程流程、推进、M0 历史说明、热点、索引和日志共 6 页；回读哈希全部一致。严格 lint 扫描 32 页、360 链接、0 问题；语义复核保留单人审查和 M0 未完成边界，不把历史沙箱结果当本次重跑。可恢复草稿为忽略的 `.local/github-governance/vault-transaction.json`。
 
 配置前后快照保存在忽略的 `.local/github-governance/`；GitHub 插件的创建分支接口因集成权限返回 403，已使用经核验具备 admin 的 GitHub CLI 账号完成用户授权的初始化。单人维护无独立人工批准、生产 CD 与 M0 整体验收未完成。
 
