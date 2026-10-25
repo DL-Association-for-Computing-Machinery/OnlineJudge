@@ -9,7 +9,7 @@
 | 根规则、开发文档、PR 模板 | 本轮配置 |
 | Git hooks 与治理脚本 | 本地实现；安装与测试结果见交付记录 |
 | GitHub Actions `governance` | 已提供文件；用户已授权推送任务分支，远端执行尚未验证 |
-| Go / 前端测试与构建 | 本地通过、已配置实际 CI 检查；数据库与判题集成尚未接入，任务分支单次推送不在当前 workflow 触发范围内 |
+| Go / 前端测试与构建 | 本地通过、已配置实际 CI 检查；新增真实 PostgreSQL integration job，远端未运行；专用 Linux 沙箱分项本地通过，完整判题尚未贯通 |
 | 分支保护、CODEOWNERS、独立审批 | 未配置；需核验托管平台、账号与权限 |
 | 测试/生产环境、制品仓库、CD | 未配置；不可变离线包/维护窗口/受控回滚已确认，Linux Docker Engine＋Compose 优先验证 |
 
@@ -35,7 +35,7 @@ Go 标准 testing、真实 PostgreSQL/Redis（Testcontainers for Go 优先验证
 
 ### 首次应用代码的基础门禁
 
-已有 `backend` / `frontend` jobs，分别执行 `make go-check go-build`、`make web-check`。本地检查与远端 CI 分别报告；只有 workflow 文件不能证明远端通过。当前没有数据库或比赛功能，不要求未实现功能的验收先通过；每次新功能同时接入对应测试。真实数据库引入时建立 `integration` 检查，不以 mock 代替事务和关键 SQL 验证。
+已有 `backend` / `frontend` jobs，分别执行 `make go-check go-build`、`make web-check`。新增 `integration` job 使用独立 PostgreSQL 14 临时服务，检查 sqlc v1.31.1 生成差异及事务/迁移/租约真实测试；loopback trust 仅限一次性 CI 数据库，不作为部署配置。本地 `make db-test` 额外启动两个真实 API 子进程。专用 VM 的 `sandbox-test` 与普通 PR CI 分离。本地检查与远端 CI 分别报告；本轮没有远端执行，详情见[M0 记录](m0-experiment.md)。
 
 ### 随功能交付建立的验收目录
 

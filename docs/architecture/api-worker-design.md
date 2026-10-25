@@ -1,10 +1,10 @@
 # API、事件与 Worker 协议
 
-日期：2026-10-25。版本：0.2。状态：方案与约定已确认；工程骨架仅实现进程健康检查和基础错误契约，业务接口、数据库模式及 Worker 协议尚未实现验证。关联 [总体架构](system-design.md)、[判题](judging-design.md)、[存储](storage-design.md)。
+日期：2026-10-25。版本：0.3。状态：M0 本机实验提交契约、数据库模式与租约持久化核心已实现并实测；完整认证 Worker HTTP/mTLS、材料传输和产品 API 仍待完成。证据与预算见[M0 记录](../m0-experiment.md)。关联 [总体架构](system-design.md)、[判题](judging-design.md)、[存储](storage-design.md)。
 
 ## 1. 契约与错误
 
-采用 REST＋JSON＋OpenAPI 3.1 契约优先，前端类型优先验证 openapi-typescript；生成类型不代替运行时输入验证。接口按 `/api/v1` 分组，DTO 与数据库模型分离。当前仅 [健康接口契约](../../api/openapi.yaml)已实现，前端对单一响应做显式边界检查；类型生成随业务接口增加接入，其他协议仍待实现。
+采用 REST＋JSON＋OpenAPI 3.1 契约优先，前端类型优先验证 openapi-typescript；生成类型不代替运行时输入验证。接口按 `/api/v1` 分组，DTO 与数据库模型分离。当前 [健康契约](../../api/openapi.yaml)及默认关闭的 [M0 实验契约](../../api/experiment.openapi.yaml)已实现，实验凭据仅供受控本机客户端，前端仍只有健康响应检查；业务前端与生成类型待接入。
 
 - 错误采用 RFC 9457 Problem Details 结构，保留稳定业务错误码、请求编号和适用字段错误；HTTP 状态表达认证、授权、冲突、限额等语义，内部根因只进受控诊断。
 - ID 用字符串，时间以 UTC 传输并在界面按时区展示；列表分页及响应大小有界，增长列表优先游标，榜单分页绑定同一结果版本/快照。

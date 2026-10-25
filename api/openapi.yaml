@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: OnlineJudge Bootstrap API
   version: 0.1.0
-  description: 仅提供 API 进程存活检查；不代表数据库、Worker、沙箱或判题就绪。未定义路径返回 404，已定义路径的不支持方法返回 405，错误体采用 Problem。
+  description: 默认仅提供 API 进程存活检查；不代表数据库、Worker、沙箱或判题就绪。独立的 experiment.openapi.yaml 描述显式启用的本机实验接口。未定义路径返回 404，已定义路径的不支持方法返回 405，错误体采用 Problem。
 paths:
   /api/v1/healthz:
     get:

@@ -9,7 +9,7 @@ import (
 )
 
 // NewHandler builds the bootstrap API. Health reports process liveness only.
-func NewHandler() http.Handler {
+func NewHandler(experiments ...Experiment) http.Handler {
 	router := gin.New()
 	_ = router.SetTrustedProxies(nil)
 	router.HandleMethodNotAllowed = true
@@ -20,6 +20,9 @@ func NewHandler() http.Handler {
 		c.Header("Cache-Control", "no-store")
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "service": "api", "scope": "process"})
 	})
+	if len(experiments) == 1 && experiments[0].Store != nil {
+		registerExperiment(router, experiments[0])
+	}
 	router.NoRoute(func(c *gin.Context) {
 		problem(c, http.StatusNotFound, "NOT_FOUND", "接口不存在")
 	})

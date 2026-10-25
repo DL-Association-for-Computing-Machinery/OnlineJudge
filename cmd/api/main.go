@@ -13,7 +13,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/db"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/httpapi"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
 )
 
 func main() {
@@ -30,8 +33,36 @@ func run(logger *slog.Logger) error {
 		addr = "127.0.0.1:8080"
 	}
 	gin.SetMode(gin.ReleaseMode)
+	handler := httpapi.NewHandler()
+	scope := "bootstrap-only"
+	if tokenFile := os.Getenv("OJ_EXPERIMENT_TOKEN_FILE"); tokenFile != "" {
+		token, err := experiment.LoadToken(addr, tokenFile)
+		if err != nil {
+			return err
+		}
+		startup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		dsn := os.Getenv("OJ_DATABASE_URL")
+		if dsn == "" {
+			return errors.New("OJ_DATABASE_URL is required for the experiment")
+		}
+		pool, err := postgres.Open(startup, dsn)
+		if err != nil {
+			return err
+		}
+		defer pool.Close()
+		if err := db.CheckSchema(startup, pool); err != nil {
+			return err
+		}
+		store, err := postgres.New(pool, experiment.Version, experiment.Manifest())
+		if err != nil {
+			return err
+		}
+		handler = httpapi.NewHandler(httpapi.Experiment{Store: store, Token: token})
+		scope = "m0-acceptance-only"
+	}
 	server := &http.Server{
-		Addr: addr, Handler: httpapi.NewHandler(),
+		Addr: addr, Handler: handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second, WriteTimeout: 15 * time.Second,
 		IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20,
@@ -40,7 +71,7 @@ func run(logger *slog.Logger) error {
 	defer stop()
 	result := make(chan error, 1)
 	go func() { result <- server.ListenAndServe() }()
-	logger.Info("API starting", "address", addr, "scope", "bootstrap-only")
+	logger.Info("API starting", "address", addr, "scope", scope)
 	select {
 	case err := <-result:
 		return err

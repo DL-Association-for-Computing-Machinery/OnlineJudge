@@ -1,14 +1,15 @@
 # OnlineJudge
 
-面向东华理工大学计算机协会的训练与校赛平台。当前已建立可运行的工程骨架：API 进程健康检查、React 预览页和独立 Worker 命令入口；尚未实现登录、数据库、提交或判题业务。
+面向东华理工大学计算机协会的训练与校赛平台。当前进入 M0 技术实验：已有提交持久化、幂等回执和任务租约核心，并在独立本机 Linux 虚拟机验证 GNU++17 沙箱分项。登录、完整 Worker 判题链路及训练产品尚未交付。
 
 ## 当前交付与下一步
 
 - [精简交付基线 v1.0](docs/delivery-plan.md)：技术栈引入时机、训练试用/完整训练范围、分阶段验收和待补条件。
-- 本轮为 0A 工程骨架；下一步是 GNU++17 文本题的真实提交、持久化、隔离执行与故障恢复实验，不能将当前健康接口视为判题就绪。
+- [首期开发计划](docs/phase-1-development-plan.md)：0B → 1A → 1B 的任务依赖、P0—P7 开发包、里程碑与验收证据要求。
+- [M0 实验记录与复现](docs/m0-experiment.md)：数据库、双 API 进程、任务租约及 Linux 沙箱的实际证据与未覆盖项；M0 整体验收尚未通过，健康接口不代表判题就绪。
 - 模块化单体＋独立判题 Worker；不创建空业务层，不把所有模块拆成服务。
 - 既有 Redis 会话路线保留待验证，新增 PostgreSQL 会话对比；未做未经确认的替换。
-- 暂未引入 PostgreSQL、Redis、sqlc、Goose、River、go-judge 或监控备份服务；它们随实际功能和验证目标接入。
+- 已引入 PostgreSQL 实验、sqlc/pgx/Goose；go-judge 仅进入专用 Linux VM 的隔离实验。Redis 会话、River 与监控备份服务尚未接入。
 - 多文件/ZIP 提交、自测与辅助能力不作为训练试用前置；完整语言、比赛及后续需求保留。
 - 0A 已完成本地验证，按治理、骨架与 CI、项目文档分组提交；远端同步状态以 Git 引用为准。未部署，远端 CI 和分支保护尚未验证。
 
@@ -16,7 +17,7 @@
 
 Go 工具链锁定为 `go.mod` 中的 1.26.10（本机可由 Go 自动下载到缓存）；前端使用 pnpm 11.25.0，建议 Node 24.19.0，见 [Node 版本](web/.node-version)。兼容范围见 [package.json](web/package.json)，锁文件为 `go.sum` 和 `web/pnpm-lock.yaml`。
 
-本轮本地验证：macOS arm64，Go 1.26.10；pnpm 自带运行环境实际为 Node 24.19.0，本机 shell 的 Node 22.17.1 不等于 pnpm 子命令运行版本。未验证 Linux 判题、Docker 或离线安装。首次依赖安装需要网络；Makefile 将 Go 工具链/模块/构建缓存和二进制放在忽略的 `.local/`。
+本轮本地验证：macOS arm64，Go 1.26.10、PostgreSQL 14.19；pnpm 自带 Node 24.19.0。另建 Colima `oj-m0` Linux arm64 VM（2 CPU/2 GiB），实测 go-judge 1.13.3、GCC 15.3.0；该实验不证明生产部署或完整判题链路通过。首次依赖安装需要网络；Makefile 将 Go 工具链/模块/构建缓存和二进制放在忽略的 `.local/`。
 
 ## 安装与启动
 
@@ -40,7 +41,7 @@ pnpm --dir web dev
 
 `GET /api/v1/healthz` 返回 `{"status":"ok","service":"api","scope":"process"}`，只说明 API 可响应，不表示数据库、Worker 或沙箱就绪。契约见 [OpenAPI](api/openapi.yaml)，未知接口返回 404，不支持的方法返回 405。
 
-`make worker` 只执行骨架检查、明确提示任务/沙箱未接入后退出，不启动判题服务。API 可通过 `OJ_API_ADDR` 改监听地址；若改端口，同时调整本地 Vite 代理配置。当前无秘密配置，未接入 .env 自动加载。
+`make worker` 仍只提示任务/沙箱未接入后退出。API 可通过 `OJ_API_ADDR` 改监听地址；若改端口，同时调整 Vite 代理。默认没有业务接口；显式设置 `OJ_EXPERIMENT_TOKEN_FILE` 与 `OJ_DATABASE_URL` 可启用仅 loopback 的 M0 提交接口，见[实验契约](api/experiment.openapi.yaml)与[M0 配置边界](docs/m0-experiment.md)。凭据只放私有本地文件，不提交；未接入 .env 自动加载。
 
 ## 检查与构建
 
@@ -57,9 +58,11 @@ python3 scripts/repo_policy.py repository
 python3 -B -m unittest discover -s tests/governance -v
 ```
 
-产物位于忽略的 `.local/bin/` 和 `web/dist/`。`pnpm --dir web preview` 仅预览静态构建，不提供生产 API 反代；生产入口、HTTPS、容器、数据库迁移与部署命令尚未配置，不用 Vite dev server 承担正式比赛。
+真实临时数据库与两个 API 子进程测试：`make db-test`（需本机 `initdb/pg_ctl/createdb`、Python 3，自动建立独立私有目录并停止临时数据库）。专用 `oj-m0` VM 与沙箱启动后运行 `OJ_SANDBOX_EXPERIMENT=1 make sandbox-test`；不可在共享 Docker 主机或宿主直接运行选手代码，详细前置与清理见[M0 记录](docs/m0-experiment.md)。数据库和沙箱测试不在快速 `make check` 中静默跳过或冒充通过。
 
-GitHub Actions 已配置 `governance`、`backend`、`frontend` 三个真实检查，远端尚未运行。原 `bootstrap-ci` 命令保留用于检查空骨架，当前有应用时预期失败，已从 workflow 替换；未放宽其行为。
+产物位于忽略的 `.local/bin/` 和 `web/dist/`。独立迁移程序为 `.local/bin/migrate`；实验数据库迁移/回退边界见 M0 记录。`pnpm --dir web preview` 仅预览静态构建；生产入口、HTTPS 与部署尚未配置，不用 Vite dev server 承担正式比赛。
+
+GitHub Actions 已配置 `governance`、`backend`、`frontend` 和真实 PostgreSQL `integration` 检查，远端尚未运行。专用 Linux 沙箱不进入普通 PR 快速 CI。原 `bootstrap-ci` 命令保留用于检查空骨架，当前有应用时预期失败，已从 workflow 替换；未放宽其行为。
 
 已有 hooks 安装入口为 `sh scripts/install-hooks.sh`，仅改变当前克隆，遇到已有配置拒绝覆盖；本轮不重新安装或修改 hooks。初始化不自动授权 Git 提交、推送或发布。
 
