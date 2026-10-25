@@ -8,12 +8,12 @@
 | --- | --- |
 | 根规则、开发文档、PR 模板 | 本轮配置 |
 | Git hooks 与治理脚本 | 本地实现；安装与测试结果见交付记录 |
-| GitHub Actions `governance` | 已提供文件；用户已授权推送任务分支，远端执行尚未验证 |
+| GitHub Actions `governance` | 已配置仓库权限及必需检查；具体远端运行见交付记录 |
 | Go / 前端测试与构建 | 本地通过、已配置实际 CI 检查；新增真实 PostgreSQL integration job，远端未运行；专用 Linux 沙箱分项本地通过，完整判题尚未贯通 |
-| 分支保护、CODEOWNERS、独立审批 | 未配置；需核验托管平台、账号与权限 |
+| 分支保护、CODEOWNERS、独立审批 | main ruleset 已启用并回读；单人维护按用户选择暂不强制独立批准/CODEOWNERS |
 | 测试/生产环境、制品仓库、CD | 未配置；不可变离线包/维护窗口/受控回滚已确认，Linux Docker Engine＋Compose 优先验证 |
 
-GitHub Actions 是本次提供的可审查流水线基线，不代表已确认当前远端账号、套餐或仓库保护状态。若选择其他托管平台，保留同样门禁并迁移实现。
+远端为 GitHub 公开组织仓库，管理员权限和保护配置已核验，详见 [GitHub 治理](github-governance.md)。仓库设置与工作流执行结果分别验证。
 
 ## CI 分层
 
@@ -66,7 +66,7 @@ Go 标准 testing、真实 PostgreSQL/Redis（Testcontainers for Go 优先验证
 - 数据访问：sqlc＋pgx 为优先验证路线，尚未配置检查命令；引入后检查生成代码与模式/查询的一致性，并用真实 PostgreSQL 验证事务、任务认领、回滚/断连、超时取消与连接池总预算。生成成功不能替代关键 SQL 计划和并发恢复测试。
 - 运行环境：判题集成测试在受限 Linux 环境中执行；不在有生产凭据、真实题库或普通开发宿主权限的 runner 上运行不可信选手代码。
 
-应用门禁当前使用稳定名称 `governance`、`backend`、`frontend`；数据库引入时增加 `integration`。失败、取消和未配置不能被当作通过。初始化阻断替换与回归已在本地配置，远端 required checks 尚未配置，须获授权后同步，不能声称本地文件已经强制保护远端。
+应用门禁使用稳定名称 `governance`、`backend`、`frontend`、`integration`；四项均已配置为 main 必需检查并限定 GitHub Actions 来源。失败、取消和未配置不能被当作通过。PR 标题编辑触发重验，标题通过 Conventional Commits 校验后作为 squash 标题。
 
 ## 合并门禁与单人阶段
 
@@ -76,7 +76,7 @@ Go 标准 testing、真实 PostgreSQL/Redis（Testcontainers for Go 优先验证
 - 新增长期维护者后：至少一名非作者批准，关键模块设置真实 CODEOWNERS，更新提交后要求重新审查。
 - 分支保护与 Environment 审批受套餐、仓库可见性和账号权限影响。不能配置时明确报告控制缺口，保留人工关口；不声称有等价自动强制力。
 
-本次没有授权远端写入，尚未启用以上保护。PR 模板只帮助记录，不能自动证明勾选内容真实。
+用户已授权并完成 main 保护、仅 squash 合并和 Actions 权限配置，未合并 PR；单人维护的独立批准数量为 0。PR 模板只帮助记录，不能自动证明勾选内容真实。
 
 ## CD 与环境晋级
 
@@ -107,7 +107,7 @@ Go 标准 testing、真实 PostgreSQL/Redis（Testcontainers for Go 优先验证
 
 流水线、hooks、门禁脚本和规则也是代码：修改需解释目的、补成功与失败路径测试，不能借故障降低约束。远端审查权限与分支保护应防止未经审查地改掉检查本身。
 
-本地 hook 可绕过，CI 可被有权限的人修改，AGENTS.md 是行为指导；它们不能代替平台权限、沙箱和独立审查。正式阶段需评估可靠秘密扫描、依赖更新、SBOM/制品来源及漏洞处理流程，本轮未安装或启用这些服务。
+本地 hook 可绕过，CI 可被有权限的人修改，AGENTS.md 是行为指导；它们不能代替平台权限、沙箱和独立审查。已启用 GitHub secret scanning、push protection 和 Dependabot 安全更新；SBOM/制品来源及完整漏洞响应仍待建立。
 
 ## 官方依据
 
@@ -116,4 +116,4 @@ Go 标准 testing、真实 PostgreSQL/Redis（Testcontainers for Go 优先验证
 - [部署 Environment 的权限与套餐限制](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments)
 - [Git hooks 可用入口与限制](https://git-scm.com/docs/githooks)
 
-查阅日期：2026-10-25。当前没有 CI/CD 运行成功或生产可用的声明。
+查阅日期：2026-10-25。CI 实际结果见交付日志；生产 CD 尚未配置。

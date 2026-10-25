@@ -11,7 +11,7 @@
 - 既有 Redis 会话路线保留待验证，新增 PostgreSQL 会话对比；未做未经确认的替换。
 - 已引入 PostgreSQL 实验、sqlc/pgx/Goose；go-judge 仅进入专用 Linux VM 的隔离实验。Redis 会话、River 与监控备份服务尚未接入。
 - 多文件/ZIP 提交、自测与辅助能力不作为训练试用前置；完整语言、比赛及后续需求保留。
-- 0A 已完成本地验证，按治理、骨架与 CI、项目文档分组提交；远端同步状态以 Git 引用为准。未部署，远端 CI 和分支保护尚未验证。
+- 0A 和 M0 分项已按逻辑分组提交；main 已建立并保护，代码通过 PR 审查，远端 CI 结果见交付日志。未部署，M0 整体仍未通过。
 
 ## 运行环境
 
@@ -80,6 +80,7 @@ GitHub Actions 已配置 `governance`、`backend`、`frontend` 和真实 Postgre
 - [API 与 Worker 协议](docs/architecture/api-worker-design.md)
 - [运维与实施阶段](docs/architecture/operations-design.md)
 - [开发工作流](docs/development-workflow.md)
+- [GitHub 仓库治理与配置](docs/github-governance.md)
 - [CI/CD](docs/ci-cd.md)
 - [交付与验证记录](docs/delivery-log.md)
 - [项目根规则](AGENTS.md)

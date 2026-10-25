@@ -148,6 +148,10 @@ def staged():
 def commit_message(filename):
     lines = Path(filename).read_text(encoding="utf-8").splitlines()
     title = lines[0] if lines else ""
+    check_title(title)
+
+
+def check_title(title):
     if len(title) > 100 or not TITLE.fullmatch(title):
         raise PolicyError("Use a Conventional Commit title, at most 100 characters.")
 
@@ -177,8 +181,12 @@ def bootstrap_ci():
 
 def main(argv):
     if len(argv) < 2:
-        raise PolicyError("Expected repository, staged, commit-message, pre-push or bootstrap-ci.")
+        raise PolicyError("Expected repository, staged, commit-message, pr-title, pre-push or bootstrap-ci.")
     command = argv[1]
+    if command == "pr-title":
+        # Read untrusted PR metadata as data, never interpolate it into shell code.
+        check_title(os.environ.get("PR_TITLE", ""))
+        return
     if command == "commit-message" and len(argv) == 3:
         commit_message(argv[2])
         return

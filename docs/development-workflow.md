@@ -25,7 +25,7 @@
 
 - `main` 为受保护集成主线；短期分支采用 `codex/<topic>`，人工分支可用 `feat/`、`fix/`、`docs/`、`chore/`。不要求长期 `develop` 分支。
 - 进入应用实现前必须有任务分支。创建或切换分支遵循已有授权；未获授权且当前在主线时先准备方案，再说明需要任务分支，不自动切换用户分支。
-- 当前沿用已有 `codex/engineering-baseline` 任务分支；用户已授权将现有成果整理为原子提交并推送此分支。hooks 不允许在 `main/master` 提交；该授权不包含新建/直推主线、合并或部署。
+- 当前沿用 `codex/engineering-baseline`；用户授权原子提交、推送和 PR，并另行确认从空基点 `5d233d6` 建立并保护 `main`。初始化已完成，后续实现只经 PR 进入主线；不授权合并或部署，hooks 仍拒绝直推主线。远端配置见 [GitHub 治理](github-governance.md)。
 - 一个提交对应一个逻辑变更。首行采用 `type(scope)!: summary`，scope 与 `!` 可省略；允许 `feat/fix/docs/refactor/test/chore/style/perf/build/ci/revert`，首行不超过 100 字符。
 - 正文用中文写明原因、验证及限制，并沿用 `Agent-Task`、`Agent-Decision`、`Agent-Limitation`。hooks 只机械校验首行，不代替正文审查。
 - 默认 squash merge，PR 标题采用同样格式；相关测试和文档与功能一起合并。共享分支不强推，已合并问题用新修复或经审查的 revert 处理。

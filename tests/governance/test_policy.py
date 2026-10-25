@@ -163,6 +163,20 @@ class PolicyTests(unittest.TestCase):
         self.policy("pre-push", stdin=f"refs/heads/codex/task {sha} refs/heads/codex/task {zero}\n")
         self.policy("pre-push", stdin="malformed\n", succeeds=False)
 
+    def test_pr_title_rejects_missing_invalid_or_multiline_values(self):
+        self.env.pop("PR_TITLE", None)
+        self.policy("pr-title", succeeds=False)
+        for title in ("update things", "feat: ", "feat: ok\nextra", "feat: " + "x" * 100):
+            self.env["PR_TITLE"] = title
+            self.policy("pr-title", succeeds=False)
+        self.env["PR_TITLE"] = "feat(submission): persist receipts"
+        self.policy("pr-title")
+
+    def test_pr_title_shell_characters_are_data(self):
+        self.env["PR_TITLE"] = "docs: $(touch marker) `touch marker`"
+        self.policy("pr-title")
+        self.assertFalse((self.root / "marker").exists())
+
     def test_application_requires_real_ci(self):
         for name in ("go.mod", "cmd/api/main.go", "frontend/package.json", "web/App.tsx", "app.py"):
             with self.subTest(name=name):
