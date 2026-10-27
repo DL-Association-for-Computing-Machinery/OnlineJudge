@@ -1,6 +1,6 @@
 # API、事件与 Worker 协议
 
-日期：2026-10-27。版本：0.4。状态：M0 提交/租约核心及独立 mTLS 租约入口已实现并实测；材料传输、真实执行客户端和产品 API 仍待完成。证据与预算见[M0 记录](../m0-experiment.md)。关联 [总体架构](system-design.md)、[判题](judging-design.md)、[存储](storage-design.md)。
+日期：2026-10-27。版本：0.5。状态：M0 提交/租约核心、独立 mTLS 租约及任务范围材料下载/哈希校验已实现并实测；真实执行客户端、缓存和产品 API 仍待完成。协议见 [Worker OpenAPI](../../api/worker.openapi.yaml)，证据、模块边界及预算见[M0 记录](../m0-experiment.md)。关联 [总体架构](system-design.md)、[判题](judging-design.md)、[存储](storage-design.md)。
 
 ## 1. 契约与错误
 
