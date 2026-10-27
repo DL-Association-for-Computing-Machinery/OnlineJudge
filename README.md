@@ -72,7 +72,7 @@ python3 -B -m unittest discover -s tests/governance -v
 
 GitHub Actions 的 `governance`、`backend`、`frontend` 和真实 PostgreSQL `integration` 首轮已全部通过，对应提交及运行链接见[交付日志](docs/delivery-log.md)；后续提交以对应 head 的检查为准。专用 Linux 沙箱不进入普通 PR 快速 CI。原 `bootstrap-ci` 命令保留用于检查空骨架，当前有应用时预期失败，已从 workflow 替换；未放宽其行为。
 
-已有 hooks 安装入口为 `sh scripts/install-hooks.sh`，仅改变当前克隆，遇到已有配置拒绝覆盖；本轮不重新安装或修改 hooks。初始化不自动授权 Git 提交、推送或发布。
+已有 hooks 安装入口为 `sh scripts/install-hooks.sh`，仅改变当前克隆，遇到已有配置拒绝覆盖；本轮不重新安装或修改 hooks。按 2026-10-27 的持续授权，每次开发执行“对应任务分支 → 实现与验证 → 原子提交 → 推送 → PR → 当前 head 的 CI 核验”，GitHub 操作统一使用 `gh`。一个 PR 对应一个明确功能或预先界定、可独立验收的阶段；具体边界见[根规则第 7 节](AGENTS.md#7-git-与审查)与[开发工作流](docs/development-workflow.md)。合并和发布仍由用户决定。
 
 ## 文档入口
 
