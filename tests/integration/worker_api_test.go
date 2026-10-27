@@ -24,6 +24,7 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/testpki"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/workerclient"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -38,11 +39,13 @@ func testWorkerAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool, store 
 	}
 	nodes := []string{"tls-node-a", "tls-node-b"}
 	clients := make([]*http.Client, 2)
+	pairs := make([]tls.Certificate, 2)
 	for i, id := range nodes {
 		_, err := pool.Exec(ctx, `INSERT INTO worker_nodes(id,credential_version) VALUES($1,1)`, id)
 		must(t, err)
 		pair, _, _ := ca.Issue(t, "spiffe://onlinejudge/worker/"+id+"/1", x509.ExtKeyUsageClientAuth, time.Now().Add(time.Hour))
 		clients[i] = workerClient(t, ca.Roots, pair)
+		pairs[i] = pair
 	}
 	materialRoot := t.TempDir()
 	must(t, experiment.WriteMaterials(materialRoot))
@@ -121,8 +124,22 @@ func testWorkerAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool, store 
 		call(clients[1-winner], urls[winner], "renew", renew(l), 409)
 		call(clients[1-winner], urls[winner], "report", report(l, "AC"), 409)
 		call(clients[winner], urls[1-winner], "renew", renew(l), 200)
+		// Exercise the actual node-side client against the other controller process.
+		renewer, err := workerclient.NewRenewer(urls[1-winner], ca.Roots, pairs[winner])
+		must(t, err)
+		defer renewer.Close()
+		must(t, renewer.Renew(ctx, l.Token))
+		wrongNode, err := workerclient.NewRenewer(urls[winner], ca.Roots, pairs[1-winner])
+		must(t, err)
+		defer wrongNode.Close()
+		if err := wrongNode.Renew(ctx, l.Token); err != submission.ErrLease {
+			t.Fatalf("cross-node renewal accepted: %v", err)
+		}
 		testWorkerMaterials(t, clients[winner], clients[1-winner], urls, materialRoot, l.ID, l.Token)
 		call(clients[winner], urls[0], "report", report(l, "AC"), 204)
+		if err := renewer.Renew(ctx, l.Token); err != submission.ErrLease {
+			t.Fatalf("completed lease renewed: %v", err)
+		}
 		call(clients[winner], urls[1], "assignment", renew(l), 409)
 		call(clients[winner], urls[0], "material", materialBody(l.Token), 409)
 		call(clients[winner], urls[1], "report", report(l, "AC"), 204)
