@@ -1,5 +1,18 @@
 # 工程交付记录
 
+## 2026-10-27：固定 GNU++17 材料的受限执行编排
+
+唯一目标：P2、AC05/06/17/20 的固定 v2 受限编排。GitHub CLI 已核验 PR #4 合并为 `56b43361db91a98c1353c9342141e255f7ecd56f`，从更新主线创建独立工作区及 `codex/bounded-execution` 分支；原克隆 5 个文档改动保持。以下为本地验证时的未提交状态，后续提交及 CI 以对应 PR 的精确 head 为准。
+
+- 新增 `internal/execution`：单槽 Runner、材料与环境预检、一次编译/按序逐点执行、首次失败停止、结果归因、编译独立/运行峰值统计、制品清理。go-judge REST 适配与编排分离；不新增依赖、SQL、公共 API 或后台任务服务。
+- 基线相关实验/文本/材料单测通过。最终 `GOPROXY=off make go-check go-build` 通过格式/vet/race/四命令构建，Make 参数复用原克隆 `.local/go-mod`、`.local/go-build`；macOS arm64、Go 1.26.10。未改数据库/前端，本轮未重跑本地数据库/前端检查；未修改 hooks/CI。
+- `OJ_SANDBOX_EXPERIMENT=1 GOPROXY=off make sandbox-test` 通过新增 10 项真实编排子测试与既有 12 项隔离回归；固定 Linux arm64、GCC 15.3.0、go-judge v1.13.3。逐例核验编译次数、首/末点停止和缓存清空，覆盖正常/错误/资源超限、非法 UTF-8 和临时文件隔离。
+- 实测首先发现 OLE 响应保留 4097 字节并附 `CollectSizeExceeded`；新增失败回归，核对固定版本源码后修复适配，再通过真实测试。仅接受结构化输出超限证据，文件/未知错误不伪装为选手错误。
+- 注入验证材料损坏、环境不匹配、协议缺字段/矛盾、响应超限、取消、容量与清理失败。远端状态不明时 Runner 停用，HTTP 取消不视为 kill 确认。测试驱动使用已有专用无网络/无挂载 VM，尚无生产执行传输或宿主检查器。
+- README、M0 记录、首期计划同步。完整 Worker、租约中止确认、真实回报和 M0 整体验收仍未完成；无部署或独立人工审查。后续先做租约中止，再做真实回报。
+
+收尾自审：仓库策略 120 文件及 `git diff --check` 通过，相对 `origin/main` 的改动仅包含本功能及必要测试/文档。专用容器与 VM 已停止，`colima list` 回读 Stopped，Docker context 仍为 desktop-linux。知识回流和远端 CI 另按实际结果记录，不用本地成功代替远端状态。
+
 ## 2026-10-27：固定 GNU++17 实验环境与材料 v2
 
 唯一目标：P1/P2 的固定执行环境及新材料版本子项。已通过 GitHub 回读 PR #3 合并提交 `e69129d65334e5a7220cbf141b5cf33f5b8a6dc6` 并 fetch，从该主线新建独立工作区/分支 `codex/execution-environment`。以下记录本地验证阶段，当时尚未提交；随后用户授权提交、推送、创建 PR 并检查 CI，实际提交和远端结果以 Git 历史及对应 PR 检查为准。未授权合并或部署。原克隆 5 处文档改动保留。

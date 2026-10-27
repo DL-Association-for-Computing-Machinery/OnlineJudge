@@ -1,6 +1,6 @@
 # M0 实验实施与验证记录
 
-日期：2026-10-25。状态：**进行中，未通过 M0 整体验收**。在 `codex/engineering-baseline` 实现并验证持久化与租约核心，另在独立 Linux VM 完成沙箱分项实验。成果现已整理为原子提交，PR/远端 CI 状态见[交付日志](delivery-log.md)。没有部署、真实用户数据或独立人工审查；本次提交前复跑快速检查和真实数据库测试，未重启特权沙箱。
+日期：2026-10-27。状态：**进行中，未通过 M0 整体验收**。已有持久化、租约、材料授权和固定环境，本次新增受限执行编排，并在独立 Linux VM 实测。PR/远端 CI 状态见[交付日志](delivery-log.md)。没有部署、真实用户数据或独立人工审查；完整 Worker 与会话仍未交付。
 
 ## 已实现与边界
 
@@ -12,6 +12,7 @@
 | `internal/materials` | 任务范围下载、SHA-256 校验、受限本地读取和私有快照、读取后再次授权 | 生产题库发布、Worker 缓存、对象存储与容量/灾备验收 |
 | `db/migrations`、`cmd/migrate` | Goose 独立迁移与 advisory lock，API 只读检查模式版本，显式夹具注册 | 生产升级、模式内容哈希账本、断连及非事务迁移恢复 |
 | `internal/judging` | 有界文本 token 比较，ASCII 大小写规则与显式敏感选项 | 浮点、SPJ、完整结果归因/编排 |
+| `internal/execution` | 固定 v2 材料与环境预检、单槽编译/按序执行、首次失败停止、结果分类、统计和制品清理 | 租约客户端、远程中止确认、真实回报、通用题目/语言及生产节点接入 |
 | `tests/sandbox` | 真实 GNU++17 编译运行、答案比较、超限和隔离分项实验 | 从提交到真实结果的闭环、双 Worker、租约中止执行、系统故障注入 |
 
 API 的健康检查仍仅代表进程存活；未启用实验时行为保持原样。实验入口仅在设置 `OJ_EXPERIMENT_TOKEN_FILE` 后注册，启动时强制使用字面量 loopback 地址，凭据文件必须为 owner-private 普通文件。一个静态测试主体 `m0-operator`、一个固定上下文 `m0-training`，拒绝带 Origin 的请求；它不是正式登录、Cookie 或 CSRF 实现，也不是对同主机管理员的安全边界。现有浏览器预览页不接入此凭据。
@@ -158,12 +159,28 @@ PR #1 审查修复（2026-10-25，验证时为基于 `a31e021` 的未提交工�
 
 可复现证据：测试源码、固定镜像摘要；本机原始输出为忽略的 `.local/m0-db-test.log`、`.local/m0-sandbox-test.log`。同机多进程不证明主机高可用；数据库本机测试不等同灾备恢复。
 
+## 受限执行编排
+
+唯一目标为 P2、AC05/06/17/20 的固定 GNU++17 文本夹具编排子项。`execution.New(sandbox).Judge(ctx, descriptor, blobs)` 接收已由控制端授权的材料快照和按 SHA-256 索引的内容，再核验源码、规范清单和全部测试材料。只接受与内置 `m0-sum-v2` **逐字节一致**的清单及固定环境；v1、未知配置、缺失/损坏材料在编译前拒绝。该模块不代替有效租约授权，不自行领取或回报。
+
+模块通过 `Sandbox` 小接口依赖执行设施，核心不依赖数据库或 Gin；`GoJudge` 负责 v1.13.3 REST 适配。每个 Runner 限一个活动尝试，忙时立即拒绝；没有后台无界排队。每次编译一次，编译制品仅在本次尝试内复用，每点独立 `/run`，只有前点 AC 才启动后点。参考答案留在编排侧，不传入编译器或选手运行环境。未运行点为 `NOT_RUN`、usage 为空；编译统计独立，汇总取实际运行点最大 CPU 和峰值内存，无运行点时汇总为空；输出截断明确标记。
+
+适配器必须注入受信任宿主检查器和传输；先核验实际 image ID、内核、编译器、外层容器隔离，再检查 REST 版本、cgroup v2、cpu/memory/pids 和 seccomp。不存在默认网络传输。当前 `tests/sandbox` 通过既有固定 Docker context、`docker exec` 和容器 loopback REST 驱动真实编排；它是实验驱动，不是已部署 Worker 客户端。参考版本定义见 [go-judge v1.13.3 模型](https://github.com/criyle/go-judge/blob/v1.13.3/cmd/go-judge/model/model.go)。
+
+编译非零退出或已证实的预算超限为 CE；编译器异常信号、文件/设施错误为 SE。运行资源结果映射为 TLE/MLE/OLE，非零退出、信号及受限系统调用为 RE；正常零退出才比较答案。未知、矛盾、缺字段和响应超限为 SE。REST 总响应限 128 KiB；输出超限必须有 `CollectSizeExceeded` 结构化证据，按[固定版本收集器](https://github.com/criyle/go-judge/blob/v1.13.3/envexec/file_collect.go)处理保留的上限 + 1 字节，普通文件错误仍为 SE。运行 stderr 单独超限的归因未纳入公布的 stdout 规则，保守返回 SE。JSON 可能把非法 UTF-8 字节变为 U+FFFD，因此解码文本预算最多为原字节预算三倍；固定数字答案不会与该替换字符匹配，实际 4096 个非法字节回归为 WA。这不是通用二进制保真输出协议，扩展题目之前须改用保真传输并另验。
+
+编译/运行请求分别有固定墙钟预算加 5 秒传输余量，环境检查 10 秒，制品删除使用独立 5 秒上下文。成功、CE、运行失败和取消路径均尝试删除已知制品；清理失败改为 SE。开始编译后的传输、协议、取消或清理错误会将 Runner 标为不可复用，避免远端执行状态不明时释放容量后继续投递；必须由节点所有者确认恢复后重建 Runner。HTTP 取消不证明远端进程已终止，丢失响应可能留下未知制品，本轮不承诺远程 kill 确认或节点自动恢复。
+
+验证：macOS arm64 / Go 1.26.10 的 `GOPROXY=off make go-check go-build` 通过（Make 参数指定已有 Go 缓存，无依赖下载）。`OJ_SANDBOX_EXPERIMENT=1 GOPROXY=off make sandbox-test` 在专用 `oj-m0` VM 通过新增 10 项真实编排验收及原 12 项隔离回归。新增覆盖 AC、首/末点 WA、CE、RE、TLE、MLE、OLE、非法 UTF-8 输出和逐点文件隔离，并逐例核验制品清空。异常材料、环境、协议、取消、容量与清理失败通过单元注入验证；不冒充真实租约中止或双 Worker 联调。
+
+本轮不改变 API、数据库、依赖、默认配置和 `cmd/worker` 行为。回退本模块及实验测试无需迁移或重写历史任务；实际节点出现未知在途状态时须先停止接收并确认执行/制品清理，不能仅重建 Runner 宣称恢复。
+
 ## 组件准入与下一步
 
 pgx v5.11.0、Goose v3.29.0、sqlc v1.31.1 已核对官方版本/本地模块许可证（MIT），与 Go 1.26.10 构建和真实 PostgreSQL 测试相容。Goose 库只使用 pgx 驱动，其他数据库 CLI 驱动未链接；其最低 Go 1.26 与 pgx 依赖约束导致必要的传递模块版本变化，见锁文件。sqlc 本机开发二进制约 75 MiB；正式 API/migrate 构建分别约 25/14 MiB，数值随构建而变。PostgreSQL 14.19 仅复用本机实验环境，生产版本与升级窗口未确认。
 
 go-judge v1.13.3 官方 arm64 镜像约 58 MB，GCC 15 镜像约 532 MB；实际 GCC 为 15.3.0。固定 tag 的 MIT 许可证已核对并保存 `.local/go-judge-v1.13.3-LICENSE`，SHA-256 为 `a84a0427c3a1c25851a4689410a54283962a759a02558058a107470993b80c5a`；GCC/基础发行版各组件许可及安全清单尚未完整核验，只准入隔离实验，不准入生产或对外分发。[pgx 发布](https://github.com/jackc/pgx/releases/tag/v5.11.0)、[Goose 发布](https://github.com/pressly/goose/releases/tag/v3.29.0)、[sqlc 发布](https://github.com/sqlc-dev/sqlc/releases/tag/v1.31.1)、[go-judge 版本](https://github.com/criyle/go-judge/releases/tag/v1.13.3)、[隔离与 API](https://docs.goj.ac/api)为核验入口。
 
-本次完成上述固定本机执行环境与 `m0-sum-v2` 子项；下一项是受限执行编排，继续将租约失效中止、真实回报按可独立验收范围推进，再贯通双 API＋双 Worker 及会话关键实验。既有 mTLS、材料与新版本子项不能替代完整链路；`m0-sum-v1` 继续保持 unvalidated。新执行端必须核验实际环境并拒绝未知/不匹配配置，不能仅凭材料登记成功启动执行。
+本次完成固定 v2 的受限执行编排；下一项是租约续期/失效与执行中止确认，随后接入真实回报，再贯通双 API＋双 Worker 及会话关键实验。既有 mTLS、材料、环境及编排子项不能替代完整链路；`m0-sum-v1` 继续保持 unvalidated。生产节点检查器、传输、恢复及材料下载客户端仍须独立验证。
 
 M0 仍待完整链路与会话实验；M1/M2 仍需试用范围、题库授权、SMTP/HTTPS、负载目标、RPO/RTO 与独立备份位置。不能把本页分项通过视作首期平台可用。
