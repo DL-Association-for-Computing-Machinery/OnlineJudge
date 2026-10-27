@@ -193,6 +193,10 @@ func testWorkerAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool, store 
 		base := startWorkerController(t, binary, ca.CAFile, certFile, keyFile, clients[1])
 		call(clients[1], base, "assignment", `{"lease_token":"`+strings.Repeat("a", 64)+`"}`, 503)
 	})
+	t.Run("pinned material version remains isolated", func(t *testing.T) {
+		base := startVersionedWorkerController(t, binary, ca.CAFile, certFile, keyFile, clients[1], experiment.PinnedVersion, materialRoot)
+		testPinnedMaterials(t, ctx, pool, clients[1], base, urls[1], store)
+	})
 }
 
 func workerClient(t *testing.T, roots *x509.CertPool, cert tls.Certificate) *http.Client {
@@ -222,6 +226,10 @@ func workerRequest(client *http.Client, base, action, body string) (int, []byte,
 }
 
 func startWorkerController(t *testing.T, binary, ca, cert, key string, client *http.Client, materialRoot ...string) string {
+	return startVersionedWorkerController(t, binary, ca, cert, key, client, "", materialRoot...)
+}
+
+func startVersionedWorkerController(t *testing.T, binary, ca, cert, key string, client *http.Client, version string, materialRoot ...string) string {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	must(t, err)
@@ -230,6 +238,7 @@ func startWorkerController(t *testing.T, binary, ca, cert, key string, client *h
 	cmd := exec.Command(binary)
 	// Do not inherit credentials or configuration from the invoking user's environment.
 	cmd.Env = []string{"OJ_WORKER_API_ADDR=" + addr, "OJ_WORKER_CA_FILE=" + ca, "OJ_WORKER_CERT_FILE=" + cert, "OJ_WORKER_KEY_FILE=" + key, "OJ_DATABASE_URL=" + os.Getenv("OJ_TEST_DATABASE_URL")}
+	cmd.Env = append(cmd.Env, "OJ_EXPERIMENT_MATERIAL_VERSION="+version)
 	if len(materialRoot) > 0 {
 		cmd.Env = append(cmd.Env, "OJ_MATERIAL_ROOT="+materialRoot[0])
 	}

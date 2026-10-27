@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OnlineJudge M0 Submission Experiment
-  version: 0.2.0
+  version: 0.3.0
   description: >-
     默认关闭、仅本机受控客户端使用。静态实验主体 m0-operator、上下文 m0-training，
     不是正式账号 API。接收成功不代表执行完成；独立 worker.openapi.yaml 定义 mTLS 租约接口，沙箱尚未接入闭环。
@@ -101,7 +101,9 @@ components:
       additionalProperties: false
       required: [material_version, language, source]
       properties:
-        material_version: {const: m0-sum-v1}
+        material_version:
+          enum: [m0-sum-v1, m0-sum-v2]
+          description: 必须匹配当前进程 OJ_EXPERIMENT_MATERIAL_VERSION（默认 m0-sum-v1）；不匹配返回 MATERIAL_UNAVAILABLE。v2 固定本机实验环境，v1 保持 unvalidated；不是任意环境选择接口。
         language: {const: 'gnu++17'}
         source:
           type: string

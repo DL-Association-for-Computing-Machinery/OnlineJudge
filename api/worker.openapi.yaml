@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OnlineJudge M0 Worker Lease and Material API
-  version: 0.2.0
+  version: 0.3.0
   description: >-
     独立 loopback HTTPS 控制端，TLS 1.3 双向认证。客户端证书唯一 URI SAN 为
     spiffe://onlinejudge/worker/{node_id}/{credential_version}，不接受请求自报身份。
@@ -115,6 +115,9 @@ paths:
         当前节点有效租约限定的源码与固定清单。每次重新授权；已完成/过期/旧尝试或旧代次拒绝。
         manifest 是规范 JSON 原始字节的 base64，解码后核验 manifest_sha256；source 的 UTF-8 字节
         核验 source_sha256。清单 execution_environment=unvalidated 不得解释为可执行环境。
+        m0-sum-v2 将 execution_environment 固定为环境对象，包含本机镜像 ID、平台、工具版本、参数及预算；
+        image_id 是 Docker config digest，不是可拉取的 registry digest。执行端仍须核验实际环境并拒绝未知配置。
+        控制端只领取/提供配置版本的材料；切换版本时不能把旧租约转交给新版本控制端。
       requestBody:
         required: true
         content:

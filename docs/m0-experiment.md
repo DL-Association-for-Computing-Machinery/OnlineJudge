@@ -79,6 +79,32 @@ make worker-api
 
 兼容/回退：无数据库迁移，`m0-sum-v1` 清单与既有哈希不变，仍是 `execution_environment=unvalidated`。取消 `OJ_MATERIAL_ROOT` 并重启控制端可关闭材料入口，或回退到 PR #2 的程序；保留数据库与目录，不运行 Down 删除数据。本次没有 Worker 缓存/受限执行编排、生产题库发布或完整 M0 验收。
 
+## 固定执行环境与新材料版本
+
+2026-10-27，基于 PR #3 合并提交 `e69129d` 的独立 `codex/execution-environment` 分支，本地验证时尚未提交。唯一目标是固定 GNU++17 实验环境并绑定新材料版本，属于 P1/P2 的前置子项；不交付 Worker 执行循环或完整 M0。
+
+`internal/experiment/environment.go` 记录 `m0-gnu17-linux-arm64-v1`：本机 Linux arm64 镜像 config ID `sha256:fa4d3b785c8245ae856b3bda4687deeb74fbd9615a0de6df3c93ab6151717661`、构建配方 SHA-256、Linux `6.8.0-100-generic`、GCC `15.3.0`、go-judge `v1.13.3`、沙箱启动参数、编译/执行参数、环境变量及每阶段预算。复用既有隔离实验制品，没有下载或升级依赖。镜像 ID 是本地内容寻址标识，**不是 registry manifest digest，不能拿它作为远端 pull 地址**；另一架构、内核、重新构建或升级必须独立验证并创建新配置/材料版本，不宣称跨节点可复现或可分发。
+
+新 `m0-sum-v2` 将完整环境对象纳入规范清单摘要，输入/答案、文本比较器和顺序保持原样。原 `m0-sum-v1` 永久保留 `execution_environment=unvalidated`，不追改历史提交。规范清单 SHA-256：v1 为 `5825e71b429c1b4b41d853f714bd8e078f3f48adf06232f0903d5717d1703dea`，v2 为 `4699ed93798241b796c5c00701f7150e1d8c80fb7e3ba536b9344cf88fa3d68a`；回归固定两者。嵌套环境对象统一按 JSON 对象键排序，避免结构体字段顺序与 JSONB 回读规范化产生不同字节摘要。
+
+显式选择新版本（仍需前文数据库、材料目录和 TLS 等配置）：
+
+```sh
+export OJ_EXPERIMENT_MATERIAL_VERSION=m0-sum-v2
+.local/bin/migrate fixture
+# 在各自终端中使用相同版本配置：
+make api
+make worker-api
+```
+
+三个命令共用严格选择器，只接受空值/v1/v2；空值默认 v1，未知值拒绝实验启动/注册。API 请求 `material_version` 必须等于该进程选择的版本。API 启动不注册材料，未注册的 v2 不可接收；注册重复执行校验同一清单，已存在版本不允许覆盖。四个文件沿用既有摘要，可共用材料目录；无 SQL、索引或数据库迁移变化。
+
+控制端继续按现有 SQL 仅领取配置版本的任务，材料读取再核对该版本/清单，不能通过切换进程配置重新标记旧任务。需要同时处理 v1/v2 时，使用不同监听端口运行各自匹配的提交/控制端进程；不要在同一负载均衡入口混放不同版本。历史 GET 回执不受选择版本影响，旧提交的 POST 重试仍应回到旧版本入口。回退时先停止 v2 新接收并处理其在途租约，再取消配置使用 v1；v2 排队任务保留，旧二进制不会领取它们，恢复 v2 程序才能继续处理。不要通过 Down 或删除任务回退。
+
+沙箱测试在任何程序执行前检查容器实际 image ID、平台、内核、编译器/执行器版本、启动参数、无网络、无挂载、只读根目录及外层 CPU/内存/进程/临时盘预算；已有 cgroup v2/seccomp 检查保持。编译/运行直接消费清单同源配置。本检查是专用 VM 的测试入口，不是已交付的生产 Worker 身份证明，不能抵抗恶意宿主管理员。
+
+验证覆盖：新旧版本规范哈希与可变切片隔离、构建配方漂移、未知版本拒绝；真实 PostgreSQL 注册冲突、环境篡改拒绝；真实 mTLS 控制端只领取 v2、旧控制端不领取 v2、固定清单与材料下载；真实 API 子进程显式切到 v2、重复回执及 v1 历史查询。Linux 沙箱重新运行编译/两点 AC、WA/CE/RE/TLE/MLE/OLE、文件/网络隔离及清理共 12 项。实际命令与最终结果见[交付日志](delivery-log.md)。没有把数据库合成回报与独立沙箱拼接成真实 Worker 闭环。
+
 ## 本机数据库复现
 
 前置：已安装 Go、Python 3、PostgreSQL 的 `initdb/pg_ctl/createdb`；固定 Go 模块已缓存或网络可用。不是对系统 PostgreSQL 服务进行初始化。
@@ -138,6 +164,6 @@ pgx v5.11.0、Goose v3.29.0、sqlc v1.31.1 已核对官方版本/本地模块许
 
 go-judge v1.13.3 官方 arm64 镜像约 58 MB，GCC 15 镜像约 532 MB；实际 GCC 为 15.3.0。固定 tag 的 MIT 许可证已核对并保存 `.local/go-judge-v1.13.3-LICENSE`，SHA-256 为 `a84a0427c3a1c25851a4689410a54283962a759a02558058a107470993b80c5a`；GCC/基础发行版各组件许可及安全清单尚未完整核验，只准入隔离实验，不准入生产或对外分发。[pgx 发布](https://github.com/jackc/pgx/releases/tag/v5.11.0)、[Goose 发布](https://github.com/pressly/goose/releases/tag/v3.29.0)、[sqlc 发布](https://github.com/sqlc-dev/sqlc/releases/tag/v1.31.1)、[go-judge 版本](https://github.com/criyle/go-judge/releases/tag/v1.13.3)、[隔离与 API](https://docs.goj.ac/api)为核验入口。
 
-下一项独立 PR：固定执行环境及相应新材料版本；随后实现受限编排、续租失效中止与真实回报，再贯通双 API＋双 Worker 及会话关键实验。mTLS 租约入口和租约限定材料下载/哈希校验已完成上述协议子项，不能替代完整链路。工具链配置必须随真实尝试固定，当前 `m0-sum-v1` 清单明确 `execution_environment=unvalidated`，不能直接给已有排队提交贴上已固定运行环境的标签，应创建新材料版本。
+本次完成上述固定本机执行环境与 `m0-sum-v2` 子项；下一项是受限执行编排，继续将租约失效中止、真实回报按可独立验收范围推进，再贯通双 API＋双 Worker 及会话关键实验。既有 mTLS、材料与新版本子项不能替代完整链路；`m0-sum-v1` 继续保持 unvalidated。新执行端必须核验实际环境并拒绝未知/不匹配配置，不能仅凭材料登记成功启动执行。
 
 M0 仍待完整链路与会话实验；M1/M2 仍需试用范围、题库授权、SMTP/HTTPS、负载目标、RPO/RTO 与独立备份位置。不能把本页分项通过视作首期平台可用。
