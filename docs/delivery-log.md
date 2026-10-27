@@ -1,5 +1,16 @@
 # 工程交付记录
 
+## 2026-10-27：租约守护与独占沙箱中止确认
+
+唯一目标：P2、AC28/29 的执行生命周期子项。GitHub CLI 回读 PR #6 已合并，主线 `b50f6a0`；从该主线建立独立 `codex/lease-execution` 工作区，原克隆 5 处文档改动保留。本记录为提交前验证快照，提交/PR/CI 以实际交付结果为准。非目标为领取/材料下载、真实结果回报、自动恢复、双 Worker、会话与部署。
+
+- 新增 mTLS 续租客户端与租约守护，执行前续租、周期续租、保守单调时限、失败取消、独立停止确认、旧槽永久停用；无依赖、SQL、迁移、HTTP 契约或配置变化。职责和限制见[M0 记录](m0-experiment.md#租约守护与中止确认)。
+- `GOPROXY=off make go-check db-test GOMODCACHE=/Users/huangqijun/Documents/OnlineJudge/.local/go-mod GOCACHE=/private/tmp/oj-lease-go-build` 通过：格式、vet、Go race、四个命令构建、临时 PostgreSQL 14.19、双 mTLS 控制端与双 API 的 24 并发/重启回执回归。macOS arm64、Go 1.26.10；临时库 `/tmp/oj-postgres.k68fim` 已自动停止。最初默认沙箱检查因本机端口权限失败，经工具审批后正常验证，未降低测试。
+- `OJ_SANDBOX_EXPERIMENT=1 GOPROXY=off GOMODCACHE=/Users/huangqijun/Documents/OnlineJudge/.local/go-mod GOCACHE=/private/tmp/oj-lease-go-build go test -race -count=1 -tags=sandbox ./tests/sandbox -v` 通过新增真实中止确认及原 10 项编排、12 项隔离测试，日志 `/private/tmp/oj-lease-sandbox.log`。首次失败来自无宿主挂载时 Colima SSH 默认 cwd 不存在；固定测试探针目录 `/tmp` 后所有断言通过。实验容器/VM 已停止，无镜像下载或删除。
+- README、M0、协议架构、首期计划和交付记录同步。未改前端、hooks 或 CI，未重跑本地前端；无独立人工审查。完整数据库撤销→真实沙箱联合实验、生产停止适配器和完整 Worker/M0 仍未完成。
+
+收尾：仓库策略检查 125 文件、diff 检查通过；知识事务 `oj-lease-execution-20261027` 已更新 M0 实测、推进、热点、索引与日志 5 页，严格 lint 32 页、373 链接、0 问题，目标哈希回读一致。保留可恢复草稿 `/private/tmp/oj-lease-vault.json`；未新增 accepted 断言、未改 raw，无已绑定外部同步目标。远端交付状态以本任务 PR 的当前 head 检查为准。
+
 ## 2026-10-27：固定 GNU++17 材料的受限执行编排
 
 唯一目标：P2、AC05/06/17/20 的固定 v2 受限编排。GitHub CLI 已核验 PR #4 合并为 `56b43361db91a98c1353c9342141e255f7ecd56f`，从更新主线创建独立工作区及 `codex/bounded-execution` 分支；原克隆 5 个文档改动保持。以下为本地验证时的未提交状态，后续提交及 CI 以对应 PR 的精确 head 为准。

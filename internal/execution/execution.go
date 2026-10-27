@@ -1,4 +1,4 @@
-// Package execution orchestrates one bounded M0 attempt independently of leases.
+// Package execution orchestrates bounded M0 attempts with optional lease supervision.
 package execution
 
 import (
