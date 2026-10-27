@@ -9,95 +9,68 @@ import (
 	"errors"
 	"time"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres/submissiondb"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-var (
-	ErrNode           = errors.New("node disabled or credential version invalid")
-	ErrNoTask         = errors.New("no task available within node capacity")
-	ErrLease          = errors.New("lease expired or superseded")
-	ErrResultConflict = errors.New("attempt already reported different result")
-)
-
-// NodeIdentity must be supplied by a trusted transport after authentication.
-// These persistence methods are not exposed as HTTP worker endpoints yet.
-type NodeIdentity struct {
-	ID                string
-	CredentialVersion int64
-}
-
-// Lease pins all three independent counters; Token is internal, never a public receipt.
-type Lease struct {
-	Token, SubmissionID                 string
-	JudgeGeneration, RecoveryGeneration int64
-	AttemptNumber                       int32
-	Until                               time.Time
-}
-
-// Result carries a verdict and a digest of the bounded execution evidence.
-// Validating evidence against sandbox/checker outcomes belongs to P2.
-type Result struct {
-	Verdict        string
-	EvidenceSHA256 string
-}
-
 // Claim atomically takes one queued task without retaining any execution-time lock.
 // M0 uses FIFO; user fairness and shared quotas remain required before M1.
-func (s *Store) Claim(ctx context.Context, node NodeIdentity) (Lease, error) {
+func (s *Store) Claim(ctx context.Context, node submission.NodeIdentity) (submission.Lease, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return Lease{}, err
+		return submission.Lease{}, err
 	}
 	defer rollback(tx)
 	q := submissiondb.New(tx)
 	record, err := authorizeNode(ctx, q, node)
 	if err != nil {
-		return Lease{}, err
+		return submission.Lease{}, err
 	}
 	if err := s.checkMaterial(ctx, q); err != nil {
-		return Lease{}, err
+		return submission.Lease{}, err
 	}
 	count, err := q.CountNodeLeases(ctx, node.ID)
 	if err != nil {
-		return Lease{}, err
+		return submission.Lease{}, err
 	}
 	if count >= int64(record.Capacity) {
-		return Lease{}, ErrNoTask
+		return submission.Lease{}, submission.ErrNoTask
 	}
 	id, err := q.ClaimCandidate(ctx, s.version)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return Lease{}, ErrNoTask
+		return submission.Lease{}, submission.ErrNoTask
 	}
 	if err != nil {
-		return Lease{}, err
+		return submission.Lease{}, err
 	}
 	task, err := q.BeginAttempt(ctx, id)
 	if err != nil {
-		return Lease{}, err
+		return submission.Lease{}, err
 	}
 	random := make([]byte, 32)
 	if _, err := rand.Read(random); err != nil {
-		return Lease{}, err
+		return submission.Lease{}, err
 	}
 	token := hex.EncodeToString(random)
 	until, err := q.InsertAttempt(ctx, submissiondb.InsertAttemptParams{Token: token, SubmissionID: id,
 		JudgeGeneration: task.JudgeGeneration, RecoveryGeneration: task.RecoveryGeneration,
 		AttemptNumber: task.AttemptNumber, NodeID: node.ID, CredentialVersion: node.CredentialVersion, LeaseSeconds: 30})
 	if err != nil {
-		return Lease{}, err
+		return submission.Lease{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return Lease{}, err
+		return submission.Lease{}, err
 	}
-	return Lease{token, id, task.JudgeGeneration, task.RecoveryGeneration, task.AttemptNumber, until.Time}, nil
+	return submission.Lease{Token: token, SubmissionID: id, JudgeGeneration: task.JudgeGeneration,
+		RecoveryGeneration: task.RecoveryGeneration, AttemptNumber: task.AttemptNumber, Until: until.Time}, nil
 }
 
 // Renew refuses expired attempts even before the recovery scanner has run.
-func (s *Store) Renew(ctx context.Context, node NodeIdentity, token string) (time.Time, error) {
+func (s *Store) Renew(ctx context.Context, node submission.NodeIdentity, token string) (time.Time, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	tx, err := s.pool.Begin(ctx)
@@ -111,17 +84,17 @@ func (s *Store) Renew(ctx context.Context, node NodeIdentity, token string) (tim
 	}
 	row, err := q.LockAttempt(ctx, submissiondb.LockAttemptParams{Token: token, NodeID: node.ID, CredentialVersion: node.CredentialVersion})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return time.Time{}, ErrLease
+		return time.Time{}, submission.ErrLease
 	}
 	if err != nil {
 		return time.Time{}, err
 	}
 	if row.State != "leased" || row.TaskState != "running" || row.AttemptNumber != row.CurrentAttempt {
-		return time.Time{}, ErrLease
+		return time.Time{}, submission.ErrLease
 	}
 	until, err := q.RenewAttempt(ctx, submissiondb.RenewAttemptParams{Token: token, LeaseSeconds: 30})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return time.Time{}, ErrLease
+		return time.Time{}, submission.ErrLease
 	}
 	if err != nil {
 		return time.Time{}, err
@@ -134,14 +107,14 @@ func (s *Store) Renew(ctx context.Context, node NodeIdentity, token string) (tim
 
 // Report conditionally finalizes a valid attempt. Exact repeats are acknowledged;
 // conflicting evidence is refused, including after a successful response was lost.
-func (s *Store) Report(ctx context.Context, node NodeIdentity, token string, result Result) error {
+func (s *Store) Report(ctx context.Context, node submission.NodeIdentity, token string, result submission.Result) error {
 	valid := false
 	for _, v := range []string{"AC", "WA", "CE", "RE", "TLE", "MLE", "OLE", "SE"} {
 		valid = valid || result.Verdict == v
 	}
 	raw, err := hex.DecodeString(result.EvidenceSHA256)
 	if !valid || err != nil || len(raw) != 32 {
-		return ErrResultConflict
+		return submission.ErrResultConflict
 	}
 	data, _ := json.Marshal(result)
 	sum := sha256.Sum256(data)
@@ -159,26 +132,26 @@ func (s *Store) Report(ctx context.Context, node NodeIdentity, token string, res
 	}
 	row, err := q.LockAttempt(ctx, submissiondb.LockAttemptParams{Token: token, NodeID: node.ID, CredentialVersion: node.CredentialVersion})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrLease
+		return submission.ErrLease
 	}
 	if err != nil {
 		return err
 	}
 	if row.State == "completed" {
 		if row.ResultSha256.String != fingerprint {
-			return ErrResultConflict
+			return submission.ErrResultConflict
 		}
 		return nil
 	}
 	if row.State != "leased" || row.TaskState != "running" || row.AttemptNumber != row.CurrentAttempt {
-		return ErrLease
+		return submission.ErrLease
 	}
 	changed, err := q.CompleteAttempt(ctx, submissiondb.CompleteAttemptParams{Token: token, ResultSha256: pgtype.Text{String: fingerprint, Valid: true}, ResultPayload: data})
 	if err != nil {
 		return err
 	}
 	if changed != 1 {
-		return ErrLease
+		return submission.ErrLease
 	}
 	if result.Verdict == "SE" {
 		err = q.RecoverTask(ctx, row.SubmissionID)
@@ -238,16 +211,16 @@ func (s *Store) recoverOne(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
-func authorizeNode(ctx context.Context, q *submissiondb.Queries, node NodeIdentity) (submissiondb.WorkerNode, error) {
+func authorizeNode(ctx context.Context, q *submissiondb.Queries, node submission.NodeIdentity) (submissiondb.WorkerNode, error) {
 	row, err := q.LockNode(ctx, node.ID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return row, ErrNode
+		return row, submission.ErrNode
 	}
 	if err != nil {
 		return row, err
 	}
 	if !row.Enabled || row.CredentialVersion != node.CredentialVersion {
-		return row, ErrNode
+		return row, submission.ErrNode
 	}
 	return row, nil
 }

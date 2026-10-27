@@ -1,5 +1,22 @@
 # 工程交付记录
 
+## 2026-10-27：Worker mTLS 租约入口
+
+唯一目标：完成 P1/P2、AC28/29 的认证节点领取/续租/结果回报子项。基于已合并主线 `25ed31a`，在独立工作区的 `codex/worker-mtls` 开发；原 `codex/engineering-baseline` 工作区的 5 个规则文档改动保留，未混入此 PR。验收是证书身份绑定、逐次授权及跨实例租约约束；材料下载、真实判题、证书运维工具、恢复循环与会话是后续独立目标。
+
+- 新增 `cmd/worker-api` 和 `internal/workerapi`：显式 loopback 配置、TLS 1.3 双向认证、唯一 URI SAN 节点身份、每次请求重验证书与原事务内节点授权，三个有界 JSON 接口。复用标准库 TLS/X.509，不新增或升级依赖；核对了官方 API 文档及本机 Go 1.26.10 源码。模块契约移至 `internal/submission`，HTTP 不依赖 PostgreSQL 类型，已有结果摘要序列化保持不变。
+- 新增真实 TLS 边界测试与两个真实控制端子进程/两个节点客户端的 PostgreSQL 集成测试。证书每次临时生成，私钥不提交；合成结果只证明协议与持久化，不代表执行过选手程序。
+- 同步 README、Worker OpenAPI、M0、协议设计、首期计划、需求子项证据和 CI 说明；无 SQL、迁移或流水线配置改动。退回原进程组合只需停止新增控制端，保留已领取任务并按既有恢复语义处理，不删除数据。
+
+实际验证（macOS arm64、Go 1.26.10、PostgreSQL 14.19）：
+
+- 修改前 `GOPROXY=off go test ./internal/...` 基线通过。新测试首轮通过；全量 vet 发现契约迁移后跨包结构体使用位置字段，改为命名字段后通过。
+- `GOPROXY=off make go-check go-build`：格式、vet、全部 Go race 测试及四个命令构建通过；`make db-test`：临时 PostgreSQL、原迁移/租约回归、两个 mTLS 控制端进程竞争认领、同连接撤销/版本轮换、异节点/到期/旧尝试拒绝、重复/冲突回报通过，另有原两个提交 API 的 24 并发与重启回执检查。测试使用原克隆的 `.local/go-build` 与 `.local/go-mod` 缓存，通过 Make 变量显式指定，禁用网络下载。数据库已自动停止，诊断目录 `/tmp/oj-postgres.M9I8qM`。
+- `python3 scripts/repo_policy.py repository`、25 项治理回归、`git diff --check` 通过；3 份 OpenAPI YAML 解析及本地 `$ref` 解析通过。未运行完整 OpenAPI 专用校验器。
+- 本地未重跑未改动的前端，也未重启 Linux 沙箱；远端 CI 以此 PR head 独立核验。M0 整体未通过，未部署或合并，尚无独立人工审查。
+
+收尾：知识事务 `oj-worker-mtls-20261027` inspect/apply 完成，更新 M0 实测、开发推进、热点、索引和日志共 5 页；目标哈希全部回读一致。严格 lint：32 页、368 链接、0 问题；另行核对了源码哈希、协议与真实判题的边界，不新增 accepted 账本断言、不覆盖 raw。可恢复草稿为本工作区忽略的 `.local/worker-mtls-vault-transaction.json`；外部飞书文档未发现已绑定同步目标。
+
 ## 2026-10-25：PR #1 回退竞态与 Unicode 源码修复
 
 本条记录修复验证阶段：用户要求审查并修复 PR #1；基于 `a31e021`，沿用 `codex/engineering-baseline` 的未提交工作区。未安装 CodeRabbit，按用户选择由 Codex 直接审查与复现；该验证阶段没有提交、推送、修改远端审查状态或部署。随后用户授权按回退并发保护、Unicode 源码保真整理为两个原子提交并推送任务分支；提交标识以 Git 历史为准，推送与新 CI 结果须另行回读，不沿用旧提交状态。
