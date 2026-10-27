@@ -53,7 +53,11 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	if err := db.CheckSchema(startup, pool); err != nil {
 		return err
 	}
-	store, err := postgres.New(pool, experiment.Version, experiment.Manifest())
+	version, manifest, err := experiment.SelectFixture(os.Getenv("OJ_EXPERIMENT_MATERIAL_VERSION"))
+	if err != nil {
+		return err
+	}
+	store, err := postgres.New(pool, version, manifest)
 	if err != nil {
 		return err
 	}
