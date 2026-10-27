@@ -10,18 +10,23 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materials"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
 )
 
 var digestPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
-// NewHandler exposes only lease operations; it must sit behind direct mTLS.
+// NewHandler exposes lease and optional material operations behind direct mTLS.
 // The store must authorize node state/version inside each operation's transaction.
-func NewHandler(store submission.LeaseStore, roots *x509.CertPool) http.Handler {
-	return newHandler(store, roots, time.Now)
+func NewHandler(store submission.LeaseStore, roots *x509.CertPool, materialService ...*materials.Service) http.Handler {
+	return newHandler(store, roots, time.Now, materialService...)
 }
 
-func newHandler(store submission.LeaseStore, roots *x509.CertPool, now func() time.Time) http.Handler {
+func newHandler(store submission.LeaseStore, roots *x509.CertPool, now func() time.Time, materialService ...*materials.Service) http.Handler {
+	var service *materials.Service
+	if len(materialService) > 0 {
+		service = materialService[0]
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		node, err := authenticate(r.TLS, roots, now())
@@ -33,7 +38,7 @@ func newHandler(store submission.LeaseStore, roots *x509.CertPool, now func() ti
 			problem(w, 403, "WORKER_ONLY", "接口仅供受控节点使用")
 			return
 		}
-		if r.URL.Path != "/api/v1/worker/claim" && r.URL.Path != "/api/v1/worker/renew" && r.URL.Path != "/api/v1/worker/report" {
+		if r.URL.Path != "/api/v1/worker/claim" && r.URL.Path != "/api/v1/worker/renew" && r.URL.Path != "/api/v1/worker/report" && r.URL.Path != "/api/v1/worker/assignment" && r.URL.Path != "/api/v1/worker/material" {
 			problem(w, 404, "NOT_FOUND", "接口不存在")
 			return
 		}
@@ -47,6 +52,8 @@ func newHandler(store submission.LeaseStore, roots *x509.CertPool, now func() ti
 			return
 		}
 		switch r.URL.Path {
+		case "/api/v1/worker/assignment", "/api/v1/worker/material":
+			serveMaterials(w, r, service, node, roots, now)
 		case "/api/v1/worker/claim":
 			var req struct{}
 			if !decode(w, r, &req) {
@@ -165,6 +172,10 @@ func storeError(w http.ResponseWriter, err error) {
 		problem(w, 409, "LEASE_INVALID", "租约已失效或不属于当前节点")
 	case errors.Is(err, submission.ErrResultConflict):
 		problem(w, 409, "RESULT_CONFLICT", "结果与已接受回报冲突")
+	case errors.Is(err, submission.ErrInvalid):
+		problem(w, 400, "INVALID_REQUEST", "材料请求格式无效")
+	case errors.Is(err, submission.ErrNotFound):
+		problem(w, 404, "MATERIAL_NOT_FOUND", "材料不在当前任务清单中")
 	default:
 		problem(w, 503, "WORKER_UNAVAILABLE", "操作状态未知；停止执行并保留原租约和结果")
 	}

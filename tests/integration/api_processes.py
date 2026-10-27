@@ -4,6 +4,7 @@ Only synthetic source and a temporary random token are used. Never prints secret
 """
 
 import concurrent.futures
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -31,6 +32,14 @@ def main():
         subprocess.run([str(root / ".local/bin/migrate"), command], env=env, check=True)
 
     with tempfile.TemporaryDirectory(prefix="oj-api-processes-") as temp:
+        material_root = Path(temp) / "materials"
+        material_root.mkdir(mode=0o700)
+        fixture_env = dict(env, OJ_MATERIAL_ROOT=str(material_root))
+        for _ in range(2):
+            subprocess.run([str(root / ".local/bin/migrate"), "fixture"], env=fixture_env, check=True)
+        for data in (b"1 2\n", b"3\n", b"-7 4\n", b"-3\n"):
+            assert (material_root / hashlib.sha256(data).hexdigest()).read_bytes() == data
+        assert len(list(material_root.iterdir())) == 4
         token = secrets.token_urlsafe(32)
         token_path = Path(temp) / "token"
         token_path.write_text(token)

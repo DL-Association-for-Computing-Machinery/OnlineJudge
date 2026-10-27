@@ -14,6 +14,7 @@ import (
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/db"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materials"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/workerapi"
 )
@@ -56,14 +57,23 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	var materialService *materials.Service
+	if path := os.Getenv("OJ_MATERIAL_ROOT"); path != "" {
+		reader, err := materials.OpenLocal(path)
+		if err != nil {
+			return err
+		}
+		defer reader.Close()
+		materialService = materials.New(store, reader)
+	}
 	server := &http.Server{
-		Addr: addr, Handler: workerapi.NewHandler(store, tlsConfig.ClientCAs), TLSConfig: tlsConfig,
+		Addr: addr, Handler: workerapi.NewHandler(store, tlsConfig.ClientCAs, materialService), TLSConfig: tlsConfig,
 		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second,
 		WriteTimeout: 15 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 8192,
 	}
 	result := make(chan error, 1)
 	go func() { result <- server.ListenAndServeTLS("", "") }()
-	logger.Info("Worker controller starting", "address", addr, "scope", "m0-lease-protocol-only")
+	logger.Info("Worker controller starting", "address", addr, "scope", "m0-lease-and-material-protocol")
 	select {
 	case err := <-result:
 		return err

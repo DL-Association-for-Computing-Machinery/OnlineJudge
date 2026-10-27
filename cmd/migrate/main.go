@@ -44,6 +44,11 @@ func run() error {
 		if err != nil {
 			return err
 		}
+		if path := os.Getenv("OJ_MATERIAL_ROOT"); path != "" {
+			if err := experiment.WriteMaterials(path); err != nil {
+				return err
+			}
+		}
 		if err := store.RegisterFixture(ctx); err != nil {
 			return err
 		}

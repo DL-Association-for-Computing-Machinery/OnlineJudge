@@ -37,6 +37,8 @@ Go 标准 testing、真实 PostgreSQL/Redis（Testcontainers for Go 优先验证
 
 2026-10-27 新增 mTLS 租约子项，沿用现有 jobs：`backend` 包含证书/HTTP 边界的 race 测试和 `worker-api` 构建；`integration` 在临时数据库上自行构建并启动两个真实控制端子进程，以动态签发的临时证书验证两个节点客户端，不依赖生产秘密、外网 PKI 或特权 VM。结果为合成回报，完整判题与沙箱仍独立验收。此次未修改 CI 配置；远端结果以当前 PR head 为准。
 
+同日材料子项沿用上述 jobs：`backend` 验证有界快照、摘要、异常文件和读取后再次授权；`integration` 验证双控制端的源码/清单/四文件下载、失效授权、真实行锁等待及 CLI 合成初始化。单元测试的授权竞态为依赖注入，协议和锁测试使用真实 TLS/进程/PostgreSQL；不把这些测试当成 Worker 缓存、沙箱执行或容量验收。
+
 已有 `backend` / `frontend` jobs，分别执行 `make go-check go-build`、`make web-check`。`integration` job 使用独立 PostgreSQL 14 临时服务，检查 sqlc v1.31.1 生成差异及事务/迁移/租约真实测试；loopback trust 仅限一次性 CI 数据库，不作为部署配置。本地 `make db-test` 额外启动两个真实 API 子进程。专用 VM 的 `sandbox-test` 与普通 PR CI 分离。本地与 PR #1 首轮 CI 均已通过，具体 head 及运行见[交付日志](delivery-log.md)，实验边界见[M0 记录](m0-experiment.md)。
 
 ### 随功能交付建立的验收目录

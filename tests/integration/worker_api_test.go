@@ -44,11 +44,13 @@ func testWorkerAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool, store 
 		pair, _, _ := ca.Issue(t, "spiffe://onlinejudge/worker/"+id+"/1", x509.ExtKeyUsageClientAuth, time.Now().Add(time.Hour))
 		clients[i] = workerClient(t, ca.Roots, pair)
 	}
-	urls := []string{startWorkerController(t, binary, ca.CAFile, certFile, keyFile, clients[0]), startWorkerController(t, binary, ca.CAFile, certFile, keyFile, clients[1])}
+	materialRoot := t.TempDir()
+	must(t, experiment.WriteMaterials(materialRoot))
+	urls := []string{startWorkerController(t, binary, ca.CAFile, certFile, keyFile, clients[0], materialRoot), startWorkerController(t, binary, ca.CAFile, certFile, keyFile, clients[1], materialRoot)}
 	seq := 0
 	accept := func() submission.Receipt {
 		seq++
-		row, _, err := store.Accept(ctx, "tls-fixture", "m0-training", fmt.Sprintf("tls-fixture-%08d", seq), submission.Request{MaterialVersion: experiment.Version, Language: "gnu++17", Source: "// synthetic protocol fixture; never executed\n"})
+		row, _, err := store.Accept(ctx, "tls-fixture", "m0-training", fmt.Sprintf("tls-fixture-%08d", seq), submission.Request{MaterialVersion: experiment.Version, Language: "gnu++17", Source: "// synthetic protocol fixture; 原样源码😀; never executed\n"})
 		must(t, err)
 		return row
 	}
@@ -119,7 +121,10 @@ func testWorkerAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool, store 
 		call(clients[1-winner], urls[winner], "renew", renew(l), 409)
 		call(clients[1-winner], urls[winner], "report", report(l, "AC"), 409)
 		call(clients[winner], urls[1-winner], "renew", renew(l), 200)
+		testWorkerMaterials(t, clients[winner], clients[1-winner], urls, materialRoot, l.ID, l.Token)
 		call(clients[winner], urls[0], "report", report(l, "AC"), 204)
+		call(clients[winner], urls[1], "assignment", renew(l), 409)
+		call(clients[winner], urls[0], "material", materialBody(l.Token), 409)
 		call(clients[winner], urls[1], "report", report(l, "AC"), 204)
 		call(clients[winner], urls[1], "report", report(l, "WA"), 409)
 		row, err := store.Get(ctx, "tls-fixture", "m0-training", expected.ID)
@@ -141,6 +146,8 @@ func testWorkerAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool, store 
 		}
 		call(clients[0], urls[0], "claim", "{}", 403)
 		call(clients[0], urls[0], "report", report(old, "AC"), 403)
+		call(clients[0], urls[0], "assignment", renew(old), 403)
+		call(clients[0], urls[1], "material", materialBody(old.Token), 403)
 		_, err = pool.Exec(ctx, `UPDATE worker_nodes SET enabled=true,credential_version=2 WHERE id=$1`, nodes[0])
 		must(t, err)
 		call(clients[0], urls[1], "claim", "{}", 403)
@@ -148,6 +155,8 @@ func testWorkerAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool, store 
 		fresh := workerClient(t, ca.Roots, pair)
 		call(fresh, urls[0], "renew", renew(old), 409)
 		call(fresh, urls[0], "report", report(old, "AC"), 409)
+		call(fresh, urls[0], "assignment", renew(old), 409)
+		call(fresh, urls[1], "material", materialBody(old.Token), 409)
 		_, err = store.Recover(ctx)
 		must(t, err)
 		current := claim(fresh, urls[1])
@@ -163,15 +172,26 @@ func testWorkerAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool, store 
 		must(t, err)
 		call(clients[1], urls[1], "renew", renew(old), 409)
 		call(clients[1], urls[1], "report", report(old, "AC"), 409)
+		call(clients[1], urls[1], "assignment", renew(old), 409)
+		call(clients[1], urls[0], "material", materialBody(old.Token), 409)
 		_, err = store.Recover(ctx)
 		must(t, err)
 		current := claim(clients[1], urls[1])
+		call(clients[1], urls[0], "assignment", renew(old), 409)
+		call(clients[1], urls[0], "material", materialBody(old.Token), 409)
 		call(clients[1], urls[0], "report", report(old, "AC"), 409)
 		call(clients[1], urls[0], "report", report(current, "AC"), 204)
 	})
 	t.Run("unregistered certificate identity denied", func(t *testing.T) {
 		pair, _, _ := ca.Issue(t, "spiffe://onlinejudge/worker/unregistered/1", x509.ExtKeyUsageClientAuth, time.Now().Add(time.Hour))
 		call(workerClient(t, ca.Roots, pair), urls[0], "claim", "{}", 403)
+	})
+	t.Run("material lease locks and generations", func(t *testing.T) {
+		testMaterialLocks(t, ctx, pool, store, submission.NodeIdentity{ID: nodes[1], CredentialVersion: 1})
+	})
+	t.Run("unconfigured materials fail closed", func(t *testing.T) {
+		base := startWorkerController(t, binary, ca.CAFile, certFile, keyFile, clients[1])
+		call(clients[1], base, "assignment", `{"lease_token":"`+strings.Repeat("a", 64)+`"}`, 503)
 	})
 }
 
@@ -201,7 +221,7 @@ func workerRequest(client *http.Client, base, action, body string) (int, []byte,
 	return resp.StatusCode, data, reused, err
 }
 
-func startWorkerController(t *testing.T, binary, ca, cert, key string, client *http.Client) string {
+func startWorkerController(t *testing.T, binary, ca, cert, key string, client *http.Client, materialRoot ...string) string {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	must(t, err)
@@ -210,6 +230,9 @@ func startWorkerController(t *testing.T, binary, ca, cert, key string, client *h
 	cmd := exec.Command(binary)
 	// Do not inherit credentials or configuration from the invoking user's environment.
 	cmd.Env = []string{"OJ_WORKER_API_ADDR=" + addr, "OJ_WORKER_CA_FILE=" + ca, "OJ_WORKER_CERT_FILE=" + cert, "OJ_WORKER_KEY_FILE=" + key, "OJ_DATABASE_URL=" + os.Getenv("OJ_TEST_DATABASE_URL")}
+	if len(materialRoot) > 0 {
+		cmd.Env = append(cmd.Env, "OJ_MATERIAL_ROOT="+materialRoot[0])
+	}
 	logFile, err := os.Create(filepath.Join(t.TempDir(), "controller.log"))
 	must(t, err)
 	cmd.Stdout = logFile

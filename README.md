@@ -7,12 +7,12 @@
 - [精简交付基线 v1.0](docs/delivery-plan.md)：技术栈引入时机、训练试用/完整训练范围、分阶段验收和待补条件。
 - [首期开发计划](docs/phase-1-development-plan.md)：0B → 1A → 1B 的任务依赖、P0—P7 开发包、里程碑与验收证据要求。
 - [M0 实验记录与复现](docs/m0-experiment.md)：数据库、双 API 进程、任务租约及 Linux 沙箱的实际证据与未覆盖项；M0 整体验收尚未通过，健康接口不代表判题就绪。
-- [Worker mTLS 租约契约](api/worker.openapi.yaml)：专用控制端的认证领取、续租与结果回报；两个真实控制端进程和 TLS 客户端已验证，回报仍为合成夹具。
+- [Worker mTLS 契约](api/worker.openapi.yaml)：认证领取、续租、结果回报及有效租约限定的源码/材料下载与哈希校验；两个真实控制端进程和 TLS 客户端已验证，回报仍为合成夹具。
 - 模块化单体＋独立判题 Worker；不创建空业务层，不把所有模块拆成服务。
 - 既有 Redis 会话路线保留待验证，新增 PostgreSQL 会话对比；未做未经确认的替换。
 - 已引入 PostgreSQL 实验、sqlc/pgx/Goose；go-judge 仅进入专用 Linux VM 的隔离实验。Redis 会话、River 与监控备份服务尚未接入。
 - 多文件/ZIP 提交、自测与辅助能力不作为训练试用前置；完整语言、比赛及后续需求保留。
-- 0A 和 M0 分项已按逻辑分组提交；main 已建立并保护，[PR #1](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/1) 待人工审查，远端 CI 证据见交付日志。未部署，M0 整体仍未通过。
+- 0A 和 M0 分项已按逻辑分组提交；main 已建立并保护，PR #1 和 [PR #2](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/2) 已合并，后续按单功能 PR 推进；验证证据见交付日志。未部署，M0 整体仍未通过。
 
 ## 运行环境
 
@@ -45,6 +45,8 @@ pnpm --dir web dev
 `make worker` 仍只提示任务/沙箱未接入后退出。API 可通过 `OJ_API_ADDR` 改监听地址；若改端口，同时调整 Vite 代理。默认没有业务接口；显式设置 `OJ_EXPERIMENT_TOKEN_FILE` 与 `OJ_DATABASE_URL` 可启用仅 loopback 的 M0 提交接口，见[实验契约](api/experiment.openapi.yaml)与[M0 配置边界](docs/m0-experiment.md)。凭据只放私有本地文件，不提交；未接入 .env 自动加载。
 
 `make worker-api` 启动独立控制端 HTTPS 进程，也可运行 `make go-build` 生成的 `.local/bin/worker-api`。必须提供 `OJ_WORKER_API_ADDR`、`OJ_WORKER_CA_FILE`、`OJ_WORKER_CERT_FILE`、`OJ_WORKER_KEY_FILE` 和 `OJ_DATABASE_URL`，初始化及证书要求见 [M0 Worker 入口](docs/m0-experiment.md#worker-mtls-租约入口)。这是持有数据库连接的控制端，`cmd/worker` 执行端仍是骨架。缺少配置会拒绝启动，无默认开放端口。
+
+材料下载另需 `OJ_MATERIAL_ROOT` 指向专用持久化目录；先显式初始化合成文件，再让控制端只读使用同一目录。命令、预算和回退见[材料入口](docs/m0-experiment.md#有效租约限定的材料入口)。未配置时两个材料接口返回 503，原租约接口保持可用。
 
 ## 检查与构建
 
