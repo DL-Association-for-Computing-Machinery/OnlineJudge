@@ -1,5 +1,18 @@
 # 工程交付记录
 
+## 2026-10-27：真实执行结果摘要与 mTLS 回报
+
+唯一目标：P2、AC28/29 的真实结果归属与可靠确认子项。gh 回读 PR #7 已合并为 `b6b0e428380ae18978b9bb6312c475c7659e7120`，从该主线建立独立 `codex/result-reporting` 工作区，保留原克隆 5 处文档改动。此条为提交前验证快照，提交/PR/CI 以最终实际 head 为准。非目标为领取/材料客户端、常驻 Worker、自动恢复/重试、双 Worker、会话及部署。
+
+- `LeasedRunner.JudgeReport` 在租约守护、执行及清理成功后生成绑定提交/尝试/代次、材料、结果及用量的摘要值；失败不产生可发送结果。`workerclient.Reporter` 使用有界 mTLS、禁止重定向、明确未知/失租/撤销/冲突；未知确认只能原样重报，不能重新执行改变结果。无新增依赖、SQL、迁移或公共 HTTP 契约。
+- `GOPROXY=off make go-check db-test` 通过：格式、vet、race、四个命令构建、临时 PostgreSQL 14.19、双控制端及双 API 的 24 并发/重启回执。macOS arm64 / Go 1.26.10，复用原克隆 `.local/go-mod` 与 `.local/go-build` 缓存，无依赖下载；临时库 `/tmp/oj-postgres.ZyuPYK` 已停止。最初 TLS 基线被沙箱禁止监听端口，经工具审批后通过，未改变测试要求。
+- `OJ_SANDBOX_EXPERIMENT=1 GOPROXY=off make report-test` 通过，Make 命令行指定上述缓存；日志为当前工作区忽略的 `.local/report-test.log`，临时库 `/tmp/oj-postgres.cO0Pw1` 已停止。7 种真实选手判定持久化，提交后丢失响应、跨控制端原样重报、摘要冲突、跨节点、撤销及到期拒绝均通过，共 8 项。使用现有 oj-m0 VM 与固定镜像，无下载/重建，选手代码仅在离线无挂载容器中执行。
+- 联合测试的两个 TLS handler 在同一测试进程，领取/材料准备为直接夹具；独立控制端进程另由数据库回归验证。无详细证据归档、待回报磁盘队列、崩溃恢复或生产停止驱动；不能称为完整 Worker 或 M0 通过。README、M0、协议设计、CI 说明及首期计划已同步，下一项为领取/材料客户端。
+
+收尾复验：原 10 项编排、12 项隔离及真实中止确认均通过 race 沙箱回归，日志 `.local/sandbox-regression.log`；回报联合测试在独立 `report-test` 中实际运行，普通沙箱回归中的显式 skip 不算它的通过证据。仓库策略 130 文件、`git diff --check` 通过；未修改前端或 hooks/CI，未重跑本地前端。专用容器/VM 已停止并保留，Docker context 仍为 desktop-linux。AI 自审覆盖完整任务差异及新增文件，没有独立人工审查或部署。
+
+知识回流事务 `oj-result-reporting-20261027` 已完成，更新实测索引、开发推进、热点、索引与日志 5 页；严格 lint 32 页、375 链接、0 问题，5 页哈希回读一致。语义复核保留真实执行、直接夹具、同进程 TLS handler 与独立控制端测试的区别，不新增 accepted 断言或覆盖 raw。
+
 ## 2026-10-27：租约守护与独占沙箱中止确认
 
 唯一目标：P2、AC28/29 的执行生命周期子项。GitHub CLI 回读 PR #6 已合并，主线 `b50f6a0`；从该主线建立独立 `codex/lease-execution` 工作区，原克隆 5 处文档改动保留。本记录为提交前验证快照，提交/PR/CI 以实际交付结果为准。非目标为领取/材料下载、真实结果回报、自动恢复、双 Worker、会话与部署。

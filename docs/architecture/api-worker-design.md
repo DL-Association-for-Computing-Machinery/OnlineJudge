@@ -1,6 +1,6 @@
 # API、事件与 Worker 协议
 
-日期：2026-10-27。版本：0.6。状态：M0 提交/租约核心、独立 mTLS 租约及任务范围材料下载/哈希校验已实现并实测；本次新增固定实验环境及材料 v2。真实执行客户端、缓存和产品 API 仍待完成。协议见 [Worker OpenAPI](../../api/worker.openapi.yaml)，证据、模块边界及预算见[M0 记录](../m0-experiment.md)。关联 [总体架构](system-design.md)、[判题](judging-design.md)、[存储](storage-design.md)。
+日期：2026-10-27。版本：0.7。状态：M0 提交/租约、mTLS、材料授权、固定 v2 环境、受限编排及租约守护已实测；本次新增真实结果摘要与 mTLS 回报。完整执行客户端、缓存和产品 API 仍待完成。协议见 [Worker OpenAPI](../../api/worker.openapi.yaml)，证据、模块边界及预算见[M0 记录](../m0-experiment.md)。关联 [总体架构](system-design.md)、[判题](judging-design.md)、[存储](storage-design.md)。
 
 ## 1. 契约与错误
 
@@ -29,7 +29,9 @@ Worker 主动拉取，每节点独立身份，mTLS 双向证书认证优先验�
 
 M0 已验证子集：[Worker 契约](../../api/worker.openapi.yaml)提供独立 loopback TLS 1.3 领取/续租/回报及逐次授权材料入口。证书唯一 URI SAN 绑定节点 ID 与凭据版本，逐请求重验证书、逐事务校验节点记录，拒绝代理头/JSON 自报身份；原租约令牌关联节点、尝试及代次，无新增数据库模型。真实控制端进程和 TLS 客户端的证据见 M0 记录。证书生命周期工具与真正执行 Worker 仍未交付。
 
-M0 执行端增加 `workerclient.Renewer` 和 `execution.LeasedRunner`：前者负责有界 mTLS 续租，不依赖数据库；后者通过续租/停止小接口监督独占执行槽，不耦合 HTTP 或 Docker。执行前续租、每 5 秒刷新，从请求前的单调时间计算 25 秒本地预算（控制端固定 30 秒契约），失败或状态未知取消。独立停止确认后仍永久停用旧执行器，禁止把取消 HTTP 当作远程终止。当前仅专用 VM 测试驱动实现整容器停止与 PID 核验；真实回报及 Worker 入口未接入，详见[租约守护](../m0-experiment.md#租约守护与中止确认)。
+M0 执行端增加 `workerclient.Renewer` 和 `execution.LeasedRunner`：前者负责有界 mTLS 续租，不依赖数据库；后者通过续租/停止小接口监督独占执行槽，不耦合 HTTP 或 Docker。执行前续租、每 5 秒刷新，从请求前的单调时间计算 25 秒本地预算（控制端固定 30 秒契约），失败或状态未知取消。独立停止确认后仍永久停用旧执行器，禁止把取消 HTTP 当作远程终止。当前仅专用 VM 测试驱动实现整容器停止与 PID 核验；Worker 入口未接入，详见[租约守护](../m0-experiment.md#租约守护与中止确认)。
+
+真实结果通过 `LeasedRunner.JudgeReport` 在执行/清理成功后形成绑定尝试及材料的 `submission.Result` 摘要值；`workerclient.Reporter` 只负责有界 mTLS 发送与确认分类，不依赖数据库或沙箱。原契约与存储指纹不变；只有 204 确认成功，状态未知保留原租约/原结果供显式重报，不自动重跑选手代码。执行错误不产生回报，详细证据归档及待回报持久化尚未实现。摘要语义、真实数据库/沙箱联合证据和测试夹具边界见[真实结果回报](../m0-experiment.md#真实结果回报)。
 
 实验版本由 `OJ_EXPERIMENT_MATERIAL_VERSION` 显式选择，默认 v1；v2 把本机镜像身份、平台/内核、工具版本、启动参数与预算纳入清单摘要。提交入口和控制端必须匹配版本，旧任务不重标，历史回执仍可查询。未来执行端只能消费已核验的已知配置，不能把清单中的命令当成任意可执行输入；当前仅独立沙箱测试执行环境核验。配置归 `internal/experiment`，SQL/租约模型不变，详见[M0 固定环境](../m0-experiment.md#固定执行环境与新材料版本)。
 

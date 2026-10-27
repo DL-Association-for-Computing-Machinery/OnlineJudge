@@ -136,14 +136,24 @@ func testWorkerAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool, store 
 			t.Fatalf("cross-node renewal accepted: %v", err)
 		}
 		testWorkerMaterials(t, clients[winner], clients[1-winner], urls, materialRoot, l.ID, l.Token)
-		call(clients[winner], urls[0], "report", report(l, "AC"), 204)
+		reporter, err := workerclient.NewReporter(urls[0], ca.Roots, pairs[winner])
+		must(t, err)
+		defer reporter.Close()
+		frozen := submission.Result{Verdict: "AC", EvidenceSHA256: strings.Repeat("a", 64)}
+		must(t, reporter.Report(ctx, l.Token, frozen))
 		if err := renewer.Renew(ctx, l.Token); err != submission.ErrLease {
 			t.Fatalf("completed lease renewed: %v", err)
 		}
 		call(clients[winner], urls[1], "assignment", renew(l), 409)
 		call(clients[winner], urls[0], "material", materialBody(l.Token), 409)
-		call(clients[winner], urls[1], "report", report(l, "AC"), 204)
-		call(clients[winner], urls[1], "report", report(l, "WA"), 409)
+		otherController, err := workerclient.NewReporter(urls[1], ca.Roots, pairs[winner])
+		must(t, err)
+		defer otherController.Close()
+		must(t, otherController.Report(ctx, l.Token, frozen))
+		frozen.Verdict = "WA"
+		if err := otherController.Report(ctx, l.Token, frozen); err != submission.ErrResultConflict {
+			t.Fatalf("conflicting result accepted: %v", err)
+		}
 		row, err := store.Get(ctx, "tls-fixture", "m0-training", expected.ID)
 		must(t, err)
 		if row.State != "finished" || row.Verdict == nil || *row.Verdict != "AC" {

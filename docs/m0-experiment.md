@@ -1,6 +1,6 @@
 # M0 实验实施与验证记录
 
-日期：2026-10-27。状态：**进行中，未通过 M0 整体验收**。已有持久化、租约、材料授权、固定环境和受限编排，本次新增租约守护与中止确认，独立 Linux VM 实测通过。PR/远端 CI 状态见[交付日志](delivery-log.md)。没有部署、真实用户数据或独立人工审查；完整 Worker 与会话仍未交付。
+日期：2026-10-27。状态：**进行中，未通过 M0 整体验收**。已有持久化、租约、材料授权、固定环境、受限编排及租约守护，本次新增真实结果摘要与 mTLS 回报，独立 Linux VM＋PostgreSQL 联合实测通过。PR/远端 CI 状态见[交付日志](delivery-log.md)。没有部署、真实用户数据或独立人工审查；完整 Worker 与会话仍未交付。
 
 ## 已实现与边界
 
@@ -8,12 +8,12 @@
 | --- | --- | --- |
 | `internal/submission`、`postgres` | 源码/任务同事务、主体＋上下文幂等、接收回执/所有权查询；固定合成材料版本与哈希核验 | 真实用户、题目发布授权、全局接收额度、公平调度 |
 | `postgres/leases.go`、`materials.go` | 节点记录逐次授权、单次认领、容量限制、续租、结果条件更新、重复/冲突回报、有限恢复；有效租约读取源码/清单 | 节点运维入口、自动恢复循环、真正 Worker 进程 |
-| `cmd/worker-api`、`internal/workerapi` | 独立 loopback mTLS 控制端；证书身份绑定、逐请求证书验证、租约及材料操作；真实双控制端进程测试 | 证书签发/告警工具、跨主机部署、执行客户端；回报仍为合成数据 |
+| `cmd/worker-api`、`internal/workerapi` | 独立 loopback mTLS 控制端；证书身份绑定、逐请求证书验证、租约及材料操作；真实双控制端进程测试 | 证书签发/告警工具、跨主机部署、完整执行客户端 |
 | `internal/materials` | 任务范围下载、SHA-256 校验、受限本地读取和私有快照、读取后再次授权 | 生产题库发布、Worker 缓存、对象存储与容量/灾备验收 |
 | `db/migrations`、`cmd/migrate` | Goose 独立迁移与 advisory lock，API 只读检查模式版本，显式夹具注册 | 生产升级、模式内容哈希账本、断连及非事务迁移恢复 |
 | `internal/judging` | 有界文本 token 比较，ASCII 大小写规则与显式敏感选项 | 浮点、SPJ、完整结果归因/编排 |
-| `internal/execution`、`internal/workerclient` | 固定 v2 受限编排、mTLS 续租、保守本地租约预算、失效取消、独占沙箱停止确认和永久停用 | 真实回报、通用题目/语言、生产停止适配器及节点接入 |
-| `tests/sandbox` | 真实 GNU++17 编译运行、答案比较、超限、隔离与取消后容器/PID 停止确认 | 从提交到真实结果的闭环、双 Worker、真实数据库撤销到真实沙箱的联合故障注入 |
+| `internal/execution`、`internal/workerclient` | 固定 v2 受限编排、mTLS 续租/结果回报、结果摘要、失效取消、独占沙箱停止确认和永久停用 | 领取/材料客户端、通用题目/语言、生产停止适配器及节点接入 |
+| `tests/sandbox` | 真实编译/运行/比较/超限/隔离/中止；真实结果经双 TLS handler 持久化及重复/拒绝回报 | 完整 Worker 闭环、双 Worker、执行中数据库撤销到沙箱的联合故障注入 |
 
 API 的健康检查仍仅代表进程存活；未启用实验时行为保持原样。实验入口仅在设置 `OJ_EXPERIMENT_TOKEN_FILE` 后注册，启动时强制使用字面量 loopback 地址，凭据文件必须为 owner-private 普通文件。一个静态测试主体 `m0-operator`、一个固定上下文 `m0-training`，拒绝带 Origin 的请求；它不是正式登录、Cookie 或 CSRF 实现，也不是对同主机管理员的安全边界。现有浏览器预览页不接入此凭据。
 
@@ -185,9 +185,21 @@ PR #1 审查修复（2026-10-25，验证时为基于 `a31e021` 的未提交工�
 
 实际证据分层：单元/race 测试注入编译/运行期间的撤销、到期、传输失败、超时、迟到响应，验证周期续租跨过初始预算、未执行点、清理/停止期间容量、取消与完成竞争、永久停用和停止失败。真实双控制端＋PostgreSQL 测试使用新客户端验证跨实例续租、异节点和已完成租约拒绝。`TestLeasedExecutionConfirmsHostStop` 在专用离线 VM 观测真实休眠选手 PID 后取消，用固定容器 ID 执行 KILL，检查 `Running=false/Pid=0/Restarting=false` 及 VM `/proc/<pid>` 消失，后续点保持 NOT_RUN，旧 Runner 不能复用。测试恢复容器后重跑原 10 项编排与 12 项隔离回归，全部通过。
 
-停止适配器目前仅是 `tests/sandbox` 的实验驱动，续租在该真实沙箱用例中为注入成功响应；不能称为数据库撤销到沙箱的完整联调或生产节点驱动。KILL 行为依据 [Docker 官方文档](https://docs.docker.com/reference/cli/docker/container/kill/)，停止事实以上述实际状态/PID 检查为准。首次 PID 核验因 Colima SSH 继承无挂载的宿主仓库目录而失败，驱动固定 `/tmp` 后重跑通过，没有放宽断言。真实回报、领取/材料下载客户端、自动恢复、双 Worker 与完整 M0 未完成。
+停止适配器目前仅是 `tests/sandbox` 的实验驱动，续租在该真实沙箱用例中为注入成功响应；不能称为数据库撤销到沙箱的完整联调或生产节点驱动。KILL 行为依据 [Docker 官方文档](https://docs.docker.com/reference/cli/docker/container/kill/)，停止事实以上述实际状态/PID 检查为准。首次 PID 核验因 Colima SSH 继承无挂载的宿主仓库目录而失败，驱动固定 `/tmp` 后重跑通过，没有放宽断言。真实回报现已在下节独立验证；领取/材料下载客户端、自动恢复、双 Worker 与完整 M0 未完成。
 
 复现：`GOPROXY=off make go-check db-test`；已有专用 VM/容器按前置启动后，`OJ_SANDBOX_EXPERIMENT=1 go test -race -count=1 -tags=sandbox ./tests/sandbox -v`。本机依赖复用缓存，具体命令/日志见交付记录。无迁移/配置变化；回退本次代码即可，实验容器恢复必须在旧请求排空后重新核验环境，数据库任务与历史保留。
+
+## 真实结果回报
+
+唯一目标为 P2、AC28/29 的真实结果归属与可靠确认子项。`LeasedRunner.JudgeReport` 在执行前核对提交 ID、租约格式及正数代次/尝试号；复用已验证材料与租约守护，只有执行和制品清理成功才返回 `submission.Result` 值。执行、清理、租约、取消或停止确认错误均不生成可发送结果，交由既有控制端有界恢复处理；当前没有自动恢复循环。客户端不能把本地错误转换成选手失败，也不会在失去授权后发送 SE。
+
+`m0-execution-evidence-v1` 的固定结构 JSON 摘要绑定提交、判题/恢复代次、尝试号、材料版本、语言、源码/清单哈希、最终判定、编译状态/退出/资源/截断证据、有序逐点状态/资源/截断及峰值。清单哈希绑定环境、检查器和测试顺序。凭据、源码正文、答案、原始输出、临时制品 ID 不进入摘要对象；回报正文仅发送租约令牌、判定与摘要，不输出令牌到错误或日志。摘要结构演进须更换 schema 标识；服务端仍按现有结果指纹进行去重，HTTP/SQL/迁移保持兼容。摘要是可信节点的证据指纹，不是对恶意节点的远程证明；详细证据归档仍待实现。
+
+`workerclient.NewReporter(...).Report(ctx, token, frozenResult)` 使用独立 mTLS 客户端连接预算，沿用续租的显式 HTTPS/CA/节点证书、3 秒超时、禁止重定向。只把 204 当作确认；401/403 为节点失效，409 的有界 Problem Details 区分租约失效与结果冲突；断连、超时、503、异常状态/正文均返回 `ErrReportUnknown`。无隐式重试；调用方保留原租约和已冻结结果原样重报，不能重新执行以重算摘要。当前仅返回内存值，无磁盘待回报队列、崩溃恢复或自动重试调度。执行结束至回报的授权竞态由数据库最终校验；已经接受的完全相同历史回报仍可确认。
+
+验证：`OJ_SANDBOX_EXPERIMENT=1 make report-test` 建立独立临时数据库，先运行既有双 API/双控制端回归，再通过专用离线 Linux 沙箱、真实 mTLS 续租、两个 TLS handler 和 PostgreSQL 跑 8 项联合用例。AC/WA/CE/RE/TLE/MLE/OLE 均真实执行并持久化；服务端提交后主动断开响应，另一控制端原样重报通过，修改摘要返回冲突、错误节点拒绝；真实 AC 在节点撤销时拒绝，另一个真实 AC 到期后不生效。逐项回读数据库中的 verdict 和摘要。领取/材料准备由测试夹具直接完成，两个 handler 在同一测试进程内；独立控制端子进程另由 `db-test` 验证，不能称为双 Worker 端到端交付。
+
+单元/race 覆盖摘要归属、用量、未执行点、私有临时信息排除、清理失败/失租/取消不生成回报、未知响应/重定向/超时及原样重试。未引入依赖、公共配置或数据库变更；回退新增调用方即可，保留已接受的历史结果与任务。下一项为领取/材料客户端及 Worker 入口，生产停止驱动、自动恢复、详细证据保存、双 Worker 与会话仍未交付。
 
 ## 组件准入与下一步
 
@@ -195,6 +207,6 @@ pgx v5.11.0、Goose v3.29.0、sqlc v1.31.1 已核对官方版本/本地模块许
 
 go-judge v1.13.3 官方 arm64 镜像约 58 MB，GCC 15 镜像约 532 MB；实际 GCC 为 15.3.0。固定 tag 的 MIT 许可证已核对并保存 `.local/go-judge-v1.13.3-LICENSE`，SHA-256 为 `a84a0427c3a1c25851a4689410a54283962a759a02558058a107470993b80c5a`；GCC/基础发行版各组件许可及安全清单尚未完整核验，只准入隔离实验，不准入生产或对外分发。[pgx 发布](https://github.com/jackc/pgx/releases/tag/v5.11.0)、[Goose 发布](https://github.com/pressly/goose/releases/tag/v3.29.0)、[sqlc 发布](https://github.com/sqlc-dev/sqlc/releases/tag/v1.31.1)、[go-judge 版本](https://github.com/criyle/go-judge/releases/tag/v1.13.3)、[隔离与 API](https://docs.goj.ac/api)为核验入口。
 
-本次完成固定 v2 的租约守护与中止确认子项；下一项接入真实回报，再贯通领取/材料客户端、双 API＋双 Worker 及会话关键实验。既有 mTLS、材料、环境及编排子项不能替代完整链路；`m0-sum-v1` 继续保持 unvalidated。生产节点检查器、传输、恢复及材料下载客户端仍须独立验证。
+本次完成固定 v2 的真实结果回报子项；下一项贯通领取/材料客户端，再接 Worker 入口、双 API＋双 Worker 及会话关键实验。既有 mTLS、材料、环境及编排子项不能替代完整链路；`m0-sum-v1` 继续保持 unvalidated。生产节点检查器、传输、恢复及材料下载客户端仍须独立验证。
 
 M0 仍待完整链路与会话实验；M1/M2 仍需试用范围、题库授权、SMTP/HTTPS、负载目标、RPO/RTO 与独立备份位置。不能把本页分项通过视作首期平台可用。
