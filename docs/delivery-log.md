@@ -9,6 +9,17 @@
 - 实际本地验证：`python3 scripts/repo_policy.py repository`（110 文件）、`python3 -B -m unittest discover -s tests/governance -v`（25 项）和 `git diff --check` 通过。本次只改规则与文档，未修改应用、hooks 或 CI；未重跑本地应用/沙箱测试。PR CI 以该分支实际 head 为准，不能沿用 PR #4 结果。
 
 按本次持续授权继续完成正常 hooks 提交、分支推送、CLI 创建 PR 与 CI 核验；最终提交号和检查状态以 Git 历史、对应 PR 及知识库交付记录为准。不自动合并或发布。
+## 2026-10-27：固定 GNU++17 实验环境与材料 v2
+
+唯一目标：P1/P2 的固定执行环境及新材料版本子项。已通过 GitHub 回读 PR #3 合并提交 `e69129d65334e5a7220cbf141b5cf33f5b8a6dc6` 并 fetch，从该主线新建独立工作区/分支 `codex/execution-environment`。以下记录本地验证阶段，当时尚未提交；随后用户授权提交、推送、创建 PR 并检查 CI，实际提交和远端结果以 Git 历史及对应 PR 检查为准。未授权合并或部署。原克隆 5 处文档改动保留。
+
+- 复用并核验已有专用 VM 中的镜像 config ID、Linux arm64/内核、GCC/go-judge 版本、启动参数与资源预算。环境描述归 `internal/experiment`，`m0-sum-v2` 的规范清单包含完整描述，旧 v1 字节/hash 不变。API、控制端和夹具 CLI 共用显式版本选择，默认 v1；无依赖、SQL、索引或迁移变化。版本并存与回退规则见[M0 记录](m0-experiment.md#固定执行环境与新材料版本)。
+- 新增真实数据库/mTLS 场景，验证 v2 显式注册、旧控制端不领取 v2、清单/源码精确字节摘要、材料下载、版本冲突和环境篡改拒绝。双 API 测试增加 v2 接收/幂等与 v1 历史回执；原 24 并发与重启恢复保留。
+- 实际验证（macOS arm64、Go 1.26.10、PostgreSQL 14.19）：修改前 `GOPROXY=off make go-check db-test` 通过；默认沙箱首次因 httptest 本机监听权限失败，经工具审批后运行。新增集成首次捕获嵌套结构体 JSON 顺序与 JSONB 规范字节不一致，统一规范化后通过。最终相同命令通过格式/vet/race/四命令构建、真实数据库和进程回归；通过 Make 参数复用原克隆 `.local/go-mod`/`.local/go-build` 缓存，禁用下载。最终日志 `/tmp/oj-environment-final.log`；临时数据库 `/tmp/oj-postgres.gdEM5M` 自动停止。
+- `OJ_SANDBOX_EXPERIMENT=1 GOPROXY=off make sandbox-test` 通过：执行前核验固定环境及运行隔离，12 项 GNU++17/文本结果、超限、文件/网络隔离和缓存清理全部通过。最终日志 `/tmp/oj-environment-sandbox-final.log`。本次未改/未重跑前端、未修改治理 hooks/CI，尚无本分支远端 CI 或独立人工审查。
+- 同步 README、两份实验契约、M0、协议设计与首期计划。完整 Worker、租约中止、真实回报、跨节点分发、完整镜像许可证/CVE 和 M0 综合验收仍未完成；本机 image ID 不是可 pull 的 registry digest。下一项独立目标为受限执行编排。
+
+收尾核验：仓库策略检查 114 文件及 `git diff --check` 通过，3 份 API YAML 解析通过（未运行完整 OpenAPI 校验器）；专用容器已停止，`colima list` 回读 oj-m0 为 Stopped，原 Docker context 仍是 desktop-linux。知识事务 `oj-execution-environment-20261027` 已 inspect/apply，更新实测索引、推进、热点、索引与日志 5 页，回读哈希一致；严格 lint 32 页、369 链接、0 问题，另行核对协议/独立沙箱与完整闭环的语义边界。可恢复草稿 `.local/execution-environment-vault-transaction.json`；未新增 accepted 账本断言、未改 raw，无已绑定外部飞书同步目标。
 
 ## 2026-10-27：有效租约限定的材料下载与哈希校验
 

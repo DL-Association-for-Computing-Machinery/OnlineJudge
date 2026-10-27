@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/judging"
 )
 
@@ -68,22 +69,25 @@ func execute(t *testing.T, command map[string]any) outcome {
 }
 
 func base(args []string, input string) map[string]any {
+	p := experiment.PinnedEnvironment()
 	return map[string]any{
-		"args": args, "env": []string{"PATH=/usr/local/bin:/usr/bin:/bin", "LANG=C", "LD_LIBRARY_PATH=/usr/local/lib64"},
-		"files":    []any{map[string]any{"content": input}, map[string]any{"name": "stdout", "max": 4096}, map[string]any{"name": "stderr", "max": 4096}},
-		"cpuLimit": 200000000, "clockLimit": 2000000000, "memoryLimit": 32 << 20, "procLimit": 16,
+		"args": args, "env": p.Env,
+		"files":    []any{map[string]any{"content": input}, map[string]any{"name": "stdout", "max": p.OutputBytes}, map[string]any{"name": "stderr", "max": p.OutputBytes}},
+		"cpuLimit": p.Run.CPU, "clockLimit": p.Run.Wall, "memoryLimit": p.Run.Memory, "procLimit": p.Run.Processes,
 	}
 }
 
 func compile(t *testing.T, source string) (string, outcome) {
 	t.Helper()
-	command := base([]string{"/usr/local/bin/g++", "-std=gnu++17", "-O2", "-pipe", "main.cpp", "-o", "main"}, "")
-	command["cpuLimit"] = 10000000000
-	command["clockLimit"] = 15000000000
-	command["memoryLimit"] = 512 << 20
+	p := experiment.PinnedEnvironment()
+	command := base(p.CompileArgs, "")
+	command["cpuLimit"] = p.Compile.CPU
+	command["clockLimit"] = p.Compile.Wall
+	command["memoryLimit"] = p.Compile.Memory
+	command["procLimit"] = p.Compile.Processes
 	command["copyIn"] = map[string]any{"main.cpp": map[string]any{"content": source}}
 	command["copyOutCached"] = []string{"main?"}
-	command["copyOutMax"] = 1 << 20
+	command["copyOutMax"] = p.ExecutableBytes
 	result := execute(t, command)
 	id := result.IDs["main"]
 	if id != "" {
@@ -94,12 +98,13 @@ func compile(t *testing.T, source string) (string, outcome) {
 
 func run(t *testing.T, id, input string) outcome {
 	t.Helper()
-	command := base([]string{"main"}, input)
+	command := base(experiment.PinnedEnvironment().RunArgs, input)
 	command["copyIn"] = map[string]any{"main": map[string]any{"fileId": id}}
 	return execute(t, command)
 }
 
 func TestSandbox(t *testing.T) {
+	verifyEnvironment(t)
 	var config struct {
 		Runner struct {
 			CgroupType  int      `json:"cgroupType"`

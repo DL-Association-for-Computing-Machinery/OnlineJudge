@@ -40,7 +40,11 @@ func run() error {
 		if err := db.CheckSchema(ctx, pool); err != nil {
 			return err
 		}
-		store, err := postgres.New(pool, experiment.Version, experiment.Manifest())
+		version, manifest, err := experiment.SelectFixture(os.Getenv("OJ_EXPERIMENT_MATERIAL_VERSION"))
+		if err != nil {
+			return err
+		}
+		store, err := postgres.New(pool, version, manifest)
 		if err != nil {
 			return err
 		}
@@ -52,7 +56,7 @@ func run() error {
 		if err := store.RegisterFixture(ctx); err != nil {
 			return err
 		}
-		fmt.Println("M0 synthetic fixture registered; execution remains unvalidated")
+		fmt.Println("M0 synthetic fixture registered:", version, "; full Worker execution remains unvalidated")
 		return nil
 	}
 	conn, err := sql.Open("pgx", dsn)
