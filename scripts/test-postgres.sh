@@ -21,3 +21,8 @@ go test -race -count=1 -tags=integration ./tests/integration -v
 createdb -h "$oj_test_dir" -U oj_test oj_process_test
 export OJ_TEST_DATABASE_URL="host=$oj_test_dir user=oj_test dbname=oj_process_test sslmode=disable"
 python3 tests/integration/api_processes.py
+if [ "${OJ_SANDBOX_REPORT:-0}" = "1" ]; then
+    createdb -h "$oj_test_dir" -U oj_test oj_report_test
+    export OJ_TEST_DATABASE_URL="host=$oj_test_dir user=oj_test dbname=oj_report_test sslmode=disable"
+    go test -race -count=1 -tags=sandbox ./tests/sandbox -run '^TestExecutionReport$' -v
+fi

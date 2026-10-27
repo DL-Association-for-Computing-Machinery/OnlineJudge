@@ -1,4 +1,4 @@
-.PHONY: api worker worker-api go-check go-build web-check check db-test sqlc sandbox-test
+.PHONY: api worker worker-api go-check go-build web-check check db-test sqlc sandbox-test report-test
 
 # Keep downloaded toolchains, dependency caches and binaries out of source Git.
 export GOCACHE := $(CURDIR)/.local/go-build
@@ -30,6 +30,10 @@ sqlc:
 
 db-test: go-build
 	sh scripts/test-postgres.sh
+
+# Requires the same dedicated, offline Linux sandbox as sandbox-test.
+report-test: go-build
+	OJ_SANDBOX_REPORT=1 sh scripts/test-postgres.sh
 
 sandbox-test:
 	go test -count=1 -tags=sandbox ./tests/sandbox -v
