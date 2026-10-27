@@ -7,6 +7,7 @@
 - [精简交付基线 v1.0](docs/delivery-plan.md)：技术栈引入时机、训练试用/完整训练范围、分阶段验收和待补条件。
 - [首期开发计划](docs/phase-1-development-plan.md)：0B → 1A → 1B 的任务依赖、P0—P7 开发包、里程碑与验收证据要求。
 - [M0 实验记录与复现](docs/m0-experiment.md)：数据库、双 API 进程、任务租约及 Linux 沙箱的实际证据与未覆盖项；M0 整体验收尚未通过，健康接口不代表判题就绪。
+- [Worker mTLS 租约契约](api/worker.openapi.yaml)：专用控制端的认证领取、续租与结果回报；两个真实控制端进程和 TLS 客户端已验证，回报仍为合成夹具。
 - 模块化单体＋独立判题 Worker；不创建空业务层，不把所有模块拆成服务。
 - 既有 Redis 会话路线保留待验证，新增 PostgreSQL 会话对比；未做未经确认的替换。
 - 已引入 PostgreSQL 实验、sqlc/pgx/Goose；go-judge 仅进入专用 Linux VM 的隔离实验。Redis 会话、River 与监控备份服务尚未接入。
@@ -43,6 +44,8 @@ pnpm --dir web dev
 
 `make worker` 仍只提示任务/沙箱未接入后退出。API 可通过 `OJ_API_ADDR` 改监听地址；若改端口，同时调整 Vite 代理。默认没有业务接口；显式设置 `OJ_EXPERIMENT_TOKEN_FILE` 与 `OJ_DATABASE_URL` 可启用仅 loopback 的 M0 提交接口，见[实验契约](api/experiment.openapi.yaml)与[M0 配置边界](docs/m0-experiment.md)。凭据只放私有本地文件，不提交；未接入 .env 自动加载。
 
+`make worker-api` 启动独立控制端 HTTPS 进程，也可运行 `make go-build` 生成的 `.local/bin/worker-api`。必须提供 `OJ_WORKER_API_ADDR`、`OJ_WORKER_CA_FILE`、`OJ_WORKER_CERT_FILE`、`OJ_WORKER_KEY_FILE` 和 `OJ_DATABASE_URL`，初始化及证书要求见 [M0 Worker 入口](docs/m0-experiment.md#worker-mtls-租约入口)。这是持有数据库连接的控制端，`cmd/worker` 执行端仍是骨架。缺少配置会拒绝启动，无默认开放端口。
+
 ## 检查与构建
 
 ```sh
@@ -58,7 +61,7 @@ python3 scripts/repo_policy.py repository
 python3 -B -m unittest discover -s tests/governance -v
 ```
 
-真实临时数据库与两个 API 子进程测试：`make db-test`（需本机 `initdb/pg_ctl/createdb`、Python 3，自动建立独立私有目录并停止临时数据库）。专用 `oj-m0` VM 与沙箱启动后运行 `OJ_SANDBOX_EXPERIMENT=1 make sandbox-test`；不可在共享 Docker 主机或宿主直接运行选手代码，详细前置与清理见[M0 记录](docs/m0-experiment.md)。数据库和沙箱测试不在快速 `make check` 中静默跳过或冒充通过。
+真实临时数据库、两个提交 API 子进程、两个 mTLS 控制端子进程及两个节点客户端测试：`make db-test`（需本机 `initdb/pg_ctl/createdb`、Python 3，自动建立独立私有目录并停止临时数据库）。专用 `oj-m0` VM 与沙箱启动后运行 `OJ_SANDBOX_EXPERIMENT=1 make sandbox-test`；不可在共享 Docker 主机或宿主直接运行选手代码，详细前置与清理见[M0 记录](docs/m0-experiment.md)。数据库和沙箱测试不在快速 `make check` 中静默跳过或冒充通过。
 
 产物位于忽略的 `.local/bin/` 和 `web/dist/`。独立迁移程序为 `.local/bin/migrate`；实验数据库迁移/回退边界见 M0 记录。`pnpm --dir web preview` 仅预览静态构建；生产入口、HTTPS 与部署尚未配置，不用 Vite dev server 承担正式比赛。
 

@@ -18,15 +18,15 @@ import (
 
 // Synthetic result reports test persistence only. No contestant program runs here.
 func testLeases(t *testing.T, ctx context.Context, pool *pgxpool.Pool, first, second *postgres.Store) {
-	nodes := []postgres.NodeIdentity{{ID: "test-node-a", CredentialVersion: 1}, {ID: "test-node-b", CredentialVersion: 1}}
+	nodes := []submission.NodeIdentity{{ID: "test-node-a", CredentialVersion: 1}, {ID: "test-node-b", CredentialVersion: 1}}
 	for _, n := range nodes {
 		_, err := pool.Exec(ctx, `INSERT INTO worker_nodes(id,credential_version) VALUES($1,$2)`, n.ID, n.CredentialVersion)
 		must(t, err)
 	}
-	ac := postgres.Result{Verdict: "AC", EvidenceSHA256: strings.Repeat("a", 64)}
+	ac := submission.Result{Verdict: "AC", EvidenceSHA256: strings.Repeat("a", 64)}
 	for range 16 {
 		lease, err := first.Claim(ctx, nodes[0])
-		if errors.Is(err, postgres.ErrNoTask) {
+		if errors.Is(err, submission.ErrNoTask) {
 			break
 		}
 		must(t, err)
@@ -48,8 +48,8 @@ func testLeases(t *testing.T, ctx context.Context, pool *pgxpool.Pool, first, se
 	t.Run("two nodes compete without duplicate claims", func(t *testing.T) {
 		expected := accept()
 		type answer struct {
-			node  postgres.NodeIdentity
-			lease postgres.Lease
+			node  submission.NodeIdentity
+			lease submission.Lease
 			err   error
 		}
 		results := make(chan answer, 2)
@@ -66,7 +66,7 @@ func testLeases(t *testing.T, ctx context.Context, pool *pgxpool.Pool, first, se
 		close(results)
 		successes := 0
 		for result := range results {
-			if errors.Is(result.err, postgres.ErrNoTask) {
+			if errors.Is(result.err, submission.ErrNoTask) {
 				continue
 			}
 			must(t, result.err)
@@ -74,7 +74,7 @@ func testLeases(t *testing.T, ctx context.Context, pool *pgxpool.Pool, first, se
 			if result.lease.SubmissionID != expected.ID {
 				t.Fatal("wrong task claimed")
 			}
-			if _, err := first.Claim(ctx, result.node); !errors.Is(err, postgres.ErrNoTask) {
+			if _, err := first.Claim(ctx, result.node); !errors.Is(err, submission.ErrNoTask) {
 				t.Fatal("node over-prefetched")
 			}
 			until, err := second.Renew(ctx, result.node, result.lease.Token)
@@ -86,7 +86,7 @@ func testLeases(t *testing.T, ctx context.Context, pool *pgxpool.Pool, first, se
 			must(t, second.Report(ctx, result.node, result.lease.Token, ac))
 			changed := ac
 			changed.EvidenceSHA256 = strings.Repeat("b", 64)
-			if !errors.Is(second.Report(ctx, result.node, result.lease.Token, changed), postgres.ErrResultConflict) {
+			if !errors.Is(second.Report(ctx, result.node, result.lease.Token, changed), submission.ErrResultConflict) {
 				t.Fatal("conflicting result accepted")
 			}
 		}
@@ -104,10 +104,10 @@ func testLeases(t *testing.T, ctx context.Context, pool *pgxpool.Pool, first, se
 		old, err := first.Claim(ctx, nodes[0])
 		must(t, err)
 		expire(old.Token)
-		if _, err := second.Renew(ctx, nodes[0], old.Token); !errors.Is(err, postgres.ErrLease) {
+		if _, err := second.Renew(ctx, nodes[0], old.Token); !errors.Is(err, submission.ErrLease) {
 			t.Fatal("expired renew accepted")
 		}
-		if !errors.Is(second.Report(ctx, nodes[0], old.Token, ac), postgres.ErrLease) {
+		if !errors.Is(second.Report(ctx, nodes[0], old.Token, ac), submission.ErrLease) {
 			t.Fatal("expired report accepted")
 		}
 		count, err := second.Recover(ctx)
@@ -120,7 +120,7 @@ func testLeases(t *testing.T, ctx context.Context, pool *pgxpool.Pool, first, se
 		if current.SubmissionID != expected.ID || current.AttemptNumber != old.AttemptNumber+1 || current.JudgeGeneration != old.JudgeGeneration || current.RecoveryGeneration != old.RecoveryGeneration {
 			t.Fatal("counters conflated")
 		}
-		if !errors.Is(first.Report(ctx, nodes[0], old.Token, ac), postgres.ErrLease) {
+		if !errors.Is(first.Report(ctx, nodes[0], old.Token, ac), submission.ErrLease) {
 			t.Fatal("old attempt overwrote new attempt")
 		}
 		must(t, second.Report(ctx, nodes[1], current.Token, ac))
@@ -129,15 +129,15 @@ func testLeases(t *testing.T, ctx context.Context, pool *pgxpool.Pool, first, se
 		accept()
 		lease, err := first.Claim(ctx, nodes[0])
 		must(t, err)
-		if _, err := second.Renew(ctx, nodes[1], lease.Token); !errors.Is(err, postgres.ErrLease) {
+		if _, err := second.Renew(ctx, nodes[1], lease.Token); !errors.Is(err, submission.ErrLease) {
 			t.Fatal("foreign node renewed")
 		}
 		_, err = pool.Exec(ctx, `UPDATE worker_nodes SET enabled=false,credential_version=2 WHERE id=$1`, nodes[0].ID)
 		must(t, err)
-		if !errors.Is(first.Report(ctx, nodes[0], lease.Token, ac), postgres.ErrNode) {
+		if !errors.Is(first.Report(ctx, nodes[0], lease.Token, ac), submission.ErrNode) {
 			t.Fatal("revoked node reported")
 		}
-		if _, err := first.Claim(ctx, nodes[0]); !errors.Is(err, postgres.ErrNode) {
+		if _, err := first.Claim(ctx, nodes[0]); !errors.Is(err, submission.ErrNode) {
 			t.Fatal("revoked node claimed")
 		}
 		count, err := second.Recover(ctx)
@@ -147,7 +147,7 @@ func testLeases(t *testing.T, ctx context.Context, pool *pgxpool.Pool, first, se
 		}
 		_, err = pool.Exec(ctx, `UPDATE worker_nodes SET enabled=true WHERE id=$1`, nodes[0].ID)
 		must(t, err)
-		if _, err := first.Claim(ctx, nodes[0]); !errors.Is(err, postgres.ErrNode) {
+		if _, err := first.Claim(ctx, nodes[0]); !errors.Is(err, submission.ErrNode) {
 			t.Fatal("old credential revived")
 		}
 		nodes[0].CredentialVersion = 2
@@ -159,7 +159,7 @@ func testLeases(t *testing.T, ctx context.Context, pool *pgxpool.Pool, first, se
 		expected := accept()
 		se := ac
 		se.Verdict = "SE"
-		var old postgres.Lease
+		var old submission.Lease
 		for i := 1; i <= 3; i++ {
 			lease, err := first.Claim(ctx, nodes[0])
 			must(t, err)
@@ -177,7 +177,7 @@ func testLeases(t *testing.T, ctx context.Context, pool *pgxpool.Pool, first, se
 		if row.State != "failed" || row.Verdict != nil {
 			t.Fatal("system error became contestant verdict")
 		}
-		if _, err := second.Claim(ctx, nodes[0]); !errors.Is(err, postgres.ErrNoTask) {
+		if _, err := second.Claim(ctx, nodes[0]); !errors.Is(err, submission.ErrNoTask) {
 			t.Fatal("unbounded retries")
 		}
 	})
@@ -206,10 +206,10 @@ func testLeases(t *testing.T, ctx context.Context, pool *pgxpool.Pool, first, se
 			must(t, err)
 			_, err = pool.Exec(ctx, query, expected.ID)
 			must(t, err)
-			if !errors.Is(second.Report(ctx, nodes[0], lease.Token, ac), postgres.ErrLease) {
+			if !errors.Is(second.Report(ctx, nodes[0], lease.Token, ac), submission.ErrLease) {
 				t.Fatal("old generation accepted")
 			}
-			if _, err := second.Renew(ctx, nodes[0], lease.Token); !errors.Is(err, postgres.ErrLease) {
+			if _, err := second.Renew(ctx, nodes[0], lease.Token); !errors.Is(err, submission.ErrLease) {
 				t.Fatal("old generation renewed")
 			}
 			expire(lease.Token)
