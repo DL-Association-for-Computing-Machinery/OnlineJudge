@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/workerhost"
 )
 
 func TestSlotLockProcess(t *testing.T) {
@@ -55,6 +57,13 @@ func TestSlotLockProcess(t *testing.T) {
 		l.Close()
 		t.Fatal("crashed slot reused")
 	}
+	// Another fixed slot remains usable even while this slot is quarantined.
+	secondary, _ := workerhost.ParseM0Slot("secondary")
+	other, err := acquireLock(filepath.Join(filepath.Dir(path), secondary.LockName()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	other.Close()
 	// Only this test's private fixture is reset, simulating operator recovery.
 	if err := os.Truncate(path, 0); err != nil {
 		t.Fatal(err)

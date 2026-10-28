@@ -1,5 +1,21 @@
 # 工程交付记录
 
+## 2026-10-28：双固定槽 Worker 真实执行与退出接管
+
+基于主线 `f1ece3f8d6e376045365024fbea73aedad018aef`，独立分支 `codex/dual-worker-recovery`，工作区 `/Users/huangqijun/.codex/worktrees/dual-worker-recovery/OnlineJudge`。唯一目标是双 Worker 的隔离运行与可清理退出后的真实任务接管。下列为提交前本地验证快照；后续按开发交付持续授权提交、推送、创建 PR 并核验对应 head 的 CI/审查，远端终态以实际回读为准。原克隆 5 处文档改动保持原状。
+
+- `OJ_WORKER_M0_SLOT` 严格选择两个固定容器和对应锁，空值/primary 保持原容器及 `slot.lock`，secondary 使用独立容器/锁。初始名字解析后仍绑定完整 ID/启动时间，执行核心和控制端协议不变。无依赖、SQL、迁移、hooks 或 workflow 变更。
+- 基线测试最初受沙箱 loopback 监听限制；按工具权限运行后通过。`GOPROXY=off make go-check go-build GOMODCACHE=/Users/huangqijun/Documents/OnlineJudge/.local/go-mod GOCACHE=/private/tmp/oj-lease-go-build` 通过格式、vet、race 与四个二进制构建，日志 `/private/tmp/oj-dual-go.log`。
+- `OJ_SANDBOX_EXPERIMENT=1 GOPROXY=off make dual-worker-test`（同上缓存参数）通过真实临时 PostgreSQL、双 API 24 并发/回执和双控制端回归；两个独立 Worker 在固定离线容器完成八份 AC，运行中 SIGTERM 后核验容器停止和 PID 消失，实际控制端等自然租约到期重新排队，另一节点第 2 次尝试完成 AC。旧令牌回报拒绝且新证据不变，存活节点继续完成新题。未修改租约时间或手动调用 Recover。首次日志 `/private/tmp/oj-dual-integration.log`；加强同时持有两份有效租约的断言后，最终日志 `/private/tmp/oj-dual-integration-final.log`。
+- `OJ_SANDBOX_EXPERIMENT=1 GOPROXY=off make report-test`（同上缓存参数）通过原默认槽连续两题/丢失回执重报、AC/WA/CE/RE/TLE/MLE/OLE/失租回报，以及真实命令 AC/WA、重复启动拒绝、SIGINT/SIGTERM 停止确认；日志 `/private/tmp/oj-dual-report.log`。未重跑本地前端和完整独立隔离套件。
+- 文档同步 README、M0、开发/交付计划、协议架构和 CI 分层；仓库策略检查 159 文件及 `git diff --check` 通过。自审覆盖从基线到工作区的完整差异与 4 个新增文件，无独立人工审查。知识回写保存可定位证据和范围，结果以事务 lint/哈希回读为准。
+
+边界：同一 VM 内双容器，不代表跨主机高可用或容量验收；SIGTERM 可清理退出不等价于 SIGKILL、主机故障或网络分区。旧回报探针使用新尝试结果配旧令牌，不冒充中断节点已冻结结果。普通重试增加尝试编号，判题/灾备恢复代次不变。下一项执行中撤销/材料故障联合验证，然后会话；执行端自动重启/解封、磁盘结果队列与完整 M0 尚未完成，无部署。
+
+最终双 Worker 用例 42.92 秒通过，临时数据库 `/tmp/oj-postgres.itdI7m` 已停止。两容器回读 `Running=false/Pid=0/Restarting=false`，`oj-m0` VM 已停止，原 Docker context 仍为 `desktop-linux`；未删除镜像、容器、锁文件或数据。
+
+知识事务 `oj-dual-worker-20261028` 已更新 M0 实测、开发推进、热点、索引和日志 5 页；严格 lint 32 页/391 链接/0 问题，5 页哈希回读一致。保留未提交源码哈希和证据边界，未修改 raw 或 accepted 账本。
+
 ## 2026-10-28：控制端任务自动恢复
 
 基于主线 `8448641` 的独立 `codex/worker-recovery`，唯一目标为 P1/P2、AC28/29 的控制端恢复扫描。新增扫描器复用既有 `Store.Recover`：启动即扫描、单轮最多 64 条/5 秒、完成后等待 1 秒、失败限速重试、取消排空后关闭池。仅记录安全计数，数据库级扫描跨材料版本；无 SQL、迁移、依赖、HTTP 契约或 CI 配置变化。原克隆 5 处未提交文档改动保留。

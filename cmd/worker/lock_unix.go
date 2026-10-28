@@ -8,13 +8,15 @@ import (
 	"os/user"
 	"path/filepath"
 	"syscall"
+
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/workerhost"
 )
 
 type slotLock struct{ file *os.File }
 
 // Resolve the account home, not HOME/TMPDIR or a caller-selected path: different
 // checkouts and launch environments must contend for the same dedicated slot.
-func lockM0() (*slotLock, error) {
+func lockM0(slot workerhost.M0Slot) (*slotLock, error) {
 	u, err := user.Current()
 	if err != nil || !filepath.IsAbs(u.HomeDir) {
 		return nil, errors.New("cannot resolve M0 owner home")
@@ -31,7 +33,7 @@ func lockM0() (*slotLock, error) {
 	if !ok || stat.Uid != uint32(os.Geteuid()) {
 		return nil, errors.New("M0 ownership directory has wrong owner")
 	}
-	return acquireLock(filepath.Join(dir, "slot.lock"))
+	return acquireLock(filepath.Join(dir, slot.LockName()))
 }
 
 func acquireLock(path string) (*slotLock, error) {
