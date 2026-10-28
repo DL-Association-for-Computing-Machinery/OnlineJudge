@@ -7,9 +7,12 @@ import (
 	"net"
 	"net/url"
 	"os"
+
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/workerhost"
 )
 
 type config struct {
+	slot     workerhost.M0Slot
 	endpoint string
 	roots    *x509.CertPool
 	cert     tls.Certificate
@@ -20,6 +23,11 @@ func loadConfig(getenv func(string) string) (config, error) {
 	var c config
 	if getenv("OJ_SANDBOX_EXPERIMENT") != "1" {
 		return c, errors.New("explicit OJ_SANDBOX_EXPERIMENT=1 required")
+	}
+	var err error
+	c.slot, err = workerhost.ParseM0Slot(getenv("OJ_WORKER_M0_SLOT"))
+	if err != nil {
+		return c, err
 	}
 	c.endpoint = getenv("OJ_WORKER_CONTROLLER_URL")
 	u, err := url.Parse(c.endpoint)

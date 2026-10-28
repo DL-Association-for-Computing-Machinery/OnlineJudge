@@ -1,6 +1,8 @@
 # API、事件与 Worker 协议
 
-日期：2026-10-28。版本：0.11。状态：M0 提交/租约、mTLS、材料授权、固定 v2 环境、受限编排、租约守护及结果回报已实测；单槽循环和可信宿主已接入可运行 Worker 命令，跨进程独占、AC/WA 回报和信号停止通过。双 Worker、自动恢复、生产宿主、缓存和产品 API 仍待完成。协议见 [Worker OpenAPI](../../api/worker.openapi.yaml)，证据、模块边界及预算见[M0 记录](../m0-experiment.md)。关联 [总体架构](system-design.md)、[判题](judging-design.md)、[存储](storage-design.md)。
+日期：2026-10-28。版本：0.12。状态：M0 提交/租约、mTLS、材料授权、固定 v2 环境、受限编排、租约守护及结果回报已实测；单槽循环和可信宿主已接入可运行 Worker 命令。控制端自动恢复、两个固定槽的真实双 Worker 竞争执行及 SIGTERM 后自然租约到期接管已验证。执行端自动恢复、生产宿主、缓存和产品 API 仍待完成，完整 M0 未通过。协议见 [Worker OpenAPI](../../api/worker.openapi.yaml)，证据、模块边界及预算见[M0 记录](../m0-experiment.md)。关联 [总体架构](system-design.md)、[判题](judging-design.md)、[存储](storage-design.md)。
+
+固定槽映射由 `workerhost.M0Slot` 统一持有：命令配置只接受 primary/secondary（空值为原 primary），独占锁名与容器名不可分别配置；所有执行与停止继续绑定不可变容器 ID/启动时间。核心 Worker/执行模块不依赖槽选择或 Docker，控制端协议不变。双进程实验的恢复只增加尝试编号，灾备恢复代次不随普通重试递增；详见[双 Worker 实验](../m0-experiment.md#双-worker-真实执行与接管)。
 
 ## 1. 契约与错误
 

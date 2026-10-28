@@ -27,12 +27,12 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	lock, err := lockM0()
+	lock, err := lockM0(c.slot)
 	if err != nil {
 		return err
 	}
 	defer lock.Close()
-	return runSlot(ctx, c, logger, lock, func(ctx context.Context) (sandboxHost, error) { return workerhost.OpenM0(ctx) })
+	return runSlot(ctx, c, logger, lock, func(ctx context.Context) (sandboxHost, error) { return workerhost.OpenM0Slot(ctx, c.slot) })
 }
 
 func runSlot(ctx context.Context, c config, logger *slog.Logger, lock *slotLock, open func(context.Context) (sandboxHost, error)) (result error) {

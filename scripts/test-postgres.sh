@@ -26,3 +26,8 @@ if [ "${OJ_SANDBOX_REPORT:-0}" = "1" ]; then
     export OJ_TEST_DATABASE_URL="host=$oj_test_dir user=oj_test dbname=oj_report_test sslmode=disable"
     go test -race -count=1 -tags=sandbox ./tests/sandbox -run '^TestExecutionReport$' -v
 fi
+if [ "${OJ_SANDBOX_DUAL:-0}" = "1" ]; then
+    createdb -h "$oj_test_dir" -U oj_test oj_dual_test
+    export OJ_TEST_DATABASE_URL="host=$oj_test_dir user=oj_test dbname=oj_dual_test sslmode=disable"
+    go test -race -count=1 -tags=sandbox ./tests/sandbox -run '^TestDualWorkerRecovery$' -v
+fi

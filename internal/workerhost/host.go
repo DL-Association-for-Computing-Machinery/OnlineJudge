@@ -35,9 +35,19 @@ type Host struct {
 // do not open multiple Hosts or share this container with another worker.
 func OpenM0(ctx context.Context) (*Host, error) { return open(ctx, runCommand) }
 
+// OpenM0Slot opens one fixed slot with the same identity and isolation checks as
+// OpenM0. The caller must hold this slot's canonical lock throughout its lifetime.
+func OpenM0Slot(ctx context.Context, slot M0Slot) (*Host, error) {
+	return openSlot(ctx, runCommand, slot)
+}
+
 func open(ctx context.Context, run command) (*Host, error) {
+	return openSlot(ctx, run, M0Slot{})
+}
+
+func openSlot(ctx context.Context, run command, slot M0Slot) (*Host, error) {
 	h := &Host{run: run, active: make(map[uint64]context.CancelFunc), drained: make(chan struct{})}
-	s, err := h.inspect(ctx, container)
+	s, err := h.inspect(ctx, slot.ContainerName())
 	if err != nil {
 		return nil, err
 	}
