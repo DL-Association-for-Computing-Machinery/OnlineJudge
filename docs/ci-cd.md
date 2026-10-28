@@ -19,6 +19,10 @@
 
 `make worker-fault-test` 是需显式 `OJ_SANDBOX_EXPERIMENT=1` 的本机特权专项：在独立空库和既有 primary 槽验证运行中节点禁用/凭据轮换、材料缺失/损坏、失败退出和显式重启后的自动任务回收。先执行原数据库/双 API 回归；专项结果不由普通 CI 替代。Makefile 变更沿用全量应用套件分类，无 workflow 或必需门禁变化。
 
+2026-10-28 新增 Docker 默认构建/本机启动入口。`containers` job 在 backend 或 frontend 被影响矩阵选中时执行 `python3 scripts/test-compose.py`，实际构建镜像并验证页面、代理、非 root/只读容器、API 重建与启停；不运行特权判题沙箱。Dockerfile、Compose、Nginx 配置及冒烟脚本属于未知/共享路径，现有分类保守执行全量应用测试，不改变四个必需门禁或远端保护。`containers` 为新增检查，远端是否成功以当前 head 的实际运行结果为准，本地通过不等于远端已执行。
+
+本地默认应用构建为 `docker compose build`，一键启动为 `docker compose up -d --build --wait`，检查为 `docker compose run --rm --build backend-check` / `frontend-check`。既有 CI 和数据库/沙箱专项保留 Make 兼容入口；本项未迁移数据库/Worker 宿主适配器，不新增部署或镜像发布步骤。工具链、镜像摘要和 pnpm/Go 依赖在 Dockerfile 与现有锁文件中固定；源码修改后须重建检查镜像。
+
 2026-10-28 双固定槽变更由 Go race 覆盖选择器、默认锁兼容、隔离标记独立性及停止目标边界；`make dual-worker-test` 在专用离线 VM 和独立空库验证两个真实控制端/Worker 竞争执行、SIGTERM 停止确认、自然租约到期后的接管及旧回报拒绝。普通 PR CI 不运行该特权实验；共享 Makefile 变化按已有矩阵触发全量应用套件，无新增 workflow 或保护变更。
 
 2026-10-28 控制端自动恢复沿用现有 `backend-tests` 和 `integration-tests`：Go race 验证扫描限速、重试、取消排空及日志脱敏；真实临时数据库、双控制端子进程验证启动积压、有效租约保留、旧回报隔离及三次恢复上限。用例只使用合成回报，不需要特权 VM，不代表双 Worker 沙箱接管通过。未修改 CI 分流和必需门禁。

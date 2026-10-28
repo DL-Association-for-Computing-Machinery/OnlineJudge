@@ -22,7 +22,32 @@ Go 工具链锁定为 `go.mod` 中的 1.26.10（本机可由 Go 自动下载到�
 
 本轮本地验证：macOS arm64，Go 1.26.10、PostgreSQL 14.19；pnpm 自带 Node 24.19.0。另建 Colima `oj-m0` Linux arm64 VM（2 CPU/2 GiB），实测 go-judge 1.13.3、GCC 15.3.0；该实验不证明生产部署或完整判题链路通过。首次依赖安装需要网络；Makefile 将 Go 工具链/模块/构建缓存和二进制放在忽略的 `.local/`。
 
-## 安装与启动
+## Docker 构建与一键启动（默认）
+
+后续默认使用 Docker 构建和 Compose 启动。安装并启动支持 Linux 容器的 Docker Engine（macOS 需 Linux VM）与 Compose v2+；默认入口不需要宿主机安装 Go、Node、pnpm 或 Make。首次构建需联网获取 Dockerfile 中固定摘要的基础镜像和锁定依赖。
+
+在仓库根目录执行：
+
+```sh
+docker compose up -d --build --wait
+```
+
+打开 [Docker 本机预览](http://127.0.0.1:8080/)，点击“检查 API 连接”。Nginx 提供 Vite 构建后的静态文件，将 `/api/` 转发到 Compose 内部的 `api:8080`；后端不发布宿主机端口。若 8080 被占用，执行 `OJ_WEB_PORT=18080 docker compose up -d --build --wait`，再访问 18080。后续源码修改需要重建，此入口不是热更新开发服务器。
+
+```sh
+docker compose build                 # 仅构建默认应用镜像
+docker compose ps                    # 查看服务和健康状态
+docker compose logs --tail=100        # 查看启动或请求错误
+docker compose down                  # 停止并移除本 Compose 项目的容器、网络
+```
+
+当前只启动前端与基础 API，健康检查只证明进程/代理连通；不启动数据库、Worker、控制端或判题沙箱，不代表完整 OJ 可用。应用容器使用非 root、只读根文件系统；Nginx 临时文件只写入内存目录。当前默认服务没有持久化业务数据或 volume；后续增加数据库必须同步配置持久化与迁移步骤，不使用 `down -v` 清理数据。HTTPS、正式部署与离线制品交付尚未配置。
+
+Dockerfile 的 Go、Node、pnpm 与现有配置保持一致，基础镜像固定多架构索引摘要；依赖仍使用 `go.sum` 和 `pnpm-lock.yaml`。`.dockerignore` 限定构建上下文，排除本地 Git、缓存、环境文件和常见凭据文件。更换工具链时需同步 Dockerfile 和对应锁定入口，并重新验证容器检查及启动流程。
+
+## 宿主机开发与 M0 专项入口（兼容）
+
+以下保留给已有 CI、热更新开发和专用沙箱实验；不是默认一键启动的前置步骤。
 
 从仓库根目录安装前端锁定依赖：
 
@@ -58,6 +83,19 @@ API 可通过 `OJ_API_ADDR` 改监听地址；若改端口，同时调整 Vite �
 
 ## 检查与构建
 
+优先在容器中执行日常应用检查；这些任务每次运行测试，构建缓存不会跳过测试：
+
+```sh
+docker compose run --rm --build backend-check
+docker compose run --rm --build frontend-check
+```
+
+后端覆盖格式、vet、race 单元测试和全部命令的编译；前端覆盖 lint、类型检查、测试和生产构建。检查容器按镜像内源码运行，`--build` 确保包含最新改动；不会写入宿主机依赖或构建产物。真实数据库与专用沙箱实验仍使用下述独立入口，不能用这些快速检查代替。
+
+容器启动回归：`python3 scripts/test-compose.py`（宿主机需要 Python 3 标准库）。它创建唯一 Compose 项目、随机本机端口，验证页面/资源、SPA 回退、API 契约、容器权限和重建恢复，最后仅清理自己的容器/网络。仓库治理检查仍按下列 Python 命令执行。
+
+既有宿主机/CI 兼容入口：
+
 ```sh
 make check
 ```
@@ -73,7 +111,7 @@ python3 -B -m unittest discover -s tests/governance -v
 
 真实临时数据库、两个提交 API 子进程、两个 mTLS 控制端子进程及两个节点客户端测试：`make db-test`（需本机 `initdb/pg_ctl/createdb`、Python 3，自动建立独立私有目录并停止临时数据库）。专用 `oj-m0` VM 与沙箱启动后运行 `OJ_SANDBOX_EXPERIMENT=1 make sandbox-test`；不可在共享 Docker 主机或宿主直接运行选手代码，详细前置与清理见[M0 记录](docs/m0-experiment.md)。数据库和沙箱测试不在快速 `make check` 中静默跳过或冒充通过。
 
-产物位于忽略的 `.local/bin/` 和 `web/dist/`。独立迁移程序为 `.local/bin/migrate`；实验数据库迁移/回退边界见 M0 记录。`pnpm --dir web preview` 仅预览静态构建；生产入口、HTTPS 与部署尚未配置，不用 Vite dev server 承担正式比赛。
+Docker 构建产物位于本地应用镜像内；上述宿主机命令的产物位于忽略的 `.local/bin/` 和 `web/dist/`。独立迁移程序为 `.local/bin/migrate`；实验数据库迁移/回退边界见 M0 记录。`pnpm --dir web preview` 仅预览静态构建；Compose Nginx 当前也仅作为本机 HTTP 预览入口，生产 HTTPS 与部署尚未配置，不用 Vite dev server 承担正式比赛。
 
 GitHub Actions 的 `governance`、`backend`、`frontend` 和真实 PostgreSQL `integration` 首轮已全部通过，对应提交及运行链接见[交付日志](docs/delivery-log.md)；后续提交以对应 head 的检查为准。专用 Linux 沙箱不进入普通 PR 快速 CI。原 `bootstrap-ci` 命令保留用于检查空骨架，当前有应用时预期失败，已从 workflow 替换；未放宽其行为。
 
