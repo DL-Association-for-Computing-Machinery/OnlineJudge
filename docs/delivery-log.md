@@ -1,5 +1,16 @@
 # 工程交付记录
 
+## 2026-10-28：Worker 领取与材料客户端
+
+唯一目标：P2、AC22/28/29 的受控领取与材料准备。gh 核验 PR #8 已合并为 `64b99922de3ab0e01509d6b3a42cd248687424c9`，从该主线创建独立 `codex/claim-material-client` 工作区；原克隆 5 处未提交文档改动保留。本条为提交前验证快照，提交号、PR 和当前 head 的 CI 以实际交付结果为准。非目标为常驻 Worker、自动恢复/轮询、磁盘缓存、通用题包、双 Worker、会话与部署。
+
+- 新增 `workerclient.Acquirer`，一次领取、回执未知不重试；限定固定 v2 的下载、完整性与预算校验，失败不返回部分材料。独立连接预算，调用方继续使用原租约和 `LeasedRunner` 前置续租；无依赖、SQL、迁移、HTTP 契约或配置变更。
+- macOS arm64 / Go 1.26.10 / PostgreSQL 14.19，`GOPROXY=off make go-check report-test GOMODCACHE=/Users/huangqijun/Documents/OnlineJudge/.local/go-mod GOCACHE=/private/tmp/oj-claim-go-build OJ_SANDBOX_EXPERIMENT=1` 全部通过：格式、vet、race、四命令构建、真实数据库/双控制端、双 API 24 并发及重启回执、8 项沙箱联合用例。日志 `/private/tmp/oj-claim-report.log`；临时数据库 `/tmp/oj-postgres.RUWQV5` 已自动停止。
+- 19 项领取与 24 项材料边界子测试、真实双节点竞争领取和跨控制端材料下载通过；覆盖回执不明、错误身份/归属/哈希/长度/媒体类型、取消、缺失/损坏、撤销、过期与恢复后旧尝试拒绝。最初本地 TLS 基线因沙箱禁止监听失败，经审批后通过；首次真实集成暴露本次 ID 校验错误，修正 UUID 假设为持久化的 32 位十六进制串后重跑完整检查通过，未降低断言。
+- `report-test` 已从直接领取/材料夹具切换到客户端，再接已有受限执行、续租及回报；真实 AC/WA/CE/RE/TLE/MLE/OLE 持久化，丢失确认跨控制端原样重报、冲突、跨节点、撤销、到期拒绝仍通过。使用既有专用离线 Linux VM/固定容器，无镜像下载或重建；实验容器/VM 收尾停止，Docker context 保持 desktop-linux。
+- 两个 TLS handler 在同一测试进程；提交与沙箱生命周期仍由测试驱动管理。独立双控制端由数据库回归另外验证，不能宣称常驻双 Worker 或完整 M0 通过。未改/未重跑本地前端、未修改 hooks/CI、未重跑独立沙箱隔离/中止专项；没有独立人工审查或部署。
+- README、M0、协议架构、CI 说明及首期计划已同步，下一步为 Worker 入口及生命周期。仓库策略 134 文件、`git diff --check` 通过；AI 自审覆盖相对主线完整差异和新增文件。知识回流按既有授权记录到 M0 实测、开发推进、热点、索引与日志，实际事务及终态核验随最终交付汇报。
+
 ## 2026-10-27：真实执行结果摘要与 mTLS 回报
 
 唯一目标：P2、AC28/29 的真实结果归属与可靠确认子项。gh 回读 PR #7 已合并为 `b6b0e428380ae18978b9bb6312c475c7659e7120`，从该主线建立独立 `codex/result-reporting` 工作区，保留原克隆 5 处文档改动。此条为提交前验证快照，提交/PR/CI 以最终实际 head 为准。非目标为领取/材料客户端、常驻 Worker、自动恢复/重试、双 Worker、会话及部署。

@@ -29,8 +29,8 @@ import (
 )
 
 // Two real TLS handlers share a disposable database. Only the execution adapter
-// talks to the offline Linux container. Claim/material setup is direct fixture
-// code, not the still-unimplemented production Worker download loop.
+// talks to the offline Linux container. Claim and materials use the node client;
+// fixture submission and sandbox lifecycle remain test-driver responsibilities.
 func TestExecutionReport(t *testing.T) {
 	if os.Getenv("OJ_SANDBOX_REPORT") != "1" {
 		t.Skip("run make report-test with the dedicated sandbox")
@@ -78,8 +78,17 @@ func TestExecutionReport(t *testing.T) {
 	cert, _, _ := ca.Issue(t, "spiffe://onlinejudge/worker/report-node/1", x509.ExtKeyUsageClientAuth, time.Now().Add(time.Hour))
 	otherCert, _, _ := ca.Issue(t, "spiffe://onlinejudge/worker/other-node/1", x509.ExtKeyUsageClientAuth, time.Now().Add(time.Hour))
 	var loseReply atomic.Bool
+	root := t.TempDir()
+	if err := experiment.WriteMaterials(root); err != nil {
+		t.Fatal(err)
+	}
+	reader, err := materials.OpenLocal(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
 	newController := func() *httptest.Server {
-		handler := workerapi.NewHandler(store, ca.Roots)
+		handler := workerapi.NewHandler(store, ca.Roots, materials.New(store, reader))
 		server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/api/v1/worker/report" && loseReply.CompareAndSwap(true, false) {
 				recorded := httptest.NewRecorder()
@@ -99,6 +108,16 @@ func TestExecutionReport(t *testing.T) {
 		return server
 	}
 	first, second := newController(), newController()
+	acquirer, err := workerclient.NewAcquirer(first.URL, ca.Roots, cert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer acquirer.Close()
+	downloader, err := workerclient.NewAcquirer(second.URL, ca.Roots, cert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer downloader.Close()
 	renewer, err := workerclient.NewRenewer(first.URL, ca.Roots, cert)
 	if err != nil {
 		t.Fatal(err)
@@ -119,10 +138,6 @@ func TestExecutionReport(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer wrong.Close()
-	blobs := map[string][]byte{}
-	for _, s := range []string{"1 2\n", "3\n", "-7 4\n", "-3\n"} {
-		blobs[hashBytes([]byte(s))] = []byte(s)
-	}
 	for index, tc := range []struct{ verdict, source string }{
 		{"AC", "#include <cstdio>\nint main(){int a,b;scanf(\"%d%d\",&a,&b);printf(\"%d\",a+b);}"},
 		{"WA", "#include <cstdio>\nint main(){puts(\"wrong\");}"},
@@ -138,11 +153,14 @@ func TestExecutionReport(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			lease, err := store.Claim(ctx, submission.NodeIdentity{ID: "report-node", CredentialVersion: 1})
+			lease, err := acquirer.Claim(ctx)
 			if err != nil || lease.SubmissionID != row.ID {
 				t.Fatalf("claim: %v", err)
 			}
-			d := materials.Descriptor{TaskMaterials: submission.TaskMaterials{SubmissionID: row.ID, Version: version, Language: "gnu++17", Source: tc.source, Manifest: manifest, ManifestSHA256: hashBytes(manifest)}, SourceSHA256: hashBytes([]byte(tc.source))}
+			d, blobs, err := downloader.Fetch(ctx, lease)
+			if err != nil {
+				t.Fatal(err)
+			}
 			verifyEnvironment(t)
 			sandbox := execution.NewGoJudge(&dockerTransport{}, func(context.Context, experiment.ExecutionProfile) error { return nil }) // verified above
 			runner := execution.NewLeased(sandbox, renewer.Renew, func(context.Context) error { return errors.New("unexpected interruption requires fixture recovery") })

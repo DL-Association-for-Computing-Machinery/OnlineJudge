@@ -224,6 +224,13 @@ func testWorkerAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool, store 
 		base := startVersionedWorkerController(t, binary, ca.CAFile, certFile, keyFile, clients[1], experiment.PinnedVersion, materialRoot)
 		testPinnedMaterials(t, ctx, pool, clients[1], base, urls[1], store)
 	})
+	t.Run("node acquisition client", func(t *testing.T) {
+		bases := []string{
+			startVersionedWorkerController(t, binary, ca.CAFile, certFile, keyFile, clients[1], experiment.PinnedVersion, materialRoot),
+			startVersionedWorkerController(t, binary, ca.CAFile, certFile, keyFile, clients[1], experiment.PinnedVersion, materialRoot),
+		}
+		testAcquisition(t, ctx, pool, ca, bases, materialRoot)
+	})
 }
 
 func workerClient(t *testing.T, roots *x509.CertPool, cert tls.Certificate) *http.Client {

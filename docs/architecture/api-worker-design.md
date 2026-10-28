@@ -1,6 +1,6 @@
 # API、事件与 Worker 协议
 
-日期：2026-10-27。版本：0.7。状态：M0 提交/租约、mTLS、材料授权、固定 v2 环境、受限编排及租约守护已实测；本次新增真实结果摘要与 mTLS 回报。完整执行客户端、缓存和产品 API 仍待完成。协议见 [Worker OpenAPI](../../api/worker.openapi.yaml)，证据、模块边界及预算见[M0 记录](../m0-experiment.md)。关联 [总体架构](system-design.md)、[判题](judging-design.md)、[存储](storage-design.md)。
+日期：2026-10-28。版本：0.8。状态：M0 提交/租约、mTLS、材料授权、固定 v2 环境、受限编排、租约守护及结果回报已实测；新增领取与材料客户端下载并接入真实执行实验。常驻 Worker、缓存和产品 API 仍待完成。协议见 [Worker OpenAPI](../../api/worker.openapi.yaml)，证据、模块边界及预算见[M0 记录](../m0-experiment.md)。关联 [总体架构](system-design.md)、[判题](judging-design.md)、[存储](storage-design.md)。
 
 ## 1. 契约与错误
 
@@ -42,6 +42,8 @@ M0 执行端增加 `workerclient.Renewer` 和 `execution.LeasedRunner`：前者�
 - go-judge 等执行服务仅节点本地受控访问，按所用组件能力配置独立认证/隔离，不开放给选手网络；不得沿用公开示例的宽松配置。
 
 ## 4. 调度与过载
+
+`workerclient.Acquirer` 负责一次领取及当前租约的材料准备，通过已有 POST 接口交互，不依赖数据库或沙箱。204 表示无可领任务；领取回执未知不自动重领。`Fetch` 只接受执行器支持的固定 v2，核对提交归属、源码/清单及逐文件哈希，全部成功后返回内存描述与材料集合。每请求 3 秒、整次下载 15 秒；与续租独立连接预算，执行前仍须由 `LeasedRunner` 重新续租。无持久缓存或自动恢复；详细预算与失败语义见[客户端实验](../m0-experiment.md#领取与材料客户端)。
 
 采用比赛优先、参与者公平排序、有界队列。后续用户要求参考 DOMjudge 后，公平性采用其虚拟排队时间思路，替代早期严格逐参与者轮转提案；不是复制完整实现或固定常数。
 

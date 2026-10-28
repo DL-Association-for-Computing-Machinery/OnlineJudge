@@ -8,12 +8,12 @@
 - [首期开发计划](docs/phase-1-development-plan.md)：0B → 1A → 1B 的任务依赖、P0—P7 开发包、里程碑与验收证据要求。
 - [M0 实验记录与复现](docs/m0-experiment.md)：数据库、双 API 进程、任务租约及 Linux 沙箱的实际证据与未覆盖项；M0 整体验收尚未通过，健康接口不代表判题就绪。
 - [Worker mTLS 契约](api/worker.openapi.yaml)：认证领取、续租、结果回报及有效租约限定的源码/材料下载与哈希校验；两个真实控制端进程和 TLS 客户端已验证。新增真实沙箱结果经 mTLS 回报至 PostgreSQL 的联合测试，见[真实结果回报](docs/m0-experiment.md#真实结果回报)。
-- `internal/execution` 已完成固定 `m0-sum-v2` 的受限编排、租约守护和结果摘要；`internal/workerclient` 提供 mTLS 续租与回报客户端。续租异常取消执行并确认独占沙箱停止，见[租约守护与中止确认](docs/m0-experiment.md#租约守护与中止确认)。领取/材料下载客户端尚未贯通，`cmd/worker` 仍为骨架。
+- `internal/execution` 已完成固定 `m0-sum-v2` 的受限编排、租约守护和结果摘要；`internal/workerclient` 提供 mTLS 领取、材料下载、续租与回报客户端，已在实验驱动中贯通真实执行。下载有时长/大小限制，校验完整后才返回，见[领取与材料客户端](docs/m0-experiment.md#领取与材料客户端)。`cmd/worker` 仍为骨架，下一步接入常驻入口及生命周期。
 - 模块化单体＋独立判题 Worker；不创建空业务层，不把所有模块拆成服务。
 - 既有 Redis 会话路线保留待验证，新增 PostgreSQL 会话对比；未做未经确认的替换。
 - 已引入 PostgreSQL 实验、sqlc/pgx/Goose；go-judge 仅进入专用 Linux VM 的隔离实验。Redis 会话、River 与监控备份服务尚未接入。
 - 多文件/ZIP 提交、自测与辅助能力不作为训练试用前置；完整语言、比赛及后续需求保留。
-- 0A 和 M0 分项已按逻辑分组提交；main 已建立并保护，PR #1—#7 已合并；本次真实回报通过独立分支交付，验证证据见交付日志。未部署，M0 整体仍未通过。
+- 0A 和 M0 分项已按逻辑分组提交；main 已建立并保护，PR #1—#8 已合并；本次领取/材料客户端通过独立分支交付，验证证据见交付日志。未部署，M0 整体仍未通过。
 
 ## 运行环境
 
