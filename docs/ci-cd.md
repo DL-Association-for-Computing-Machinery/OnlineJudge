@@ -43,7 +43,9 @@ Go 标准 testing、真实 PostgreSQL/Redis（Testcontainers for Go 优先验证
 
 ### 随功能交付建立的验收目录
 
-单槽 Worker 生命周期沿用 `backend` 的格式/vet/race 检查；`report-test` 新增连续两题真实执行、跨控制端原样重报、空队列取消及停止后不可复用，与原 8 项回报用例共同运行。失败停止、重试耗尽、各阶段取消及等待执行排空由单元注入验证；宿主停止专项的历史结果不算本次重跑，无 CI 配置变化。
+单槽 Worker 生命周期沿用 `backend` 的格式/vet/race 检查；`report-test` 新增连续两题真实执行、跨控制端原样重报、空队列取消及停止后不可复用，与原 8 项回报用例共同运行。失败停止、重试耗尽、各阶段取消及等待执行排空由单元注入验证，无 CI 配置变化。
+
+可信 M0 宿主适配器由 `backend` 覆盖环境/生命周期漂移、请求预算、取消排空和停止失败封锁的单元/race 测试。专用 VM 下 `TestWorkerHostExecution` 覆盖实际 AC/WA 与制品清理，`TestLeasedExecutionConfirmsHostStop` 已接入该适配器并独立核验选手 PID 消失；两项与原编排/隔离回归于 2026-10-28 重跑通过。特权测试不进入普通 PR CI，不能把注入续租的取消测试视为真实数据库撤销或命令进程信号验收；本次未重跑本地 report-test。
 
 领取/材料客户端沿用现有 `backend` 与 `integration`：真实双控制端验证竞争领取、跨实例下载、损坏/缺失及失效授权拒绝。`report-test` 已改为由该客户端领取并下载后再执行，移除该路径的直接租约/材料夹具；仍是实验驱动，两个 TLS handler 同进程，不代表常驻双 Worker 验收。无 CI 配置变化。
 

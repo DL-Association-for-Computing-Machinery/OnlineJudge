@@ -18,6 +18,7 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materials"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/workerhost"
 )
 
 // This driver is deliberately limited to the already verified, exclusively owned
@@ -61,17 +62,17 @@ func TestLeasedExecutionConfirmsHostStop(t *testing.T) {
 	for _, s := range []string{"1 2\n", "3\n", "-7 4\n", "-3\n"} {
 		blobs[hashBytes([]byte(s))] = []byte(s)
 	}
-	transport := &dockerTransport{}
-	sandbox := execution.NewGoJudge(transport, func(context.Context, experiment.ExecutionProfile) error { return nil }) // verified above
+	host, err := workerhost.OpenM0(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	transport := &countingTransport{base: host}
+	sandbox := execution.NewGoJudge(transport, host.Verify)
 	var observedPID atomic.Int64
 	stopped := false
 	runner := execution.NewLeased(sandbox, func(context.Context, string) error { return nil }, func(stopCtx context.Context) error {
-		if _, err := docker(stopCtx, "kill", "--signal", "KILL", id); err != nil {
-			return fmt.Errorf("stop command failed: %w", err)
-		}
-		out, err := docker(stopCtx, "inspect", "--format", "{{.State.Running}} {{.State.Pid}} {{.State.Restarting}}", id)
-		if err != nil || strings.TrimSpace(string(out)) != "false 0 false" {
-			return errors.New("container still active or state unavailable")
+		if err := host.Stop(stopCtx); err != nil {
+			return err
 		}
 		// Check the observed contestant PID in the VM, beyond the REST client and
 		// container state. PID reuse conservatively fails confirmation.
@@ -134,6 +135,9 @@ func TestLeasedExecutionConfirmsHostStop(t *testing.T) {
 	before := transport.runs
 	if _, err := runner.Judge(context.Background(), "synthetic-lease", d, blobs); err == nil || transport.runs != before {
 		t.Fatal("quarantined executor reused")
+	}
+	if err := host.Verify(context.Background(), experiment.PinnedEnvironment()); err == nil {
+		t.Fatal("stopped host reused")
 	}
 	t.Log("observed live contestant; container stopped, PID absent, later point NOT_RUN, old runner quarantined")
 }

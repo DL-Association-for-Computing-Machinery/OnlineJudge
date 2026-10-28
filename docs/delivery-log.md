@@ -1,5 +1,16 @@
 # 工程交付记录
 
+## 2026-10-28：可信 M0 宿主适配器
+
+唯一目标：P2、AC28/29 的可信宿主检查、容器内传输及停止确认前置功能。PR #10 已通过 gh 核验合并为 `9c926f3cb08be2df3f3382f20639c39be5a6dc9a`，从该主线建立 `codex/worker-host` 独立工作区，原克隆 5 处改动保留。此条为提交前验证快照，远端交付以最终 head 核验为准。非目标：cmd/worker 接线、跨进程锁、双 Worker、恢复、会话、生产部署。
+
+- 新增 `internal/workerhost`，宿主细节留在适配层，执行与生命周期核心不变；固定专用 VM/容器、不可变 ID/启动时间核验、有限 REST 子集、取消排空、停止/PID 确认和永久封锁。工程选择与代价见[M0 宿主适配器](m0-experiment.md#可信宿主适配器)。无新增依赖、SQL、迁移、公共协议或环境变量。
+- macOS arm64 / Go 1.26.10：直接使用已缓存工具链，`GOPROXY=off`、原克隆 `.local/go-mod` 和 `/tmp/oj-worker-host-go-build`；`go vet ./...`、`go test -race ./...`、`go build ./cmd/...` 通过。初次 TLS 基线被沙箱禁止临时监听端口，经审批后通过；未放宽断言或下载依赖。
+- 既有无挂载专用 oj-m0 Linux VM/固定镜像：`OJ_SANDBOX_EXPERIMENT=1 go test -count=1 -race -tags=sandbox ./tests/sandbox -run 'TestBoundedExecution|TestWorkerHostExecution|TestLeasedExecutionConfirmsHostStop|^TestSandbox$' -v` 通过（沿用上述工具链/缓存）。新宿主真实 AC/WA、制品清理与运行中取消停止通过，原 10 项编排、12 项隔离回归通过；停止专项独立观察选手 PID 消失、后续点 NOT_RUN、旧实例拒绝。
+- 本地未重跑 PostgreSQL/report-test 和前端；它们未改动，不能将历史结果记作本次通过。普通 CI 不执行特权沙箱；没有修改 hooks/CI。cmd/worker 仍为骨架，M0 未通过，无独立人工审查、合并或部署。
+
+同步 README、M0、首期计划、协议架构与 CI 说明。仓库策略 143 文件与 diff 检查通过；AI 自审覆盖相对主线完整差异及新增文件。知识事务 `oj-worker-host-20261028` 更新实测、推进、热点、索引、日志 5 页，严格 lint 32 页、381 链接、0 问题，目标哈希回读一致。实验容器和 VM 已停止并保留，无部署。
+
 ## 2026-10-28：单槽 Worker 生命周期
 
 唯一目标：P2、AC28/29 的串行领取、材料准备、租约执行与可靠回报编排。gh 核验 PR #9 已合并为 `51d054a6d63d5e5501af3c465b65120ab74684cb`，独立 `codex/worker-lifecycle` 从该主线开始，原克隆 5 处文档改动保留。此条为提交前实测快照，提交/PR/CI 以最终 head 核验为准。非目标为命令入口、宿主驱动、双 Worker、磁盘队列、自动恢复、会话与部署。

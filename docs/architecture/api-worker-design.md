@@ -1,6 +1,6 @@
 # API、事件与 Worker 协议
 
-日期：2026-10-28。版本：0.9。状态：M0 提交/租约、mTLS、材料授权、固定 v2 环境、受限编排、租约守护及结果回报已实测；单槽 Worker 循环已串联客户端并通过真实执行实验。常驻命令入口、可信宿主适配器、缓存和产品 API 仍待完成。协议见 [Worker OpenAPI](../../api/worker.openapi.yaml)，证据、模块边界及预算见[M0 记录](../m0-experiment.md)。关联 [总体架构](system-design.md)、[判题](judging-design.md)、[存储](storage-design.md)。
+日期：2026-10-28。版本：0.10。状态：M0 提交/租约、mTLS、材料授权、固定 v2 环境、受限编排、租约守护及结果回报已实测；单槽 Worker 循环已串联客户端，可信 M0 宿主适配器通过真实执行与停止确认。常驻命令入口、跨进程独占、生产宿主、缓存和产品 API 仍待完成。协议见 [Worker OpenAPI](../../api/worker.openapi.yaml)，证据、模块边界及预算见[M0 记录](../m0-experiment.md)。关联 [总体架构](system-design.md)、[判题](judging-design.md)、[存储](storage-design.md)。
 
 ## 1. 契约与错误
 
@@ -31,7 +31,7 @@ Worker 主动拉取，每节点独立身份，mTLS 双向证书认证优先验�
 
 M0 已验证子集：[Worker 契约](../../api/worker.openapi.yaml)提供独立 loopback TLS 1.3 领取/续租/回报及逐次授权材料入口。证书唯一 URI SAN 绑定节点 ID 与凭据版本，逐请求重验证书、逐事务校验节点记录，拒绝代理头/JSON 自报身份；原租约令牌关联节点、尝试及代次，无新增数据库模型。真实控制端进程和 TLS 客户端的证据见 M0 记录。证书生命周期工具与真正执行 Worker 仍未交付。
 
-M0 执行端增加 `workerclient.Renewer` 和 `execution.LeasedRunner`：前者负责有界 mTLS 续租，不依赖数据库；后者通过续租/停止小接口监督独占执行槽，不耦合 HTTP 或 Docker。执行前续租、每 5 秒刷新，从请求前的单调时间计算 25 秒本地预算（控制端固定 30 秒契约），失败或状态未知取消。独立停止确认后仍永久停用旧执行器，禁止把取消 HTTP 当作远程终止。当前仅专用 VM 测试驱动实现整容器停止与 PID 核验；Worker 入口未接入，详见[租约守护](../m0-experiment.md#租约守护与中止确认)。
+M0 执行端增加 `workerclient.Renewer` 和 `execution.LeasedRunner`：前者负责有界 mTLS 续租，不依赖数据库；后者通过续租/停止小接口监督独占执行槽，不耦合 HTTP 或 Docker。执行前续租、每 5 秒刷新，从请求前的单调时间计算 25 秒本地预算（控制端固定 30 秒契约），失败或状态未知取消。独立停止确认后仍永久停用旧执行器，禁止把取消 HTTP 当作远程终止。`internal/workerhost` 实现专用 M0 宿主检查、传输及整容器停止/PID 核验，依赖 `experiment` 固定配置，不反向依赖 Worker 编排；调用方通过现有小接口注入。Worker 入口与跨进程独占未接入，详见[宿主适配器](../m0-experiment.md#可信宿主适配器)。
 
 真实结果通过 `LeasedRunner.JudgeReport` 在执行/清理成功后形成绑定尝试及材料的 `submission.Result` 摘要值；`workerclient.Reporter` 只负责有界 mTLS 发送与确认分类，不依赖数据库或沙箱。原契约与存储指纹不变；只有 204 确认成功，状态未知保留原租约/原结果供显式重报，不自动重跑选手代码。执行错误不产生回报，详细证据归档及待回报持久化尚未实现。摘要语义、真实数据库/沙箱联合证据和测试夹具边界见[真实结果回报](../m0-experiment.md#真实结果回报)。
 
