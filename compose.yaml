@@ -1,0 +1,57 @@
+services:
+  api:
+    build:
+      context: .
+      target: api
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 15s
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/api/v1/healthz]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  web:
+    build:
+      context: .
+      target: web
+    ports:
+      - "127.0.0.1:${OJ_WEB_PORT:-8080}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/api/v1/healthz]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  backend-check:
+    profiles: [checks]
+    build:
+      context: .
+      target: backend-source
+    command:
+      - sh
+      - -ec
+      - |
+        test -z "$$(gofmt -l cmd internal db tests)"
+        go vet ./...
+        go test -race -count=1 ./...
+        go build -trimpath ./cmd/...
+
+  frontend-check:
+    profiles: [checks]
+    build:
+      context: .
+      target: frontend-source
+    command: [sh, -ec, "pnpm lint && pnpm typecheck && pnpm test && pnpm build"]

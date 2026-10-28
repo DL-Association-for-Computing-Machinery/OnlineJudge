@@ -16,6 +16,20 @@
 
 提交前后完整自审补强：把后续题提前到 Worker 启动前入队，消除“题目来得晚所以未领取”的时序空隙。同一 `make worker-fault-test` 全套重跑通过，四故障 90.90 秒（10.34/10.18/34.63/35.55 秒）；日志 `/private/tmp/oj-fault-queued-regression.log`，临时数据库 `/tmp/oj-postgres.pUySCd` 已停止。首提交 `bb97e1f` 的 [PR #18 CI](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/actions/runs/40711372352) 全部成功；补强提交仍须按最新 head 重新核验，不沿用此结果。
 
+## 2026-10-28：Docker 构建与本机一键启动
+
+用户确认后续默认使用 Docker 构建并一键启动，授权独立工作树与 `codex/docker-compose` 分支。最初基于 `c3e3a48`，交付时整合已合并 PR #18 的 `f13f4dc`，工作区 `/Users/huangqijun/.codex/worktrees/docker-compose/OnlineJudge`。下列为初次提交前的本地验证快照；原克隆五处既有改动保持原样，后续 PR/CI/合并状态以实际回读为准。
+
+- 唯一目标：将当前前端与基础 API 的构建、启动、快速应用检查放入 Docker。新增固定基础镜像摘要的多阶段 Dockerfile、限定上下文的 `.dockerignore`、Compose 和 Nginx；默认仅本机 8080 入口，内部服务名代理，非 root、只读根文件系统及健康等待。检查服务使用独立 profile，默认启动不会运行测试容器。
+- 在 macOS arm64 / Docker Engine 29.8.1 Linux arm64 / Compose 5.5.1 实测：`docker compose -p oj-docker-validation build` 成功；`docker compose -p oj-docker-validation run --rm --build --no-deps backend-check` 通过格式、vet、race 全部单元测试和全部 Go 命令编译；前端检查镜像构建后 `docker compose -p oj-docker-validation run --rm --no-deps frontend-check` 通过 lint、类型检查、6 项测试及 Vite 构建。Go 1.26.10、Node 24.19.0、pnpm 11.25.0 与现有配置一致。
+- `python3 scripts/test-compose.py` 通过实际镜像构建、随机 loopback 端口启动、HTML/静态资源/SPA 回退、缺失资源 404、API 健康与 404/405 契约、非 root/只读/无特权/无 API 宿主端口，以及 API 重建、停止网关错误和重启恢复。唯一测试项目在 finally 中清理容器与网络，没有 volume 或业务数据。未删除镜像和构建缓存。
+- 首轮后端容器缺少 `deploy/experiments/go-judge.Dockerfile`，原 `TestPinnedBuildRecipe` 正确失败；补齐构建上下文和 COPY 后完整重跑通过。首轮停止测试假定必为 502，诊断实测为连接超时 504；测试改为明确接受拒绝连接/超时两种网关失败，仍拒绝健康成功；未改代理掩盖错误。
+- 新增 `containers` CI job，复用现有影响矩阵触发实际构建与冒烟；保持四个必需门禁和远端保护不变。新增 job 尚未在 GitHub 执行，不宣称远端通过。README、根规则与 CI 文档同步；仓库策略 164 文件、37 项治理回归及 `git diff --check` 通过，完整差异与新增文件自审，无独立人工审查。
+
+日志为本机临时证据：`/private/tmp/oj-docker-build.log`、`/private/tmp/oj-docker-backend-check-final.log`、`/private/tmp/oj-docker-frontend-check.log`、`/private/tmp/oj-compose-smoke-final.log`，可能被系统清理。默认 Compose 不含 PostgreSQL、Worker、控制端或沙箱；专用 M0 适配器仍依赖现有宿主环境，数据库与沙箱专项本轮未重跑。只有 Linux arm64 本地实测，amd64/远端 CI 待验证；无 HTTPS、正式发布、离线制品或完整 M0 验收。回退仅需停止当前无状态 Compose 项目并恢复宿主机兼容入口，不涉及数据库迁移。
+
+交付准备：用户授权整理原子提交并创建远端 PR。整合 `f13f4dc` 时仅有 CI/交付文档追加位置冲突，保留双方记录，无应用代码冲突；重新运行 Compose 全流程冒烟通过（`/private/tmp/oj-compose-pr-smoke.log`），165 文件仓库策略、37 项治理回归及完整目标分支差异检查通过。一个提交包含本目标的 10 个必要文件，无前置 PR 的重复改动；远端检查与合并结果以 PR 的当前 head 及知识库交付回读记录为准。
+
 ## 2026-10-28：双固定槽 Worker 真实执行与退出接管
 
 基于主线 `f1ece3f8d6e376045365024fbea73aedad018aef`，独立分支 `codex/dual-worker-recovery`，工作区 `/Users/huangqijun/.codex/worktrees/dual-worker-recovery/OnlineJudge`。唯一目标是双 Worker 的隔离运行与可清理退出后的真实任务接管。下列为提交前本地验证快照；后续按开发交付持续授权提交、推送、创建 PR 并核验对应 head 的 CI/审查，远端终态以实际回读为准。原克隆 5 处文档改动保持原状。
