@@ -8,7 +8,7 @@
 - [首期开发计划](docs/phase-1-development-plan.md)：0B → 1A → 1B 的任务依赖、P0—P7 开发包、里程碑与验收证据要求。
 - [M0 实验记录与复现](docs/m0-experiment.md)：数据库、双 API 进程、任务租约及 Linux 沙箱的实际证据与未覆盖项；M0 整体验收尚未通过，健康接口不代表判题就绪。
 - [Worker mTLS 契约](api/worker.openapi.yaml)：认证领取、续租、结果回报及有效租约限定的源码/材料下载与哈希校验；两个真实控制端进程和 TLS 客户端已验证。新增真实沙箱结果经 mTLS 回报至 PostgreSQL 的联合测试，见[真实结果回报](docs/m0-experiment.md#真实结果回报)。
-- `cmd/worker` 已接入单槽领取、材料准备、租约执行与冻结结果回报，复用 `internal/worker`、`internal/execution`、`internal/workerclient` 和 `internal/workerhost`。入口提供按固定槽独占、崩溃隔离标记、启动预检和信号停止；仅支持固定 `m0-sum-v2`，见[执行端命令入口](docs/m0-experiment.md#执行端命令入口)。两个独立 Worker/控制端的真实竞争执行与 SIGTERM 后接管已验证，见[双 Worker 实验](docs/m0-experiment.md#双-worker-真实执行与接管)。后续补齐撤销/材料故障联合验证和会话实验，M0 尚未通过。
+- `cmd/worker` 已接入单槽领取、材料准备、租约执行与冻结结果回报，复用 `internal/worker`、`internal/execution`、`internal/workerclient` 和 `internal/workerhost`。入口提供按固定槽独占、崩溃隔离标记、启动预检和信号停止；仅支持固定 `m0-sum-v2`，见[执行端命令入口](docs/m0-experiment.md#执行端命令入口)。两个独立 Worker/控制端的真实竞争执行与 SIGTERM 后接管已验证，见[双 Worker 实验](docs/m0-experiment.md#双-worker-真实执行与接管)。撤销/材料故障的专项命令与证据边界见[故障联调](docs/m0-experiment.md#撤销与材料故障联调)；会话实验及 M0 整体验收尚未通过。
 - `cmd/worker-api` 自动扫描过期、撤销或凭据轮换后的任务租约，保留三次尝试上限及旧回报隔离；见[控制端任务自动恢复](docs/m0-experiment.md#控制端任务自动恢复)。这只恢复数据库任务，不重启 Worker 或解除沙箱隔离。
 - 模块化单体＋独立判题 Worker；不创建空业务层，不把所有模块拆成服务。
 - 既有 Redis 会话路线保留待验证，新增 PostgreSQL 会话对比；未做未经确认的替换。
@@ -84,6 +84,8 @@ CI 按完整变更范围执行：纯文档/根规则只跑治理；前端变更�
 真实沙箱结果与临时数据库联合验证：在上述专用 VM/容器已启动时，执行 `OJ_SANDBOX_EXPERIMENT=1 make report-test`。该命令先运行数据库与双 API 回归，再在独立空库运行单槽 Worker 连续两题与丢失回执重报、原 8 项结果回报用例，以及真实 Worker 命令的 AC/WA、重复启动拒绝、SIGINT 空闲停止和 SIGTERM 在途停止。需要独占专用沙箱，入口隔离标记必须无未决状态；测试不自动清除旧隔离标记。普通 CI 不运行此特权实验，`sandbox-test` 不替代它。
 
 双 Worker 接管验证：管理员按 [M0 前置条件](docs/m0-experiment.md#双-worker-真实执行与接管) 准备并启动两个固定槽后，执行 `OJ_SANDBOX_EXPERIMENT=1 make dual-worker-test`。测试使用独立空库、两个真实控制端与两个真实 Worker 进程，等待自然租约到期；结束后两个容器均停止。`OJ_WORKER_M0_SLOT` 只接受空值/`primary`/`secondary`，默认槽兼容既有锁路径；不自动创建或恢复容器。
+
+撤销与材料故障验证：独占并启动既有 primary 容器后运行 `OJ_SANDBOX_EXPERIMENT=1 make worker-fault-test`。先执行数据库/双 API 回归，再在独立空库用两个控制端和先后启动的真实 Worker 注入节点禁用、凭据轮换、最后一个答案文件缺失/损坏。核验失败退出、停止确认、无结果及不领取下一题、控制端自动恢复与旧回报拒绝。测试驱动只修复临时材料、显式重启并重新核验实验容器；结束时 primary 停止，不操作 secondary。不是生产自动恢复或即时撤销 SLA。
 
 ## 文档入口
 

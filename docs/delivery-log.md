@@ -1,5 +1,19 @@
 # 工程交付记录
 
+## 2026-10-28：撤销与材料故障联合验证
+
+基于已合并 PR #17 的 `c3e3a48bfc0f39f760596458e9fb107311a3ee67`，独立 `codex/worker-fault-validation`。唯一目标为 P2、AC28/29 的四类故障联调；新增 `tests/sandbox/fault_test.go`、`make worker-fault-test` 及临时数据库入口。无应用行为、依赖、SQL、迁移、协议或 workflow 变化。以下为提交前实测快照，PR/CI/合并终态另行回读。
+
+- 基线 `GOPROXY=off make go-check go-build GOMODCACHE=/Users/huangqijun/Documents/OnlineJudge/.local/go-mod GOCACHE=/private/tmp/oj-lease-go-build` 通过格式、vet、race 和构建。日志 `/private/tmp/oj-fault-baseline.log`。
+- `GOPROXY=off OJ_SANDBOX_EXPERIMENT=1 make worker-fault-test`（同上缓存参数）通过真实临时 PostgreSQL、双 API 24 并发及双控制端回归。四类故障专项 91.53 秒：禁用 11.02 秒、轮换 10.21 秒、缺失 34.46 秒、损坏 35.64 秒。日志 `/private/tmp/oj-fault-integration-final.log`；临时数据库 `/tmp/oj-postgres.n0TJG8` 已停止。环境为 macOS arm64、Go 1.26.10、既有 PostgreSQL 14.19 与专用 Linux arm64 VM/GCC 15.3.0/go-judge 1.13.3。
+- 观察选手 PID 后禁用或轮换节点；材料用例破坏临时目录的最后一个答案文件。故障 Worker 退出码 1、整容器停止、已观察 PID 消失，没有结果载荷/verdict，也不领取下一题。修复临时材料并显式重启/复验沙箱后，实际控制端扫描回收任务；原题第 2 次尝试 AC，下一题也 AC。两个控制端拒绝旧回报，新结果字节不变。未修改租约时间或手调 Recover。
+- 首次运行因新测试幂等键过短被既有验证拒绝，修正夹具后全套重跑通过；未放宽应用规则。首次失败日志 `/private/tmp/oj-fault-integration.log` 保留。`sh -n scripts/test-postgres.sh`、标签测试编译、仓库策略 160 文件与 diff 检查通过。没有修改应用代码，未额外重跑独立隔离套件或本地前端；普通远端 CI 按 Makefile 的共享范围执行全量套件。
+- 两实验容器回读均为 `Running=false/Pid=0/Restarting=false`，本轮只使用 primary；VM 关闭且原 Docker context 保留。原克隆和前置任务工作区保持原状。文档同步 README、M0、开发/交付计划和 CI 分层；完整差异自审，无独立人工批准。
+
+边界：5 秒续租周期内的短任务撤销可能在回报时拒绝，本项不承诺即时杀进程。材料不执行半套数据的直接计数由已有单元测试覆盖，本项不把未观察到 PID 当作从未执行的证据。沙箱/Worker 重启由测试驱动显式完成，不是执行端自动恢复；旧回报使用新结果作授权探针。会话、持久结果队列、SIGKILL/网络分区/跨主机故障与完整 M0 未通过。回退仅移除专项测试入口/用例，无迁移或部署。
+
+知识事务 `oj-worker-fault-20261028` 已更新实测、推进、热点、索引和日志五页；严格 lint 32 页/394 链接/0 问题，五页哈希回读一致。保存测试源码哈希与证据边界，不修改 raw 或 accepted 账本。
+
 ## 2026-10-28：双固定槽 Worker 真实执行与退出接管
 
 基于主线 `f1ece3f8d6e376045365024fbea73aedad018aef`，独立分支 `codex/dual-worker-recovery`，工作区 `/Users/huangqijun/.codex/worktrees/dual-worker-recovery/OnlineJudge`。唯一目标是双 Worker 的隔离运行与可清理退出后的真实任务接管。下列为提交前本地验证快照；后续按开发交付持续授权提交、推送、创建 PR 并核验对应 head 的 CI/审查，远端终态以实际回读为准。原克隆 5 处文档改动保持原状。
