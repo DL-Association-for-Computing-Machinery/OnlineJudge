@@ -43,6 +43,8 @@ Go 标准 testing、真实 PostgreSQL/Redis（Testcontainers for Go 优先验证
 
 ### 随功能交付建立的验收目录
 
+领取/材料客户端沿用现有 `backend` 与 `integration`：真实双控制端验证竞争领取、跨实例下载、损坏/缺失及失效授权拒绝。`report-test` 已改为由该客户端领取并下载后再执行，移除该路径的直接租约/材料夹具；仍是实验驱动，两个 TLS handler 同进程，不代表常驻双 Worker 验收。无 CI 配置变化。
+
 真实结果回报沿用 `backend` 的 Go race 测试及 `integration` 的双控制端/数据库测试，不修改 CI 配置。新增本地 `OJ_SANDBOX_EXPERIMENT=1 make report-test` 在独立空库连接专用离线 Linux 沙箱，验证 8 项真实执行与回报；普通 PR CI 不具备该特权 VM，不能以 CI 绿灯替代这项本地实测。`make sandbox-test` 中该联合用例需要额外显式启用，独立运行普通沙箱回归不代表已运行回报联调。
 
 下列为完整功能验收目录，按 [交付阶段与 AC 子项](delivery-plan.md#4-验收归属)启用，不是首次应用提交必须一次完成的清单。已交付功能的要求不能跳过；未交付条目保持待实现，不能标通过。实际可执行命令见 README。

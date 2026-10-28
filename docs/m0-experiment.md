@@ -12,7 +12,7 @@
 | `internal/materials` | 任务范围下载、SHA-256 校验、受限本地读取和私有快照、读取后再次授权 | 生产题库发布、Worker 缓存、对象存储与容量/灾备验收 |
 | `db/migrations`、`cmd/migrate` | Goose 独立迁移与 advisory lock，API 只读检查模式版本，显式夹具注册 | 生产升级、模式内容哈希账本、断连及非事务迁移恢复 |
 | `internal/judging` | 有界文本 token 比较，ASCII 大小写规则与显式敏感选项 | 浮点、SPJ、完整结果归因/编排 |
-| `internal/execution`、`internal/workerclient` | 固定 v2 受限编排、mTLS 续租/结果回报、结果摘要、失效取消、独占沙箱停止确认和永久停用 | 领取/材料客户端、通用题目/语言、生产停止适配器及节点接入 |
+| `internal/execution`、`internal/workerclient` | 固定 v2 受限编排、mTLS 领取/材料下载/续租/回报、结果摘要、失效取消、独占沙箱停止确认和永久停用 | 常驻 Worker、通用题目/语言、生产停止适配器及节点接入 |
 | `tests/sandbox` | 真实编译/运行/比较/超限/隔离/中止；真实结果经双 TLS handler 持久化及重复/拒绝回报 | 完整 Worker 闭环、双 Worker、执行中数据库撤销到沙箱的联合故障注入 |
 
 API 的健康检查仍仅代表进程存活；未启用实验时行为保持原样。实验入口仅在设置 `OJ_EXPERIMENT_TOKEN_FILE` 后注册，启动时强制使用字面量 loopback 地址，凭据文件必须为 owner-private 普通文件。一个静态测试主体 `m0-operator`、一个固定上下文 `m0-training`，拒绝带 Origin 的请求；它不是正式登录、Cookie 或 CSRF 实现，也不是对同主机管理员的安全边界。现有浏览器预览页不接入此凭据。
@@ -185,7 +185,7 @@ PR #1 审查修复（2026-10-25，验证时为基于 `a31e021` 的未提交工�
 
 实际证据分层：单元/race 测试注入编译/运行期间的撤销、到期、传输失败、超时、迟到响应，验证周期续租跨过初始预算、未执行点、清理/停止期间容量、取消与完成竞争、永久停用和停止失败。真实双控制端＋PostgreSQL 测试使用新客户端验证跨实例续租、异节点和已完成租约拒绝。`TestLeasedExecutionConfirmsHostStop` 在专用离线 VM 观测真实休眠选手 PID 后取消，用固定容器 ID 执行 KILL，检查 `Running=false/Pid=0/Restarting=false` 及 VM `/proc/<pid>` 消失，后续点保持 NOT_RUN，旧 Runner 不能复用。测试恢复容器后重跑原 10 项编排与 12 项隔离回归，全部通过。
 
-停止适配器目前仅是 `tests/sandbox` 的实验驱动，续租在该真实沙箱用例中为注入成功响应；不能称为数据库撤销到沙箱的完整联调或生产节点驱动。KILL 行为依据 [Docker 官方文档](https://docs.docker.com/reference/cli/docker/container/kill/)，停止事实以上述实际状态/PID 检查为准。首次 PID 核验因 Colima SSH 继承无挂载的宿主仓库目录而失败，驱动固定 `/tmp` 后重跑通过，没有放宽断言。真实回报现已在下节独立验证；领取/材料下载客户端、自动恢复、双 Worker 与完整 M0 未完成。
+停止适配器目前仅是 `tests/sandbox` 的实验驱动，续租在该真实沙箱用例中为注入成功响应；不能称为数据库撤销到沙箱的完整联调或生产节点驱动。KILL 行为依据 [Docker 官方文档](https://docs.docker.com/reference/cli/docker/container/kill/)，停止事实以上述实际状态/PID 检查为准。首次 PID 核验因 Colima SSH 继承无挂载的宿主仓库目录而失败，驱动固定 `/tmp` 后重跑通过，没有放宽断言。真实回报、领取/材料客户端现已在下节独立验证；自动恢复、双 Worker 与完整 M0 未完成。
 
 复现：`GOPROXY=off make go-check db-test`；已有专用 VM/容器按前置启动后，`OJ_SANDBOX_EXPERIMENT=1 go test -race -count=1 -tags=sandbox ./tests/sandbox -v`。本机依赖复用缓存，具体命令/日志见交付记录。无迁移/配置变化；回退本次代码即可，实验容器恢复必须在旧请求排空后重新核验环境，数据库任务与历史保留。
 
@@ -197,9 +197,21 @@ PR #1 审查修复（2026-10-25，验证时为基于 `a31e021` 的未提交工�
 
 `workerclient.NewReporter(...).Report(ctx, token, frozenResult)` 使用独立 mTLS 客户端连接预算，沿用续租的显式 HTTPS/CA/节点证书、3 秒超时、禁止重定向。只把 204 当作确认；401/403 为节点失效，409 的有界 Problem Details 区分租约失效与结果冲突；断连、超时、503、异常状态/正文均返回 `ErrReportUnknown`。无隐式重试；调用方保留原租约和已冻结结果原样重报，不能重新执行以重算摘要。当前仅返回内存值，无磁盘待回报队列、崩溃恢复或自动重试调度。执行结束至回报的授权竞态由数据库最终校验；已经接受的完全相同历史回报仍可确认。
 
-验证：`OJ_SANDBOX_EXPERIMENT=1 make report-test` 建立独立临时数据库，先运行既有双 API/双控制端回归，再通过专用离线 Linux 沙箱、真实 mTLS 续租、两个 TLS handler 和 PostgreSQL 跑 8 项联合用例。AC/WA/CE/RE/TLE/MLE/OLE 均真实执行并持久化；服务端提交后主动断开响应，另一控制端原样重报通过，修改摘要返回冲突、错误节点拒绝；真实 AC 在节点撤销时拒绝，另一个真实 AC 到期后不生效。逐项回读数据库中的 verdict 和摘要。领取/材料准备由测试夹具直接完成，两个 handler 在同一测试进程内；独立控制端子进程另由 `db-test` 验证，不能称为双 Worker 端到端交付。
+验证：`OJ_SANDBOX_EXPERIMENT=1 make report-test` 建立独立临时数据库，先运行既有双 API/双控制端回归，再通过专用离线 Linux 沙箱、真实 mTLS 续租、两个 TLS handler 和 PostgreSQL 跑 8 项联合用例。AC/WA/CE/RE/TLE/MLE/OLE 均真实执行并持久化；服务端提交后主动断开响应，另一控制端原样重报通过，修改摘要返回冲突、错误节点拒绝；真实 AC 在节点撤销时拒绝，另一个真实 AC 到期后不生效。逐项回读数据库中的 verdict 和摘要。2026-10-28 已将领取/材料准备替换为下节客户端并重跑通过；两个 handler 仍在同一测试进程内，独立控制端子进程另由 `db-test` 验证，不能称为双 Worker 端到端交付。
 
-单元/race 覆盖摘要归属、用量、未执行点、私有临时信息排除、清理失败/失租/取消不生成回报、未知响应/重定向/超时及原样重试。未引入依赖、公共配置或数据库变更；回退新增调用方即可，保留已接受的历史结果与任务。下一项为领取/材料客户端及 Worker 入口，生产停止驱动、自动恢复、详细证据保存、双 Worker 与会话仍未交付。
+单元/race 覆盖摘要归属、用量、未执行点、私有临时信息排除、清理失败/失租/取消不生成回报、未知响应/重定向/超时及原样重试。未引入依赖、公共配置或数据库变更；回退新增调用方即可，保留已接受的历史结果与任务。领取/材料客户端见下节；下一项为 Worker 入口，生产停止驱动、自动恢复、详细证据保存、双 Worker 与会话仍未交付。
+
+## 领取与材料客户端
+
+2026-10-28，基于 PR #8 合并提交 `64b9992` 的独立 `codex/claim-material-client` 分支，完成 P2、AC22/28/29 的单一子项。`workerclient.NewAcquirer(endpoint, roots, certificate)` 提供 `Claim(ctx)` 与 `Fetch(ctx, lease)`，复用既有专用 CA、TLS 1.3、禁止重定向的传输配置；独立单连接预算，不阻塞已有续租/回报客户端。不新增依赖、SQL、迁移、HTTP 接口或运行配置。
+
+`Claim` 每次只发一个 POST，校验 32 位十六进制提交 ID、64 位租约令牌、正整数双代次/尝试及有效时间格式。204 返回 `ErrNoTask`，401/403 返回 `ErrNode`；断连、超时、非预期响应或不完整回执返回 `ErrClaimUnknown`，不自动重领。未知结果可能已占节点容量，须由后续受信任恢复机制处理，不能断言事务失败。截止时间只作记录，实际执行仍依赖 `LeasedRunner` 前置续租和单调时限。
+
+`Fetch` 仅支持与执行器一致的规范 `m0-sum-v2`，先校验任务归属、源码与清单哈希及固定环境，再按清单顺序下载四个文件。每次请求带原租约并由服务端重新授权；要求 octet-stream、明确长度、摘要头及实际 SHA-256 一致。源码限 64 KiB，清单为固定规范字节；JSON 响应限 `6*MaxSourceBytes+32768`（兼容转义/base64），文件限 `judging.TextBudget`（1 MiB），合计最多 4 MiB。单请求最多 3 秒，整次 Fetch 最多 15 秒；无重试、无磁盘缓存，错误不暴露响应正文、URL 或凭据。任何失败均返回空描述和 nil 材料，不能把部分材料交给执行器或回报选手判定。代价是每次重新下载，尚不支持通用题包或大材料。
+
+验证：macOS arm64、Go 1.26.10、PostgreSQL 14.19，`GOPROXY=off make go-check report-test OJ_SANDBOX_EXPERIMENT=1` 通过（指定已有模块缓存及临时构建缓存，完整命令见交付记录）。19 项领取与 24 项材料边界子测试覆盖空队列、回执丢失、重定向、取消、畸形/超限回执、归属/摘要不符、截断、未知长度、最后文件失败不返回半套数据。真实双控制端子进程与双节点客户端验证唯一认领、跨实例下载、原样 Unicode、损坏/缺失恢复、跨节点/撤销/过期/旧尝试/已完成拒绝。首次集成发现客户端错误假定 UUID 带连字符，按实际持久化 32 位十六进制 ID 修正后全套重跑通过。
+
+同一命令的 8 项真实沙箱联合用例已用新客户端完成领取/下载，再调用已有租约执行器并回报；参考答案未加入选手执行请求。实验提交与沙箱生命周期仍由测试驱动控制，两个 TLS handler 同进程，独立双控制端测试不等于常驻双 Worker。未重跑未修改的独立隔离/中止专项，既有证据保留为历史；无本地前端变更或重测。回退只撤销新增调用方，保留租约、任务、结果和材料，无数据库回滚。
 
 ## 组件准入与下一步
 
@@ -207,6 +219,6 @@ pgx v5.11.0、Goose v3.29.0、sqlc v1.31.1 已核对官方版本/本地模块许
 
 go-judge v1.13.3 官方 arm64 镜像约 58 MB，GCC 15 镜像约 532 MB；实际 GCC 为 15.3.0。固定 tag 的 MIT 许可证已核对并保存 `.local/go-judge-v1.13.3-LICENSE`，SHA-256 为 `a84a0427c3a1c25851a4689410a54283962a759a02558058a107470993b80c5a`；GCC/基础发行版各组件许可及安全清单尚未完整核验，只准入隔离实验，不准入生产或对外分发。[pgx 发布](https://github.com/jackc/pgx/releases/tag/v5.11.0)、[Goose 发布](https://github.com/pressly/goose/releases/tag/v3.29.0)、[sqlc 发布](https://github.com/sqlc-dev/sqlc/releases/tag/v1.31.1)、[go-judge 版本](https://github.com/criyle/go-judge/releases/tag/v1.13.3)、[隔离与 API](https://docs.goj.ac/api)为核验入口。
 
-本次完成固定 v2 的真实结果回报子项；下一项贯通领取/材料客户端，再接 Worker 入口、双 API＋双 Worker 及会话关键实验。既有 mTLS、材料、环境及编排子项不能替代完整链路；`m0-sum-v1` 继续保持 unvalidated。生产节点检查器、传输、恢复及材料下载客户端仍须独立验证。
+本次完成固定 v2 的领取/材料客户端并贯通实验驱动中的执行与回报；下一项接入 Worker 入口，再进行双 API＋双 Worker 及会话关键实验。既有分项不能替代完整生命周期验收；`m0-sum-v1` 继续保持 unvalidated。生产节点检查器、传输与恢复仍须独立验证。
 
 M0 仍待完整链路与会话实验；M1/M2 仍需试用范围、题库授权、SMTP/HTTPS、负载目标、RPO/RTO 与独立备份位置。不能把本页分项通过视作首期平台可用。
