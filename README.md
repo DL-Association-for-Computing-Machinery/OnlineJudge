@@ -9,6 +9,7 @@
 - [M0 实验记录与复现](docs/m0-experiment.md)：数据库、双 API 进程、任务租约及 Linux 沙箱的实际证据与未覆盖项；M0 整体验收尚未通过，健康接口不代表判题就绪。
 - [Worker mTLS 契约](api/worker.openapi.yaml)：认证领取、续租、结果回报及有效租约限定的源码/材料下载与哈希校验；两个真实控制端进程和 TLS 客户端已验证。新增真实沙箱结果经 mTLS 回报至 PostgreSQL 的联合测试，见[真实结果回报](docs/m0-experiment.md#真实结果回报)。
 - `cmd/worker` 已接入单槽领取、材料准备、租约执行与冻结结果回报，复用 `internal/worker`、`internal/execution`、`internal/workerclient` 和 `internal/workerhost`。入口提供跨进程独占、崩溃隔离标记、启动预检和信号停止；仅支持固定 `m0-sum-v2`，见[执行端命令入口](docs/m0-experiment.md#执行端命令入口)。下一步验证双 Worker 与故障恢复，再补会话实验。
+- `cmd/worker-api` 自动扫描过期、撤销或凭据轮换后的任务租约，保留三次尝试上限及旧回报隔离；见[控制端任务自动恢复](docs/m0-experiment.md#控制端任务自动恢复)。这只恢复数据库任务，不重启 Worker 或解除沙箱隔离。
 - 模块化单体＋独立判题 Worker；不创建空业务层，不把所有模块拆成服务。
 - 既有 Redis 会话路线保留待验证，新增 PostgreSQL 会话对比；未做未经确认的替换。
 - 已引入 PostgreSQL 实验、sqlc/pgx/Goose；go-judge 仅进入专用 Linux VM 的隔离实验。Redis 会话、River 与监控备份服务尚未接入。
@@ -48,6 +49,8 @@ pnpm --dir web dev
 API 可通过 `OJ_API_ADDR` 改监听地址；若改端口，同时调整 Vite 代理。默认没有业务接口；显式设置 `OJ_EXPERIMENT_TOKEN_FILE` 与 `OJ_DATABASE_URL` 可启用仅 loopback 的 M0 提交接口，见[实验契约](api/experiment.openapi.yaml)与[M0 配置边界](docs/m0-experiment.md)。凭据只放私有本地文件，不提交；未接入 .env 自动加载。
 
 `make worker-api` 启动独立控制端 HTTPS 进程，也可运行 `make go-build` 生成的 `.local/bin/worker-api`。必须提供 `OJ_WORKER_API_ADDR`、`OJ_WORKER_CA_FILE`、`OJ_WORKER_CERT_FILE`、`OJ_WORKER_KEY_FILE` 和 `OJ_DATABASE_URL`，初始化及证书要求见 [M0 Worker 入口](docs/m0-experiment.md#worker-mtls-租约入口)。这是持有数据库连接的控制端，其服务端证书与执行端节点证书分别配置。缺少配置会拒绝启动，无默认开放端口。
+
+控制端成功绑定监听地址后立即启动任务恢复扫描；每轮最多 64 条、5 秒预算，完成后等待 1 秒再扫描。扫描覆盖数据库中符合既有恢复条件的全部材料版本，不随该控制端的领取版本过滤。暂时失败会记录不含数据库错误正文的告警并继续限速重试；停止控制端会取消并等待扫描排空。无新增开关；回退旧二进制将停止自动扫描，数据库历史保留。
 
 材料下载另需 `OJ_MATERIAL_ROOT` 指向专用持久化目录；先显式初始化合成文件，再让控制端只读使用同一目录。命令、预算和回退见[材料入口](docs/m0-experiment.md#有效租约限定的材料入口)。未配置时两个材料接口返回 503，原租约接口保持可用。
 

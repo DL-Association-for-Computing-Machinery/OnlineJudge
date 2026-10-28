@@ -126,8 +126,7 @@ func testMaterialLocks(t *testing.T, ctx context.Context, pool *pgxpool.Pool, st
 			if err := <-done; !errors.Is(err, submission.ErrLease) {
 				t.Fatalf("expired while blocked = %v", err)
 			}
-			_, err = store.Recover(ctx)
-			must(t, err)
+			waitTaskState(t, ctx, pool, lease.SubmissionID, "queued")
 			current, err := store.Claim(ctx, node)
 			must(t, err)
 			must(t, store.Report(ctx, node, current.Token, submission.Result{Verdict: "AC", EvidenceSHA256: strings.Repeat("a", 64)}))
