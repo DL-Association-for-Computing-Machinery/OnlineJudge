@@ -21,13 +21,35 @@
 
 ### 当前治理流水线
 
-对 PR、main/master 推送及人工触发运行 `governance`。不按文档路径过滤触发，避免未来必需检查因跳过而悬空。
+对 PR、main/master 推送及人工触发保留工作流入口，不使用 workflow 级 `paths-ignore`，避免必需检查悬空。2026-10-28 起按完整变更范围选择应用测试，保留四个稳定必需检查名称，不修改远端保护。
 
 1. 检出待检查版本，checkout 固定到核验过的完整提交 SHA，不保留推送凭据。
 2. 用 Python 标准库执行仓库检查和 hook 回归测试。
-3. 骨架引入后，workflow 中的初始化阻断已由真实 `backend` / `frontend` jobs 替换，运行 Go 格式/vet/race/构建及前端 lint/类型/测试/构建；冻结前端锁文件安装，不使用缺文件跳过或成功占位。旧 `bootstrap-ci` 命令保留为初始化检测器，当前有应用时仍应失败，不再由本项目 workflow 调用；治理回归保护这一转换。
+3. `governance` 在仓库检查、标题检查和治理回归通过后，通过 `scripts/ci_scope.py plan` 输出各套件是否受影响。应用任务为 `backend-tests`、`frontend-tests`、`integration-tests`，执行原有完整检查，不按缺少 manifest 或测试失败跳过。
+4. `backend`、`frontend`、`integration` 是轻量结果门禁，使用 `always()` 检查分类和对应应用任务结果。受影响时只接受 `success`；明确不受影响时只接受 `skipped` 并写入摘要“tests omitted”。分类失败、缺输出、取消、未知结果或应跑未跑均失败；不能把未执行测试描述为测试通过。旧 `bootstrap-ci` 初始化检测器仍在有应用时拒绝通过。
 
 权限仅 `contents: read`，不注入生产秘密，不使用 `pull_request_target` 执行 PR 代码，不上传仓库到外部审查服务。PR 同分支新运行可取消旧检查；设定超时。当前未调用第三方秘密扫描器，文件名检查不等价于秘密扫描。
+
+### 按变更影响选择检查
+
+| 完整差异中的路径 | 应用测试（治理检查始终执行） |
+| --- | --- |
+| 根 README/AGENTS/LICENSE、`docs/**/*.md`、PR 模板、`web/README.md` | 无；只执行治理和结果门禁 |
+| `web/` 中其余文件（含依赖、锁文件、Node 和构建配置） | frontend |
+| `cmd/`、`internal/`、`db/`、集成/沙箱测试目录、`go.mod`/`go.sum`、`sqlc.yaml`、`scripts/test-postgres.sh` | backend + integration |
+| hooks、仓库策略/安装脚本、普通治理测试 | 治理检查及治理回归 |
+| 分流脚本及其测试、workflow、共享 Makefile、仓库配置、其他未识别路径 | 全量应用测试 |
+| 手动触发、无法取得有效差异、空差异 | 全量应用测试 |
+
+混合改动取并集。新增模块须先确定依赖影响再缩小默认全量范围；不通过后缀全局排除 Markdown（例如应用目录里的 Markdown 测试夹具仍触发应用测试）。本次不做包级测试裁剪，也不修改应用断言、部署或特权沙箱边界。
+
+PR 使用事件中的不可变 base/head SHA 做 three-dot diff，覆盖整个 PR 而非最后一次提交；主线 push 使用 before/after 的完整 two-dot diff。checkout 获取完整历史，Git 的 NUL 分隔文件名支持空格/换行；禁用重命名折叠，以便同时检查删除源和新增目标。无 REST changed-files 分页或路径过滤文件数截断。应用测试仍检出 GitHub 合并候选，不仅测 head。
+
+PR 的 `edited` 事件继续按完整差异执行，确保标题和目标分支变更被复核；这意味着代码 PR 仅编辑描述也会重验其受影响套件。本轮优化文件影响范围，不复用旧 CI 结果。并发取消和超时保持现有配置；不引入缓存结果作为成功依据。
+
+本地验证：`python3 -B -m unittest discover -s tests/governance -v` 覆盖路径矩阵、真实 Git 多提交/分叉/删除/重命名/push、缺失历史及失败门禁；已有 `actionlint` 可检查 workflow 语法和表达式。远端实际启用和结果以对应 PR head 的运行及交付记录为准。
+
+设计依据（2026-10-28 核对）：GitHub [必需检查与跳过任务](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks)、[工作流语法与 diff](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax)、[并发控制](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)。采用影响范围选择、稳定门禁和失败阻断，不表示已具备独立人工审批或完整企业发布体系。
 
 ### 已确认的验证与交付路线
 
@@ -41,7 +63,7 @@ Go 标准 testing、真实 PostgreSQL/Redis（Testcontainers for Go 优先验证
 
 同日材料子项沿用上述 jobs：`backend` 验证有界快照、摘要、异常文件和读取后再次授权；`integration` 验证双控制端的源码/清单/四文件下载、失效授权、真实行锁等待及 CLI 合成初始化。单元测试的授权竞态为依赖注入，协议和锁测试使用真实 TLS/进程/PostgreSQL；不把这些测试当成 Worker 缓存、沙箱执行或容量验收。
 
-已有 `backend` / `frontend` jobs，分别执行 `make go-check go-build`、`make web-check`。`integration` job 使用独立 PostgreSQL 14 临时服务，检查 sqlc v1.31.1 生成差异及事务/迁移/租约真实测试；loopback trust 仅限一次性 CI 数据库，不作为部署配置。本地 `make db-test` 额外启动两个真实 API 子进程。专用 VM 的 `sandbox-test` 与普通 PR CI 分离。本地与 PR #1 首轮 CI 均已通过，具体 head 及运行见[交付日志](delivery-log.md)，实验边界见[M0 记录](m0-experiment.md)。
+已有 `backend-tests` / `frontend-tests` jobs，受影响时分别执行 `make go-check go-build`、`make web-check`。`integration-tests` job 受影响时使用独立 PostgreSQL 14 临时服务，检查 sqlc v1.31.1 生成差异及事务/迁移/租约真实测试；loopback trust 仅限一次性 CI 数据库，不作为部署配置。本地 `make db-test` 额外启动两个真实 API 子进程。专用 VM 的 `sandbox-test` 与普通 PR CI 分离。本地与 PR #1 首轮 CI 均已通过，具体 head 及运行见[交付日志](delivery-log.md)，实验边界见[M0 记录](m0-experiment.md)。
 
 ### 随功能交付建立的验收目录
 
@@ -86,11 +108,11 @@ Go 标准 testing、真实 PostgreSQL/Redis（Testcontainers for Go 优先验证
 
 远端目标配置：main 禁止直接更新、强推和删除；只允许经 PR 合并；必需 CI 全部通过，讨论已解决，目标分支变化后重新验证。管理员例外也需留痕。
 
-- 当前只有用户一位维护者：用户人工检查 Codex 改动并承担合并责任，不能声称具备双人职责分离；不要设置只有作者本人却要求非作者批准的死锁规则。
+- 当前只有用户一位维护者：按根规则的持续授权，由 Codex 审查并在 CI/讨论/可合并条件满足后合并，用户保留授权与发布决定；不能声称具备双人职责分离，不设置只有作者本人却要求非作者批准的死锁规则。
 - 新增长期维护者后：至少一名非作者批准，关键模块设置真实 CODEOWNERS，更新提交后要求重新审查。
 - 分支保护与 Environment 审批受套餐、仓库可见性和账号权限影响。不能配置时明确报告控制缺口，保留人工关口；不声称有等价自动强制力。
 
-用户已授权并完成 main 保护、仅 squash 合并和 Actions 权限配置，未合并 PR；单人维护的独立批准数量为 0。PR 模板只帮助记录，不能自动证明勾选内容真实。
+用户已授权并完成 main 保护、仅 squash 合并和 Actions 权限配置；单人维护的独立批准数量为 0。PR 模板只帮助记录，不能自动证明勾选内容真实。
 
 ## CD 与环境晋级
 

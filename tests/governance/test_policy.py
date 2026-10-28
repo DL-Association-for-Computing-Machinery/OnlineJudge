@@ -189,7 +189,7 @@ class PolicyTests(unittest.TestCase):
         # gate with skip-on-missing manifests or a successful placeholder job.
         workflow = (SOURCE / ".github/workflows/governance.yml").read_text()
         self.assertNotIn("repo_policy.py bootstrap-ci", workflow)
-        for step in ("name: backend", "name: frontend", "make go-check go-build",
+        for step in ("backend-tests:", "frontend-tests:", "make go-check go-build",
                      "make web-check", "--frozen-lockfile"):
             self.assertIn(step, workflow)
         makefile = (SOURCE / "Makefile").read_text()
