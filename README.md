@@ -74,7 +74,7 @@ python3 -B -m unittest discover -s tests/governance -v
 
 GitHub Actions 的 `governance`、`backend`、`frontend` 和真实 PostgreSQL `integration` 首轮已全部通过，对应提交及运行链接见[交付日志](docs/delivery-log.md)；后续提交以对应 head 的检查为准。专用 Linux 沙箱不进入普通 PR 快速 CI。原 `bootstrap-ci` 命令保留用于检查空骨架，当前有应用时预期失败，已从 workflow 替换；未放宽其行为。
 
-已有 hooks 安装入口为 `sh scripts/install-hooks.sh`，仅改变当前克隆，遇到已有配置拒绝覆盖；本轮不重新安装或修改 hooks。按 2026-10-27 的持续授权，每次开发执行“对应任务分支 → 实现与验证 → 原子提交 → 推送 → PR → 当前 head 的 CI 核验”，GitHub 操作统一使用 `gh`。一个 PR 对应一个明确功能或预先界定、可独立验收的阶段；具体边界见[根规则第 7 节](AGENTS.md#7-git-与审查)与[开发工作流](docs/development-workflow.md)。合并和发布仍由用户决定。
+已有 hooks 安装入口为 `sh scripts/install-hooks.sh`，仅改变当前克隆，遇到已有配置拒绝覆盖；本轮不重新安装或修改 hooks。持续授权的开发流程为“对应任务分支 → 实现与验证 → 原子提交 → 推送 → PR → 当前 head 的 CI 与 review → 条件满足后 squash 合并并回读”，GitHub 操作统一使用 `gh`。2026-10-28 新增后续 PR 的条件合并授权，无需逐次确认；不绕过保护，不启用平台自动合并，不授权部署。一个 PR 对应一个明确功能或预先界定、可独立验收的阶段；具体边界见[根规则第 7 节](AGENTS.md#7-git-与审查)与[开发工作流](docs/development-workflow.md)。
 
 真实沙箱结果与临时数据库联合验证：在上述专用 VM/容器已启动时，执行 `OJ_SANDBOX_EXPERIMENT=1 make report-test`。该命令先运行数据库与双 API 回归，再在独立空库运行单槽 Worker 连续两题与丢失回执重报、原 8 项结果回报用例，以及真实 Worker 命令的 AC/WA、重复启动拒绝、SIGINT 空闲停止和 SIGTERM 在途停止。需要独占专用沙箱，入口隔离标记必须无未决状态；测试不自动清除旧隔离标记。普通 CI 不运行此特权实验，`sandbox-test` 不替代它。
 

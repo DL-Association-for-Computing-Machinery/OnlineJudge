@@ -7,7 +7,7 @@
 - 默认分支为 `main`；实现留在 `codex/engineering-baseline`，首次 PR 包含空基点之后的全部工程成果。
 - `main-governance` ruleset（ID `25824684`）为 active，匹配 `refs/heads/main`，无 bypass actor。禁止删除、强推，要求线性历史和 PR；讨论必须解决。
 - 必需检查为 `governance`、`backend`、`frontend`、`integration`，限定 GitHub Actions App `15368`。分支必须基于最新主线，创建匹配分支也不豁免检查。
-- 仅允许 squash merge，以 PR 标题/正文生成提交信息；禁止自动合并，合并后自动删除任务分支。PR 标题通过 Conventional Commits 校验，标题编辑会重新触发检查。最终由用户人工决定合并，Codex 不执行合并。
+- 仅允许 squash merge，以 PR 标题/正文生成提交信息；GitHub 平台自动合并未启用，合并后自动删除任务分支。PR 标题通过 Conventional Commits 校验，标题编辑会重新触发检查。2026-10-28 用户已授权 Codex 在当前 head 的 CI 与 review 均通过后主动执行普通 squash 合并，具体门禁见[开发工作流](development-workflow.md)；这不改变平台设置，不使用 `--auto` 或管理员绕过。
 - Actions 默认令牌只读，不允许 Actions 创建或批准 PR；仅允许本组织及 GitHub 官方 actions，外部已验证发布者和自定义匹配列表关闭，所有 actions 必须固定完整 SHA。工作流仍显式 `contents: read`、不保留 checkout 凭据、不使用 `pull_request_target`，普通 PR 不进入专用特权沙箱。
 - Dependabot alerts 已启用，安全更新、secret scanning 和 push protection 已启用。未启用向提供方验证秘密有效性的功能，未引入额外付费服务。扫描开启不代表代码或镜像已无漏洞。
 
