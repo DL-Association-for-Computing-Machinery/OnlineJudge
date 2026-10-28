@@ -117,8 +117,7 @@ func testAcquisition(t *testing.T, ctx context.Context, pool *pgxpool.Pool, ca *
 	_, err = pool.Exec(ctx, `UPDATE judge_attempts SET lease_until=clock_timestamp()-interval '1 second' WHERE token=$1`, lease.Token)
 	must(t, err)
 	deny(clients[winner][0], lease, submission.ErrLease)
-	_, err = store.Recover(ctx)
-	must(t, err)
+	waitTaskState(t, ctx, pool, lease.SubmissionID, "queued")
 	current, err := clients[winner][1].Claim(ctx)
 	must(t, err)
 	if current.SubmissionID != lease.SubmissionID || current.Token == lease.Token || current.AttemptNumber <= lease.AttemptNumber {

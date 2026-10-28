@@ -184,8 +184,7 @@ func testWorkerAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool, store 
 		call(fresh, urls[0], "report", report(old, "AC"), 409)
 		call(fresh, urls[0], "assignment", renew(old), 409)
 		call(fresh, urls[1], "material", materialBody(old.Token), 409)
-		_, err = store.Recover(ctx)
-		must(t, err)
+		waitTaskState(t, ctx, pool, old.ID, "queued")
 		current := claim(fresh, urls[1])
 		if current.ID != old.ID || current.Token == old.Token {
 			t.Fatal("revoked task recovery failed")
@@ -201,13 +200,42 @@ func testWorkerAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool, store 
 		call(clients[1], urls[1], "report", report(old, "AC"), 409)
 		call(clients[1], urls[1], "assignment", renew(old), 409)
 		call(clients[1], urls[0], "material", materialBody(old.Token), 409)
-		_, err = store.Recover(ctx)
-		must(t, err)
+		waitTaskState(t, ctx, pool, old.ID, "queued")
 		current := claim(clients[1], urls[1])
 		call(clients[1], urls[0], "assignment", renew(old), 409)
 		call(clients[1], urls[0], "material", materialBody(old.Token), 409)
 		call(clients[1], urls[0], "report", report(old, "AC"), 409)
 		call(clients[1], urls[0], "report", report(current, "AC"), 204)
+	})
+	t.Run("automatic recovery exhausts three attempts without losing history", func(t *testing.T) {
+		expected := accept()
+		for attempt := 1; attempt <= 3; attempt++ {
+			current := claim(clients[1], urls[attempt%2])
+			if current.ID != expected.ID {
+				t.Fatal("recovery claimed another submission")
+			}
+			var number int
+			must(t, pool.QueryRow(ctx, `SELECT attempt_number FROM judge_attempts WHERE token=$1`, current.Token).Scan(&number))
+			if number != attempt {
+				t.Fatalf("attempt=%d want=%d", number, attempt)
+			}
+			_, err := pool.Exec(ctx, `UPDATE judge_attempts SET lease_until=clock_timestamp()-interval '1 second' WHERE token=$1`, current.Token)
+			must(t, err)
+			state := "queued"
+			if attempt == 3 {
+				state = "failed"
+			}
+			waitTaskState(t, ctx, pool, current.ID, state)
+			call(clients[1], urls[0], "report", report(current, "AC"), 409)
+		}
+		call(clients[1], urls[1], "claim", "{}", 204)
+		var attempts int
+		must(t, pool.QueryRow(ctx, `SELECT count(*) FROM judge_attempts WHERE submission_id=$1 AND state='expired'`, expected.ID).Scan(&attempts))
+		row, err := store.Get(ctx, "tls-fixture", "m0-training", expected.ID)
+		must(t, err)
+		if attempts != 3 || row.State != "failed" || row.Verdict != nil {
+			t.Fatal("automatic recovery lost history or produced a contestant verdict")
+		}
 	})
 	t.Run("unregistered certificate identity denied", func(t *testing.T) {
 		pair, _, _ := ca.Issue(t, "spiffe://onlinejudge/worker/unregistered/1", x509.ExtKeyUsageClientAuth, time.Now().Add(time.Hour))
@@ -231,6 +259,22 @@ func testWorkerAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool, store 
 		}
 		testAcquisition(t, ctx, pool, ca, bases, materialRoot)
 	})
+}
+
+func waitTaskState(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id, want string) {
+	t.Helper()
+	deadline := time.Now().Add(8 * time.Second)
+	for {
+		var state string
+		must(t, pool.QueryRow(ctx, `SELECT state FROM judge_tasks WHERE submission_id=$1`, id).Scan(&state))
+		if state == want {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("automatic recovery state=%s want=%s", state, want)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 }
 
 func workerClient(t *testing.T, roots *x509.CertPool, cert tls.Certificate) *http.Client {

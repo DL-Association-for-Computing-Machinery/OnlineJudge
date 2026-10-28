@@ -1,5 +1,15 @@
 # 工程交付记录
 
+## 2026-10-28：控制端任务自动恢复
+
+基于主线 `8448641` 的独立 `codex/worker-recovery`，唯一目标为 P1/P2、AC28/29 的控制端恢复扫描。新增扫描器复用既有 `Store.Recover`：启动即扫描、单轮最多 64 条/5 秒、完成后等待 1 秒、失败限速重试、取消排空后关闭池。仅记录安全计数，数据库级扫描跨材料版本；无 SQL、迁移、依赖、HTTP 契约或 CI 配置变化。原克隆 5 处未提交文档改动保留。
+
+- 先新增回归再实现：旧控制端的撤销/轮换、到期和三次上限用例均在 8 秒后仍为 `running`，日志 `/tmp/oj-worker-recovery-before.log`。后续依赖用例的失败来自遗留未恢复任务，不把它们当作独立缺陷。
+- macOS arm64 / Go 1.26.10 / PostgreSQL 14.19：`GOPROXY=off make go-check db-test GOMODCACHE=/Users/huangqijun/Documents/OnlineJudge/.local/go-mod GOCACHE=/tmp/oj-worker-recovery-go-build` 通过格式、vet、race、四个二进制构建、真实数据库和双 API/控制端回归。最终日志 `/tmp/oj-worker-recovery-final-tests.log`，一次性数据库 `/tmp/oj-postgres.xMLTRB` 已停止。
+- 新增双控制端启动前 65 条过期积压、仍有效租约不回收、每题唯一重领；撤销/轮换、旧回报拒绝和三次尝试后 `failed`/无 verdict 通过。涉及自动恢复的材料/领取测试改为等待实际扫描，避免手动调用掩盖调度缺口。扫描失败重试、日志脱敏和取消排空以单元注入验证。
+- README、开发计划、M0 实验与 CI 说明同步。`python3 scripts/repo_policy.py repository`（155 文件）和 `git diff --check` 通过；完整差异自审和交付状态在最终回读中确认。本条为提交前验证快照，远端 CI 不沿用旧 head。
+- 合成回报只证明控制端协议/存储，不是双 Worker 沙箱接管；本次未运行特权沙箱或前端套件。下一项双 Worker 真实执行与故障接管，执行端自动重启/解封、磁盘结果队列、会话和完整 M0 仍未完成。回退控制端二进制可停止扫描，历史数据保留；无部署或独立人工批准。
+
 ## 2026-10-28：按影响范围执行 CI
 
 远端全量路径已核验：[PR #14](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/14) 的 head `cce2f6812826b250bffe3a5e063b952c4ff22b02` 在 [CI 40700532954](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/actions/runs/40700532954) 中识别 9 个变更路径，选择三个应用套件并全部执行成功，四个稳定必需门禁全部 success。合并前 SHA/base 一致、完整差异自审无未解决问题、远端 reviews/comments/threads 为空、GitHub CLEAN/MERGEABLE；按持续授权 squash 合并为 `1f8a95127190f850ab40f7b47d6da891591f7a86`，主线树已回读一致。无独立人工批准或部署。

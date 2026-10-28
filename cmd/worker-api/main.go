@@ -75,9 +75,16 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second,
 		WriteTimeout: 15 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 8192,
 	}
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
+	defer listener.Close()
+	stopRecovery := startRecovery(ctx, logger, store.Recover)
+	defer stopRecovery()
 	result := make(chan error, 1)
-	go func() { result <- server.ListenAndServeTLS("", "") }()
-	logger.Info("Worker controller starting", "address", addr, "scope", "m0-lease-and-material-protocol")
+	go func() { result <- server.ServeTLS(listener, "", "") }()
+	logger.Info("Worker controller starting", "address", addr, "scope", "m0-lease-material-and-task-recovery")
 	select {
 	case err := <-result:
 		return err
