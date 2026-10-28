@@ -8,12 +8,12 @@
 - [首期开发计划](docs/phase-1-development-plan.md)：0B → 1A → 1B 的任务依赖、P0—P7 开发包、里程碑与验收证据要求。
 - [M0 实验记录与复现](docs/m0-experiment.md)：数据库、双 API 进程、任务租约及 Linux 沙箱的实际证据与未覆盖项；M0 整体验收尚未通过，健康接口不代表判题就绪。
 - [Worker mTLS 契约](api/worker.openapi.yaml)：认证领取、续租、结果回报及有效租约限定的源码/材料下载与哈希校验；两个真实控制端进程和 TLS 客户端已验证。新增真实沙箱结果经 mTLS 回报至 PostgreSQL 的联合测试，见[真实结果回报](docs/m0-experiment.md#真实结果回报)。
-- `internal/worker` 已串联单槽领取、材料准备、租约执行和冻结结果回报；空队列限速轮询、未知确认有界原样重报、取消排空及失败停止已有验证，见[Worker 生命周期](docs/m0-experiment.md#单槽-worker-生命周期)。复用 `internal/execution` 与 `internal/workerclient`，仅支持固定 `m0-sum-v2`。`cmd/worker` 仍为骨架，下一步实现可信宿主适配器并接入命令入口。
+- `internal/worker` 已串联单槽领取、材料准备、租约执行和冻结结果回报；空队列限速轮询、未知确认有界原样重报、取消排空及失败停止已有验证，见[Worker 生命周期](docs/m0-experiment.md#单槽-worker-生命周期)。新增 `internal/workerhost` 专用 M0 宿主适配器，绑定容器身份/启动时间，检查环境、执行受限传输并确认整容器停止，见[宿主适配器](docs/m0-experiment.md#可信宿主适配器)。仅支持固定 `m0-sum-v2`；`cmd/worker` 仍为骨架，下一步接入命令入口。
 - 模块化单体＋独立判题 Worker；不创建空业务层，不把所有模块拆成服务。
 - 既有 Redis 会话路线保留待验证，新增 PostgreSQL 会话对比；未做未经确认的替换。
 - 已引入 PostgreSQL 实验、sqlc/pgx/Goose；go-judge 仅进入专用 Linux VM 的隔离实验。Redis 会话、River 与监控备份服务尚未接入。
 - 多文件/ZIP 提交、自测与辅助能力不作为训练试用前置；完整语言、比赛及后续需求保留。
-- 0A 和 M0 分项已按逻辑分组提交；main 已建立并保护，PR #1—#9 已合并；本次单槽生命周期通过独立分支交付，验证证据见交付日志。未部署，M0 整体仍未通过。
+- 0A 和 M0 分项已按逻辑分组提交；main 已建立并保护，PR #1—#10 已合并；本次宿主适配器通过独立分支交付，验证证据见交付日志。未部署，M0 整体仍未通过。
 
 ## 运行环境
 

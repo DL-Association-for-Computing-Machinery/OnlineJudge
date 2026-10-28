@@ -1,6 +1,6 @@
 # M0 实验实施与验证记录
 
-日期：2026-10-28。状态：**进行中，未通过 M0 整体验收**。已有持久化、租约、材料授权、固定环境、受限编排、租约守护与真实回报，本次新增单槽 Worker 生命周期，独立 Linux VM＋PostgreSQL 联合实测通过。PR/远端 CI 状态见[交付日志](delivery-log.md)。没有部署、真实用户数据或独立人工审查；完整 Worker 与会话仍未交付。
+日期：2026-10-28。状态：**进行中，未通过 M0 整体验收**。已有持久化、租约、材料授权、固定环境、受限编排、租约守护、真实回报及单槽生命周期；本次新增可信宿主适配器，独立 Linux VM 的真实执行与停止确认通过。PR/远端 CI 状态见[交付日志](delivery-log.md)。没有部署、真实用户数据或独立人工审查；完整 Worker 与会话仍未交付。
 
 ## 已实现与边界
 
@@ -13,7 +13,8 @@
 | `db/migrations`、`cmd/migrate` | Goose 独立迁移与 advisory lock，API 只读检查模式版本，显式夹具注册 | 生产升级、模式内容哈希账本、断连及非事务迁移恢复 |
 | `internal/judging` | 有界文本 token 比较，ASCII 大小写规则与显式敏感选项 | 浮点、SPJ、完整结果归因/编排 |
 | `internal/execution`、`internal/workerclient` | 固定 v2 受限编排、mTLS 领取/材料下载/续租/回报、结果摘要、失效取消、独占沙箱停止确认和永久停用 | 常驻 Worker、通用题目/语言、生产停止适配器及节点接入 |
-| `internal/worker` | 单槽串行领取/下载/执行/回报、空队列限速、未知回报有界重试、取消排空及失败停止 | 命令入口、可信宿主适配器、平滑下线、磁盘队列、自动恢复 |
+| `internal/worker` | 单槽串行领取/下载/执行/回报、空队列限速、未知回报有界重试、取消排空及失败停止 | 命令入口、平滑下线、磁盘队列、自动恢复 |
+| `internal/workerhost` | 专用 M0 容器身份/启动时间与环境核验、容器内有界传输、整容器停止与 PID 核验、永久封锁旧实例 | 命令接线、跨进程所有权锁、通用宿主、自动配置/恢复、生产准入 |
 | `tests/sandbox` | 真实编译/运行/比较/超限/隔离/中止；真实结果经双 TLS handler 持久化及重复/拒绝回报 | 完整 Worker 闭环、双 Worker、执行中数据库撤销到沙箱的联合故障注入 |
 
 API 的健康检查仍仅代表进程存活；未启用实验时行为保持原样。实验入口仅在设置 `OJ_EXPERIMENT_TOKEN_FILE` 后注册，启动时强制使用字面量 loopback 地址，凭据文件必须为 owner-private 普通文件。一个静态测试主体 `m0-operator`、一个固定上下文 `m0-training`，拒绝带 Origin 的请求；它不是正式登录、Cookie 或 CSRF 实现，也不是对同主机管理员的安全边界。现有浏览器预览页不接入此凭据。
@@ -32,7 +33,19 @@ API 的健康检查仍仅代表进程存活；未启用实验时行为保持原�
 
 `OJ_SANDBOX_EXPERIMENT=1 make report-test` 新增 `worker-lifecycle` 联调：两个真实 TLS handler、临时 PostgreSQL 和专用离线 Linux 沙箱中，一个 Worker 连续执行 AC、WA，首回报提交后丢弃响应，另一控制端重报；核验总计 3 次领取（最后为空）、3 次发送、2 个不同结果、5 次沙箱调用（编译/测试点），并逐题回读持久结果。原 8 项真实回报回归继续通过。实验提交与沙箱生命周期仍由测试驱动控制，两个 TLS handler 同进程；停止确认/排空失败在本次采用单元注入，不冒充真实节点故障或双 Worker 验收。
 
-回退只需回退本次应用编排及测试，无数据迁移；现有命令入口与协议保持兼容。完整命令、日志与环境收尾见[交付记录](delivery-log.md)。下一项为可信宿主适配器和命令入口，再验证双 Worker、恢复与会话，M0 未通过。
+回退只需回退本次应用编排及测试，无数据迁移；现有命令入口与协议保持兼容。完整命令、日志与环境收尾见[交付记录](delivery-log.md)。宿主适配器已在下节独立验证，下一项为命令入口，再验证双 Worker、恢复与会话，M0 未通过。
+
+## 可信宿主适配器
+
+P2、AC28/29 的独立前置功能：`workerhost.OpenM0`、`Verify`、`RoundTrip`、`Stop` 直接满足 `execution.GoJudge` 和 `LeasedRunner` 已有的注入接口，不使执行核心依赖 Docker。仅适配已有专用 `colima-oj-m0` / `oj-m0-sandbox`，调用方须独占该容器及可信控制面；不提供跨进程锁，不允许两个 Worker 同时使用。下一步命令接线必须处理独占运行前置条件。
+
+打开时绑定完整容器 ID 与 StartedAt；核验固定镜像、平台、内核、编译器、启动参数、资源预算、只读根、无挂载、无网络、私有 PID/IPC、禁自动重启等。每次 REST 请求前再次检查绑定生命周期与隔离设置。运行期间管理员不得重启/改配容器、替换 CLI 或重指 Docker context；这里是可信宿主适配，不是对管理员的安全隔离或远程证明。
+
+传输通过容器内 curl 访问 loopback，仅允许 GET version/config、POST run 与 DELETE 合法制品 ID；禁用户信息、查询、fragment、编码路径、代理、curl 配置和重定向。请求最多 512 KiB，容纳合法 64 KiB 源码的 JSON 六倍转义；响应缓冲有界，HTTP 200 才成功。单命令上限 25 秒、curl 20 秒，遵守上层更短上下文；命令错误不传播正文、参数或 stderr。请求正文仅接受现有执行适配器产生的有限内存 reader。
+
+Stop 先永久关闭请求入口，取消并排空本地命令，然后仅针对绑定的原生命周期发送 KILL。检查 Running=false、Pid=0、Restarting=false，并通过 VM `/proc` 检查停止前观察到的 PID 均消失；进程证据缺失、PID 复用或任何未知状态均失败。枚举失败仍尝试终止已核实的容器，但不能报告成功。独立 10 秒停止预算，失败仍封锁实例；不自动启动/恢复容器。CLI 语义依据 [Docker kill](https://docs.docker.com/reference/cli/docker/container/kill/) 与 [inspect](https://docs.docker.com/reference/cli/docker/container/inspect/)，停止事实由测试核验。
+
+2026-10-28：新增单元/race 覆盖环境漂移、生命周期变化、请求/响应边界、合法最大转义源码、取消排空、停止错误及永久封锁。真实 `TestWorkerHostExecution` 完成 AC/WA 与制品清理；`TestLeasedExecutionConfirmsHostStop` 改用该适配器，独立观察选手 PID 后取消，确认 PID 消失、后续点 NOT_RUN 和旧实例拒绝。另重跑原 10 项受限编排、12 项隔离测试通过。续租在停止专项中仍注入成功；数据库撤销到真实停止、命令进程信号、双 Worker 未验证。本次未改数据库/协议/依赖，回退模块及其测试即可，无迁移；完整复现命令见交付记录。
 
 ## 数据模型、边界与预算
 
