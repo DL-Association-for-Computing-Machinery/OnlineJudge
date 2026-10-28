@@ -30,6 +30,8 @@
 
 交付准备：用户授权整理原子提交并创建远端 PR。整合 `f13f4dc` 时仅有 CI/交付文档追加位置冲突，保留双方记录，无应用代码冲突；重新运行 Compose 全流程冒烟通过（`/private/tmp/oj-compose-pr-smoke.log`），165 文件仓库策略、37 项治理回归及完整目标分支差异检查通过。一个提交包含本目标的 10 个必要文件，无前置 PR 的重复改动；远端检查与合并结果以 PR 的当前 head 及知识库交付回读记录为准。
 
+[PR #19](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/19) 首提交 `14c691d` 的 [CI 40714398607](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/actions/runs/40714398607) 实际通过后端、前端与 PostgreSQL 集成套件，但新增 `containers` 失败，因此不能合并。日志显示 CI Compose 在恢复依赖后重建 web，随机宿主端口重新分配，测试仍访问旧 URL 而连接拒绝，容器健康检查本身已通过。本地先在恢复步骤强制重建复现同一失败（`/private/tmp/oj-compose-port-regression-before.log`），再改为重建后回读实际端口；保留强制重建作为回归场景和所有原断言。修复后完整冒烟通过（`/private/tmp/oj-compose-port-regression-after.log`），临时项目已清理，仓库策略及 diff 检查通过。修复以独立原子提交追加，不改已推送历史、不降低 CI 要求；最新 head 的最终结果另行核验。
+
 ## 2026-10-28：双固定槽 Worker 真实执行与退出接管
 
 基于主线 `f1ece3f8d6e376045365024fbea73aedad018aef`，独立分支 `codex/dual-worker-recovery`，工作区 `/Users/huangqijun/.codex/worktrees/dual-worker-recovery/OnlineJudge`。唯一目标是双 Worker 的隔离运行与可清理退出后的真实任务接管。下列为提交前本地验证快照；后续按开发交付持续授权提交、推送、创建 PR 并核验对应 head 的 CI/审查，远端终态以实际回读为准。原克隆 5 处文档改动保持原状。

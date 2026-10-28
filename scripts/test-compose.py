@@ -45,12 +45,16 @@ def check_health(base):
             "health contract changed")
 
 
+def web_base():
+    address = compose("port", "web", "8080", capture=True).strip()
+    require(re.fullmatch(r"127\.0\.0\.1:\d+", address), "web must bind loopback only")
+    return "http://" + address
+
+
 def main():
     try:
         compose("up", "-d", "--build", "--wait", "--wait-timeout", "60")
-        address = compose("port", "web", "8080", capture=True).strip()
-        require(re.fullmatch(r"127\.0\.0\.1:\d+", address), "web must bind loopback only")
-        base = "http://" + address
+        base = web_base()
         status, headers, body = request(base, "/")
         require(status == 200 and "text/html" in headers.get("Content-Type", ""),
                 "frontend HTML missing")
@@ -97,8 +101,10 @@ def main():
         # A stopped endpoint can refuse immediately (502) or time out (504).
         require(stopped_status in (502, 504),
                 f"stopped API response: {stopped_status}, {stopped_body[:200]!r}")
-        compose("up", "-d", "--wait", "--wait-timeout", "60")
-        check_health(base)
+        # Exercise the replacement path even on Compose versions that reuse web.
+        compose("up", "-d", "--force-recreate", "--wait", "--wait-timeout", "60")
+        # Port 0 is allocated again when web is replaced; the old URL is stale.
+        check_health(web_base())
         print("Compose smoke passed: assets, SPA, API contracts, isolation, recreate and restart.")
     finally:
         # This unique project contains no volumes, databases or user data.
