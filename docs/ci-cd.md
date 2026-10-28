@@ -43,6 +43,8 @@ Go 标准 testing、真实 PostgreSQL/Redis（Testcontainers for Go 优先验证
 
 ### 随功能交付建立的验收目录
 
+单槽 Worker 生命周期沿用 `backend` 的格式/vet/race 检查；`report-test` 新增连续两题真实执行、跨控制端原样重报、空队列取消及停止后不可复用，与原 8 项回报用例共同运行。失败停止、重试耗尽、各阶段取消及等待执行排空由单元注入验证；宿主停止专项的历史结果不算本次重跑，无 CI 配置变化。
+
 领取/材料客户端沿用现有 `backend` 与 `integration`：真实双控制端验证竞争领取、跨实例下载、损坏/缺失及失效授权拒绝。`report-test` 已改为由该客户端领取并下载后再执行，移除该路径的直接租约/材料夹具；仍是实验驱动，两个 TLS handler 同进程，不代表常驻双 Worker 验收。无 CI 配置变化。
 
 真实结果回报沿用 `backend` 的 Go race 测试及 `integration` 的双控制端/数据库测试，不修改 CI 配置。新增本地 `OJ_SANDBOX_EXPERIMENT=1 make report-test` 在独立空库连接专用离线 Linux 沙箱，验证 8 项真实执行与回报；普通 PR CI 不具备该特权 VM，不能以 CI 绿灯替代这项本地实测。`make sandbox-test` 中该联合用例需要额外显式启用，独立运行普通沙箱回归不代表已运行回报联调。

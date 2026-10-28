@@ -138,6 +138,9 @@ func TestExecutionReport(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer wrong.Close()
+	t.Run("worker-lifecycle", func(t *testing.T) {
+		testWorkerLifecycle(t, store, acquirer, downloader, renewer, reporter, retry, &loseReply)
+	})
 	for index, tc := range []struct{ verdict, source string }{
 		{"AC", "#include <cstdio>\nint main(){int a,b;scanf(\"%d%d\",&a,&b);printf(\"%d\",a+b);}"},
 		{"WA", "#include <cstdio>\nint main(){puts(\"wrong\");}"},

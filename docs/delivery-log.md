@@ -1,5 +1,17 @@
 # 工程交付记录
 
+## 2026-10-28：单槽 Worker 生命周期
+
+唯一目标：P2、AC28/29 的串行领取、材料准备、租约执行与可靠回报编排。gh 核验 PR #9 已合并为 `51d054a6d63d5e5501af3c465b65120ab74684cb`，独立 `codex/worker-lifecycle` 从该主线开始，原克隆 5 处文档改动保留。此条为提交前实测快照，提交/PR/CI 以最终 head 核验为准。非目标为命令入口、宿主驱动、双 Worker、磁盘队列、自动恢复、会话与部署。
+
+- `internal/worker` 通过最小接口串联已有模块；空队列间隔 1 秒，未知回报最多 3 次且原样重放，异常停止，取消等待执行排空，实例单次使用。选择失败停止以限制本阶段恢复复杂度，代价为暂不自动恢复可用性、无崩溃持久性或平滑下线。无依赖/SQL/迁移/公共 HTTP 或配置变化。
+- macOS arm64、Go 1.26.10、PostgreSQL 14.19：`GOPROXY=off make go-check db-test GOMODCACHE=/Users/huangqijun/Documents/OnlineJudge/.local/go-mod GOCACHE=/private/tmp/oj-lifecycle-go-build` 通过格式、vet、race、四命令构建、临时数据库/双控制端、双 API 的 24 并发与重启回执。最初基线测试受沙箱 bind 限制，经工具审批重跑通过，未放宽断言。临时数据库 `/tmp/oj-postgres.8OyFu8` 已停止。
+- `GOPROXY=off make report-test GOMODCACHE=/Users/huangqijun/Documents/OnlineJudge/.local/go-mod GOCACHE=/private/tmp/oj-lifecycle-go-build OJ_SANDBOX_EXPERIMENT=1` 通过新增生命周期联调及原 8 项回报用例。一个 Worker 连续完成真实 AC/WA，丢失确认跨控制端原样重报，5 次沙箱调用证明无重复执行；回读两题持久结果。日志 `/private/tmp/oj-lifecycle-report.log`，临时库 `/tmp/oj-postgres.OkZ3XM` 已停止。
+- 联调仍使用同进程 TLS handler 和测试宿主驱动；取消排空/停止错误通过单元注入，不冒充真实进程信号、数据库撤销到沙箱中止或双 Worker 验收。未修改/重跑本地前端、独立沙箱隔离/中止专项，未改 hooks/CI；M0 未通过，无独立人工审查或部署。
+- 同步 README、首期计划、M0、协议架构和 CI 说明，下一项为可信宿主适配器与命令入口。恢复沿用已有离线专用 VM/镜像，未下载/重建，实验完成后停止容器/VM，原 Docker context 保持 desktop-linux。
+
+收尾：仓库策略 137 文件、`git diff --check` 通过，AI 自审覆盖相对主线完整差异和新增文件。知识事务 `oj-worker-lifecycle-20261028` 更新实测、推进、热点、索引与日志 5 页，严格 lint 32 页、379 链接、0 问题，目标哈希回读一致；不新增 accepted 断言或覆盖 raw。
+
 ## 2026-10-28：Worker 领取与材料客户端
 
 唯一目标：P2、AC22/28/29 的受控领取与材料准备。gh 核验 PR #8 已合并为 `64b99922de3ab0e01509d6b3a42cd248687424c9`，从该主线创建独立 `codex/claim-material-client` 工作区；原克隆 5 处未提交文档改动保留。本条为提交前验证快照，提交号、PR 和当前 head 的 CI 以实际交付结果为准。非目标为常驻 Worker、自动恢复/轮询、磁盘缓存、通用题包、双 Worker、会话与部署。
