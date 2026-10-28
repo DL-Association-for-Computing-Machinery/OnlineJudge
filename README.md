@@ -8,12 +8,12 @@
 - [首期开发计划](docs/phase-1-development-plan.md)：0B → 1A → 1B 的任务依赖、P0—P7 开发包、里程碑与验收证据要求。
 - [M0 实验记录与复现](docs/m0-experiment.md)：数据库、双 API 进程、任务租约及 Linux 沙箱的实际证据与未覆盖项；M0 整体验收尚未通过，健康接口不代表判题就绪。
 - [Worker mTLS 契约](api/worker.openapi.yaml)：认证领取、续租、结果回报及有效租约限定的源码/材料下载与哈希校验；两个真实控制端进程和 TLS 客户端已验证。新增真实沙箱结果经 mTLS 回报至 PostgreSQL 的联合测试，见[真实结果回报](docs/m0-experiment.md#真实结果回报)。
-- `internal/execution` 已完成固定 `m0-sum-v2` 的受限编排、租约守护和结果摘要；`internal/workerclient` 提供 mTLS 领取、材料下载、续租与回报客户端，已在实验驱动中贯通真实执行。下载有时长/大小限制，校验完整后才返回，见[领取与材料客户端](docs/m0-experiment.md#领取与材料客户端)。`cmd/worker` 仍为骨架，下一步接入常驻入口及生命周期。
+- `internal/worker` 已串联单槽领取、材料准备、租约执行和冻结结果回报；空队列限速轮询、未知确认有界原样重报、取消排空及失败停止已有验证，见[Worker 生命周期](docs/m0-experiment.md#单槽-worker-生命周期)。复用 `internal/execution` 与 `internal/workerclient`，仅支持固定 `m0-sum-v2`。`cmd/worker` 仍为骨架，下一步实现可信宿主适配器并接入命令入口。
 - 模块化单体＋独立判题 Worker；不创建空业务层，不把所有模块拆成服务。
 - 既有 Redis 会话路线保留待验证，新增 PostgreSQL 会话对比；未做未经确认的替换。
 - 已引入 PostgreSQL 实验、sqlc/pgx/Goose；go-judge 仅进入专用 Linux VM 的隔离实验。Redis 会话、River 与监控备份服务尚未接入。
 - 多文件/ZIP 提交、自测与辅助能力不作为训练试用前置；完整语言、比赛及后续需求保留。
-- 0A 和 M0 分项已按逻辑分组提交；main 已建立并保护，PR #1—#8 已合并；本次领取/材料客户端通过独立分支交付，验证证据见交付日志。未部署，M0 整体仍未通过。
+- 0A 和 M0 分项已按逻辑分组提交；main 已建立并保护，PR #1—#9 已合并；本次单槽生命周期通过独立分支交付，验证证据见交付日志。未部署，M0 整体仍未通过。
 
 ## 运行环境
 
@@ -74,7 +74,7 @@ GitHub Actions 的 `governance`、`backend`、`frontend` 和真实 PostgreSQL `i
 
 已有 hooks 安装入口为 `sh scripts/install-hooks.sh`，仅改变当前克隆，遇到已有配置拒绝覆盖；本轮不重新安装或修改 hooks。按 2026-10-27 的持续授权，每次开发执行“对应任务分支 → 实现与验证 → 原子提交 → 推送 → PR → 当前 head 的 CI 核验”，GitHub 操作统一使用 `gh`。一个 PR 对应一个明确功能或预先界定、可独立验收的阶段；具体边界见[根规则第 7 节](AGENTS.md#7-git-与审查)与[开发工作流](docs/development-workflow.md)。合并和发布仍由用户决定。
 
-真实沙箱结果与临时数据库联合验证：在上述专用 VM/容器已启动时，执行 `OJ_SANDBOX_EXPERIMENT=1 make report-test`。该命令先运行数据库与双 API 回归，再在独立空库运行 8 项真实结果回报用例；需要与 `db-test` 相同的本机工具及专用沙箱。普通 CI 不运行此特权实验，`sandbox-test` 不替代它。
+真实沙箱结果与临时数据库联合验证：在上述专用 VM/容器已启动时，执行 `OJ_SANDBOX_EXPERIMENT=1 make report-test`。该命令先运行数据库与双 API 回归，再在独立空库运行单槽 Worker 连续两题与丢失回执重报，以及原 8 项真实结果回报用例；需要与 `db-test` 相同的本机工具及专用沙箱。普通 CI 不运行此特权实验，`sandbox-test` 不替代它。
 
 ## 文档入口
 
