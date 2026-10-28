@@ -1,12 +1,21 @@
-// Command worker checks the Worker bootstrap entry point; it does not judge code.
+// Command worker runs one exclusively owned, pinned M0 execution slot.
 package main
 
 import (
+	"context"
 	"log/slog"
 	"os"
+	"os/signal"
+	"syscall"
 )
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	logger.Info("Worker 骨架入口可执行；任务协议和沙箱未接入，未启动判题服务", "mode", "bootstrap-check")
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	if err := run(ctx, logger); err != nil {
+		logger.Error("Worker 已停止", "error", err.Error())
+		os.Exit(1)
+	}
+	logger.Info("Worker 已停止，沙箱停止已确认")
 }
