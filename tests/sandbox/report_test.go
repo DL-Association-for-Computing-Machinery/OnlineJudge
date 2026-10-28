@@ -70,7 +70,7 @@ func TestExecutionReport(t *testing.T) {
 	if err := store.RegisterFixture(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `INSERT INTO worker_nodes(id,credential_version) VALUES('report-node',1),('other-node',1)`); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO worker_nodes(id,credential_version) VALUES('report-node',1),('other-node',1),('entry-node',1)`); err != nil {
 		t.Fatal(err)
 	}
 	ca := testpki.New(t)
@@ -229,4 +229,7 @@ func TestExecutionReport(t *testing.T) {
 			t.Logf("real %s persisted; lost reply retried across TLS controllers; conflict and wrong node rejected", tc.verdict)
 		})
 	}
+	t.Run("worker-command", func(t *testing.T) {
+		testWorkerCommand(t, store, ca, first.URL)
+	})
 }

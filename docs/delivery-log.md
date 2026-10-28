@@ -1,5 +1,16 @@
 # 工程交付记录
 
+## 2026-10-28：单槽 Worker 命令入口与独占运行
+
+- 唯一目标：P2、AC28/29 的 `cmd/worker` 接线与进程所有权。在已合并 PR #11 的 `786611519e8c7d3347837b1a269f5aeb6eb3e43b` 上建立独立 `codex/worker-entry`；原克隆 5 处未提交改动保留。实现阶段为未提交工作区，最终提交/PR/CI 以交付回读为准。
+- 配置与模块边界：显式 loopback HTTPS、节点证书/私钥、实验开关；入口装配既有客户端/生命周期/执行/宿主。固定同账号所有权文件锁及持久隔离标记，领取前宿主/协议预检，SIGINT/SIGTERM 取消排空并独立确认整容器停止。停止结果复用，失败不清隔离。无新增依赖、SQL、迁移或协议变化。
+- 基线：Worker/execution/workerhost 测试通过；workerclient 首次受沙箱本机 bind 权限限制，获准后原测试全部通过，未修改断言。
+- macOS arm64 / Go 1.26.10：`GOPROXY=off make GOMODCACHE=/Users/huangqijun/Documents/OnlineJudge/.local/go-mod GOCACHE=/Users/huangqijun/Documents/OnlineJudge/.local/go-build go-check go-build` 通过。新增配置、预检/停止错误、真实子进程锁与 SIGKILL 隔离测试通过。
+- `OJ_SANDBOX_EXPERIMENT=1 GOPROXY=off make GOMODCACHE=/Users/huangqijun/Documents/OnlineJudge/.local/go-mod GOCACHE=/Users/huangqijun/Documents/OnlineJudge/.local/go-build report-test` 通过，临时数据库自动停止（`/tmp/oj-postgres.7jcI31`）。现有数据库/双 API/双 mTLS 控制端回归、单槽生命周期与 8 项回报通过；新增真实 Worker 子进程 AC/WA 落库、重复启动锁拒绝、空闲 SIGINT、在途选手 SIGTERM、容器/PID 消失及无中断结果发布通过。原始输出保存在任务工作区忽略的 `.local/worker-entry-report.log`。
+- 新命令联合测试的控制端 handlers 在测试进程内；数据库回归另有真实双控制端子进程。本轮未重跑前端和完整 12 项隔离测试；不宣称双 Worker、自动恢复、磁盘回报队列、平滑下线、会话、生产准入或完整 M0 通过。无合并、部署或独立人工审查。
+- README、M0 记录、开发计划、API/Worker 架构和 CI 验证边界同步。回退无迁移，须先核验旧 Worker/容器终止及隔离标记；禁止仅删除锁文件解除未知状态。
+- 收尾：仓库策略检查通过（150 文件），`git diff --check` 通过；专用容器/VM 已停止，入口隔离文件回读为空，原克隆保持原状。知识库与最终远端交付结果另行回读。
+
 ## 2026-10-28：可信 M0 宿主适配器
 
 唯一目标：P2、AC28/29 的可信宿主检查、容器内传输及停止确认前置功能。PR #10 已通过 gh 核验合并为 `9c926f3cb08be2df3f3382f20639c39be5a6dc9a`，从该主线建立 `codex/worker-host` 独立工作区，原克隆 5 处改动保留。此条为提交前验证快照，远端交付以最终 head 核验为准。非目标：cmd/worker 接线、跨进程锁、双 Worker、恢复、会话、生产部署。

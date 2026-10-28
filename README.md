@@ -8,12 +8,12 @@
 - [首期开发计划](docs/phase-1-development-plan.md)：0B → 1A → 1B 的任务依赖、P0—P7 开发包、里程碑与验收证据要求。
 - [M0 实验记录与复现](docs/m0-experiment.md)：数据库、双 API 进程、任务租约及 Linux 沙箱的实际证据与未覆盖项；M0 整体验收尚未通过，健康接口不代表判题就绪。
 - [Worker mTLS 契约](api/worker.openapi.yaml)：认证领取、续租、结果回报及有效租约限定的源码/材料下载与哈希校验；两个真实控制端进程和 TLS 客户端已验证。新增真实沙箱结果经 mTLS 回报至 PostgreSQL 的联合测试，见[真实结果回报](docs/m0-experiment.md#真实结果回报)。
-- `internal/worker` 已串联单槽领取、材料准备、租约执行和冻结结果回报；空队列限速轮询、未知确认有界原样重报、取消排空及失败停止已有验证，见[Worker 生命周期](docs/m0-experiment.md#单槽-worker-生命周期)。新增 `internal/workerhost` 专用 M0 宿主适配器，绑定容器身份/启动时间，检查环境、执行受限传输并确认整容器停止，见[宿主适配器](docs/m0-experiment.md#可信宿主适配器)。仅支持固定 `m0-sum-v2`；`cmd/worker` 仍为骨架，下一步接入命令入口。
+- `cmd/worker` 已接入单槽领取、材料准备、租约执行与冻结结果回报，复用 `internal/worker`、`internal/execution`、`internal/workerclient` 和 `internal/workerhost`。入口提供跨进程独占、崩溃隔离标记、启动预检和信号停止；仅支持固定 `m0-sum-v2`，见[执行端命令入口](docs/m0-experiment.md#执行端命令入口)。下一步验证双 Worker 与故障恢复，再补会话实验。
 - 模块化单体＋独立判题 Worker；不创建空业务层，不把所有模块拆成服务。
 - 既有 Redis 会话路线保留待验证，新增 PostgreSQL 会话对比；未做未经确认的替换。
 - 已引入 PostgreSQL 实验、sqlc/pgx/Goose；go-judge 仅进入专用 Linux VM 的隔离实验。Redis 会话、River 与监控备份服务尚未接入。
 - 多文件/ZIP 提交、自测与辅助能力不作为训练试用前置；完整语言、比赛及后续需求保留。
-- 0A 和 M0 分项已按逻辑分组提交；main 已建立并保护，PR #1—#10 已合并；本次宿主适配器通过独立分支交付，验证证据见交付日志。未部署，M0 整体仍未通过。
+- 0A 和 M0 分项已按逻辑分组提交；main 已建立并保护，PR #1—#11 已合并；本次执行端入口通过独立分支交付，验证证据见交付日志。未部署，M0 整体仍未通过。
 
 ## 运行环境
 
@@ -43,13 +43,15 @@ pnpm --dir web dev
 
 `GET /api/v1/healthz` 返回 `{"status":"ok","service":"api","scope":"process"}`，只说明 API 可响应，不表示数据库、Worker 或沙箱就绪。契约见 [OpenAPI](api/openapi.yaml)，未知接口返回 404，不支持的方法返回 405。
 
-`make worker` 仍只提示任务/沙箱未接入后退出。API 可通过 `OJ_API_ADDR` 改监听地址；若改端口，同时调整 Vite 代理。默认没有业务接口；显式设置 `OJ_EXPERIMENT_TOKEN_FILE` 与 `OJ_DATABASE_URL` 可启用仅 loopback 的 M0 提交接口，见[实验契约](api/experiment.openapi.yaml)与[M0 配置边界](docs/m0-experiment.md)。凭据只放私有本地文件，不提交；未接入 .env 自动加载。
+`make worker` 现在要求显式 M0 配置，缺失时非零退出。信号验收与运行建议直接使用 `make go-build` 生成的 `.local/bin/worker`，避免把信号发给 `go run` 包装进程。必须设置 `OJ_SANDBOX_EXPERIMENT=1`、`OJ_WORKER_CONTROLLER_URL`（字面 loopback HTTPS）、`OJ_WORKER_CA_FILE`、`OJ_WORKER_CERT_FILE` 和 `OJ_WORKER_KEY_FILE`；执行端不需要数据库凭据。专用容器与节点须由管理员预先准备，见[命令入口](docs/m0-experiment.md#执行端命令入口)。
 
-`make worker-api` 启动独立控制端 HTTPS 进程，也可运行 `make go-build` 生成的 `.local/bin/worker-api`。必须提供 `OJ_WORKER_API_ADDR`、`OJ_WORKER_CA_FILE`、`OJ_WORKER_CERT_FILE`、`OJ_WORKER_KEY_FILE` 和 `OJ_DATABASE_URL`，初始化及证书要求见 [M0 Worker 入口](docs/m0-experiment.md#worker-mtls-租约入口)。这是持有数据库连接的控制端，`cmd/worker` 执行端仍是骨架。缺少配置会拒绝启动，无默认开放端口。
+API 可通过 `OJ_API_ADDR` 改监听地址；若改端口，同时调整 Vite 代理。默认没有业务接口；显式设置 `OJ_EXPERIMENT_TOKEN_FILE` 与 `OJ_DATABASE_URL` 可启用仅 loopback 的 M0 提交接口，见[实验契约](api/experiment.openapi.yaml)与[M0 配置边界](docs/m0-experiment.md)。凭据只放私有本地文件，不提交；未接入 .env 自动加载。
+
+`make worker-api` 启动独立控制端 HTTPS 进程，也可运行 `make go-build` 生成的 `.local/bin/worker-api`。必须提供 `OJ_WORKER_API_ADDR`、`OJ_WORKER_CA_FILE`、`OJ_WORKER_CERT_FILE`、`OJ_WORKER_KEY_FILE` 和 `OJ_DATABASE_URL`，初始化及证书要求见 [M0 Worker 入口](docs/m0-experiment.md#worker-mtls-租约入口)。这是持有数据库连接的控制端，其服务端证书与执行端节点证书分别配置。缺少配置会拒绝启动，无默认开放端口。
 
 材料下载另需 `OJ_MATERIAL_ROOT` 指向专用持久化目录；先显式初始化合成文件，再让控制端只读使用同一目录。命令、预算和回退见[材料入口](docs/m0-experiment.md#有效租约限定的材料入口)。未配置时两个材料接口返回 503，原租约接口保持可用。
 
-可选 `OJ_EXPERIMENT_MATERIAL_VERSION=m0-sum-v2` 为本次 GNU++17 实验固定执行环境；初始化夹具、提交 API 和 Worker 控制端须配置相同版本。未设置仍使用原 `m0-sum-v1`，未知值拒绝启动实验服务/注册夹具。新版本绑定已核验的本机 Linux arm64 镜像 ID、编译参数和预算，不重标旧提交；切换、并存和回退限制见 [固定执行环境](docs/m0-experiment.md#固定执行环境与新材料版本)。执行端仍未交付。
+可选 `OJ_EXPERIMENT_MATERIAL_VERSION=m0-sum-v2` 为 GNU++17 实验固定执行环境；初始化夹具、提交 API 和 Worker 控制端须配置相同版本。未设置仍使用原 `m0-sum-v1`，未知值拒绝启动实验服务/注册夹具。执行端只接受 v2，不会执行 v1 或未知清单。新版本绑定已核验的本机 Linux arm64 镜像 ID、编译参数和预算，不重标旧提交；切换、并存和回退限制见 [固定执行环境](docs/m0-experiment.md#固定执行环境与新材料版本)。
 
 ## 检查与构建
 
@@ -74,7 +76,7 @@ GitHub Actions 的 `governance`、`backend`、`frontend` 和真实 PostgreSQL `i
 
 已有 hooks 安装入口为 `sh scripts/install-hooks.sh`，仅改变当前克隆，遇到已有配置拒绝覆盖；本轮不重新安装或修改 hooks。按 2026-10-27 的持续授权，每次开发执行“对应任务分支 → 实现与验证 → 原子提交 → 推送 → PR → 当前 head 的 CI 核验”，GitHub 操作统一使用 `gh`。一个 PR 对应一个明确功能或预先界定、可独立验收的阶段；具体边界见[根规则第 7 节](AGENTS.md#7-git-与审查)与[开发工作流](docs/development-workflow.md)。合并和发布仍由用户决定。
 
-真实沙箱结果与临时数据库联合验证：在上述专用 VM/容器已启动时，执行 `OJ_SANDBOX_EXPERIMENT=1 make report-test`。该命令先运行数据库与双 API 回归，再在独立空库运行单槽 Worker 连续两题与丢失回执重报，以及原 8 项真实结果回报用例；需要与 `db-test` 相同的本机工具及专用沙箱。普通 CI 不运行此特权实验，`sandbox-test` 不替代它。
+真实沙箱结果与临时数据库联合验证：在上述专用 VM/容器已启动时，执行 `OJ_SANDBOX_EXPERIMENT=1 make report-test`。该命令先运行数据库与双 API 回归，再在独立空库运行单槽 Worker 连续两题与丢失回执重报、原 8 项结果回报用例，以及真实 Worker 命令的 AC/WA、重复启动拒绝、SIGINT 空闲停止和 SIGTERM 在途停止。需要独占专用沙箱，入口隔离标记必须无未决状态；测试不自动清除旧隔离标记。普通 CI 不运行此特权实验，`sandbox-test` 不替代它。
 
 ## 文档入口
 
