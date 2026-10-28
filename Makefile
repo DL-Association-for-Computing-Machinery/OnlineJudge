@@ -1,4 +1,4 @@
-.PHONY: api worker worker-api go-check go-build web-check check db-test sqlc sandbox-test report-test dual-worker-test
+.PHONY: api worker worker-api go-check go-build web-check check db-test sqlc sandbox-test report-test dual-worker-test worker-fault-test
 
 # Keep downloaded toolchains, dependency caches and binaries out of source Git.
 export GOCACHE := $(CURDIR)/.local/go-build
@@ -38,6 +38,9 @@ report-test: go-build
 # Requires both pre-provisioned fixed slots on the dedicated offline M0 VM.
 dual-worker-test: go-build
 	OJ_SANDBOX_DUAL=1 sh scripts/test-postgres.sh
+
+worker-fault-test: go-build
+	OJ_SANDBOX_FAULT=1 sh scripts/test-postgres.sh
 
 sandbox-test:
 	go test -count=1 -tags=sandbox ./tests/sandbox -v
