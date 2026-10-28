@@ -14,6 +14,8 @@
 
 知识事务 `oj-worker-fault-20261028` 已更新实测、推进、热点、索引和日志五页；严格 lint 32 页/394 链接/0 问题，五页哈希回读一致。保存测试源码哈希与证据边界，不修改 raw 或 accepted 账本。
 
+提交前后完整自审补强：把后续题提前到 Worker 启动前入队，消除“题目来得晚所以未领取”的时序空隙。同一 `make worker-fault-test` 全套重跑通过，四故障 90.90 秒（10.34/10.18/34.63/35.55 秒）；日志 `/private/tmp/oj-fault-queued-regression.log`，临时数据库 `/tmp/oj-postgres.pUySCd` 已停止。首提交 `bb97e1f` 的 [PR #18 CI](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/actions/runs/40711372352) 全部成功；补强提交仍须按最新 head 重新核验，不沿用此结果。
+
 ## 2026-10-28：双固定槽 Worker 真实执行与退出接管
 
 基于主线 `f1ece3f8d6e376045365024fbea73aedad018aef`，独立分支 `codex/dual-worker-recovery`，工作区 `/Users/huangqijun/.codex/worktrees/dual-worker-recovery/OnlineJudge`。唯一目标是双 Worker 的隔离运行与可清理退出后的真实任务接管。下列为提交前本地验证快照；后续按开发交付持续授权提交、推送、创建 PR 并核验对应 head 的 CI/审查，远端终态以实际回读为准。原克隆 5 处文档改动保持原状。

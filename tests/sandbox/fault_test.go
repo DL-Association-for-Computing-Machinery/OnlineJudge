@@ -115,6 +115,9 @@ func testWorkerFault(t *testing.T, pool *pgxpool.Pool, store *postgres.Store, fa
 		return row.ID
 	}
 	rowID := accept("broken")
+	// Both tasks exist before startup, so refusing the next claim cannot pass
+	// merely because that task arrived after the failed process already exited.
+	nextID := accept("next")
 	p := dualWorker(t, ca, certFile, key, endpoints[0], "primary")
 	var token, pid string
 	if fault == "disabled" || fault == "rotated" {
@@ -138,8 +141,6 @@ func testWorkerFault(t *testing.T, pool *pgxpool.Pool, store *postgres.Store, fa
 			t.Fatal(err)
 		}
 	}
-	// Queue another task before the failed process exits; it must not take it.
-	nextID := accept("next")
 	select {
 	case err := <-p.done:
 		p.stopped = true
