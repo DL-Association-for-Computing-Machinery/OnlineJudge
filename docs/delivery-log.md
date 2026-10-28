@@ -2,6 +2,10 @@
 
 ## 2026-10-28：按影响范围执行 CI
 
+远端全量路径已核验：[PR #14](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/14) 的 head `cce2f6812826b250bffe3a5e063b952c4ff22b02` 在 [CI 40700532954](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/actions/runs/40700532954) 中识别 9 个变更路径，选择三个应用套件并全部执行成功，四个稳定必需门禁全部 success。合并前 SHA/base 一致、完整差异自审无未解决问题、远端 reviews/comments/threads 为空、GitHub CLEAN/MERGEABLE；按持续授权 squash 合并为 `1f8a95127190f850ab40f7b47d6da891591f7a86`，主线树已回读一致。无独立人工批准或部署。
+
+本次仅补齐此交付记录的 `codex/ci-docs-validation` 分支用于真实验证纯文档路径：预期 governance 与三个结果门禁成功，三个 `*-tests` 均 skipped；不能将其写为应用测试通过。该文档分支运行结果以对应 PR/CI 和知识库最终回读为准，下列为实现提交前的验证快照。
+
 用户要求避免小改动无条件重跑所有 CI。基于已合并 PR #13（`2e11806a84020c5b5ff23f06ec85b1a9ef8496b4`）创建 `codex/ci-impact` 独立任务，唯一目标为 CI 分流和稳定必需门禁，不修改应用、依赖、远端 ruleset 或部署。
 
 - `scripts/ci_scope.py` 使用完整 PR merge-base 差异或完整 push 差异，文档/治理、前端、后端/数据库按明确路径选择，混合取并集，未知路径/缺失历史/人工触发全量。重命名按删除与新增处理，不受 API 文件列表分页截断影响。
