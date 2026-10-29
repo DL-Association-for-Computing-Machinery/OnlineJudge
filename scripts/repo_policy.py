@@ -45,6 +45,10 @@ def prohibited(path):
         or (name == ".env" or name.startswith(".env.")) and name != ".env.example"
         or name.endswith(".local") or ".local." in name
         or name.endswith((".pem", ".key", ".p12", ".pfx", ".crt", ".cer"))
+        or name.endswith((".log", ".sqlite", ".sqlite3", ".sqlite-wal", ".sqlite-shm",
+                          ".sqlite3-wal", ".sqlite3-shm", ".db", ".db-wal", ".db-shm",
+                          ".dump", ".sql.gz", ".bak"))
+        or path == ".claude-obsidian.json"
         or name in {"id_rsa", "id_ed25519", ".ds_store"}
     )
 
