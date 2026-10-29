@@ -1,5 +1,11 @@
 # M0 实验实施与验证记录
 
+## 会话名额与撤销子实验（2026-10-29）
+
+[独立实验模块](../tests/sessionexperiment/README.md)通过真实 Redis 和同进程两个 TLS 测试 API，验证 24 并发请求只接纳三个会话、跨 API 撤销、迟到保存/空闲过期拒绝、重复保存不增名额、绝对期限约束，以及撤销凭证改换主体仍被拒绝。连接池关闭时返回 503 且不清 Cookie；这是客户端失败注入，不是 Redis 宕机恢复。
+
+六项 race 测试、模块校验及 vet 通过；复现命令、夹具版本和限制见实验 README。根模块测试与当前 CI 不执行此独立模块。未接入正式 API、账号数据库或 Gin；跨进程、旧快照恢复、CSRF、完整会话期限和 PostgreSQL 对比仍待完成，M0 未通过。
+
 ## 当前入口：Docker Desktop（2026-10-29）
 
 Makefile 已移除，当前命令以 [README](../README.md#构建与测试docker-desktop) 为准：`docker compose run --build --rm toolchain db` 和 `python3 scripts/test-worker.py all`。不再启动 Colima。以下 2026-10-25—28 的命令和运行结果保留为历史证据，旧 Make/Colima 命令不再适用。

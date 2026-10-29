@@ -56,6 +56,8 @@ PR 的 `edited` 事件继续按完整差异执行，确保标题和目标分支�
 
 ### 已确认的验证与交付路线
 
+会话名额/撤销的[独立实验模块](../tests/sessionexperiment/README.md)已有本机真实 Redis 验证，但不属于根模块 `go test ./...` 或当前 CI；六项 race 测试须按该页单独执行。下方完整会话验收目录仍待完成，不能以 PR 的 backend 绿灯代替会话实验结果。
+
 Go 标准 testing、真实 PostgreSQL 与 Vitest 已配置，版本以依赖清单和 Dockerfile 为准，命令见 README。React Testing Library、Playwright、Testcontainers 与正式 Redis 会话验收仍是待验证路线。专用可信 Linux 节点执行沙箱、故障、混合负载和断外网恢复演练，与快速 CI 分层；不可信 PR 不持有生产凭据或高权限执行节点。新增验收 AC26—35 与原 AC01—25 联合执行，不能用治理测试代替应用测试。
 
 离线 Nginx/HTTPS/DNS/chrony、可观测性、pgBackRest/restic、一致性恢复集合与两阶段回收、不可变制品/短维护/兼容回滚规则见 [运维设计](architecture/operations-design.md)。当前无安装、部署或演练结果。

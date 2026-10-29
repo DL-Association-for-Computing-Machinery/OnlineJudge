@@ -11,7 +11,7 @@
 - `cmd/worker` 已接入单槽领取、材料准备、租约执行与冻结结果回报，复用 `internal/worker`、`internal/execution`、`internal/workerclient` 和 `internal/workerhost`。入口提供按固定槽独占、崩溃隔离标记、启动预检和信号停止；当前执行材料为 `m0-sum-v3`，旧版证据见[执行端命令入口](docs/m0-experiment.md#执行端命令入口)。两个独立 Worker/控制端的真实竞争执行与 SIGTERM 后接管已验证，见[双 Worker 实验](docs/m0-experiment.md#双-worker-真实执行与接管)。撤销/材料故障的专项证据见[故障联调](docs/m0-experiment.md#撤销与材料故障联调)，现行命令统一见下文；会话实验及 M0 整体验收尚未通过。
 - `cmd/worker-api` 自动扫描过期、撤销或凭据轮换后的任务租约，保留三次尝试上限及旧回报隔离；见[控制端任务自动恢复](docs/m0-experiment.md#控制端任务自动恢复)。这只恢复数据库任务，不重启 Worker 或解除沙箱隔离。
 - 模块化单体＋独立判题 Worker；不创建空业务层，不把所有模块拆成服务。
-- 既有 Redis 会话路线保留待验证，新增 PostgreSQL 会话对比；未做未经确认的替换。
+- [会话名额与撤销子实验](tests/sessionexperiment/README.md)使用真实 Redis 验证同进程双测试 API 的三会话上限和撤销竞态；独立模块须单独运行，不属于根模块测试或当前 CI。正式会话、故障恢复及 PostgreSQL 对比仍待验证。
 - 已引入 PostgreSQL 实验、sqlc/pgx/Goose；go-judge 用于 Docker Desktop 专用容器实验。Redis 会话、River 与监控备份服务尚未接入。
 - 多文件/ZIP 提交、自测与辅助能力不作为训练试用前置；完整语言、比赛及后续需求保留。
 - main 已建立并保护；Docker 工具链、容器/安全门禁与只读环境自检的交付证据见[交付日志](docs/delivery-log.md)。未部署，M0 整体仍未通过。
