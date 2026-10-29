@@ -1,5 +1,13 @@
 # 工程交付记录
 
+## 2026-10-29：工作区与规则版本对齐
+
+唯一目标：将旧初始化工作区尚未交付的分支起点与单 PR 范围约束移植到主线派生的任务分支。保留用户再次确认的持续交付、CI/review 通过后合并授权；不修改应用、CI 或远端保护。旧工作区的五处未提交改动原样保留，不将其历史状态全文覆盖到新主线。
+
+新任务分支必须成功 fetch 后从 origin/main 创建，其他起点须用户明确指定；可独立验收/合并/回退的目标必须拆 PR，不以阶段名豁免。本次从 `d419df6` 创建 `codex/workspace-rules`，后续任务按同一规则推进。PR #1 已合并及旧分支清理的记录保留在原工作区，不重复作为当前状态发布。
+
+验证：`python3 scripts/repo_policy.py repository`（168 文件）及 `git diff --check` 通过；完整差异自审核对了根规则、流程与模板的范围及授权一致性。本次为文档变更，未运行应用测试；提交时未运行远端 CI，合并结果以 PR 为准，无部署。
+
 ## 2026-10-29：Docker Desktop 工具链与 Worker 测试迁移（未提交）
 
 唯一目标：本机使用 Docker Desktop，构建/数据库工具容器化，移除 Makefile。基于本地 origin/main `436204c`，独立工作区 `/Users/huangqijun/.codex/worktrees/docker-tooling/OnlineJudge`，分支 `codex/docker-tooling`；原克隆五处既有改动未变。未提交、未推送、未建 PR、未运行远端 CI、未部署。
