@@ -1,6 +1,6 @@
 # 首期题型与答案检查设计
 
-日期：2026-10-25。版本：0.8。状态：首期规则已确认；M0 已实现有界文本比较，并在独立 Linux VM 验证 GNU++17 编译、逐点比较、错误/超限及隔离分项。完整 Worker 编排、浮点/testlib、统一异常归因和生产预算待验证，详情见[M0 记录](../m0-experiment.md)。关联 [总体架构](system-design.md)、[需求与验收](../requirements.md)、[Worker 与沙箱](frontend-sandbox-options.md#4-判题-worker-与沙箱的职责)及 [存储设计](storage-design.md)。
+本页维护已确认的首期判题规则；当前编排、沙箱验证与未完成项统一见 [M0 记录](../m0-experiment.md)。关联 [总体架构](system-design.md)、[需求与验收](../requirements.md)、[Worker 与沙箱](frontend-sandbox-options.md#4-判题-worker-与沙箱的职责)及 [存储设计](storage-design.md)。
 
 ## 1. 已确认范围与取舍
 
