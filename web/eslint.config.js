@@ -7,6 +7,19 @@ export default [
   { ignores: ['dist/**', 'node_modules/**', 'coverage/**'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  ...tseslint.configs.recommendedTypeChecked.map(config => ({
+    ...config,
+    files: ['src/**/*.{ts,tsx}', 'vite.config.ts'],
+  })),
+  {
+    files: ['src/**/*.{ts,tsx}', 'vite.config.ts'],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
   {
     files: ['src/**/*.{ts,tsx}'],
     plugins: { 'react-hooks': reactHooks, 'react-refresh': reactRefresh },
