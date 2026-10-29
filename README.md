@@ -1,6 +1,6 @@
 # OnlineJudge
 
-面向东华理工大学计算机协会的训练与校赛平台。当前进入 M0 技术实验：已有提交持久化、幂等回执和任务租约核心，并在独立本机 Linux 虚拟机验证 GNU++17 沙箱分项。登录、完整 Worker 判题链路及训练产品尚未交付。
+面向东华理工大学计算机协会的训练与校赛平台。当前处于 M0 技术实验：已有提交持久化、幂等回执、任务租约及固定材料的 Worker 实验链路；当前使用 Docker Desktop 专用容器验证 GNU++17 沙箱。正式登录、训练产品及 M0 整体验收尚未交付。
 
 ## 当前交付与下一步
 
@@ -8,23 +8,23 @@
 - [首期开发计划](docs/phase-1-development-plan.md)：0B → 1A → 1B 的任务依赖、P0—P7 开发包、里程碑与验收证据要求。
 - [M0 实验记录与复现](docs/m0-experiment.md)：数据库、双 API 进程、任务租约及 Linux 沙箱的实际证据与未覆盖项；M0 整体验收尚未通过，健康接口不代表判题就绪。
 - [Worker mTLS 契约](api/worker.openapi.yaml)：认证领取、续租、结果回报及有效租约限定的源码/材料下载与哈希校验；两个真实控制端进程和 TLS 客户端已验证。新增真实沙箱结果经 mTLS 回报至 PostgreSQL 的联合测试，见[真实结果回报](docs/m0-experiment.md#真实结果回报)。
-- `cmd/worker` 已接入单槽领取、材料准备、租约执行与冻结结果回报，复用 `internal/worker`、`internal/execution`、`internal/workerclient` 和 `internal/workerhost`。入口提供按固定槽独占、崩溃隔离标记、启动预检和信号停止；仅支持固定 `m0-sum-v2`，见[执行端命令入口](docs/m0-experiment.md#执行端命令入口)。两个独立 Worker/控制端的真实竞争执行与 SIGTERM 后接管已验证，见[双 Worker 实验](docs/m0-experiment.md#双-worker-真实执行与接管)。撤销/材料故障的专项命令与证据边界见[故障联调](docs/m0-experiment.md#撤销与材料故障联调)；会话实验及 M0 整体验收尚未通过。
+- `cmd/worker` 已接入单槽领取、材料准备、租约执行与冻结结果回报，复用 `internal/worker`、`internal/execution`、`internal/workerclient` 和 `internal/workerhost`。入口提供按固定槽独占、崩溃隔离标记、启动预检和信号停止；当前执行材料为 `m0-sum-v3`，旧版证据见[执行端命令入口](docs/m0-experiment.md#执行端命令入口)。两个独立 Worker/控制端的真实竞争执行与 SIGTERM 后接管已验证，见[双 Worker 实验](docs/m0-experiment.md#双-worker-真实执行与接管)。撤销/材料故障的专项证据见[故障联调](docs/m0-experiment.md#撤销与材料故障联调)，现行命令统一见下文；会话实验及 M0 整体验收尚未通过。
 - `cmd/worker-api` 自动扫描过期、撤销或凭据轮换后的任务租约，保留三次尝试上限及旧回报隔离；见[控制端任务自动恢复](docs/m0-experiment.md#控制端任务自动恢复)。这只恢复数据库任务，不重启 Worker 或解除沙箱隔离。
 - 模块化单体＋独立判题 Worker；不创建空业务层，不把所有模块拆成服务。
 - 既有 Redis 会话路线保留待验证，新增 PostgreSQL 会话对比；未做未经确认的替换。
 - 已引入 PostgreSQL 实验、sqlc/pgx/Goose；go-judge 用于 Docker Desktop 专用容器实验。Redis 会话、River 与监控备份服务尚未接入。
 - 多文件/ZIP 提交、自测与辅助能力不作为训练试用前置；完整语言、比赛及后续需求保留。
-- 0A 和 M0 分项已按逻辑分组提交；main 已建立并保护，PR #1—#11 已合并；本次执行端入口通过独立分支交付，验证证据见交付日志。未部署，M0 整体仍未通过。
+- main 已建立并保护；Docker 工具链、容器/安全门禁与只读环境自检的交付证据见[交付日志](docs/delivery-log.md)。未部署，M0 整体仍未通过。
 
 ## 运行环境
 
-Go 工具链锁定为 `go.mod` 中的 1.26.10（本机可由 Go 自动下载到缓存）；前端使用 pnpm 11.25.0，建议 Node 24.19.0，见 [Node 版本](web/.node-version)。兼容范围见 [package.json](web/package.json)，锁文件为 `go.sum` 和 `web/pnpm-lock.yaml`。
+Docker 工具链使用 Go 1.26.10、pnpm 11.25.0、Node 24.19.0，与 `go.mod`、[Node 版本](web/.node-version)及 [package.json](web/package.json)对应；依赖锁文件为 `go.sum` 和 `web/pnpm-lock.yaml`。宿主无需另外安装这些构建工具。
 
 构建工具链由 Dockerfile 固定，应用依赖以 go.sum 和 pnpm-lock.yaml 为准。Docker Desktop 迁移的验证结果见交付日志；历史 Colima 证据不能替代本次验证。
 
 ## Docker 构建与一键启动（默认）
 
-后续默认使用 Docker 构建和 Compose 启动。安装并启动支持 Linux 容器的 Docker Engine（macOS 需 Linux VM）与 Compose v2+；默认入口不需要宿主机安装 Go、Node、pnpm 或 Make。首次构建需联网获取 Dockerfile 中固定摘要的基础镜像和锁定依赖。
+默认使用 Docker 构建和 Compose 启动。macOS 使用 Docker Desktop 的 `desktop-linux` context；Linux CI 使用 Docker Engine 与 Compose v2+，省略下面命令中的 `--context desktop-linux`。首次构建需联网获取 Dockerfile 中固定摘要的基础镜像和锁定依赖。
 
 在仓库根目录执行：
 
@@ -35,10 +35,10 @@ docker --context desktop-linux compose up -d --build --wait
 打开 [Docker 本机预览](http://127.0.0.1:8080/)，点击“检查 API 连接”。Nginx 提供 Vite 构建后的静态文件，将 `/api/` 转发到 Compose 内部的 `api:8080`；后端不发布宿主机端口。若 8080 被占用，执行 `OJ_WEB_PORT=18080 docker --context desktop-linux compose up -d --build --wait`，再访问 18080。后续源码修改需要重建，此入口不是热更新开发服务器。
 
 ```sh
-docker compose build                 # 仅构建默认应用镜像
-docker compose ps                    # 查看服务和健康状态
-docker compose logs --tail=100        # 查看启动或请求错误
-docker compose down                  # 停止并移除本 Compose 项目的容器、网络
+docker --context desktop-linux compose build            # 构建默认应用镜像
+docker --context desktop-linux compose ps               # 查看服务和健康状态
+docker --context desktop-linux compose logs --tail=100   # 查看启动或请求错误
+docker --context desktop-linux compose down             # 停止本项目容器、网络
 ```
 
 当前只启动前端与基础 API，健康检查只证明进程/代理连通；不启动数据库、Worker、控制端或判题沙箱，不代表完整 OJ 可用。应用容器使用非 root、只读根文件系统；Nginx 临时文件只写入内存目录。当前默认服务没有持久化业务数据或 volume；后续增加数据库必须同步配置持久化与迁移步骤，不使用 `down -v` 清理数据。HTTPS、正式部署与离线制品交付尚未配置。
