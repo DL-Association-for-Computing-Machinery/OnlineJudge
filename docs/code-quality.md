@@ -12,7 +12,15 @@ golangci-lint 固定 v2.15.0，配置位于 `.golangci.yml`，仅启用 staticch
 
 已有资源清理保留原有行为，并明确忽略理由；影响行为的返回值应检查，不能为了 lint 机械添加空白赋值。文件写入/同步、租约与授权错误继续由行为测试验证。测试故障注入中客户端主动中断的响应写入允许显式忽略返回值。
 
-## 工具准入
+## 前端
+
+前端沿用已有锁定的 ESLint/typescript-eslint，无新增依赖。`src/**/*.{ts,tsx}` 和 `vite.config.ts` 使用 `recommendedTypeChecked`、`projectService` 及固定配置目录，包含未处理 Promise、Promise 回调误用与不安全 any 数据流检查；JS 配置/工具脚本沿用普通 lint，不要求加入 TypeScript 项目。保留 React Hooks、refresh、零警告及原有 typecheck/Vitest/build。
+
+`pnpm lint` 先扫描真实源码，再通过 Node 测试运行器使用实际 ESLint 配置进行六项正反例。内存样例使用已有 tsconfig 成员路径，不落盘、不进入构建；覆盖 TS、TSX 事件回调和 Vite 配置，解析错误不能冒充目标规则拒绝。自测脚本命名 `lint-selftest.mjs`，避免被 Vitest 的 `*.test.*` 自动发现而混用测试运行器。
+
+类型感知分析增加 TypeScript 项目分析成本，不能替代运行时外部数据校验。`void promise` 只表示显式放弃等待，不处理拒绝；业务入口仍需 catch/错误状态。前端现有健康检查已将响应作为 unknown 并校验契约，事件处理器已有 try/catch，本次不改 UI 或业务源码。官方依据：[typed linting](https://typescript-eslint.io/getting-started/typed-linting/)。
+
+## Go 工具准入
 
 2026-10-29 核对 [v2.15.0](https://github.com/golangci/golangci-lint/releases/tag/v2.15.0)：要求 Go 1.26.0，使用项目 Go 1.26.10 构建；主项目许可证 GPL-3.0，作为独立开发 CLI 使用，不链接到应用，也不进入运行镜像。若对外分发开发镜像，应履行适用许可义务。公开 GitHub advisory 查询为空，不代表工具或传递依赖无漏洞。
 

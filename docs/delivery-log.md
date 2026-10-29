@@ -1,5 +1,13 @@
 # 工程交付记录
 
+## 2026-10-29：前端类型感知质量门禁
+
+前置 Go 质量检查 [PR #33](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/33) 的 head `4101269` 九项 CI 全成功，完整差异/讨论核验后 squash 合并为 `9bc0cab`。从成功 fetch 后的该主线创建独立 `codex/frontend-quality`，唯一目标为启用已有 typescript-eslint 的类型感知推荐规则，覆盖 src TS/TSX 与 Vite 配置；无新增依赖、业务/UI/迁移变化。
+
+Docker Desktop `frontend-check`：真实源码 lint 零告警、六项真实 ESLint 正反例（含 TSX/Vite）、TypeScript 检查、六项业务测试及生产构建全部通过。初次将 Node 自测命名为 `*.test.mjs` 导致被 Vitest 重复发现并失败，改为 `lint-selftest.mjs` 后完整复验通过，未修改测试发现规则或跳过断言。repository policy 和完整 diff 自审通过。
+
+类型感知检查不替代运行时输入校验，void 不等于捕获拒绝；未引入覆盖率/fuzz 或外部质量平台。本项无 UI 视觉变化，未进行额外截图、未部署；最终 PR/head/CI/合并回读见远端与知识库。
+
 ## 2026-10-29：Go 静态质量门禁
 
 从成功 fetch 后的 `3b4a96c` 创建 `codex/go-quality`，唯一目标为引入固定 golangci-lint v2.15.0 的 staticcheck/errcheck/ineffassign/unused。本地与 CI 共用后端入口，覆盖主模块、sandbox 源码及独立会话模块；运行镜像不包含检查工具。基线共 87 条告警已核对处理，主要为显式资源清理/故障注入返回值，另加强锁子进程退出和响应读取断言、简化等价表达式；没有全局排除或降低现有门禁。
