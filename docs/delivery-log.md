@@ -1,5 +1,13 @@
 # 工程交付记录
 
+## 2026-10-29：Go 静态质量门禁
+
+从成功 fetch 后的 `3b4a96c` 创建 `codex/go-quality`，唯一目标为引入固定 golangci-lint v2.15.0 的 staticcheck/errcheck/ineffassign/unused。本地与 CI 共用后端入口，覆盖主模块、sandbox 源码及独立会话模块；运行镜像不包含检查工具。基线共 87 条告警已核对处理，主要为显式资源清理/故障注入返回值，另加强锁子进程退出和响应读取断言、简化等价表达式；没有全局排除或降低现有门禁。
+
+Docker Desktop Linux arm64：`toolchain backend` 的格式、vet、四规则真实正反例、三范围静态扫描（各零告警）、主模块 race 与全部命令构建通过。`test-session.py --toolchain-image oj-go-quality-toolchain:latest --module-cache /private/tmp/oj-session-mod` 的十项真实 Redis 行为/race 通过（18.721 秒）。治理 46 项及 repository policy 通过；治理首次在受限沙箱因 loopback bind 权限失败，获得工具权限后完整通过。
+
+未重跑真实 Worker 沙箱专项，本轮 sandbox 证据仅为静态分析；未增加覆盖率/fuzz、未部署、未完成 M0。回退本项配置/入口和对应基线改动即可。此为提交前验证快照，最终 PR/head/CI/合并状态见远端及知识库交付索引。
+
 ## 2026-10-29：Redis 服务端超时与恢复
 
 唯一目标：补齐 P3/M0、AC23 的会话存储超时子项。从成功 fetch 后的 `f672cf4` 创建独立 `codex/session-redis-timeout`；新增三个 `_test.go` 用例，暂停一次性 Redis 的命令处理，验证读取、退出、已加载保存及登录返回有界 503 且无 Cookie，恢复后会话期限、撤销及三名额约束正确。无正式入口、依赖、驱动或迁移变化，回退新增测试及文档即可。

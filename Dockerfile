@@ -34,10 +34,23 @@ COPY --from=security-tools /usr/local/bin/govulncheck /usr/local/bin/govulncheck
 ENV GOTELEMETRY=off
 CMD ["govulncheck", "-show", "verbose", "./..."]
 
+FROM backend-deps AS quality-tools
+ENV GOTELEMETRY=off
+RUN GOBIN=/out go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+
+FROM backend-source AS backend-quality
+COPY --from=quality-tools /out/golangci-lint /usr/local/bin/golangci-lint
+COPY .golangci.yml ./
+COPY scripts/check-go.sh scripts/check-go.sh
+COPY scripts/test-go-quality.sh scripts/test-go-quality.sh
+RUN cd tests/sessionexperiment && go mod download && go mod verify
+ENV GOTELEMETRY=off
+
 FROM postgres:14-bookworm@sha256:a389ed49344afc8f4444efd4eb512965df07aaa6ed84b239b54a23246e9fe347 AS toolchain
 COPY --from=backend-source /usr/local/go /usr/local/go
-COPY --from=backend-source /go/pkg/mod /go/pkg/mod
-COPY --from=backend-source /src /src
+COPY --from=backend-quality /go/pkg/mod /go/pkg/mod
+COPY --from=backend-quality /src /src
+COPY --from=backend-quality /usr/local/bin/golangci-lint /usr/local/bin/golangci-lint
 COPY --from=sqlc-build /out/sqlc /usr/local/bin/sqlc
 RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev python3 diffutils \
     && rm -rf /var/lib/apt/lists/*

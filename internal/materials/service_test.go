@@ -85,7 +85,7 @@ func TestServiceAuthorizationAndIntegrity(t *testing.T) {
 				if err != nil || calls != 2 || reads != 1 {
 					t.Fatalf("valid download: %v calls=%d reads=%d", err, calls, reads)
 				}
-				got.Close()
+				_ = got.Close() // Cleanup; the operation outcome is checked separately.
 			} else if err == nil || got != nil {
 				t.Fatal("unauthorized/corrupt material released")
 			}

@@ -59,7 +59,8 @@ func (r *Reporter) Report(ctx context.Context, token string, result submission.R
 	if err != nil {
 		return ErrReportUnknown
 	}
-	defer resp.Body.Close()
+	// Cleanup does not change the completed operation or its primary error.
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusNoContent {
 		return nil
 	}

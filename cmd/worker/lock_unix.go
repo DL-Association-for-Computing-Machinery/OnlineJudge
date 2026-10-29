@@ -42,7 +42,10 @@ func acquireLock(path string) (*slotLock, error) {
 		return nil, errors.New("cannot open M0 slot lock")
 	}
 	f := os.NewFile(uintptr(fd), path)
-	fail := func(message string) (*slotLock, error) { f.Close(); return nil, errors.New(message) }
+	fail := func(message string) (*slotLock, error) {
+		_ = f.Close() // Preserve the lock validation error.
+		return nil, errors.New(message)
+	}
 	var stat syscall.Stat_t
 	if syscall.Fstat(fd, &stat) != nil || stat.Mode&syscall.S_IFMT != syscall.S_IFREG ||
 		stat.Mode&0077 != 0 || stat.Uid != uint32(os.Geteuid()) || stat.Nlink != 1 {
@@ -79,4 +82,4 @@ func (l *slotLock) clean() error {
 }
 
 // Close never removes the inode or clears an uncertain execution marker.
-func (l *slotLock) Close() { l.file.Close() }
+func (l *slotLock) Close() { _ = l.file.Close() } // Marker writes are synced and checked before cleanup.

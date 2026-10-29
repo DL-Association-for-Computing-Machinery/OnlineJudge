@@ -48,13 +48,13 @@ func TestRenewalMTLSAndResponses(t *testing.T) {
 			w.WriteHeader(409)
 		case 3:
 			w.WriteHeader(503)
-			fmt.Fprint(w, token)
+			_, _ = fmt.Fprint(w, token) // The client may deliberately abort this test response.
 		case 4:
-			fmt.Fprint(w, `{}`)
+			_, _ = fmt.Fprint(w, `{}`) // The client may deliberately abort this test response.
 		case 5:
-			fmt.Fprint(w, `null`)
+			_, _ = fmt.Fprint(w, `null`) // The client may deliberately abort this test response.
 		case 6:
-			fmt.Fprint(w, strings.Repeat("x", 1025))
+			_, _ = fmt.Fprint(w, strings.Repeat("x", 1025)) // The client may deliberately abort this test response.
 		case 7:
 			w.Header().Set("Location", "/redirect-must-not-be-followed")
 			w.WriteHeader(307)
@@ -62,11 +62,11 @@ func TestRenewalMTLSAndResponses(t *testing.T) {
 			<-r.Context().Done()
 		case 9:
 			w.Header().Set("Content-Type", "text/plain")
-			fmt.Fprint(w, `{"lease_until":"2026-10-27T00:00:00Z"}`)
+			_, _ = fmt.Fprint(w, `{"lease_until":"2026-10-27T00:00:00Z"}`) // The client may deliberately abort this test response.
 		case 10:
-			fmt.Fprint(w, `{"lease_until":"invalid"}`)
+			_, _ = fmt.Fprint(w, `{"lease_until":"invalid"}`) // The client may deliberately abort this test response.
 		default:
-			fmt.Fprintf(w, `{"lease_until":%q}`, time.Now().Add(30*time.Second).UTC().Format(time.RFC3339Nano))
+			_, _ = fmt.Fprintf(w, `{"lease_until":%q}`, time.Now().Add(30*time.Second).UTC().Format(time.RFC3339Nano)) // The client may deliberately abort this test response.
 		}
 	}))
 	server.TLS = &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{serverCert}, ClientAuth: tls.RequireAndVerifyClientCert, ClientCAs: ca.Roots}

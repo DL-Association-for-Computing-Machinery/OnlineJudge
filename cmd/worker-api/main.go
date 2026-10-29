@@ -67,7 +67,8 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		if err != nil {
 			return err
 		}
-		defer reader.Close()
+		// Cleanup does not change the completed operation or its primary error.
+		defer func() { _ = reader.Close() }()
 		materialService = materials.New(store, reader)
 	}
 	server := &http.Server{
@@ -79,7 +80,8 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	defer listener.Close()
+	// Cleanup does not change the completed operation or its primary error.
+	defer func() { _ = listener.Close() }()
 	stopRecovery := startRecovery(ctx, logger, store.Recover)
 	defer stopRecovery()
 	result := make(chan error, 1)

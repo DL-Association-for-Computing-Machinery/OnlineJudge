@@ -43,7 +43,8 @@ func TestDualWorkerRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	// Cleanup does not change the completed operation or its primary error.
+	defer func() { _ = conn.Close() }()
 	var tables int
 	if err := conn.QueryRowContext(ctx, `SELECT count(*) FROM information_schema.tables WHERE table_schema='public'`).Scan(&tables); err != nil || tables != 0 {
 		t.Fatal("dual-worker database must be empty")

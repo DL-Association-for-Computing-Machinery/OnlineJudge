@@ -84,11 +84,11 @@ func (s *Service) Download(ctx context.Context, node submission.NodeIdentity, to
 	}
 	current, err := s.Describe(ctx, node, token)
 	if err != nil {
-		file.Close()
+		_ = file.Close() // Cleanup; the operation outcome is checked separately.
 		return nil, err
 	}
 	if current.SubmissionID != first.SubmissionID || current.ManifestSHA256 != first.ManifestSHA256 || current.SourceSHA256 != first.SourceSHA256 {
-		file.Close()
+		_ = file.Close() // Cleanup; the operation outcome is checked separately.
 		return nil, ErrUnavailable
 	}
 	return file, nil

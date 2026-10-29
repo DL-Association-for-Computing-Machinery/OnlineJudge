@@ -31,7 +31,8 @@ func TestPublishedFixtureMatchesManifest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer reader.Close()
+	// Cleanup does not change the completed operation or its primary error.
+	defer func() { _ = reader.Close() }()
 	want := [][]string{{"1 2\n", "3\n"}, {"-7 4\n", "-3\n"}}
 	for i, test := range manifest.Tests {
 		for j, hash := range []string{test.Input, test.Answer} {
@@ -40,7 +41,7 @@ func TestPublishedFixtureMatchesManifest(t *testing.T) {
 				t.Fatal(err)
 			}
 			data, err := io.ReadAll(file)
-			file.Close()
+			_ = file.Close() // Cleanup; the operation outcome is checked separately.
 			if err != nil || string(data) != want[i][j] {
 				t.Fatalf("fixture bytes %q %v", data, err)
 			}

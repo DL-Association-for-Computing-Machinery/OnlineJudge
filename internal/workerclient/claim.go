@@ -52,7 +52,8 @@ func (a *Acquirer) Claim(ctx context.Context) (submission.Lease, error) {
 	if err != nil {
 		return submission.Lease{}, ErrClaimUnknown
 	}
-	defer resp.Body.Close()
+	// Cleanup does not change the completed operation or its primary error.
+	defer func() { _ = resp.Body.Close() }()
 	switch resp.StatusCode {
 	case http.StatusNoContent:
 		return submission.Lease{}, submission.ErrNoTask

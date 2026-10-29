@@ -40,10 +40,10 @@ func startDualProcess(t *testing.T, name string, env []string) *dualProcess {
 	p := &dualProcess{cmd: exec.Command(binary), done: make(chan error, 1)}
 	p.cmd.Env, p.cmd.Stdout, p.cmd.Stderr = env, log, log
 	if err := p.cmd.Start(); err != nil {
-		log.Close()
+		_ = log.Close() // Cleanup; the operation outcome is checked separately.
 		t.Fatal(err)
 	}
-	go func() { p.done <- p.cmd.Wait(); log.Close() }()
+	go func() { p.done <- p.cmd.Wait(); _ = log.Close() }() // Process status is reported through done.
 	t.Cleanup(func() {
 		if !p.stopped {
 			p.stop(t)
@@ -66,8 +66,8 @@ func (p *dualProcess) stop(t *testing.T) {
 		}
 	case <-time.After(15 * time.Second):
 		_ = p.cmd.Process.Kill()
-		<-p.done
-		t.Error("experiment process failed to drain")
+		err := <-p.done
+		t.Errorf("experiment process failed to drain: %v", err)
 	}
 }
 
@@ -89,7 +89,7 @@ func dualController(t *testing.T, ca *testpki.Authority, clientCert tls.Certific
 		t.Fatal(err)
 	}
 	addr := l.Addr().String()
-	l.Close()
+	_ = l.Close() // Cleanup; the operation outcome is checked separately.
 	p := startDualProcess(t, "worker-api", []string{
 		"OJ_WORKER_API_ADDR=" + addr, "OJ_WORKER_CA_FILE=" + ca.CAFile,
 		"OJ_WORKER_CERT_FILE=" + cert, "OJ_WORKER_KEY_FILE=" + key,
@@ -104,7 +104,7 @@ func dualController(t *testing.T, ca *testpki.Authority, clientCert tls.Certific
 		p.alive(t)
 		resp, err := client.Get(endpoint + "/not-a-route")
 		if err == nil {
-			resp.Body.Close()
+			_ = resp.Body.Close() // Cleanup; the operation outcome is checked separately.
 			if resp.StatusCode == http.StatusNotFound {
 				return endpoint
 			}

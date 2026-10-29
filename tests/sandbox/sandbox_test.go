@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -223,7 +222,7 @@ int main(){int fd=socket(AF_INET,SOCK_STREAM,0);if(fd<0)return 0;sockaddr_in a{}
 			t.Fatal(err)
 		}
 		if len(cache) != 0 {
-			t.Fatal(fmt.Sprintf("cache leaked %d entries", len(cache)))
+			t.Fatalf("cache leaked %d entries", len(cache))
 		}
 	})
 }

@@ -18,7 +18,8 @@ func LoadToken(addr, path string) (string, error) {
 	if err != nil {
 		return "", errors.New("cannot open experiment token file")
 	}
-	defer file.Close()
+	// Cleanup does not change the completed operation or its primary error.
+	defer func() { _ = file.Close() }()
 	info, err := file.Stat()
 	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
 		return "", errors.New("experiment token must be an owner-private regular file")

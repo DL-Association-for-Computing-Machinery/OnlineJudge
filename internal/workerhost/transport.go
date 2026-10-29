@@ -25,7 +25,8 @@ func (h *Host) RoundTrip(r *http.Request) (*http.Response, error) {
 		return nil, errors.New("missing sandbox request")
 	}
 	if r.Body != nil {
-		defer r.Body.Close()
+		// Cleanup does not change the completed operation or its primary error.
+		defer func() { _ = r.Body.Close() }()
 	}
 	if r.URL == nil || r.URL.Scheme != "http" || r.URL.Host != "127.0.0.1:5050" ||
 		r.URL.User != nil || r.URL.RawQuery != "" || r.URL.ForceQuery || r.URL.Fragment != "" ||
