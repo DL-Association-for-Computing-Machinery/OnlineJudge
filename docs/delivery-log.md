@@ -1,5 +1,15 @@
 # 工程交付记录
 
+## 2026-10-29：Go 模块漏洞处置
+
+唯一目标：将 x/net v0.61.0 升级到官方修复版本 v0.62.0，消除 GO-2026-6866 与 GO-2026-6860；不修改业务接口、其他依赖或扫描门禁。从成功 fetch 后的主线 `13c1078` 创建 `codex/go-dependency-security`。回退可恢复本次 go.mod/go.sum，但会重新引入两个模块告警；无数据库迁移。
+
+Docker Desktop、Go 1.26.10 实测：升级前 verbose 扫描为 0 可达/0 已导入包漏洞、3 个模块条目；升级后 0/0/1，两个 x/net 条目均消失。`go mod tidy` 仅改变 x/net 校验值，`go mod verify` 通过；默认和 sandbox 标签的 `go list -deps -test ./...` 均无 net/html 或 crypto/openpgp 包。GO-2026-5932 无上游修复版本，当前应用不适用，模块提示保留，未设置忽略；原因见[安全检查](security-checks.md)。
+
+`docker --context desktop-linux compose -p oj-vuln-fix run --rm toolchain backend` 的格式、vet、race 测试和四个后端入口构建通过；同项目 `toolchain db` 的 PostgreSQL 集成、双 API 24 并发、重启/回执恢复和 v3 材料测试通过；`backend-audit` 复扫通过。镜像构建曾遇公共模块代理/校验服务连接拒绝，恢复后原配置构建成功，未关闭校验。仓库策略和 diff 检查通过。未重跑特权 Worker 实验，不宣称完整 M0 或部署；远端 CI 和合并以本 PR 最新 head 及交付回读为准。
+
+原克隆 `.claude-obsidian.json` 为停止 Git 跟踪，文件仍在本地，`git check-ignore` 确认命中新增规则；不是文件丢失。本任务保留该既有暂存状态及 `.gitignore` 整理，不混入依赖修复 PR，也不覆盖其他既有改动。
+
 ## 2026-10-29：开发配置收敛与交付回读
 
 本节为当前交付索引；下方各节保留其验证时点的快照，不能将“提交前/未运行”误读为当前状态。按顺序已核验并合并：

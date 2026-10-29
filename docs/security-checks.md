@@ -27,7 +27,9 @@ Linux CI 使用相同镜像与命令，省略 `--context desktop-linux`。PR、�
 
 使用 CLI 而非额外第三方 Action，沿用现有只读工作流权限、固定 checkout SHA 和 Docker 工具链。镜像 OS 包漏洞扫描及 SBOM 留作独立后续目标，不宣称本项覆盖。
 
-2026-10-29 基线扫描：Go 未触达模块条目为 `GO-2026-6866`、`GO-2026-6860`（x/net v0.61.0，修复版本 v0.62.0）及 `GO-2026-5932`（x/crypto 的 openpgp，无修复版本）；当前没有导入相关易受攻击包或触达调用。此为默认构建的工具判断，模块升级/调用变化须复查，不是接受永久例外。本任务不修改应用依赖。
+2026-10-29 初始基线有三个未触达模块条目。本次将 `golang.org/x/net` 从 v0.61.0 升至 v0.62.0，处置 [GO-2026-6866](https://pkg.go.dev/vuln/GO-2026-6866)（HTML 渲染的祖先命名空间检查）和 [GO-2026-6860](https://pkg.go.dev/vuln/GO-2026-6860)（HTML 文本节点合并的二次复杂度）；仅更新该模块及校验值，不改业务接口或升级其他依赖。实际复扫与兼容性验证见[交付记录](delivery-log.md)。
+
+[GO-2026-5932](https://pkg.go.dev/vuln/GO-2026-5932) 涉及 `golang.org/x/crypto/openpgp` 及其子包，所有版本均无已知修复。项目默认及 `sandbox` 标签的 `go list -deps -test` 包图均未导入这些包；这属于当前项目不适用，不能称为已修复上游模块。`x/crypto` 仍用于其他包，例如 `cmd/api → gin → binding → validator/v10 → x/crypto/sha3`，不能为消除模块提示删除必要依赖或引入无用途的 OpenPGP 替代库。verbose 告警继续保留，未配置忽略或降低门禁；调用、依赖、平台或标签变化后须重新评估。
 
 ## 告警与例外
 
