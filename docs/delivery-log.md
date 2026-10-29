@@ -15,6 +15,14 @@
 
 第五项唯一目标为当前文档入口去重：从成功 fetch 后的 `d790f65` 创建任务分支，纠正 README 的 v2/旧交付状态，移除 CI 文档中已被 Docker 迁移替代的当前命令，授权以根规则为唯一入口，操作和历史证据分别引用。旧原克隆五处改动仍保留。验证：仓库策略（172 文件）、diff 检查、配置/路径/引用人工核对通过；本项不改应用或流水线，提交时 CI 与知识库事务尚待完成，最终结果以本 PR 和知识库事务回读为准。
 
+## 2026-10-29：仓库上传范围修正
+
+唯一目标：减少个人配置和本地运行产物误提交，并去除当前文档中的个人 home 路径。基于最新 `origin/main` 的独立分支 `codex/repository-upload-hygiene`，不包含原克隆已有的其他文档改动。个人 `.claude-obsidian.json` 从版本控制移除，本机已有文件保留；忽略私钥/证书、日志、数据库文件及备份，SQL 迁移/查询、依赖锁文件和 `.env.example` 仍允许跟踪。
+
+本页历史命令中的主克隆路径统一以 `${OJ_PRIMARY_CHECKOUT}` 脱敏，复现时设置为实际主克隆绝对路径；worktree 路径改用 `~/.codex/`，vault 路径相对主克隆。只替换路径，不改变历史验证结论。忽略规则不能阻止强制添加，也不会清除旧提交；本次不重写历史、不轮换凭据、不部署。
+
+本地验证：`python3 scripts/repo_policy.py repository` 检查 171 文件通过，`git diff --check` 与 `git diff --cached --check` 通过；`git check-ignore` 验证 20 项本地文件路径均被忽略、5 项源文件/示例仍允许跟踪。回读确认个人绑定保留且不再跟踪，当前跟踪文件无个人 home 绝对路径。未改应用代码，未运行应用测试；远端 CI 以 PR 对应 head 为准。例行忽略规则维护无新增架构决策或故障知识，不重复写入知识库。
+
 ## 2026-10-29：只读开发环境自检
 
 唯一目标：提供 `python3 scripts/doctor.py`（可选 `--json`、`--strict`、`--port`）检查工作区与 Docker 前置条件。禁用 Git 可选锁避免刷新 index，不 fetch、安装、切换分支或启动容器；工具错误不输出原始 stderr。缓存主线不能证明远端最新，资源展示不设未经压测的容量合格线。
@@ -49,7 +57,7 @@
 
 本节保留提交前记录。后续 [PR #20](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/20) 已合并为 `d419df6`，CI 40873232906 八项成功；当前命令见 README，下文“未提交/未运行远端 CI”仅描述当时。
 
-唯一目标：本机使用 Docker Desktop，构建/数据库工具容器化，移除 Makefile。基于本地 origin/main `436204c`，独立工作区 `/Users/huangqijun/.codex/worktrees/docker-tooling/OnlineJudge`，分支 `codex/docker-tooling`；原克隆五处既有改动未变。未提交、未推送、未建 PR、未运行远端 CI、未部署。
+唯一目标：本机使用 Docker Desktop，构建/数据库工具容器化，移除 Makefile。基于本地 origin/main `436204c`，独立工作区 `~/.codex/worktrees/docker-tooling/OnlineJudge`，分支 `codex/docker-tooling`；原克隆五处既有改动未变。未提交、未推送、未建 PR、未运行远端 CI、未部署。
 
 - Dockerfile/Compose 提供固定 Go、pnpm、sqlc v1.31.1、PostgreSQL 14 工具环境。CI 调用同一容器入口；保留稳定四门禁、影响范围和真实断言。Go 构建缓存留在 Docker volume；应用镜像不挂 Docker socket。
 - `python3 scripts/test-worker.py all` 由 Docker 交叉编译宿主驱动与命令；宿主仅需 Python/Docker。选择固定 `desktop-linux`，两个带归属标签的禁网/无挂载/只读特权槽，拒绝接管外部来源或运行中的同名槽；跨工作区互斥。选手代码仅在 Linux 沙箱执行。
@@ -66,7 +74,7 @@
 
 基于已合并 PR #17 的 `c3e3a48bfc0f39f760596458e9fb107311a3ee67`，独立 `codex/worker-fault-validation`。唯一目标为 P2、AC28/29 的四类故障联调；新增 `tests/sandbox/fault_test.go`、`make worker-fault-test` 及临时数据库入口。无应用行为、依赖、SQL、迁移、协议或 workflow 变化。以下为提交前实测快照，PR/CI/合并终态另行回读。
 
-- 基线 `GOPROXY=off make go-check go-build GOMODCACHE=/Users/huangqijun/Documents/OnlineJudge/.local/go-mod GOCACHE=/private/tmp/oj-lease-go-build` 通过格式、vet、race 和构建。日志 `/private/tmp/oj-fault-baseline.log`。
+- 基线 `GOPROXY=off make go-check go-build GOMODCACHE=${OJ_PRIMARY_CHECKOUT}/.local/go-mod GOCACHE=/private/tmp/oj-lease-go-build` 通过格式、vet、race 和构建。日志 `/private/tmp/oj-fault-baseline.log`。
 - `GOPROXY=off OJ_SANDBOX_EXPERIMENT=1 make worker-fault-test`（同上缓存参数）通过真实临时 PostgreSQL、双 API 24 并发及双控制端回归。四类故障专项 91.53 秒：禁用 11.02 秒、轮换 10.21 秒、缺失 34.46 秒、损坏 35.64 秒。日志 `/private/tmp/oj-fault-integration-final.log`；临时数据库 `/tmp/oj-postgres.n0TJG8` 已停止。环境为 macOS arm64、Go 1.26.10、既有 PostgreSQL 14.19 与专用 Linux arm64 VM/GCC 15.3.0/go-judge 1.13.3。
 - 观察选手 PID 后禁用或轮换节点；材料用例破坏临时目录的最后一个答案文件。故障 Worker 退出码 1、整容器停止、已观察 PID 消失，没有结果载荷/verdict，也不领取下一题。修复临时材料并显式重启/复验沙箱后，实际控制端扫描回收任务；原题第 2 次尝试 AC，下一题也 AC。两个控制端拒绝旧回报，新结果字节不变。未修改租约时间或手调 Recover。
 - 首次运行因新测试幂等键过短被既有验证拒绝，修正夹具后全套重跑通过；未放宽应用规则。首次失败日志 `/private/tmp/oj-fault-integration.log` 保留。`sh -n scripts/test-postgres.sh`、标签测试编译、仓库策略 160 文件与 diff 检查通过。没有修改应用代码，未额外重跑独立隔离套件或本地前端；普通远端 CI 按 Makefile 的共享范围执行全量套件。
@@ -80,7 +88,7 @@
 
 ## 2026-10-28：Docker 构建与本机一键启动
 
-用户确认后续默认使用 Docker 构建并一键启动，授权独立工作树与 `codex/docker-compose` 分支。最初基于 `c3e3a48`，交付时整合已合并 PR #18 的 `f13f4dc`，工作区 `/Users/huangqijun/.codex/worktrees/docker-compose/OnlineJudge`。下列为初次提交前的本地验证快照；原克隆五处既有改动保持原样，后续 PR/CI/合并状态以实际回读为准。
+用户确认后续默认使用 Docker 构建并一键启动，授权独立工作树与 `codex/docker-compose` 分支。最初基于 `c3e3a48`，交付时整合已合并 PR #18 的 `f13f4dc`，工作区 `~/.codex/worktrees/docker-compose/OnlineJudge`。下列为初次提交前的本地验证快照；原克隆五处既有改动保持原样，后续 PR/CI/合并状态以实际回读为准。
 
 - 唯一目标：将当前前端与基础 API 的构建、启动、快速应用检查放入 Docker。新增固定基础镜像摘要的多阶段 Dockerfile、限定上下文的 `.dockerignore`、Compose 和 Nginx；默认仅本机 8080 入口，内部服务名代理，非 root、只读根文件系统及健康等待。检查服务使用独立 profile，默认启动不会运行测试容器。
 - 在 macOS arm64 / Docker Engine 29.8.1 Linux arm64 / Compose 5.5.1 实测：`docker compose -p oj-docker-validation build` 成功；`docker compose -p oj-docker-validation run --rm --build --no-deps backend-check` 通过格式、vet、race 全部单元测试和全部 Go 命令编译；前端检查镜像构建后 `docker compose -p oj-docker-validation run --rm --no-deps frontend-check` 通过 lint、类型检查、6 项测试及 Vite 构建。Go 1.26.10、Node 24.19.0、pnpm 11.25.0 与现有配置一致。
@@ -96,10 +104,10 @@
 
 ## 2026-10-28：双固定槽 Worker 真实执行与退出接管
 
-基于主线 `f1ece3f8d6e376045365024fbea73aedad018aef`，独立分支 `codex/dual-worker-recovery`，工作区 `/Users/huangqijun/.codex/worktrees/dual-worker-recovery/OnlineJudge`。唯一目标是双 Worker 的隔离运行与可清理退出后的真实任务接管。下列为提交前本地验证快照；后续按开发交付持续授权提交、推送、创建 PR 并核验对应 head 的 CI/审查，远端终态以实际回读为准。原克隆 5 处文档改动保持原状。
+基于主线 `f1ece3f8d6e376045365024fbea73aedad018aef`，独立分支 `codex/dual-worker-recovery`，工作区 `~/.codex/worktrees/dual-worker-recovery/OnlineJudge`。唯一目标是双 Worker 的隔离运行与可清理退出后的真实任务接管。下列为提交前本地验证快照；后续按开发交付持续授权提交、推送、创建 PR 并核验对应 head 的 CI/审查，远端终态以实际回读为准。原克隆 5 处文档改动保持原状。
 
 - `OJ_WORKER_M0_SLOT` 严格选择两个固定容器和对应锁，空值/primary 保持原容器及 `slot.lock`，secondary 使用独立容器/锁。初始名字解析后仍绑定完整 ID/启动时间，执行核心和控制端协议不变。无依赖、SQL、迁移、hooks 或 workflow 变更。
-- 基线测试最初受沙箱 loopback 监听限制；按工具权限运行后通过。`GOPROXY=off make go-check go-build GOMODCACHE=/Users/huangqijun/Documents/OnlineJudge/.local/go-mod GOCACHE=/private/tmp/oj-lease-go-build` 通过格式、vet、race 与四个二进制构建，日志 `/private/tmp/oj-dual-go.log`。
+- 基线测试最初受沙箱 loopback 监听限制；按工具权限运行后通过。`GOPROXY=off make go-check go-build GOMODCACHE=${OJ_PRIMARY_CHECKOUT}/.local/go-mod GOCACHE=/private/tmp/oj-lease-go-build` 通过格式、vet、race 与四个二进制构建，日志 `/private/tmp/oj-dual-go.log`。
 - `OJ_SANDBOX_EXPERIMENT=1 GOPROXY=off make dual-worker-test`（同上缓存参数）通过真实临时 PostgreSQL、双 API 24 并发/回执和双控制端回归；两个独立 Worker 在固定离线容器完成八份 AC，运行中 SIGTERM 后核验容器停止和 PID 消失，实际控制端等自然租约到期重新排队，另一节点第 2 次尝试完成 AC。旧令牌回报拒绝且新证据不变，存活节点继续完成新题。未修改租约时间或手动调用 Recover。首次日志 `/private/tmp/oj-dual-integration.log`；加强同时持有两份有效租约的断言后，最终日志 `/private/tmp/oj-dual-integration-final.log`。
 - `OJ_SANDBOX_EXPERIMENT=1 GOPROXY=off make report-test`（同上缓存参数）通过原默认槽连续两题/丢失回执重报、AC/WA/CE/RE/TLE/MLE/OLE/失租回报，以及真实命令 AC/WA、重复启动拒绝、SIGINT/SIGTERM 停止确认；日志 `/private/tmp/oj-dual-report.log`。未重跑本地前端和完整独立隔离套件。
 - 文档同步 README、M0、开发/交付计划、协议架构和 CI 分层；仓库策略检查 159 文件及 `git diff --check` 通过。自审覆盖从基线到工作区的完整差异与 4 个新增文件，无独立人工审查。知识回写保存可定位证据和范围，结果以事务 lint/哈希回读为准。
@@ -115,7 +123,7 @@
 基于主线 `8448641` 的独立 `codex/worker-recovery`，唯一目标为 P1/P2、AC28/29 的控制端恢复扫描。新增扫描器复用既有 `Store.Recover`：启动即扫描、单轮最多 64 条/5 秒、完成后等待 1 秒、失败限速重试、取消排空后关闭池。仅记录安全计数，数据库级扫描跨材料版本；无 SQL、迁移、依赖、HTTP 契约或 CI 配置变化。原克隆 5 处未提交文档改动保留。
 
 - 先新增回归再实现：旧控制端的撤销/轮换、到期和三次上限用例均在 8 秒后仍为 `running`，日志 `/tmp/oj-worker-recovery-before.log`。后续依赖用例的失败来自遗留未恢复任务，不把它们当作独立缺陷。
-- macOS arm64 / Go 1.26.10 / PostgreSQL 14.19：`GOPROXY=off make go-check db-test GOMODCACHE=/Users/huangqijun/Documents/OnlineJudge/.local/go-mod GOCACHE=/tmp/oj-worker-recovery-go-build` 通过格式、vet、race、四个二进制构建、真实数据库和双 API/控制端回归。最终日志 `/tmp/oj-worker-recovery-final-tests.log`，一次性数据库 `/tmp/oj-postgres.xMLTRB` 已停止。
+- macOS arm64 / Go 1.26.10 / PostgreSQL 14.19：`GOPROXY=off make go-check db-test GOMODCACHE=${OJ_PRIMARY_CHECKOUT}/.local/go-mod GOCACHE=/tmp/oj-worker-recovery-go-build` 通过格式、vet、race、四个二进制构建、真实数据库和双 API/控制端回归。最终日志 `/tmp/oj-worker-recovery-final-tests.log`，一次性数据库 `/tmp/oj-postgres.xMLTRB` 已停止。
 - 新增双控制端启动前 65 条过期积压、仍有效租约不回收、每题唯一重领；撤销/轮换、旧回报拒绝和三次尝试后 `failed`/无 verdict 通过。涉及自动恢复的材料/领取测试改为等待实际扫描，避免手动调用掩盖调度缺口。扫描失败重试、日志脱敏和取消排空以单元注入验证。
 - README、开发计划、M0 实验与 CI 说明同步。`python3 scripts/repo_policy.py repository`（155 文件）和 `git diff --check` 通过；完整差异自审和交付状态在最终回读中确认。本条为提交前验证快照，远端 CI 不沿用旧 head。
 - 合成回报只证明控制端协议/存储，不是双 Worker 沙箱接管；本次未运行特权沙箱或前端套件。下一项双 Worker 真实执行与故障接管，执行端自动重启/解封、磁盘结果队列、会话和完整 M0 仍未完成。回退控制端二进制可停止扫描，历史数据保留；无部署或独立人工批准。
@@ -147,8 +155,8 @@
 - 唯一目标：P2、AC28/29 的 `cmd/worker` 接线与进程所有权。在已合并 PR #11 的 `786611519e8c7d3347837b1a269f5aeb6eb3e43b` 上建立独立 `codex/worker-entry`；原克隆 5 处未提交改动保留。实现阶段为未提交工作区，最终提交/PR/CI 以交付回读为准。
 - 配置与模块边界：显式 loopback HTTPS、节点证书/私钥、实验开关；入口装配既有客户端/生命周期/执行/宿主。固定同账号所有权文件锁及持久隔离标记，领取前宿主/协议预检，SIGINT/SIGTERM 取消排空并独立确认整容器停止。停止结果复用，失败不清隔离。无新增依赖、SQL、迁移或协议变化。
 - 基线：Worker/execution/workerhost 测试通过；workerclient 首次受沙箱本机 bind 权限限制，获准后原测试全部通过，未修改断言。
-- macOS arm64 / Go 1.26.10：`GOPROXY=off make GOMODCACHE=/Users/huangqijun/Documents/OnlineJudge/.local/go-mod GOCACHE=/Users/huangqijun/Documents/OnlineJudge/.local/go-build go-check go-build` 通过。新增配置、预检/停止错误、真实子进程锁与 SIGKILL 隔离测试通过。
-- `OJ_SANDBOX_EXPERIMENT=1 GOPROXY=off make GOMODCACHE=/Users/huangqijun/Documents/OnlineJudge/.local/go-mod GOCACHE=/Users/huangqijun/Documents/OnlineJudge/.local/go-build report-test` 通过，临时数据库自动停止（`/tmp/oj-postgres.7jcI31`）。现有数据库/双 API/双 mTLS 控制端回归、单槽生命周期与 8 项回报通过；新增真实 Worker 子进程 AC/WA 落库、重复启动锁拒绝、空闲 SIGINT、在途选手 SIGTERM、容器/PID 消失及无中断结果发布通过。原始输出保存在任务工作区忽略的 `.local/worker-entry-report.log`。
+- macOS arm64 / Go 1.26.10：`GOPROXY=off make GOMODCACHE=${OJ_PRIMARY_CHECKOUT}/.local/go-mod GOCACHE=${OJ_PRIMARY_CHECKOUT}/.local/go-build go-check go-build` 通过。新增配置、预检/停止错误、真实子进程锁与 SIGKILL 隔离测试通过。
+- `OJ_SANDBOX_EXPERIMENT=1 GOPROXY=off make GOMODCACHE=${OJ_PRIMARY_CHECKOUT}/.local/go-mod GOCACHE=${OJ_PRIMARY_CHECKOUT}/.local/go-build report-test` 通过，临时数据库自动停止（`/tmp/oj-postgres.7jcI31`）。现有数据库/双 API/双 mTLS 控制端回归、单槽生命周期与 8 项回报通过；新增真实 Worker 子进程 AC/WA 落库、重复启动锁拒绝、空闲 SIGINT、在途选手 SIGTERM、容器/PID 消失及无中断结果发布通过。原始输出保存在任务工作区忽略的 `.local/worker-entry-report.log`。
 - 新命令联合测试的控制端 handlers 在测试进程内；数据库回归另有真实双控制端子进程。本轮未重跑前端和完整 12 项隔离测试；不宣称双 Worker、自动恢复、磁盘回报队列、平滑下线、会话、生产准入或完整 M0 通过。无合并、部署或独立人工审查。
 - README、M0 记录、开发计划、API/Worker 架构和 CI 验证边界同步。回退无迁移，须先核验旧 Worker/容器终止及隔离标记；禁止仅删除锁文件解除未知状态。
 - 收尾：仓库策略检查通过（150 文件），`git diff --check` 通过；专用容器/VM 已停止，入口隔离文件回读为空，原克隆保持原状。知识库与最终远端交付结果另行回读。
@@ -169,8 +177,8 @@
 唯一目标：P2、AC28/29 的串行领取、材料准备、租约执行与可靠回报编排。gh 核验 PR #9 已合并为 `51d054a6d63d5e5501af3c465b65120ab74684cb`，独立 `codex/worker-lifecycle` 从该主线开始，原克隆 5 处文档改动保留。此条为提交前实测快照，提交/PR/CI 以最终 head 核验为准。非目标为命令入口、宿主驱动、双 Worker、磁盘队列、自动恢复、会话与部署。
 
 - `internal/worker` 通过最小接口串联已有模块；空队列间隔 1 秒，未知回报最多 3 次且原样重放，异常停止，取消等待执行排空，实例单次使用。选择失败停止以限制本阶段恢复复杂度，代价为暂不自动恢复可用性、无崩溃持久性或平滑下线。无依赖/SQL/迁移/公共 HTTP 或配置变化。
-- macOS arm64、Go 1.26.10、PostgreSQL 14.19：`GOPROXY=off make go-check db-test GOMODCACHE=/Users/huangqijun/Documents/OnlineJudge/.local/go-mod GOCACHE=/private/tmp/oj-lifecycle-go-build` 通过格式、vet、race、四命令构建、临时数据库/双控制端、双 API 的 24 并发与重启回执。最初基线测试受沙箱 bind 限制，经工具审批重跑通过，未放宽断言。临时数据库 `/tmp/oj-postgres.8OyFu8` 已停止。
-- `GOPROXY=off make report-test GOMODCACHE=/Users/huangqijun/Documents/OnlineJudge/.local/go-mod GOCACHE=/private/tmp/oj-lifecycle-go-build OJ_SANDBOX_EXPERIMENT=1` 通过新增生命周期联调及原 8 项回报用例。一个 Worker 连续完成真实 AC/WA，丢失确认跨控制端原样重报，5 次沙箱调用证明无重复执行；回读两题持久结果。日志 `/private/tmp/oj-lifecycle-report.log`，临时库 `/tmp/oj-postgres.OkZ3XM` 已停止。
+- macOS arm64、Go 1.26.10、PostgreSQL 14.19：`GOPROXY=off make go-check db-test GOMODCACHE=${OJ_PRIMARY_CHECKOUT}/.local/go-mod GOCACHE=/private/tmp/oj-lifecycle-go-build` 通过格式、vet、race、四命令构建、临时数据库/双控制端、双 API 的 24 并发与重启回执。最初基线测试受沙箱 bind 限制，经工具审批重跑通过，未放宽断言。临时数据库 `/tmp/oj-postgres.8OyFu8` 已停止。
+- `GOPROXY=off make report-test GOMODCACHE=${OJ_PRIMARY_CHECKOUT}/.local/go-mod GOCACHE=/private/tmp/oj-lifecycle-go-build OJ_SANDBOX_EXPERIMENT=1` 通过新增生命周期联调及原 8 项回报用例。一个 Worker 连续完成真实 AC/WA，丢失确认跨控制端原样重报，5 次沙箱调用证明无重复执行；回读两题持久结果。日志 `/private/tmp/oj-lifecycle-report.log`，临时库 `/tmp/oj-postgres.OkZ3XM` 已停止。
 - 联调仍使用同进程 TLS handler 和测试宿主驱动；取消排空/停止错误通过单元注入，不冒充真实进程信号、数据库撤销到沙箱中止或双 Worker 验收。未修改/重跑本地前端、独立沙箱隔离/中止专项，未改 hooks/CI；M0 未通过，无独立人工审查或部署。
 - 同步 README、首期计划、M0、协议架构和 CI 说明，下一项为可信宿主适配器与命令入口。恢复沿用已有离线专用 VM/镜像，未下载/重建，实验完成后停止容器/VM，原 Docker context 保持 desktop-linux。
 
@@ -181,7 +189,7 @@
 唯一目标：P2、AC22/28/29 的受控领取与材料准备。gh 核验 PR #8 已合并为 `64b99922de3ab0e01509d6b3a42cd248687424c9`，从该主线创建独立 `codex/claim-material-client` 工作区；原克隆 5 处未提交文档改动保留。本条为提交前验证快照，提交号、PR 和当前 head 的 CI 以实际交付结果为准。非目标为常驻 Worker、自动恢复/轮询、磁盘缓存、通用题包、双 Worker、会话与部署。
 
 - 新增 `workerclient.Acquirer`，一次领取、回执未知不重试；限定固定 v2 的下载、完整性与预算校验，失败不返回部分材料。独立连接预算，调用方继续使用原租约和 `LeasedRunner` 前置续租；无依赖、SQL、迁移、HTTP 契约或配置变更。
-- macOS arm64 / Go 1.26.10 / PostgreSQL 14.19，`GOPROXY=off make go-check report-test GOMODCACHE=/Users/huangqijun/Documents/OnlineJudge/.local/go-mod GOCACHE=/private/tmp/oj-claim-go-build OJ_SANDBOX_EXPERIMENT=1` 全部通过：格式、vet、race、四命令构建、真实数据库/双控制端、双 API 24 并发及重启回执、8 项沙箱联合用例。日志 `/private/tmp/oj-claim-report.log`；临时数据库 `/tmp/oj-postgres.RUWQV5` 已自动停止。
+- macOS arm64 / Go 1.26.10 / PostgreSQL 14.19，`GOPROXY=off make go-check report-test GOMODCACHE=${OJ_PRIMARY_CHECKOUT}/.local/go-mod GOCACHE=/private/tmp/oj-claim-go-build OJ_SANDBOX_EXPERIMENT=1` 全部通过：格式、vet、race、四命令构建、真实数据库/双控制端、双 API 24 并发及重启回执、8 项沙箱联合用例。日志 `/private/tmp/oj-claim-report.log`；临时数据库 `/tmp/oj-postgres.RUWQV5` 已自动停止。
 - 19 项领取与 24 项材料边界子测试、真实双节点竞争领取和跨控制端材料下载通过；覆盖回执不明、错误身份/归属/哈希/长度/媒体类型、取消、缺失/损坏、撤销、过期与恢复后旧尝试拒绝。最初本地 TLS 基线因沙箱禁止监听失败，经审批后通过；首次真实集成暴露本次 ID 校验错误，修正 UUID 假设为持久化的 32 位十六进制串后重跑完整检查通过，未降低断言。
 - `report-test` 已从直接领取/材料夹具切换到客户端，再接已有受限执行、续租及回报；真实 AC/WA/CE/RE/TLE/MLE/OLE 持久化，丢失确认跨控制端原样重报、冲突、跨节点、撤销、到期拒绝仍通过。使用既有专用离线 Linux VM/固定容器，无镜像下载或重建；实验容器/VM 收尾停止，Docker context 保持 desktop-linux。
 - 两个 TLS handler 在同一测试进程；提交与沙箱生命周期仍由测试驱动管理。独立双控制端由数据库回归另外验证，不能宣称常驻双 Worker 或完整 M0 通过。未改/未重跑本地前端、未修改 hooks/CI、未重跑独立沙箱隔离/中止专项；没有独立人工审查或部署。
@@ -205,8 +213,8 @@
 唯一目标：P2、AC28/29 的执行生命周期子项。GitHub CLI 回读 PR #6 已合并，主线 `b50f6a0`；从该主线建立独立 `codex/lease-execution` 工作区，原克隆 5 处文档改动保留。本记录为提交前验证快照，提交/PR/CI 以实际交付结果为准。非目标为领取/材料下载、真实结果回报、自动恢复、双 Worker、会话与部署。
 
 - 新增 mTLS 续租客户端与租约守护，执行前续租、周期续租、保守单调时限、失败取消、独立停止确认、旧槽永久停用；无依赖、SQL、迁移、HTTP 契约或配置变化。职责和限制见[M0 记录](m0-experiment.md#租约守护与中止确认)。
-- `GOPROXY=off make go-check db-test GOMODCACHE=/Users/huangqijun/Documents/OnlineJudge/.local/go-mod GOCACHE=/private/tmp/oj-lease-go-build` 通过：格式、vet、Go race、四个命令构建、临时 PostgreSQL 14.19、双 mTLS 控制端与双 API 的 24 并发/重启回执回归。macOS arm64、Go 1.26.10；临时库 `/tmp/oj-postgres.k68fim` 已自动停止。最初默认沙箱检查因本机端口权限失败，经工具审批后正常验证，未降低测试。
-- `OJ_SANDBOX_EXPERIMENT=1 GOPROXY=off GOMODCACHE=/Users/huangqijun/Documents/OnlineJudge/.local/go-mod GOCACHE=/private/tmp/oj-lease-go-build go test -race -count=1 -tags=sandbox ./tests/sandbox -v` 通过新增真实中止确认及原 10 项编排、12 项隔离测试，日志 `/private/tmp/oj-lease-sandbox.log`。首次失败来自无宿主挂载时 Colima SSH 默认 cwd 不存在；固定测试探针目录 `/tmp` 后所有断言通过。实验容器/VM 已停止，无镜像下载或删除。
+- `GOPROXY=off make go-check db-test GOMODCACHE=${OJ_PRIMARY_CHECKOUT}/.local/go-mod GOCACHE=/private/tmp/oj-lease-go-build` 通过：格式、vet、Go race、四个命令构建、临时 PostgreSQL 14.19、双 mTLS 控制端与双 API 的 24 并发/重启回执回归。macOS arm64、Go 1.26.10；临时库 `/tmp/oj-postgres.k68fim` 已自动停止。最初默认沙箱检查因本机端口权限失败，经工具审批后正常验证，未降低测试。
+- `OJ_SANDBOX_EXPERIMENT=1 GOPROXY=off GOMODCACHE=${OJ_PRIMARY_CHECKOUT}/.local/go-mod GOCACHE=/private/tmp/oj-lease-go-build go test -race -count=1 -tags=sandbox ./tests/sandbox -v` 通过新增真实中止确认及原 10 项编排、12 项隔离测试，日志 `/private/tmp/oj-lease-sandbox.log`。首次失败来自无宿主挂载时 Colima SSH 默认 cwd 不存在；固定测试探针目录 `/tmp` 后所有断言通过。实验容器/VM 已停止，无镜像下载或删除。
 - README、M0、协议架构、首期计划和交付记录同步。未改前端、hooks 或 CI，未重跑本地前端；无独立人工审查。完整数据库撤销→真实沙箱联合实验、生产停止适配器和完整 Worker/M0 仍未完成。
 
 收尾：仓库策略检查 125 文件、diff 检查通过；知识事务 `oj-lease-execution-20261027` 已更新 M0 实测、推进、热点、索引与日志 5 页，严格 lint 32 页、373 链接、0 问题，目标哈希回读一致。保留可恢复草稿 `/private/tmp/oj-lease-vault.json`；未新增 accepted 断言、未改 raw，无已绑定外部同步目标。远端交付状态以本任务 PR 的当前 head 检查为准。
@@ -762,7 +770,7 @@ M0 仍未通过：欠缺完整双 API/双 Worker 真实链路、mTLS/逐次材�
 
 ### 知识库与最终核验
 
-- 指定 vault：`/Users/huangqijun/Documents/OJ_Knowledge`；事务 `oj-engineering-baseline-20261025` 已完成。
+- 指定 vault：`../OJ_Knowledge`；事务 `oj-engineering-baseline-20261025` 已完成。
 - 新增 `wiki/decisions/go-gin-self-development.md`、`wiki/decisions/engineering-workflow.md`、`wiki/sources/engineering-baseline-20261025.md`；同步项目实体、推进、热点、索引、日志、来源/断言账本及托管地址清单。
 - 新增三份只增不改的 raw 来源，共 71,866 字节：必要用户原文、15 文件工程快照、实际验证摘录。AI 快照与验证摘要均标为 synthetic；用户意图与工程效果分开。
 - 事务预检曾拒绝不符合规范的来源 ID 和合成内容分类；按核心校验契约修正后预检、应用均成功。未用直接写文件绕过校验。
