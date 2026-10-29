@@ -40,6 +40,8 @@ CI 依据[影响范围矩阵](ci-cd.md#按变更影响选择检查)执行。合�
 
 ## 本地机械约束
 
+开发前运行 `python3 scripts/doctor.py` 可只读检查工作区、缓存主线、hooks 和 Docker 环境；不自动 fetch 或修复，不替代新分支起点核验或应用测试。详细输出与参数见 [README](../README.md#构建与测试docker-desktop)。
+
 执行 `sh scripts/install-hooks.sh`，仅影响当前克隆，不改全局配置。安装器发现既有自定义配置或活动 hooks 时退出，先合并方案，不能覆盖。
 
 | 入口 | 实际检查 | 不覆盖的内容 |
