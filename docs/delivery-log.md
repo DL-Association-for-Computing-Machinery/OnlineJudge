@@ -1,5 +1,20 @@
 # 工程交付记录
 
+## 2026-10-29：Docker Desktop 工具链与 Worker 测试迁移（未提交）
+
+唯一目标：本机使用 Docker Desktop，构建/数据库工具容器化，移除 Makefile。基于本地 origin/main `436204c`，独立工作区 `/Users/huangqijun/.codex/worktrees/docker-tooling/OnlineJudge`，分支 `codex/docker-tooling`；原克隆五处既有改动未变。未提交、未推送、未建 PR、未运行远端 CI、未部署。
+
+- Dockerfile/Compose 提供固定 Go、pnpm、sqlc v1.31.1、PostgreSQL 14 工具环境。CI 调用同一容器入口；保留稳定四门禁、影响范围和真实断言。Go 构建缓存留在 Docker volume；应用镜像不挂 Docker socket。
+- `python3 scripts/test-worker.py all` 由 Docker 交叉编译宿主驱动与命令；宿主仅需 Python/Docker。选择固定 `desktop-linux`，两个带归属标签的禁网/无挂载/只读特权槽，拒绝接管外部来源或运行中的同名槽；跨工作区互斥。选手代码仅在 Linux 沙箱执行。
+- Docker Desktop Linux arm64 / cgroup v2 / LinuxKit `7.0.14-linuxkit`，GCC 15.3.0 / go-judge v1.13.3。新执行配置为 `m0-gnu17-desktop-arm64-v1`，材料 v3；v1/v2 原始清单保留，v2 SHA-256 回归不变，执行端只接受 v3。配置/回退限制见 README 与 M0 文档。
+- 停止确认从 Colima SSH 改为 Docker VM PID namespace 的短生命周期观察容器；无特权、无网络、无挂载、只读、cap-drop ALL。保持不可变容器 ID/启动时间、停止状态与已观察 PID 消失三层核验；任何不确定仍封锁旧执行器。
+- 最终 `docker --context desktop-linux compose run --build --rm toolchain backend` 通过格式/vet/race/全部命令构建；`toolchain sqlc` 生成无差异；`toolchain db` 通过真实 PostgreSQL、迁移/租约/双控制端、双 API 24 并发/重启回执和 v3/v1 兼容。日志 `/tmp/oj-backend-verified.log`、`/tmp/oj-sqlc-verified.log`、`/tmp/oj-db-verified.log`。
+- 前端容器 lint/typecheck/6 项测试/build 通过；最终 `python3 scripts/test-compose.py` 通过静态资源/SPA/API、权限、重建和停止恢复。日志 `/tmp/oj-frontend.log`、`/tmp/oj-compose-final.log`。
+- 最终 Worker all 四套通过：受限编排与隔离、回报/单槽命令/信号退出、双 Worker 自然租约接管与旧回报拒绝、四类故障。故障专项 95.37 秒；日志 `/tmp/oj-worker-verified.log`。跨编译宿主专项不含 race，容器内后端/数据库保留 race。两个槽最后停止，临时数据库容器清理；没有启动/删除 Colima 或操作其他项目容器。
+- 38 项治理回归、repository 检查与 diff 空白检查通过；新增拒绝接管已有资源回归。相对基线完整差异及新增文件已自审，无独立人工审查。历史 Make/Colima 结果仍作为历史证据保留，现行入口已更新。
+
+自动审批曾拒绝向测试容器挂载 Docker socket，随后改用宿主驱动方案，没有绕过限制。Docker Desktop 与其他项目共享 VM，隔离边界不等同于原独立 Colima VM；仅限合成实验，不能据此宣称完整 M0 或生产准入。Docker 内核/镜像升级须重新核验并版本化，未验证其他架构。临时日志可能清理，重跑版本化命令获取新证据。
+
 ## 2026-10-28：撤销与材料故障联合验证
 
 基于已合并 PR #17 的 `c3e3a48bfc0f39f760596458e9fb107311a3ee67`，独立 `codex/worker-fault-validation`。唯一目标为 P2、AC28/29 的四类故障联调；新增 `tests/sandbox/fault_test.go`、`make worker-fault-test` 及临时数据库入口。无应用行为、依赖、SQL、迁移、协议或 workflow 变化。以下为提交前实测快照，PR/CI/合并终态另行回读。

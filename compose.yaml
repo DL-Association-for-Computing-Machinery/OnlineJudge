@@ -55,3 +55,14 @@ services:
       context: .
       target: frontend-source
     command: [sh, -ec, "pnpm lint && pnpm typecheck && pnpm test && pnpm build"]
+
+  toolchain:
+    profiles: [tools]
+    build:
+      context: .
+      target: toolchain
+    volumes:
+      - toolchain-cache:/tmp/go-build
+
+volumes:
+  toolchain-cache:

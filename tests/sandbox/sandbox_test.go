@@ -33,8 +33,8 @@ func api(t *testing.T, method, path string, value any) []byte {
 	if os.Getenv("OJ_SANDBOX_EXPERIMENT") != "1" {
 		t.Fatal("explicit OJ_SANDBOX_EXPERIMENT=1 required")
 	}
-	// Fixed dedicated VM context: never follows the user's active Docker context.
-	args := []string{"--context", "colima-oj-m0", "exec", "-i", container, "curl", "-fsS", "--max-time", "20", "-X", method, "-H", "Content-Type: application/json"}
+	// Fixed Docker Desktop context: never follows the user's active Docker context.
+	args := []string{"--context", "desktop-linux", "exec", "-i", container, "curl", "-fsS", "--max-time", "20", "-X", method, "-H", "Content-Type: application/json"}
 	var data []byte
 	if value != nil {
 		var err error

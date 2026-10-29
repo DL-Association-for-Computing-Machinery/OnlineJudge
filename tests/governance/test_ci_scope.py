@@ -56,7 +56,7 @@ class ScopeTests(unittest.TestCase):
         self.assertFalse(any(scope.classify(["scripts/repo_policy.py",
                                             "tests/governance/test_policy.py",
                                             ".githooks/pre-commit"]).values()))
-        for path in ("Makefile", ".github/workflows/governance.yml", "scripts/ci_scope.py",
+        for path in ("Dockerfile", "compose.yaml", "scripts/toolchain.sh", ".github/workflows/governance.yml", "scripts/ci_scope.py",
                      "tests/governance/test_ci_scope.py", ".github/actions/setup/action.yml",
                      ".github/repository/main-ruleset.json", "Dockerfile", "unknown.txt",
                      "docs/run.sh", "docs/fixture.sql"):

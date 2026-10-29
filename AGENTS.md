@@ -52,7 +52,7 @@
 - 外部输入在信任边界校验；访问控制在服务端执行；数据库查询参数化；外部调用设置合理超时、并发上限，并按幂等性决定是否重试。
 - 对关键 SQL 提供查询计划或等价证据；新增索引说明读写及存储代价。迁移说明兼容性和回滚策略，破坏性迁移单独确认。
 - UI 覆盖加载、空数据、错误与成功状态，保持键盘操作、可见焦点和语义化结构；重要界面变更验证桌面与移动端。
-- 用户于 2026-10-28 确认后续默认使用 Docker 构建并一键启动项目。优先维护 Dockerfile、compose.yaml 和容器检查入口，README 以 `docker compose up -d --build --wait` 为默认启动方式；新增可运行服务时同步镜像、健康检查和 Compose 配置。Makefile 仅保留既有 CI/专项实验兼容，不作为新功能的唯一入口。当前 Compose 范围是前端与基础 API，Worker 专用沙箱和数据库实验仍按 M0 文档执行，不能把页面可访问当作完整判题就绪。重建或停止环境前确认数据持久化，不擅自删除 volume。
+- 用户于 2026-10-29 明确要求后续统一使用 Docker Desktop（本机 `desktop-linux` context），构建工具在 Docker 内运行，移除 Makefile 及 Make 入口。构建、前端/后端和数据库检查维护 Dockerfile、Compose；真实 Worker 实验由 `python3 scripts/test-worker.py all` 驱动，Docker 交叉编译宿主驱动，选手程序只在禁网专用容器执行。不启动 Colima，不将 Docker socket 挂进容器。CI 的 Linux runner 使用 Docker Engine 执行同一工具镜像。不得删除其他项目容器、卷或旧 VM；环境漂移须重新验证并版本化，不能绕过检查。默认启动仍是 `docker --context desktop-linux compose up -d --build --wait`，仅前端/基础 API，不代表完整 M0。
 
 ## 5. 验证与完成标准
 

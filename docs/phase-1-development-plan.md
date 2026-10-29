@@ -188,7 +188,8 @@ AC19 的跨实例幂等和会话验证随 M0/M1 执行，但完整入口分流�
 现有基础检查命令如下，能力边界见 README：
 
 ```sh
-make check
+docker compose run --build --rm toolchain backend
+docker compose run --build --rm frontend-check
 python3 scripts/repo_policy.py repository
 git diff --check
 ```

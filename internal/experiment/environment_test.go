@@ -30,9 +30,13 @@ func TestVersionedEnvironment(t *testing.T) {
 	if err != nil || version == Version {
 		t.Fatal("missing separate version")
 	}
-	currentSum := sha256.Sum256(current)
-	if hex.EncodeToString(currentSum[:]) != "4699ed93798241b796c5c00701f7150e1d8c80fb7e3ba536b9344cf88fa3d68a" {
-		t.Fatalf("v2 immutable manifest changed: introduce a new version (%x)", currentSum)
+	_, v2, err := SelectFixture("m0-sum-v2")
+	v2Sum := sha256.Sum256(v2)
+	if err != nil || hex.EncodeToString(v2Sum[:]) != "4699ed93798241b796c5c00701f7150e1d8c80fb7e3ba536b9344cf88fa3d68a" {
+		t.Fatalf("v2 immutable manifest changed (%x)", v2Sum)
+	}
+	if version != "m0-sum-v3" || bytes.Equal(v2, current) {
+		t.Fatal("Desktop migration requires distinct v3 material")
 	}
 	if err := json.Unmarshal(current, &pinned); err != nil {
 		t.Fatal(err)
@@ -50,7 +54,7 @@ func TestVersionedEnvironment(t *testing.T) {
 	if !bytes.Equal(current, again) {
 		t.Fatal("caller mutated shared profile")
 	}
-	for _, value := range []string{"latest", "m0-sum-v3", " m0-sum-v2", "M0-SUM-V2"} {
+	for _, value := range []string{"latest", "m0-sum-v4", " m0-sum-v3", "M0-SUM-V2"} {
 		if _, _, err := SelectFixture(value); err == nil {
 			t.Fatalf("unknown selection %q accepted", value)
 		}

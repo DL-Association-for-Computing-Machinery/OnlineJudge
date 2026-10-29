@@ -25,7 +25,7 @@ func verifyEnvironment(t *testing.T) {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		out, err := exec.CommandContext(ctx, "docker", append([]string{"--context", "colima-oj-m0"}, args...)...).CombinedOutput()
+		out, err := exec.CommandContext(ctx, "docker", append([]string{"--context", "desktop-linux"}, args...)...).CombinedOutput()
 		if err != nil {
 			t.Fatalf("environment inspection failed: %v: %s", err, out)
 		}

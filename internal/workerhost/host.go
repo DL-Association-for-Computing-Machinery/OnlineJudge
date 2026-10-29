@@ -1,5 +1,5 @@
-// Package workerhost adapts the dedicated offline Colima M0 sandbox. The caller
-// must exclusively own this container and its trusted Docker/Colima control plane.
+// Package workerhost adapts the dedicated offline Docker Desktop M0 sandbox. The caller
+// must exclusively own this container and its trusted Docker control plane.
 // It is not a generic Docker host controller or a production node provisioner.
 package workerhost
 
@@ -64,7 +64,7 @@ func openSlot(ctx context.Context, run command, slot M0Slot) (*Host, error) {
 var containerID = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 func (h *Host) docker(ctx context.Context, input io.Reader, args ...string) ([]byte, error) {
-	return h.run(ctx, input, "docker", append([]string{"--context", "colima-oj-m0"}, args...)...)
+	return h.run(ctx, input, "docker", append([]string{"--context", "desktop-linux"}, args...)...)
 }
 
 func (h *Host) begin(ctx context.Context) (context.Context, func(), error) {

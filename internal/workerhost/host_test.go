@@ -38,13 +38,13 @@ func (f *fakeHost) run(ctx context.Context, input io.Reader, name string, args .
 		return nil, ctx.Err()
 	}
 	f.calls = append(f.calls, append([]string{name}, args...))
-	if name == "colima" {
+	if name == "docker" && len(args) > 2 && args[2] == "run" {
 		if f.fail == "pid" {
 			return nil, errors.New("still present")
 		}
 		return nil, nil
 	}
-	if len(args) < 3 || !reflect.DeepEqual(args[:2], []string{"--context", "colima-oj-m0"}) {
+	if len(args) < 3 || !reflect.DeepEqual(args[:2], []string{"--context", "desktop-linux"}) {
 		return nil, errors.New("wrong context")
 	}
 	switch args[2] {

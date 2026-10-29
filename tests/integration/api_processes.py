@@ -41,7 +41,7 @@ def main():
             assert (material_root / hashlib.sha256(data).hexdigest()).read_bytes() == data
         assert len(list(material_root.iterdir())) == 4
 
-        pinned_env = dict(fixture_env, OJ_EXPERIMENT_MATERIAL_VERSION="m0-sum-v2")
+        pinned_env = dict(fixture_env, OJ_EXPERIMENT_MATERIAL_VERSION="m0-sum-v3")
         for _ in range(2):
             subprocess.run([str(root / ".local/bin/migrate"), "fixture"], env=pinned_env, check=True)
         invalid_env = dict(fixture_env, OJ_EXPERIMENT_MATERIAL_VERSION="unknown")
@@ -107,17 +107,17 @@ def main():
             assert status == 200 and "source" not in receipt
             restarted.terminate()
             assert restarted.wait(timeout=10) == 0
-            start(1, "m0-sum-v2")
-            pinned_data = json.dumps({"material_version": "m0-sum-v2", "language": "gnu++17",
+            start(1, "m0-sum-v3")
+            pinned_data = json.dumps({"material_version": "m0-sum-v3", "language": "gnu++17",
                                       "source": "// synthetic pinned process fixture\n"}).encode()
             status, pinned = request(1, "/submissions", pinned_data, "pinned-process-key-01")
-            assert status == 202 and pinned["material_version"] == "m0-sum-v2"
+            assert status == 202 and pinned["material_version"] == "m0-sum-v3"
             status, repeated = request(1, "/submissions", pinned_data, "pinned-process-key-01")
             assert status == 200 and repeated["id"] == pinned["id"]
             status, original = request(1, "/submission-receipt")
             assert status == 200 and original["id"] in ids and original["material_version"] == "m0-sum-v1"
             print("PASS: two API processes, 24 concurrent requests, one submission, restart and receipt recovery")
-            print("PASS: explicit v2 registration/acceptance, repeat and historical v1 receipt")
+            print("PASS: explicit v3 registration/acceptance, repeat and historical v1 receipt")
         finally:
             for process in processes:
                 if process.poll() is None:

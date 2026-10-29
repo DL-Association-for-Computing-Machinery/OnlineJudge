@@ -12,7 +12,7 @@
 - `cmd/worker-api` 自动扫描过期、撤销或凭据轮换后的任务租约，保留三次尝试上限及旧回报隔离；见[控制端任务自动恢复](docs/m0-experiment.md#控制端任务自动恢复)。这只恢复数据库任务，不重启 Worker 或解除沙箱隔离。
 - 模块化单体＋独立判题 Worker；不创建空业务层，不把所有模块拆成服务。
 - 既有 Redis 会话路线保留待验证，新增 PostgreSQL 会话对比；未做未经确认的替换。
-- 已引入 PostgreSQL 实验、sqlc/pgx/Goose；go-judge 仅进入专用 Linux VM 的隔离实验。Redis 会话、River 与监控备份服务尚未接入。
+- 已引入 PostgreSQL 实验、sqlc/pgx/Goose；go-judge 用于 Docker Desktop 专用容器实验。Redis 会话、River 与监控备份服务尚未接入。
 - 多文件/ZIP 提交、自测与辅助能力不作为训练试用前置；完整语言、比赛及后续需求保留。
 - 0A 和 M0 分项已按逻辑分组提交；main 已建立并保护，PR #1—#11 已合并；本次执行端入口通过独立分支交付，验证证据见交付日志。未部署，M0 整体仍未通过。
 
@@ -20,7 +20,7 @@
 
 Go 工具链锁定为 `go.mod` 中的 1.26.10（本机可由 Go 自动下载到缓存）；前端使用 pnpm 11.25.0，建议 Node 24.19.0，见 [Node 版本](web/.node-version)。兼容范围见 [package.json](web/package.json)，锁文件为 `go.sum` 和 `web/pnpm-lock.yaml`。
 
-本轮本地验证：macOS arm64，Go 1.26.10、PostgreSQL 14.19；pnpm 自带 Node 24.19.0。另建 Colima `oj-m0` Linux arm64 VM（2 CPU/2 GiB），实测 go-judge 1.13.3、GCC 15.3.0；该实验不证明生产部署或完整判题链路通过。首次依赖安装需要网络；Makefile 将 Go 工具链/模块/构建缓存和二进制放在忽略的 `.local/`。
+构建工具链由 Dockerfile 固定，应用依赖以 go.sum 和 pnpm-lock.yaml 为准。Docker Desktop 迁移的验证结果见交付日志；历史 Colima 证据不能替代本次验证。
 
 ## Docker 构建与一键启动（默认）
 
@@ -29,10 +29,10 @@ Go 工具链锁定为 `go.mod` 中的 1.26.10（本机可由 Go 自动下载到�
 在仓库根目录执行：
 
 ```sh
-docker compose up -d --build --wait
+docker --context desktop-linux compose up -d --build --wait
 ```
 
-打开 [Docker 本机预览](http://127.0.0.1:8080/)，点击“检查 API 连接”。Nginx 提供 Vite 构建后的静态文件，将 `/api/` 转发到 Compose 内部的 `api:8080`；后端不发布宿主机端口。若 8080 被占用，执行 `OJ_WEB_PORT=18080 docker compose up -d --build --wait`，再访问 18080。后续源码修改需要重建，此入口不是热更新开发服务器。
+打开 [Docker 本机预览](http://127.0.0.1:8080/)，点击“检查 API 连接”。Nginx 提供 Vite 构建后的静态文件，将 `/api/` 转发到 Compose 内部的 `api:8080`；后端不发布宿主机端口。若 8080 被占用，执行 `OJ_WEB_PORT=18080 docker --context desktop-linux compose up -d --build --wait`，再访问 18080。后续源码修改需要重建，此入口不是热更新开发服务器。
 
 ```sh
 docker compose build                 # 仅构建默认应用镜像
@@ -45,85 +45,44 @@ docker compose down                  # 停止并移除本 Compose 项目的容�
 
 Dockerfile 的 Go、Node、pnpm 与现有配置保持一致，基础镜像固定多架构索引摘要；依赖仍使用 `go.sum` 和 `pnpm-lock.yaml`。`.dockerignore` 限定构建上下文，排除本地 Git、缓存、环境文件和常见凭据文件。更换工具链时需同步 Dockerfile 和对应锁定入口，并重新验证容器检查及启动流程。
 
-## 宿主机开发与 M0 专项入口（兼容）
+## 构建与测试（Docker Desktop）
 
-以下保留给已有 CI、热更新开发和专用沙箱实验；不是默认一键启动的前置步骤。
-
-从仓库根目录安装前端锁定依赖：
+本机启动 Docker Desktop，使用 `desktop-linux` context。无需安装 Go、Node、pnpm、PostgreSQL 或 Make；宿主 Python 3 只编排测试。Linux CI 使用 Docker Engine。Makefile 已移除。
 
 ```sh
-pnpm --dir web install --frozen-lockfile --ignore-scripts
-```
-
-两个终端分别运行：
-
-```sh
-make api
-```
-
-```sh
-pnpm --dir web dev
-```
-
-打开 [本机预览](http://127.0.0.1:5173/)，点击“检查 API 连接”。Vite 将 `/api` 代理到 `127.0.0.1:8080`。默认仅监听本机；用 Ctrl+C 停止。首次 Go 命令可能下载固定工具链和模块；若本机 Go 代理不可达，可对本次命令设置 `GOPROXY=https://proxy.golang.org`，无需修改全局配置。
-
-`GET /api/v1/healthz` 返回 `{"status":"ok","service":"api","scope":"process"}`，只说明 API 可响应，不表示数据库、Worker 或沙箱就绪。契约见 [OpenAPI](api/openapi.yaml)，未知接口返回 404，不支持的方法返回 405。
-
-`make worker` 现在要求显式 M0 配置，缺失时非零退出。信号验收与运行建议直接使用 `make go-build` 生成的 `.local/bin/worker`，避免把信号发给 `go run` 包装进程。必须设置 `OJ_SANDBOX_EXPERIMENT=1`、`OJ_WORKER_CONTROLLER_URL`（字面 loopback HTTPS）、`OJ_WORKER_CA_FILE`、`OJ_WORKER_CERT_FILE` 和 `OJ_WORKER_KEY_FILE`；执行端不需要数据库凭据。专用容器与节点须由管理员预先准备，见[命令入口](docs/m0-experiment.md#执行端命令入口)。
-
-API 可通过 `OJ_API_ADDR` 改监听地址；若改端口，同时调整 Vite 代理。默认没有业务接口；显式设置 `OJ_EXPERIMENT_TOKEN_FILE` 与 `OJ_DATABASE_URL` 可启用仅 loopback 的 M0 提交接口，见[实验契约](api/experiment.openapi.yaml)与[M0 配置边界](docs/m0-experiment.md)。凭据只放私有本地文件，不提交；未接入 .env 自动加载。
-
-`make worker-api` 启动独立控制端 HTTPS 进程，也可运行 `make go-build` 生成的 `.local/bin/worker-api`。必须提供 `OJ_WORKER_API_ADDR`、`OJ_WORKER_CA_FILE`、`OJ_WORKER_CERT_FILE`、`OJ_WORKER_KEY_FILE` 和 `OJ_DATABASE_URL`，初始化及证书要求见 [M0 Worker 入口](docs/m0-experiment.md#worker-mtls-租约入口)。这是持有数据库连接的控制端，其服务端证书与执行端节点证书分别配置。缺少配置会拒绝启动，无默认开放端口。
-
-控制端成功绑定监听地址后立即启动任务恢复扫描；每轮最多 64 条、5 秒预算，完成后等待 1 秒再扫描。扫描覆盖数据库中符合既有恢复条件的全部材料版本，不随该控制端的领取版本过滤。暂时失败会记录不含数据库错误正文的告警并继续限速重试；停止控制端会取消并等待扫描排空。无新增开关；回退旧二进制将停止自动扫描，数据库历史保留。
-
-材料下载另需 `OJ_MATERIAL_ROOT` 指向专用持久化目录；先显式初始化合成文件，再让控制端只读使用同一目录。命令、预算和回退见[材料入口](docs/m0-experiment.md#有效租约限定的材料入口)。未配置时两个材料接口返回 503，原租约接口保持可用。
-
-可选 `OJ_EXPERIMENT_MATERIAL_VERSION=m0-sum-v2` 为 GNU++17 实验固定执行环境；初始化夹具、提交 API 和 Worker 控制端须配置相同版本。未设置仍使用原 `m0-sum-v1`，未知值拒绝启动实验服务/注册夹具。执行端只接受 v2，不会执行 v1 或未知清单。新版本绑定已核验的本机 Linux arm64 镜像 ID、编译参数和预算，不重标旧提交；切换、并存和回退限制见 [固定执行环境](docs/m0-experiment.md#固定执行环境与新材料版本)。
-
-## 检查与构建
-
-优先在容器中执行日常应用检查；这些任务每次运行测试，构建缓存不会跳过测试：
-
-```sh
-docker compose run --rm --build backend-check
-docker compose run --rm --build frontend-check
-```
-
-后端覆盖格式、vet、race 单元测试和全部命令的编译；前端覆盖 lint、类型检查、测试和生产构建。检查容器按镜像内源码运行，`--build` 确保包含最新改动；不会写入宿主机依赖或构建产物。真实数据库与专用沙箱实验仍使用下述独立入口，不能用这些快速检查代替。
-
-容器启动回归：`python3 scripts/test-compose.py`（宿主机需要 Python 3 标准库）。它创建唯一 Compose 项目、随机本机端口，验证页面/资源、SPA 回退、API 契约、容器权限和重建恢复，最后仅清理自己的容器/网络。仓库治理检查仍按下列 Python 命令执行。
-
-既有宿主机/CI 兼容入口：
-
-```sh
-make check
-```
-
-该命令运行 Go 格式检查、vet、race 测试、API/Worker 构建，以及前端 lint、类型检查、测试、生产构建和仓库治理回归。也可分别运行：
-
-```sh
-make go-check go-build
-make web-check
+docker --context desktop-linux compose run --build --rm toolchain backend
+docker --context desktop-linux compose run --build --rm frontend-check
+docker --context desktop-linux compose run --build --rm toolchain sqlc
+docker --context desktop-linux compose run --rm toolchain db
 python3 scripts/repo_policy.py repository
 python3 -B -m unittest discover -s tests/governance -v
+python3 scripts/test-compose.py
 ```
 
-真实临时数据库、两个提交 API 子进程、两个 mTLS 控制端子进程及两个节点客户端测试：`make db-test`（需本机 `initdb/pg_ctl/createdb`、Python 3，自动建立独立私有目录并停止临时数据库）。专用 `oj-m0` VM 与沙箱启动后运行 `OJ_SANDBOX_EXPERIMENT=1 make sandbox-test`；不可在共享 Docker 主机或宿主直接运行选手代码，详细前置与清理见[M0 记录](docs/m0-experiment.md)。数据库和沙箱测试不在快速 `make check` 中静默跳过或冒充通过。
+后端包含格式、vet、race、全部命令构建；前端包含 lint、类型、测试、构建。SQL 生成检查在容器内比较生成前后内容；数据库检查使用容器内临时 PostgreSQL 14、迁移、并发租约与两个真实 API/mTLS 控制端。工具镜像不挂载 Docker socket，不访问用户数据库。测试每次运行，不以构建缓存替代测试。
 
-Docker 构建产物位于本地应用镜像内；上述宿主机命令的产物位于忽略的 `.local/bin/` 和 `web/dist/`。独立迁移程序为 `.local/bin/migrate`；实验数据库迁移/回退边界见 M0 记录。`pnpm --dir web preview` 仅预览静态构建；Compose Nginx 当前也仅作为本机 HTTP 预览入口，生产 HTTPS 与部署尚未配置，不用 Vite dev server 承担正式比赛。
+真实 Worker 专项（当前固定 macOS arm64、Docker Desktop LinuxKit 7.0.14）：
 
-GitHub Actions 的 `governance`、`backend`、`frontend` 和真实 PostgreSQL `integration` 首轮已全部通过，对应提交及运行链接见[交付日志](docs/delivery-log.md)；后续提交以对应 head 的检查为准。专用 Linux 沙箱不进入普通 PR 快速 CI。原 `bootstrap-ci` 命令保留用于检查空骨架，当前有应用时预期失败，已从 workflow 替换；未放宽其行为。
+```sh
+python3 scripts/test-worker.py all
+# 也可选择 sandbox / report / dual-worker / worker-fault
+```
 
-CI 按完整变更范围执行：纯文档/根规则只跑治理；前端变更跑前端；Go/数据库变更跑后端与 PostgreSQL 集成；流水线、共享构建配置或未知路径跑全量。四个必需检查始终给出明确结果；不受影响的应用测试会标注未执行，分类/测试失败不能变成成功跳过。手动触发可运行全量检查，路径矩阵和限制见 [CI 分层](docs/ci-cd.md#按变更影响选择检查)。
+脚本用 Docker 编译宿主测试驱动与 `.local/bin/` 命令，构建固定 go-judge/GCC 镜像，再通过宿主 Docker CLI 操作两个禁网、无挂载、只读根文件系统的专用特权容器。独立无特权观察容器共享 Docker VM 的 PID namespace，核验停止后的进程确已消失。不会启动 Colima；Docker Desktop 的 VM 与其他项目共享，这与原专用 VM 隔离边界不同。只执行仓库合成测试，不作为生产不可信提交的部署方案。
 
-已有 hooks 安装入口为 `sh scripts/install-hooks.sh`，仅改变当前克隆，遇到已有配置拒绝覆盖；本轮不重新安装或修改 hooks。持续授权的开发流程为“对应任务分支 → 实现与验证 → 原子提交 → 推送 → PR → 当前 head 的 CI 与 review → 条件满足后 squash 合并并回读”，GitHub 操作统一使用 `gh`。2026-10-28 新增后续 PR 的条件合并授权，无需逐次确认；不绕过保护，不启用平台自动合并，不授权部署。一个 PR 对应一个明确功能或预先界定、可独立验收的阶段；具体边界见[根规则第 7 节](AGENTS.md#7-git-与审查)与[开发工作流](docs/development-workflow.md)。
+首次下载需联网；重复运行复用镜像和停止的槽，拒绝接管其他来源或正在运行的同名容器。测试最后停止自己的槽，删除本次唯一命名的临时 PostgreSQL 容器（数据在 tmpfs），不删除其他容器、卷或旧 Colima 资源。异常隔离标记不自动清除。跨编译的宿主测试不含 race；Linux 容器内后端/数据库测试保留 race。
 
-真实沙箱结果与临时数据库联合验证：在上述专用 VM/容器已启动时，执行 `OJ_SANDBOX_EXPERIMENT=1 make report-test`。该命令先运行数据库与双 API 回归，再在独立空库运行单槽 Worker 连续两题与丢失回执重报、原 8 项结果回报用例，以及真实 Worker 命令的 AC/WA、重复启动拒绝、SIGINT 空闲停止和 SIGTERM 在途停止。需要独占专用沙箱，入口隔离标记必须无未决状态；测试不自动清除旧隔离标记。普通 CI 不运行此特权实验，`sandbox-test` 不替代它。
+Docker 更新导致内核或镜像变化时会拒绝执行；须验证新环境并发布新材料版本，不能放宽断言。当前执行材料为 `m0-sum-v3`；v1 默认与 v2 原始清单继续保留，执行器拒绝旧版本。初始化夹具、提交 API、控制端应一致设置 `OJ_EXPERIMENT_MATERIAL_VERSION=m0-sum-v3`。
 
-双 Worker 接管验证：管理员按 [M0 前置条件](docs/m0-experiment.md#双-worker-真实执行与接管) 准备并启动两个固定槽后，执行 `OJ_SANDBOX_EXPERIMENT=1 make dual-worker-test`。测试使用独立空库、两个真实控制端与两个真实 Worker 进程，等待自然租约到期；结束后两个容器均停止。`OJ_WORKER_M0_SLOT` 只接受空值/`primary`/`secondary`，默认槽兼容既有锁路径；不自动创建或恢复容器。
+独立构建宿主实验命令：
 
-撤销与材料故障验证：独占并启动既有 primary 容器后运行 `OJ_SANDBOX_EXPERIMENT=1 make worker-fault-test`。先执行数据库/双 API 回归，再在独立空库用两个控制端和先后启动的真实 Worker 注入节点禁用、凭据轮换、最后一个答案文件缺失/损坏。核验失败退出、停止确认、无结果及不领取下一题、控制端自动恢复与旧回报拒绝。测试驱动只修复临时材料、显式重启并重新核验实验容器；结束时 primary 停止，不操作 secondary。不是生产自动恢复或即时撤销 SLA。
+```sh
+docker --context desktop-linux build --target host-artifacts --output type=local,dest=.local/bin .
+```
+
+`.local/bin/worker` 需要 `OJ_SANDBOX_EXPERIMENT=1`、`OJ_WORKER_CONTROLLER_URL`、`OJ_WORKER_CA_FILE`、`OJ_WORKER_CERT_FILE`、`OJ_WORKER_KEY_FILE`；控制端 `.local/bin/worker-api` 需要 `OJ_WORKER_API_ADDR`、证书文件和 `OJ_DATABASE_URL`，材料目录为 `OJ_MATERIAL_ROOT`。缺失配置拒绝启动，测试脚本自动生成私有临时配置。详见 [M0 契约与历史证据](docs/m0-experiment.md)。
+
+`GET /api/v1/healthz` 仅代表进程存活；普通 Compose 入口不启动完整 Worker 产品。真实编译/运行、回报、双 Worker 接管与撤销/材料故障分别由专项验证，普通 CI 不运行特权实验。
 
 ## 文档入口
 

@@ -28,7 +28,7 @@ import (
 // SIGTERM exercises confirmed termination, not SIGKILL or physical host failure.
 func TestDualWorkerRecovery(t *testing.T) {
 	if os.Getenv("OJ_SANDBOX_DUAL") != "1" {
-		t.Skip("run make dual-worker-test with both dedicated slots")
+		t.Skip("run python3 scripts/test-worker.py dual-worker with both dedicated slots")
 	}
 	if os.Getenv("OJ_SANDBOX_EXPERIMENT") != "1" {
 		t.Fatal("explicit sandbox opt-in required")

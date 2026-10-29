@@ -7,7 +7,7 @@ import "errors"
 // Arbitrary container aliases and lock paths are deliberately unsupported.
 type M0Slot struct{ secondary bool }
 
-// ParseM0Slot accepts only the two fixed slots on the dedicated M0 VM.
+// ParseM0Slot accepts only the two fixed slots on Docker Desktop.
 func ParseM0Slot(value string) (M0Slot, error) {
 	switch value {
 	case "", "primary":

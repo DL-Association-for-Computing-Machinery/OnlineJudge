@@ -17,6 +17,7 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/testpki"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/workerhost"
 )
 
 // A real command process uses ephemeral node credentials, real TLS controllers,
@@ -42,7 +43,7 @@ func testWorkerCommand(t *testing.T, store *postgres.Store, ca *testpki.Authorit
 		"OJ_WORKER_CA_FILE="+ca.CAFile, "OJ_WORKER_CERT_FILE="+cert, "OJ_WORKER_KEY_FILE="+key)
 	docker := func(args ...string) string {
 		t.Helper()
-		out, err := exec.CommandContext(ctx, "docker", append([]string{"--context", "colima-oj-m0"}, args...)...).Output()
+		out, err := exec.CommandContext(ctx, "docker", append([]string{"--context", "desktop-linux"}, args...)...).Output()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -53,7 +54,7 @@ func testWorkerCommand(t *testing.T, store *postgres.Store, ca *testpki.Authorit
 		t.Helper()
 		docker("start", id)
 		for ctx.Err() == nil {
-			cmd := exec.CommandContext(ctx, "docker", "--context", "colima-oj-m0", "exec", id, "curl", "-fsS", "--max-time", "1", "http://127.0.0.1:5050/version")
+			cmd := exec.CommandContext(ctx, "docker", "--context", "desktop-linux", "exec", id, "curl", "-fsS", "--max-time", "1", "http://127.0.0.1:5050/version")
 			if cmd.Run() == nil {
 				return
 			}
@@ -174,7 +175,7 @@ func testWorkerCommand(t *testing.T, store *postgres.Store, ca *testpki.Authorit
 		t.Fatal("no live contestant observed")
 	}
 	stop(cmd, done, syscall.SIGTERM)
-	probe := exec.CommandContext(ctx, "colima", "--profile", "oj-m0", "ssh", "--", "test", "!", "-e", "/proc/"+pid)
+	probe := exec.CommandContext(ctx, "docker", workerhost.PIDProbeArgs(pid)...)
 	probe.Dir = "/tmp"
 	if err := probe.Run(); err != nil {
 		t.Fatal("contestant process still present")

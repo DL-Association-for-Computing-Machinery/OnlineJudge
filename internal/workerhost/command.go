@@ -17,7 +17,7 @@ func runCommand(ctx context.Context, input io.Reader, name string, args ...strin
 	ctx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.Dir = "/tmp" // The dedicated VM has no host repository mount.
+	cmd.Dir = "/tmp" // Control commands do not depend on the repository working directory.
 	cmd.Stdin = input
 	var out limitedBuffer
 	cmd.Stdout = &out

@@ -1,5 +1,15 @@
 # M0 实验实施与验证记录
 
+## 当前入口：Docker Desktop（2026-10-29）
+
+Makefile 已移除，当前命令以 [README](../README.md#构建与测试docker-desktop) 为准：`docker compose run --build --rm toolchain db` 和 `python3 scripts/test-worker.py all`。不再启动 Colima。以下 2026-10-25—28 的命令和运行结果保留为历史证据，旧 Make/Colima 命令不再适用。
+
+新材料 `m0-sum-v3` 绑定 Docker Desktop LinuxKit 7.0.14、arm64 和新镜像 ID；v2 原始清单哈希保持不变。旧提交不重标，旧版本可继续查询，但当前执行器只接受 v3。切换需让初始化、提交 API 和控制端选择 v3；回退代码时旧程序不能执行 v3，应停止领取并保留数据库历史。无 SQL 模式迁移。
+
+构建在 Docker 内，宿主测试驱动通过 Docker CLI 管理专用槽；工具容器无 Docker socket。停止确认仍核验容器 ID/生命周期/停止状态，以及已观察 PID 在 Docker VM 中消失。观察容器无特权、无网络、无挂载、只读，失败仍永久封锁旧执行器。共享 Docker Desktop VM 是本次明确接受的环境变化，不宣称与旧独立 VM 或生产节点隔离等价。
+
+## 迁移前的实现记录与历史证据
+
 日期：2026-10-28。状态：**进行中，未通过 M0 整体验收**。已有持久化、租约、材料授权、固定环境、受限编排、租约守护、真实回报、单槽生命周期、可信宿主、Worker 命令入口与控制端自动恢复；本次验证双 Worker 竞争执行及 SIGTERM 后真实接管。PR/远端 CI 状态见[交付日志](delivery-log.md)。没有部署、真实用户数据或独立人工审查；执行端自动重启/解封、更多联合故障场景与会话仍待完成。
 
 ## 已实现与边界
