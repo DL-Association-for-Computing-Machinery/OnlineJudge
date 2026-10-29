@@ -94,6 +94,34 @@ class PolicyTests(unittest.TestCase):
         self.write(".env.example", "DATABASE_URL=placeholder\n")
         self.policy("repository")
 
+    def test_installed_hook_rejects_forced_local_files(self):
+        self.install_fixture()
+        installed = self.command("sh", "scripts/install-hooks.sh")
+        self.assertEqual(installed.returncode, 0, installed.stderr)
+        self.write(".gitignore", (SOURCE / ".gitignore").read_text())
+        self.run_git("add", ".")
+        self.run_git("commit", "-m", "test: seed local file guard")
+        for name in (".claude-obsidian.json", "service.log", "state.sqlite", "state.sqlite3",
+                     "state.sqlite-wal", "state.sqlite-shm", "state.sqlite3-wal",
+                     "state.sqlite3-shm", "state.db", "state.db-wal", "state.db-shm",
+                     "data.dump", "data.sql.gz", "data.bak"):
+            with self.subTest(name=name):
+                path = self.write(name, "private-placeholder-do-not-print\n")
+                self.run_git("check-ignore", name)
+                self.run_git("add", "-f", name)
+                blocked = self.command("git", "commit", "-m", "test: reject local artifact")
+                self.assertNotEqual(blocked.returncode, 0)
+                self.assertIn("prohibited", blocked.stderr)
+                self.assertNotIn("private-placeholder-do-not-print", blocked.stderr)
+                self.run_git("rm", "--cached", name)
+                self.assertTrue(path.exists())
+                path.unlink()
+        for name in ("db/migrations/001.sql", "db/queries/query.sql", "go.sum",
+                     "web/pnpm-lock.yaml", ".env.example"):
+            self.write(name, "placeholder\n")
+            self.run_git("add", name)
+        self.run_git("commit", "-m", "test: allow source and example files")
+
     def test_local_configuration_and_build_artifacts_rejected(self):
         for name in ("secrets.local.json", "cert.pem", "dist/bundle.txt", "node_modules/a.txt"):
             with self.subTest(name=name):
