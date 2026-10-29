@@ -1,6 +1,6 @@
 # 登录会话与 Redis 设计
 
-2026-10-29：[会话名额与撤销子实验](../../tests/sessionexperiment/README.md)验证了测试专用 SCS/Redis 适配器的普通三会话名额和撤销后迟到保存拒绝。正式应用仍无账号/会话实现；Gin 集成、数据库认证代次、Redis 故障恢复与 PostgreSQL 对比尚未验证，下文产品规则保持不变。
+2026-10-29：[会话子实验](../../tests/sessionexperiment/README.md)验证了测试专用 SCS/Redis 适配器的普通三会话名额、撤销后迟到保存拒绝、独立 API 进程重启，以及 Redis 命令暂停时的有界失败和恢复后约束。登录写入超时不能视为回滚，正式结果核验及遗留名额处置待完成。正式应用仍无账号/会话实现；Gin 集成、数据库认证代次、Redis 重启/旧快照恢复与 PostgreSQL 对比尚未验证，下文产品规则保持不变。
 
 日期：2026-10-25。版本：0.13。状态：Session＋Redis、分场景期限、比赛账号、Argon2id、日常邮箱验证注册/找回及可替换 SMTP 接口已确认；SCS＋go-redis、go-mail 及 PostgreSQL 持久化发信任务＋独立受限发送执行器优先验证，Gin sessions 备选。River 开源核心优先验证，专用任务表备选；短期 AES-GCM 载荷、River 仅存业务 ID、独立密钥文件、不考虑付费方案及第 12 节令牌/重发/重试规则已确认；新增 PostgreSQL 会话对比，不替换 Redis 基线。邮件服务待选，精确依赖、密码参数、部署和实现待验证；已有工程骨架，无账号或会话实现。关联 [总体架构](system-design.md)、[ADR-001](001-go-gin.md)、[需求](../requirements.md)。
 
