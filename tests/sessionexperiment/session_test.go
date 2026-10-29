@@ -25,13 +25,17 @@ type fixture struct {
 }
 
 func setup(t *testing.T) *fixture {
+	return setupReplicas(t, "experiment:"+digest(t.Name())+":", 2)
+}
+
+func setupReplicas(t *testing.T, prefix string, replicas int) *fixture {
 	t.Helper()
 	addr := os.Getenv("OJ_SESSION_REDIS_ADDR")
 	if addr == "" {
 		t.Fatal("requires disposable Redis: run scripts/test-session.py")
 	}
 	f := &fixture{loaded: make(chan struct{}, 1), resume: make(chan struct{})}
-	for i := range 2 {
+	for i := range replicas {
 		client := redis.NewClient(&redis.Options{Addr: addr, MaxRetries: -1,
 			DialTimeout: time.Second, ReadTimeout: time.Second, WriteTimeout: time.Second,
 			PoolSize: 8, PoolTimeout: time.Second, ContextTimeoutEnabled: true})
@@ -39,7 +43,7 @@ func setup(t *testing.T) *fixture {
 		if err := client.Ping(context.Background()).Err(); err != nil {
 			t.Fatal(err)
 		}
-		store := &guardedStore{client: client, prefix: "experiment:" + digest(t.Name()) + ":"}
+		store := &guardedStore{client: client, prefix: prefix}
 		manager := scs.New()
 		manager.Store = store
 		manager.Lifetime = 12 * time.Hour

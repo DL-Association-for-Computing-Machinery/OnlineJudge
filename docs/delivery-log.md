@@ -1,5 +1,13 @@
 # 工程交付记录
 
+## 2026-10-29：独立 API 进程的会话撤销与重启
+
+唯一目标：补齐 P3/M0、AC23 会话实验的进程边界证据。从成功 fetch 后的 `e424392` 创建独立 worktree/分支 `codex/session-process-recovery`。只扩展 `_test.go` 夹具及文档，复用原有 SCS/Redis 适配器，无正式 API、依赖、迁移或产品规则变化；回退本项测试与文档即可。
+
+Docker Desktop Linux arm64、Go 1.26.10、Redis 7.2.4：`python3 scripts/test-session.py --module-cache /private/tmp/oj-session-mod` 的原六项 race 基线通过（1.306 秒），新增后七项行为测试通过（3.405 秒），gofmt、go mod verify、vet 同时通过。两个独立 API 进程的 24 并发只接纳 3 个会话；屏障证明撤销后的迟到保存被拒绝；撤销方 SIGKILL 并重新启动后，旧会话仍无效、两个有效会话仍可读取且恰好补一个名额。子进程入口的父进程跳过不代表该场景未运行，实际由进程用例启动并校验 PID/退出状态。
+
+Redis 全程存活；未证明 Redis 宕机/持久化、旧快照恢复、认证代次、跨主机高可用或完整 AC23/M0，未部署。当前 CI 仍不执行嵌套会话模块，本项专项证据来自上述本地 Docker 实测；未重跑特权 Worker 或无关应用套件。下一项为认证代次与 Redis 恢复验证。此段为提交前快照，远端交付以最终 PR/head/CI 回读为准。
+
 ## 2026-10-29：阻止强制提交本地资料
 
 唯一目标：补齐既有 pre-commit 对本地个人绑定、日志、SQLite/数据库（含 WAL/SHM）及备份文件的路径检查；即使 git add -f 也拒绝，SQL 迁移/查询、锁文件和环境示例仍可提交。测试使用临时 Git 仓库实际安装 hooks，覆盖 14 类拒绝路径、输出不泄漏内容及合法提交。没有新增 hook 类型、联网或自动删除行为；回退恢复策略函数及相应测试/说明即可。
