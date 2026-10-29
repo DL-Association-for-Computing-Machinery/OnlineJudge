@@ -4,17 +4,9 @@
 
 ## 当前交付与下一步
 
-- [精简交付基线 v1.0](docs/delivery-plan.md)：技术栈引入时机、训练试用/完整训练范围、分阶段验收和待补条件。
-- [首期开发计划](docs/phase-1-development-plan.md)：0B → 1A → 1B 的任务依赖、P0—P7 开发包、里程碑与验收证据要求。
-- [M0 实验记录与复现](docs/m0-experiment.md)：数据库、双 API 进程、任务租约及 Linux 沙箱的实际证据与未覆盖项；M0 整体验收尚未通过，健康接口不代表判题就绪。
-- [Worker mTLS 契约](api/worker.openapi.yaml)：认证领取、续租、结果回报及有效租约限定的源码/材料下载与哈希校验；两个真实控制端进程和 TLS 客户端已验证。新增真实沙箱结果经 mTLS 回报至 PostgreSQL 的联合测试，见[真实结果回报](docs/m0-experiment.md#真实结果回报)。
-- `cmd/worker` 已接入单槽领取、材料准备、租约执行与冻结结果回报，复用 `internal/worker`、`internal/execution`、`internal/workerclient` 和 `internal/workerhost`。入口提供按固定槽独占、崩溃隔离标记、启动预检和信号停止；当前执行材料为 `m0-sum-v3`，旧版证据见[执行端命令入口](docs/m0-experiment.md#执行端命令入口)。两个独立 Worker/控制端的真实竞争执行与 SIGTERM 后接管已验证，见[双 Worker 实验](docs/m0-experiment.md#双-worker-真实执行与接管)。撤销/材料故障的专项证据见[故障联调](docs/m0-experiment.md#撤销与材料故障联调)，现行命令统一见下文；会话实验及 M0 整体验收尚未通过。
-- `cmd/worker-api` 自动扫描过期、撤销或凭据轮换后的任务租约，保留三次尝试上限及旧回报隔离；见[控制端任务自动恢复](docs/m0-experiment.md#控制端任务自动恢复)。这只恢复数据库任务，不重启 Worker 或解除沙箱隔离。
-- 模块化单体＋独立判题 Worker；不创建空业务层，不把所有模块拆成服务。
-- [会话名额与撤销子实验](tests/sessionexperiment/README.md)使用真实 Redis 验证三会话上限、跨独立 API 进程撤销竞态及 API 被 SIGKILL 后重启的状态保持；独立模块行为测试须单独运行，不属于根模块测试或当前 CI，静态分析已纳入后端 CI。正式会话、Redis 故障/旧快照恢复及 PostgreSQL 对比仍待验证。
-- 已引入 PostgreSQL 实验、sqlc/pgx/Goose；go-judge 用于 Docker Desktop 专用容器实验。Redis 会话、River 与监控备份服务尚未接入。
-- 多文件/ZIP 提交、自测与辅助能力不作为训练试用前置；完整语言、比赛及后续需求保留。
-- main 已建立并保护；Docker 工具链、容器/安全门禁与只读环境自检的交付证据见[交付日志](docs/delivery-log.md)。未部署，M0 整体仍未通过。
+- [开发与交付计划](docs/phase-1-development-plan.md)：发布范围、组件引入时机、P0—P7 与里程碑。
+- [M0 记录](docs/m0-experiment.md)：Worker、数据库与会话实验的证据及剩余缺口，是当前进度入口。
+- [会话实验](tests/sessionexperiment/README.md)：独立测试模块的复现与限制，尚未接入正式登录。
 
 ## 运行环境
 
@@ -88,22 +80,4 @@ docker --context desktop-linux build --target host-artifacts --output type=local
 
 ## 文档入口
 
-- [需求与验收](docs/requirements.md)
-- [总体架构](docs/architecture/system-design.md)
-- [技术决策 ADR-001](docs/architecture/001-go-gin.md)
-- [前端与沙箱](docs/architecture/frontend-sandbox-options.md)
-- [判题与提交](docs/architecture/judging-design.md)
-- [题包导入](docs/architecture/problem-package-design.md)
-- [存储与缓存](docs/architecture/storage-design.md)
-- [会话与账号](docs/architecture/session-design.md)
-- [比赛与赛务](docs/architecture/contest-design.md)
-- [API 与 Worker 协议](docs/architecture/api-worker-design.md)
-- [运维与实施阶段](docs/architecture/operations-design.md)
-- [开发工作流](docs/development-workflow.md)
-- [GitHub 仓库治理与配置](docs/github-governance.md)
-- [CI/CD](docs/ci-cd.md)
-- [开发安全检查与告警处置](docs/security-checks.md)
-- [交付与验证记录](docs/delivery-log.md)
-- [项目根规则](AGENTS.md)
-
-已选方案不等于已引入或已验证，实际依赖以配置和锁文件为准；运行结果及限制记录在交付日志。
+完整目录与维护归属见[文档索引](docs/README.md)。已选方案不等于已引入或已验证；依赖以配置和锁文件为准，历史验证见[交付日志](docs/delivery-log.md)。

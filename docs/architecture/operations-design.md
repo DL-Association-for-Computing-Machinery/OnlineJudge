@@ -1,6 +1,6 @@
 # 运维、离线交付与验证分期
 
-日期：2026-10-25。版本：0.2。状态：工程骨架已建立，运维组件尚未部署、压测或恢复演练。审计后的引入时机见 [精简交付基线](../delivery-plan.md)。关联 [总体架构](system-design.md)、[存储](storage-design.md)、[CI/CD](../ci-cd.md)。
+日期：2026-10-25。版本：0.2。状态：工程骨架已建立，运维组件尚未部署、压测或恢复演练。审计后的引入时机见 [开发与交付计划](../phase-1-development-plan.md)。关联 [总体架构](system-design.md)、[存储](storage-design.md)、[CI/CD](../ci-cd.md)。
 
 ## 1. 入口与校内依赖
 

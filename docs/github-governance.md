@@ -4,7 +4,7 @@
 
 ## 已生效控制
 
-- 默认分支为 `main`；实现留在 `codex/engineering-baseline`，首次 PR 包含空基点之后的全部工程成果。
+- 默认分支为 `main`；`codex/engineering-baseline` 为初始化历史，当前任务按开发工作流从最新主线创建独立分支。
 - `main-governance` ruleset（ID `25824684`）为 active，匹配 `refs/heads/main`，无 bypass actor。禁止删除、强推，要求线性历史和 PR；讨论必须解决。
 - 必需检查为 `governance`、`backend`、`frontend`、`integration`，限定 GitHub Actions App `15368`。分支必须基于最新主线，创建匹配分支也不豁免检查。
 - 2026-10-28 起应用测试按[完整变更范围](ci-cd.md#按变更影响选择检查)选择；四个必需名称和远端 ruleset 保持不变。后三项是结果门禁：明确不受影响才接受对应测试跳过，受影响则必须真正成功，分类失败/缺失也阻断。门禁通过不代表所有应用测试均执行。
@@ -33,6 +33,6 @@ gh api repos/DL-Association-for-Computing-Machinery/OnlineJudge/actions/permissi
 
 更新配置时先回读当前值、审查 JSON 差异，经授权后更新现有 ruleset ID，不能重复 POST 产生多套重叠规则。配置前后快照保存在本机忽略目录 `.local/github-governance/`；它们供诊断与恢复参考，不是可直接整包 PATCH 的请求体。恢复按受影响字段逐项处理，重新核验，不自动移除保护或覆盖主线。
 
-首次主线为空，工作流与文档须经 PR 合并后才成为主线内容。已有 PR 的检查使用其合并候选；CI 通过并不自动证明 PR 中的治理脚本未被人为削弱，仍需人工审查权限和工作流变更。
+工作流与文档已纳入主线，修改继续经 PR 交付。PR 的检查使用其合并候选；CI 通过并不自动证明 PR 中的治理脚本未被人为削弱，仍需审查权限和工作流变更。
 
 依据：[GitHub rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets)、[Actions 权限 API](https://docs.github.com/en/rest/actions/permissions)、[Actions 安全使用](https://docs.github.com/en/actions/reference/security/secure-use)。

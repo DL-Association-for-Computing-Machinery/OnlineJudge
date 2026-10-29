@@ -1,6 +1,6 @@
 # 统一题目模型与题目包导入设计
 
-日期：2026-10-25。版本：0.6。状态：用户确认统一内部题目模型，优先验证 ICPC／Kattis Problem Package Format 2025-09 子集导入及下述导入/发布约定；试用录入入口按精简交付基线选择。具体字段、兼容矩阵、组件和运行效果待验证；已有工程骨架，无题包实现。关联 [总体架构](system-design.md)、[判题设计](judging-design.md)、[存储](storage-design.md)、[题面渲染](frontend-sandbox-options.md#33-已确认的题面-markdown-与公式渲染)及 [需求](../requirements.md)。
+日期：2026-10-25。版本：0.6。状态：用户确认统一内部题目模型，优先验证 ICPC／Kattis Problem Package Format 2025-09 子集导入及下述导入/发布约定；试用录入入口按开发与交付计划选择。具体字段、兼容矩阵、组件和运行效果待验证；已有工程骨架，无题包实现。关联 [总体架构](system-design.md)、[判题设计](judging-design.md)、[存储](storage-design.md)、[题面渲染](frontend-sandbox-options.md#33-已确认的题面-markdown-与公式渲染)及 [需求](../requirements.md)。
 
 ## 1. 已确认路线与取舍
 
