@@ -11,3 +11,31 @@ node_modules/
 dist/
 coverage/
 .local/
+
+# Personal workspace binding (keep the local file, never publish it)
+/.claude-obsidian.json
+
+# Credentials and certificate material
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+id_rsa
+id_ed25519
+
+# Runtime logs, database files and backups (SQL migrations remain tracked)
+*.log
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
+*.db
+*.db-wal
+*.db-shm
+*.dump
+*.sql.gz
+*.bak
