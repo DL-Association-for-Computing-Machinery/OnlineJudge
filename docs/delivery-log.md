@@ -1,5 +1,13 @@
 # 工程交付记录
 
+## 2026-10-29：PostgreSQL 账号认证代次实验
+
+从成功 fetch 后的 `662cb8f` 创建 `codex/session-auth-generation`，唯一目标为 P3/M0、AC23 的账号认证代次子项。测试专用 PostgreSQL 账号夹具、同进程两个 TLS API/独立连接池验证逐次核验、批量失效/禁用/再启用、迟到登录/保存拒绝及新代次三名额。共享行锁协调 Redis 保存与代次更新，真实锁超时用例验证等待顺序；不声称跨存储原子事务或即时撤权 SLA。
+
+Docker Desktop Linux arm64：`python3 scripts/test-session.py --module-cache /private/tmp/oj-session-mod` 的原十项基线通过（18.621 秒），最终十四项行为/race 通过（19.032 秒，另含两个子用例），格式、模块校验、vet 通过；本地已有 `oj-go-quality-toolchain` 内 golangci-lint 零告警。实验模块复用主模块 pgx v5.11.0 及依赖锁定版本，首次离线 tidy 因缺少校验和/传递模块缓存失败，随后按既有宿主 TLS/checksum 缓存准备流程完成；没有禁用验证。驱动增加容器内私有 PostgreSQL，未触及用户数据库。
+
+没有正式入口或生产迁移；回退本项测试、驱动和独立模块依赖即可。数据库客户端池失败仅证明拒绝认证，不是数据库宕机；全局灾备代次、Redis 旧快照、数据库备份回退、正式账号/权限和完整 M0 未验收，未部署。远端 CI 不执行此独立模块行为套件，仅覆盖静态分析；最终 PR/head/CI/合并状态见远端及知识库索引。
+
 ## 2026-10-29：前端类型感知质量门禁
 
 前置 Go 质量检查 [PR #33](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/33) 的 head `4101269` 九项 CI 全成功，完整差异/讨论核验后 squash 合并为 `9bc0cab`。从成功 fetch 后的该主线创建独立 `codex/frontend-quality`，唯一目标为启用已有 typescript-eslint 的类型感知推荐规则，覆盖 src TS/TSX 与 Vite 配置；无新增依赖、业务/UI/迁移变化。
