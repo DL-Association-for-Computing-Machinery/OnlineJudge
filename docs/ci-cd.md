@@ -40,7 +40,7 @@
 3. `governance` 在仓库检查、标题检查和治理回归通过后，通过 `scripts/ci_scope.py plan` 输出各套件是否受影响。应用任务为 `backend-tests`、`frontend-tests`、`integration-tests`，执行原有完整检查，不按缺少 manifest 或测试失败跳过。
 4. `backend`、`frontend`、`integration` 是轻量结果门禁，使用 `always()` 检查分类和对应应用任务结果。受影响时只接受 `success`；明确不受影响时只接受 `skipped` 并写入摘要“tests omitted”。分类失败、缺输出、取消、未知结果或应跑未跑均失败；不能把未执行测试描述为测试通过。旧 `bootstrap-ci` 初始化检测器仍在有应用时拒绝通过。
 
-权限仅 `contents: read`，不注入生产秘密，不使用 `pull_request_target` 执行 PR 代码，不上传仓库到外部审查服务。PR 同分支新运行可取消旧检查；设定超时。当前未调用第三方秘密扫描器，文件名检查不等价于秘密扫描。
+权限仅 `contents: read`，不注入生产秘密，不使用 `pull_request_target` 执行 PR 代码，不上传仓库到外部审查服务。PR 同分支新运行可取消旧检查；设定超时。`security` 执行固定版本 Gitleaks 历史扫描、Go 可达漏洞与 pnpm 全依赖审计，三个稳定结果门禁同时要求其成功；范围、联网行为和告警处置见[安全检查](security-checks.md)。文档变更仍执行安全检查，应用测试按下方矩阵分流。
 
 ### 按变更影响选择检查
 
