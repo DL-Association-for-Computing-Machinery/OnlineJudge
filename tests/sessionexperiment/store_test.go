@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/alexedwards/scs/v2"
@@ -16,7 +17,7 @@ var (
 	errStale = errors.New("session expired or revoked")
 )
 
-// This adapter exists only in the experiment. It does not authorize users.
+// This adapter exists only in the experiment, with optional fixture authority.
 // Retain expired/revoked records until their absolute deadline: deleting them
 // early would let a request that loaded old data recreate the same token.
 const commitLua = `
@@ -63,6 +64,7 @@ return 0
 type guardedStore struct {
 	client *redis.Client
 	prefix string
+	auth   *authAuthority
 }
 
 var _ scs.CtxStore = (*guardedStore)(nil)
@@ -84,6 +86,21 @@ func (s *guardedStore) CommitCtx(ctx context.Context, token string, b []byte, ex
 		return errors.New("missing authenticated fixture subject")
 	}
 	hash := digest(subject)
+	if s.auth != nil {
+		generation, ok := values["auth_generation"].(int64)
+		if !ok || generation <= 0 {
+			return errStale
+		}
+		// A new generation gets new slots; old records remain until expiry.
+		hash = digest(subject + ":" + strconv.FormatInt(generation, 10))
+		return s.auth.withValid(ctx, subject, generation, func() error {
+			return s.commit(ctx, token, b, hash, deadline, expiry)
+		})
+	}
+	return s.commit(ctx, token, b, hash, deadline, expiry)
+}
+
+func (s *guardedStore) commit(ctx context.Context, token string, b []byte, hash string, deadline, expiry time.Time) error {
 	result, err := s.client.Eval(ctx, commitLua, []string{s.key(token), s.prefix + "subject:" + hash},
 		hash, b, deadline.UnixMilli(), expiry.UnixMilli()).Int()
 	if err != nil {
@@ -103,6 +120,15 @@ func (s *guardedStore) FindCtx(ctx context.Context, token string) ([]byte, bool,
 	b, err := s.client.Eval(ctx, findLua, []string{s.key(token)}).Text()
 	if errors.Is(err, redis.Nil) {
 		return nil, false, nil
+	}
+	if err == nil && s.auth != nil {
+		_, values, decodeErr := (scs.GobCodec{}).Decode([]byte(b))
+		if decodeErr != nil {
+			return nil, false, decodeErr
+		}
+		subject, _ := values["subject"].(string)
+		generation, _ := values["auth_generation"].(int64)
+		err = s.auth.withValid(ctx, subject, generation, func() error { return nil })
 	}
 	return []byte(b), err == nil, err
 }

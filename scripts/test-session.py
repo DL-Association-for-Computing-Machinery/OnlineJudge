@@ -59,8 +59,7 @@ def main():
             "-e", "GOTOOLCHAIN=local",
             "--entrypoint", "sh", args.toolchain_image, "-ec",
             "cp -R /experiment /tmp/session-test; cd /tmp/session-test; "
-            "test -z \"$(gofmt -l .)\"; go mod verify; go vet ./...; "
-            "go test -mod=readonly -race -count=1 -timeout=90s -v ./...", timeout=300)
+            "sh run.sh", timeout=300)
     finally:
         # Only unique resources created by this invocation are removed.
         if started_test:

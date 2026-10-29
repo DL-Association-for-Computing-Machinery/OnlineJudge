@@ -29,6 +29,10 @@ func setup(t *testing.T) *fixture {
 }
 
 func setupReplicas(t *testing.T, prefix string, replicas int) *fixture {
+	return setupAuthorizedReplicas(t, prefix, replicas, nil)
+}
+
+func setupAuthorizedReplicas(t *testing.T, prefix string, replicas int, authorities []*authAuthority) *fixture {
 	t.Helper()
 	addr := os.Getenv("OJ_SESSION_REDIS_ADDR")
 	if addr == "" {
@@ -44,6 +48,9 @@ func setupReplicas(t *testing.T, prefix string, replicas int) *fixture {
 			t.Fatal(err)
 		}
 		store := &guardedStore{client: client, prefix: prefix}
+		if authorities != nil {
+			store.auth = authorities[i]
+		}
 		manager := scs.New()
 		manager.Store = store
 		manager.Lifetime = 12 * time.Hour
@@ -60,13 +67,29 @@ func setupReplicas(t *testing.T, prefix string, replicas int) *fixture {
 				token = cookie.Value
 			}
 			ctx, err := manager.Load(ctx, token)
+			if errors.Is(err, errStale) {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
 			if err != nil {
 				w.WriteHeader(http.StatusServiceUnavailable)
 				return
 			}
-			if r.URL.Path == "/login-fixture" && r.Method == http.MethodPost {
+			if (r.URL.Path == "/login-fixture" || r.URL.Path == "/late-login-fixture") && r.Method == http.MethodPost {
 				// Pre-authenticated test identity, never a production login endpoint.
 				manager.Put(ctx, "subject", "fixture-user")
+				if store.auth != nil {
+					generation, err := store.auth.current(ctx, "fixture-user")
+					if errors.Is(err, errStale) {
+						w.WriteHeader(http.StatusUnauthorized)
+						return
+					}
+					if err != nil {
+						w.WriteHeader(http.StatusServiceUnavailable)
+						return
+					}
+					manager.Put(ctx, "auth_generation", generation)
+				}
 			} else {
 				if manager.GetString(ctx, "subject") != "fixture-user" {
 					w.WriteHeader(http.StatusUnauthorized)
@@ -98,6 +121,15 @@ func setupReplicas(t *testing.T, prefix string, replicas int) *fixture {
 					}
 				default:
 					w.WriteHeader(http.StatusNotFound)
+					return
+				}
+			}
+			if r.URL.Path == "/late-login-fixture" {
+				f.loaded <- struct{}{}
+				select {
+				case <-f.resume:
+				case <-ctx.Done():
+					w.WriteHeader(http.StatusServiceUnavailable)
 					return
 				}
 			}
