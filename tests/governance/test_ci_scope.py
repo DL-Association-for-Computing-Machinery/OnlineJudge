@@ -30,7 +30,9 @@ class ScopeTests(unittest.TestCase):
         self.assertIn("fetch-depth: 0", jobs["governance"])
         self.assertIn("python3 scripts/ci_scope.py plan", jobs["governance"])
         self.assertIn("if: always()", jobs["required"])
-        self.assertIn("needs: [governance, backend-tests, frontend-tests, integration-tests, containers]", jobs["required"])
+        self.assertIn("needs: [governance, backend-tests, frontend-tests, integration-tests, containers, security]", jobs["required"])
+        self.assertIn("fetch-depth: 0", jobs["security"])
+        self.assertNotIn("if:", jobs["security"])
         self.assertIn("needs: governance", jobs["containers"])
         self.assertIn("if: needs.governance.outputs.backend == 'true' || needs.governance.outputs.frontend == 'true'", jobs["containers"])
         self.assertIn("suite: [backend, frontend, integration]", jobs["required"])
@@ -77,6 +79,7 @@ class ScopeTests(unittest.TestCase):
                     outputs[suite] = selected
                     containers = "success" if any(outputs[name] == "true" for name in ("backend", "frontend")) else "skipped"
                     needs = {"governance": {"result": "success", "outputs": outputs},
+                             "security": {"result": "success"},
                              "containers": {"result": containers}, suite + "-tests": {"result": result}}
                     expected = (selected, result) in (("true", "success"), ("false", "skipped"))
                     with self.subTest(suite=suite, selected=selected, result=result):
@@ -93,6 +96,7 @@ class ScopeTests(unittest.TestCase):
             needs = {"governance": {"result": "success", "outputs": {
                          "backend": selected, "frontend": "false", "integration": "false"}},
                      "containers": {"result": "success" if selected == "true" else "skipped"},
+                     "security": {"result": "success"},
                      "backend-tests": {"result": result}}
             env = dict(os.environ, CI_SUITE="backend", CI_NEEDS=json.dumps(needs))
             env.pop("GITHUB_STEP_SUMMARY", None)
@@ -104,7 +108,8 @@ class ScopeTests(unittest.TestCase):
         for backend, frontend in (("true", "false"), ("false", "true"), ("true", "true"), ("false", "false")):
             outputs = {"backend": backend, "frontend": frontend, "integration": backend}
             expected = "success" if "true" in (backend, frontend) else "skipped"
-            needs = {"governance": {"result": "success", "outputs": outputs}}
+            needs = {"governance": {"result": "success", "outputs": outputs},
+                     "security": {"result": "success"}}
             needs.update({name + "-tests": {"result": "success" if outputs[name] == "true" else "skipped"}
                           for name in scope.SUITES})
             for result in ("success", "skipped", "failure", "cancelled", "neutral", ""):
@@ -115,6 +120,17 @@ class ScopeTests(unittest.TestCase):
             self.assertFalse(any(scope.gate_passes(suite, needs) for suite in scope.SUITES))
         needs["containers"] = {"result": "skipped"}
         del outputs["frontend"]
+        self.assertFalse(scope.gate_passes("backend", needs))
+
+    def test_security_must_succeed_even_for_documentation(self):
+        needs = {"governance": {"result": "success", "outputs": dict.fromkeys(scope.SUITES, "false")},
+                 "containers": {"result": "skipped"}}
+        needs.update({suite + "-tests": {"result": "skipped"} for suite in scope.SUITES})
+        for result in ("success", "failure", "cancelled", "skipped", "neutral", ""):
+            needs["security"] = {"result": result}
+            for suite in scope.SUITES:
+                self.assertEqual(scope.gate_passes(suite, needs), result == "success")
+        del needs["security"]
         self.assertFalse(scope.gate_passes("backend", needs))
 
 

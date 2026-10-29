@@ -100,6 +100,7 @@ docker --context desktop-linux build --target host-artifacts --output type=local
 - [开发工作流](docs/development-workflow.md)
 - [GitHub 仓库治理与配置](docs/github-governance.md)
 - [CI/CD](docs/ci-cd.md)
+- [开发安全检查与告警处置](docs/security-checks.md)
 - [交付与验证记录](docs/delivery-log.md)
 - [项目根规则](AGENTS.md)
 

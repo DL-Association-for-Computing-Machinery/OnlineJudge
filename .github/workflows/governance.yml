@@ -93,10 +93,28 @@ jobs:
       - name: Build and verify the Compose application
         run: python3 scripts/test-compose.py
 
+  security:
+    needs: governance
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify secret detector and scan committed history
+        run: |
+          python3 scripts/check-secrets.py --self-test
+          python3 scripts/check-secrets.py
+      - name: Scan reachable Go vulnerabilities
+        run: docker compose run --build --rm backend-audit
+      - name: Audit all frontend dependencies
+        run: docker compose run --build --rm frontend-audit
+
   required:
     # Stable required contexts; an upstream failure must never become a green skip.
     name: ${{ matrix.suite }}
-    needs: [governance, backend-tests, frontend-tests, integration-tests, containers]
+    needs: [governance, backend-tests, frontend-tests, integration-tests, containers, security]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5

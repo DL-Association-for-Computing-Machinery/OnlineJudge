@@ -56,6 +56,19 @@ services:
       target: frontend-source
     command: [sh, -ec, "pnpm lint && pnpm typecheck && pnpm test && pnpm build"]
 
+  backend-audit:
+    profiles: [checks]
+    build:
+      context: .
+      target: backend-audit
+
+  frontend-audit:
+    profiles: [checks]
+    build:
+      context: .
+      target: frontend-source
+    command: [pnpm, audit, --audit-level, low]
+
   toolchain:
     profiles: [tools]
     build:

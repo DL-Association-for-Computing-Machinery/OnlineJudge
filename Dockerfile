@@ -23,6 +23,17 @@ COPY --from=host-build /out/ /
 FROM backend-deps AS sqlc-build
 RUN GOBIN=/out go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
 
+# Scanner tools are development-only; runtime images do not inherit them.
+FROM backend-deps AS security-tools
+ENV GOTELEMETRY=off
+RUN GOBIN=/usr/local/bin go install github.com/zricethezav/gitleaks/v8@v8.30.1
+RUN GOBIN=/usr/local/bin go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+
+FROM backend-source AS backend-audit
+COPY --from=security-tools /usr/local/bin/govulncheck /usr/local/bin/govulncheck
+ENV GOTELEMETRY=off
+CMD ["govulncheck", "-show", "verbose", "./..."]
+
 FROM postgres:14-bookworm@sha256:a389ed49344afc8f4444efd4eb512965df07aaa6ed84b239b54a23246e9fe347 AS toolchain
 COPY --from=backend-source /usr/local/go /usr/local/go
 COPY --from=backend-source /go/pkg/mod /go/pkg/mod
