@@ -11,6 +11,7 @@ case "${1:-}" in
     backend)
         test -z "$(gofmt -l cmd internal db tests)"
         go vet ./...
+        sh scripts/check-go.sh
         go test -race -count=1 ./...
         build ;;
     db) build; sh scripts/test-postgres.sh ;;

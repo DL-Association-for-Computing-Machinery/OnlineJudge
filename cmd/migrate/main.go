@@ -63,7 +63,8 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	// Cleanup does not change the completed operation or its primary error.
+	defer func() { _ = conn.Close() }()
 	conn.SetMaxOpenConns(2)
 	provider, err := db.Provider(conn)
 	if err != nil {

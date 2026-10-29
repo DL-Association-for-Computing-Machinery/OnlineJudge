@@ -67,7 +67,8 @@ func TestWorkerBoundary(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer resp.Body.Close()
+		// Cleanup does not change the completed operation or its primary error.
+		defer func() { _ = resp.Body.Close() }()
 		data, _ := io.ReadAll(resp.Body)
 		if resp.Header.Get("Cache-Control") != "no-store" {
 			t.Fatal("cacheable response")
@@ -128,7 +129,7 @@ func TestWorkerBoundary(t *testing.T) {
 			c := testClient(t, ca.Roots, certs...)
 			resp, err := c.Post(server.URL+"/api/v1/worker/claim", "application/json", strings.NewReader("{}"))
 			if err == nil {
-				resp.Body.Close()
+				_ = resp.Body.Close() // Cleanup; the operation outcome is checked separately.
 				t.Fatal("invalid certificate passed handshake")
 			}
 		})
@@ -143,7 +144,7 @@ func TestWorkerBoundary(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close() // Cleanup; the operation outcome is checked separately.
 		if resp.StatusCode != 401 {
 			t.Fatalf("invalid identity status=%d", resp.StatusCode)
 		}
@@ -158,7 +159,7 @@ func TestWorkerBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close() // Cleanup; the operation outcome is checked separately.
 	if resp.StatusCode != 403 || store.calls.Load() != before {
 		t.Fatal("browser request accepted")
 	}
@@ -196,8 +197,10 @@ func TestRechecksCertificateOnExistingConnection(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		io.Copy(io.Discard, resp.Body)
-		resp.Body.Close()
+		if _, err := io.Copy(io.Discard, resp.Body); err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close() // Cleanup; the operation outcome is checked separately.
 		if resp.StatusCode != want {
 			t.Fatalf("status=%d want=%d", resp.StatusCode, want)
 		}

@@ -77,7 +77,8 @@ func (a *Acquirer) describe(ctx context.Context, lease submission.Lease) (materi
 	if err != nil {
 		return materials.Descriptor{}, ErrMaterials
 	}
-	defer resp.Body.Close()
+	// Cleanup does not change the completed operation or its primary error.
+	defer func() { _ = resp.Body.Close() }()
 	if err := materialStatus(resp.StatusCode); err != nil {
 		return materials.Descriptor{}, err
 	}
@@ -105,7 +106,8 @@ func (a *Acquirer) download(ctx context.Context, token, id, kind, hash string) (
 	if err != nil {
 		return nil, ErrMaterials
 	}
-	defer resp.Body.Close()
+	// Cleanup does not change the completed operation or its primary error.
+	defer func() { _ = resp.Body.Close() }()
 	if err := materialStatus(resp.StatusCode); err != nil {
 		return nil, err
 	}

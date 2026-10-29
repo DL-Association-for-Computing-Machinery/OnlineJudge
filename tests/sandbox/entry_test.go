@@ -86,18 +86,20 @@ func testWorkerCommand(t *testing.T, store *postgres.Store, ca *testpki.Authorit
 		cmd.Stdout = log
 		cmd.Stderr = log
 		if err := cmd.Start(); err != nil {
-			log.Close()
+			_ = log.Close() // Cleanup; the operation outcome is checked separately.
 			t.Fatal(err)
 		}
 		done := make(chan error, 1)
-		go func() { done <- cmd.Wait(); log.Close(); close(done) }()
+		go func() { done <- cmd.Wait(); _ = log.Close(); close(done) }()
 		t.Cleanup(func() {
-			cmd.Process.Signal(syscall.SIGTERM)
+			_ = cmd.Process.Signal(syscall.SIGTERM) // Cleanup may follow an already reaped process.
 			select {
-			case <-done:
+			case err := <-done:
+				t.Logf("cleanup process exit: %v", err)
 			case <-time.After(15 * time.Second):
-				cmd.Process.Kill()
-				<-done
+				_ = cmd.Process.Kill()
+				err := <-done
+				t.Logf("cleanup forced process exit: %v", err)
 			}
 		})
 		return cmd, done

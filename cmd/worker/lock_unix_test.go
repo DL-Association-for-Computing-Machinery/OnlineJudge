@@ -22,9 +22,11 @@ func TestSlotLockProcess(t *testing.T) {
 		if err := lock.dirty(); err != nil {
 			t.Fatal(err)
 		}
-		os.Stdout.WriteString("locked\n")
-		bufio.NewReader(os.Stdin).ReadString('\n')
-		return // Simulated abrupt exit: leave the persistent marker.
+		if _, err := os.Stdout.WriteString("locked\n"); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = bufio.NewReader(os.Stdin).ReadString('\n') // Parent kills the helper or closes the pipe.
+		return                                            // Simulated abrupt exit: leave the persistent marker.
 	}
 	path := filepath.Join(t.TempDir(), "slot")
 	cmd := exec.Command(os.Args[0], "-test.run=^TestSlotLockProcess$")
@@ -40,7 +42,7 @@ func TestSlotLockProcess(t *testing.T) {
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { cmd.Process.Kill(); cmd.Wait() })
+	t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }) // May already be killed and reaped.
 	if line, err := bufio.NewReader(stdout).ReadString('\n'); err != nil || line != "locked\n" {
 		t.Fatalf("helper: %q %v", line, err)
 	}
@@ -51,8 +53,10 @@ func TestSlotLockProcess(t *testing.T) {
 	if err := cmd.Process.Kill(); err != nil {
 		t.Fatal(err)
 	}
-	cmd.Wait()
-	stdin.Close()
+	if err := cmd.Wait(); err == nil {
+		t.Fatal("killed helper exited successfully")
+	}
+	_ = stdin.Close() // Cleanup; the operation outcome is checked separately.
 	if l, err := acquireLock(path); err == nil {
 		l.Close()
 		t.Fatal("crashed slot reused")

@@ -39,13 +39,14 @@ services:
     profiles: [checks]
     build:
       context: .
-      target: backend-source
+      target: backend-quality
     command:
       - sh
       - -ec
       - |
         test -z "$$(gofmt -l cmd internal db tests)"
         go vet ./...
+        sh scripts/check-go.sh
         go test -race -count=1 ./...
         go build -trimpath ./cmd/...
 

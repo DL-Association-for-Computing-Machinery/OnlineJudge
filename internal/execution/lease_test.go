@@ -165,8 +165,8 @@ func TestCancellationRetainsSlotUntilStopConfirmed(t *testing.T) {
 			t.Fatalf("slot released during stop: %v", err)
 		}
 		select {
-		case <-done:
-			t.Fatal("returned before stop confirmation")
+		case err := <-done:
+			t.Fatalf("returned before stop confirmation: %v", err)
 		default:
 		}
 		close(releaseStop)

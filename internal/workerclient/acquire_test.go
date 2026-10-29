@@ -91,7 +91,7 @@ func TestClaimBoundaries(t *testing.T) {
 				}
 				if tc.name == "lost reply" {
 					conn, _, _ := w.(http.Hijacker).Hijack()
-					conn.Close()
+					_ = conn.Close() // Cleanup; the operation outcome is checked separately.
 					return
 				}
 				if tc.name == "cancelled" {
@@ -104,7 +104,7 @@ func TestClaimBoundaries(t *testing.T) {
 				}
 				w.Header().Set("Location", "/must-not-follow")
 				w.WriteHeader(tc.status)
-				fmt.Fprint(w, tc.body)
+				_, _ = fmt.Fprint(w, tc.body) // The client may deliberately abort this test response.
 			}))
 			ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 			defer cancel()
@@ -156,10 +156,10 @@ func TestFetchBoundaries(t *testing.T) {
 					case "language":
 						d.Language = "python"
 					case "null":
-						fmt.Fprint(w, "null")
+						_, _ = fmt.Fprint(w, "null") // The client may deliberately abort this test response.
 						return
 					case "oversized descriptor":
-						fmt.Fprint(w, strings.Repeat(" ", 6*submission.MaxSourceBytes+32769))
+						_, _ = fmt.Fprint(w, strings.Repeat(" ", 6*submission.MaxSourceBytes+32769)) // The client may deliberately abort this test response.
 						return
 					case "descriptor media":
 						w.Header().Set("Content-Type", "text/plain")
@@ -219,7 +219,7 @@ func TestFetchBoundaries(t *testing.T) {
 						return
 					}
 				}
-				fmt.Fprint(w, data)
+				_, _ = fmt.Fprint(w, data) // The client may deliberately abort this test response.
 			}))
 			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 			defer cancel()

@@ -18,12 +18,14 @@ func WriteMaterials(path string) error {
 	if err != nil {
 		return err
 	}
-	defer root.Close()
+	// Cleanup does not change the completed operation or its primary error.
+	defer func() { _ = root.Close() }()
 	reader, err := materials.OpenLocal(path)
 	if err != nil {
 		return err
 	}
-	defer reader.Close()
+	// Cleanup does not change the completed operation or its primary error.
+	defer func() { _ = reader.Close() }()
 	for _, data := range []string{"1 2\n", "3\n", "-7 4\n", "-3\n"} {
 		h := sha256.Sum256([]byte(data))
 		digest := hex.EncodeToString(h[:])
@@ -47,8 +49,9 @@ func publish(root *os.Root, digest, data string) error {
 	if err != nil {
 		return err
 	}
-	defer root.Remove(name)
-	defer file.Close()
+	defer func() { _ = root.Remove(name) }() // Best-effort removal of the private staging link.
+	// Cleanup does not change the completed operation or its primary error.
+	defer func() { _ = file.Close() }()
 	if _, err := file.WriteString(data); err != nil {
 		return err
 	}

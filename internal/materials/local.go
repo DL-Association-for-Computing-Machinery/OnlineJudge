@@ -78,7 +78,8 @@ func (s *Local) Open(ctx context.Context, hash string) (*File, error) {
 	if err != nil {
 		return nil, ErrUnavailable
 	}
-	defer source.Close()
+	// Cleanup does not change the completed operation or its primary error.
+	defer func() { _ = source.Close() }()
 	info, err := source.Stat()
 	if err != nil || !info.Mode().IsRegular() || info.Size() > MaxFileBytes {
 		return nil, ErrUnavailable
@@ -89,7 +90,7 @@ func (s *Local) Open(ctx context.Context, hash string) (*File, error) {
 	}
 	defer func() {
 		if !success {
-			file.Close()
+			_ = file.Close() // Cleanup; the operation outcome is checked separately.
 			_ = os.Remove(file.Name())
 		}
 	}()

@@ -45,7 +45,8 @@ func TestExecutionReport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	// Cleanup does not change the completed operation or its primary error.
+	defer func() { _ = conn.Close() }()
 	var tables int
 	if err := conn.QueryRow(`SELECT count(*) FROM information_schema.tables WHERE table_schema='public'`).Scan(&tables); err != nil || tables != 0 {
 		t.Fatal("report database must be empty")
@@ -86,7 +87,8 @@ func TestExecutionReport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer reader.Close()
+	// Cleanup does not change the completed operation or its primary error.
+	defer func() { _ = reader.Close() }()
 	newController := func() *httptest.Server {
 		handler := workerapi.NewHandler(store, ca.Roots, materials.New(store, reader))
 		server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -97,7 +99,7 @@ func TestExecutionReport(t *testing.T) {
 					t.Error("expected accepted report before dropping response")
 				}
 				conn, _, _ := w.(http.Hijacker).Hijack()
-				conn.Close()
+				_ = conn.Close() // Cleanup; the operation outcome is checked separately.
 				return
 			}
 			handler.ServeHTTP(w, r)

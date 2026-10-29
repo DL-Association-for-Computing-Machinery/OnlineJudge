@@ -135,7 +135,7 @@ func (g *GoJudge) execute(ctx context.Context, c map[string]any, p experiment.Ex
 	}
 	for _, e := range r.FileErrors {
 		if r.Status != "Output Limit Exceeded" || e.Type != "CollectSizeExceeded" ||
-			(e.Name != "stdout" && !(compile && e.Name == "stderr")) {
+			(e.Name != "stdout" && (!compile || e.Name != "stderr")) {
 			return o, errors.New("sandbox file operation failed")
 		}
 	}
@@ -180,7 +180,8 @@ func (g *GoJudge) request(ctx context.Context, method, path string, value, targe
 	if err != nil {
 		return errors.New("sandbox transport failed")
 	}
-	defer resp.Body.Close()
+	// Cleanup does not change the completed operation or its primary error.
+	defer func() { _ = resp.Body.Close() }()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 128*1024+1))
 	if err != nil || len(data) > 128*1024 || resp.StatusCode != http.StatusOK {
 		return errors.New("sandbox response unavailable or oversized")

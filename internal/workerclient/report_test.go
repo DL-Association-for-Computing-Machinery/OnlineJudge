@@ -42,29 +42,29 @@ func TestReportAcknowledgementAndRetry(t *testing.T) {
 		switch mode.Load() {
 		case 0: // Simulate accepted request with a lost response.
 			conn, _, _ := w.(http.Hijacker).Hijack()
-			conn.Close()
+			_ = conn.Close() // Cleanup; the operation outcome is checked separately.
 		case 1:
 			w.WriteHeader(204)
 		case 2:
 			w.WriteHeader(409)
-			fmt.Fprint(w, `{"code":"LEASE_INVALID"}`)
+			_, _ = fmt.Fprint(w, `{"code":"LEASE_INVALID"}`) // The client may deliberately abort this test response.
 		case 3:
 			w.WriteHeader(409)
-			fmt.Fprint(w, `{"code":"RESULT_CONFLICT"}`)
+			_, _ = fmt.Fprint(w, `{"code":"RESULT_CONFLICT"}`) // The client may deliberately abort this test response.
 		case 4:
 			w.WriteHeader(403)
 		case 5:
 			w.WriteHeader(503)
-			fmt.Fprint(w, token)
+			_, _ = fmt.Fprint(w, token) // The client may deliberately abort this test response.
 		case 6:
 			w.Header().Set("Location", "/unexpected")
 			w.WriteHeader(307)
 		case 7:
 			w.WriteHeader(409)
-			fmt.Fprint(w, strings.Repeat("x", 1025))
+			_, _ = fmt.Fprint(w, strings.Repeat("x", 1025)) // The client may deliberately abort this test response.
 		case 8:
 			w.WriteHeader(409)
-			fmt.Fprint(w, `{"code":"unknown"}`)
+			_, _ = fmt.Fprint(w, `{"code":"unknown"}`) // The client may deliberately abort this test response.
 		case 9:
 			w.WriteHeader(200)
 		case 10:

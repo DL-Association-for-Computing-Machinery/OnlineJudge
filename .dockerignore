@@ -3,6 +3,7 @@
 !go.mod
 !go.sum
 !sqlc.yaml
+!.golangci.yml
 !scripts/
 !scripts/**
 !cmd/

@@ -49,7 +49,8 @@ func serveMaterials(w http.ResponseWriter, r *http.Request, service *materials.S
 		storeError(w, err)
 		return
 	}
-	defer file.Close()
+	// Cleanup does not change the completed operation or its primary error.
+	defer func() { _ = file.Close() }()
 	if _, err := authenticate(r.TLS, roots, now()); err != nil {
 		problem(w, 401, "UNAUTHENTICATED", "需要有效节点证书")
 		return

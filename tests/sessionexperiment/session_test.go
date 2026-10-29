@@ -134,7 +134,7 @@ func request(f *fixture, replica int, method, path string, cookie *http.Cookie) 
 	client := f.servers[replica].Client()
 	response, err := client.Do(req)
 	if err == nil {
-		response.Body.Close()
+		_ = response.Body.Close() // Cleanup; the operation outcome is checked separately.
 	}
 	return response, err
 }

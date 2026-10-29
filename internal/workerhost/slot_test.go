@@ -51,7 +51,7 @@ func TestSlotStopIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	response.Body.Close()
+	_ = response.Body.Close() // Cleanup; the operation outcome is checked separately.
 	for _, call := range b.calls[1:] {
 		for _, arg := range call {
 			if arg == a.s.ID || arg == container {

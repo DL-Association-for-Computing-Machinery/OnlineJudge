@@ -102,8 +102,8 @@ func startAPIProcess(t *testing.T, prefix string) *apiProcess {
 				}
 			case <-time.After(5 * time.Second):
 				_ = p.cmd.Process.Kill()
-				<-p.done
-				t.Error("API process did not exit after control pipe closed")
+				err := <-p.done
+				t.Errorf("API process did not exit after control pipe closed: %v", err)
 			}
 		})
 	})
@@ -169,7 +169,7 @@ func (p *apiProcess) request(method, path string, cookie *http.Cookie) (*http.Re
 	}
 	response, err := p.client.Do(req)
 	if err == nil {
-		response.Body.Close()
+		_ = response.Body.Close() // Cleanup; the operation outcome is checked separately.
 	}
 	return response, err
 }

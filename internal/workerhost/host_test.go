@@ -148,7 +148,8 @@ func TestTransportBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	// Cleanup does not change the completed operation or its primary error.
+	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(resp.Body)
 	if string(b) != "{}" || resp.StatusCode != 200 {
 		t.Fatal("invalid response")
@@ -163,7 +164,7 @@ func TestTransportBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("legal escaped source rejected: %v", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close() // Cleanup; the operation outcome is checked separately.
 	f.s.Started = "new lifetime"
 	r, _ = http.NewRequest("DELETE", "http://127.0.0.1:5050/file/abc", nil)
 	if _, err := h.RoundTrip(r); err == nil {

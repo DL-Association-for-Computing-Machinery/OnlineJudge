@@ -64,7 +64,8 @@ func (r *Renewer) Renew(ctx context.Context, token string) error {
 	if err != nil {
 		return errors.New("renewal transport unavailable")
 	}
-	defer resp.Body.Close()
+	// Cleanup does not change the completed operation or its primary error.
+	defer func() { _ = resp.Body.Close() }()
 	switch resp.StatusCode {
 	case http.StatusUnauthorized, http.StatusForbidden:
 		return submission.ErrNode

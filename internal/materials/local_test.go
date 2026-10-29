@@ -23,12 +23,14 @@ func TestLocalVerifiedSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer reader.Close()
+	// Cleanup does not change the completed operation or its primary error.
+	defer func() { _ = reader.Close() }()
 	file, err := reader.Open(context.Background(), hash)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer file.Close()
+	// Cleanup does not change the completed operation or its primary error.
+	defer func() { _ = file.Close() }()
 	// Replacing the original after verification cannot change the response.
 	if err := os.WriteFile(path, []byte("corrupt"), 0600); err != nil {
 		t.Fatal(err)
@@ -74,7 +76,8 @@ func TestLocalRejectsUnsafeEntries(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer reader.Close()
+			// Cleanup does not change the completed operation or its primary error.
+			defer func() { _ = reader.Close() }()
 			// Repeated failures must release capacity too.
 			for range 6 {
 				if _, err := reader.Open(context.Background(), hash); !errors.Is(err, ErrUnavailable) {
@@ -98,7 +101,8 @@ func TestLocalBudgetAndCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer reader.Close()
+	// Cleanup does not change the completed operation or its primary error.
+	defer func() { _ = reader.Close() }()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := reader.Open(ctx, hash); !errors.Is(err, context.Canceled) {
@@ -111,16 +115,17 @@ func TestLocalBudgetAndCancellation(t *testing.T) {
 			t.Fatal(err)
 		}
 		files = append(files, f)
-		defer f.Close()
+		// Cleanup does not change the completed operation or its primary error.
+		defer func() { _ = f.Close() }()
 	}
 	if _, err := reader.Open(context.Background(), hash); !errors.Is(err, ErrUnavailable) {
 		t.Fatal("unbounded snapshots")
 	}
-	files[0].Close()
-	files[0].Close()
+	_ = files[0].Close() // Cleanup; the operation outcome is checked separately.
+	_ = files[0].Close() // Cleanup; the operation outcome is checked separately.
 	f, err := reader.Open(context.Background(), hash)
 	if err != nil {
 		t.Fatal("close did not release capacity", err)
 	}
-	f.Close()
+	_ = f.Close() // Cleanup; the operation outcome is checked separately.
 }
