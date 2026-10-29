@@ -27,7 +27,7 @@ import (
 // confirmed shutdown and automatic recovery. Only fixture data is corrupted.
 func TestWorkerFaults(t *testing.T) {
 	if os.Getenv("OJ_SANDBOX_FAULT") != "1" {
-		t.Skip("run make worker-fault-test with the dedicated primary slot")
+		t.Skip("run python3 scripts/test-worker.py worker-fault with the dedicated primary slot")
 	}
 	verifyEnvironment(t)
 	dsn := os.Getenv("OJ_TEST_DATABASE_URL")
@@ -243,7 +243,7 @@ func restartFaultSandbox(t *testing.T, ctx context.Context, id string) {
 	t.Helper()
 	dualDocker(t, "start", id)
 	for ctx.Err() == nil {
-		cmd := exec.CommandContext(ctx, "docker", "--context", "colima-oj-m0", "exec", id, "curl", "-fsS", "--max-time", "1", "http://127.0.0.1:5050/version")
+		cmd := exec.CommandContext(ctx, "docker", "--context", "desktop-linux", "exec", id, "curl", "-fsS", "--max-time", "1", "http://127.0.0.1:5050/version")
 		if cmd.Run() == nil {
 			verifyEnvironment(t)
 			return

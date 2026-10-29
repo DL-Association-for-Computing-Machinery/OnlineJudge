@@ -52,50 +52,22 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version-file: go.mod
-          cache: false
-      - name: Download and verify Go modules
-        run: go mod download && go mod verify
-      - name: Check, test and build API and Worker
-        run: make go-check go-build
+      - name: Check, test and build in Docker
+        run: docker compose run --build --rm toolchain backend
 
   integration-tests:
     needs: governance
     if: needs.governance.outputs.integration == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    services:
-      postgres:
-        image: postgres:14-alpine
-        env:
-          POSTGRES_USER: oj_test
-          POSTGRES_DB: postgres
-          # Disposable CI service, loopback only; never a deployment configuration.
-          POSTGRES_HOST_AUTH_METHOD: trust
-        ports:
-          - 127.0.0.1:5432:5432
-        options: >-
-          --health-cmd "pg_isready -U oj_test -d postgres"
-          --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version-file: go.mod
-          cache: false
-      - name: Install pinned SQL generator
-        run: GOBIN="$PWD/.local/bin" go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
-      - name: Verify generated database queries
-        run: make sqlc && git diff --exit-code -- internal/submission/postgres/submissiondb
-      - name: Test transactions, migrations and task leases
-        env:
-          OJ_TEST_DATABASE_URL: host=127.0.0.1 user=oj_test dbname=postgres sslmode=disable
-          GIN_MODE: release
-        run: go test -race -count=1 -tags=integration ./tests/integration -v
+      - name: Check generated SQL and real PostgreSQL integration
+        run: |
+          docker compose run --build --rm toolchain sqlc
+          docker compose run --rm toolchain db
 
   frontend-tests:
     needs: governance
@@ -106,15 +78,8 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version-file: web/.node-version
-      - name: Install fixed package manager
-        run: npm install --global pnpm@11.25.0
-      - name: Install locked dependencies
-        run: pnpm --dir web install --frozen-lockfile --ignore-scripts
-      - name: Lint, typecheck, test and build frontend
-        run: make web-check
+      - name: Lint, typecheck, test and build in Docker
+        run: docker compose run --build --rm frontend-check
 
   containers:
     needs: governance

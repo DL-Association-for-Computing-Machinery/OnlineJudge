@@ -3,6 +3,7 @@
 
 import json
 import os
+import platform
 from pathlib import Path
 import re
 import subprocess
@@ -14,7 +15,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parent.parent
 ENV = {**os.environ, "OJ_WEB_PORT": "0"}
-COMPOSE = ["docker", "compose", "-f", str(ROOT / "compose.yaml"),
+COMPOSE = ["docker"] + (["--context", "desktop-linux"] if platform.system() == "Darwin" else []) + ["compose", "-f", str(ROOT / "compose.yaml"),
            "-p", "oj-compose-test-" + uuid.uuid4().hex[:12]]
 
 

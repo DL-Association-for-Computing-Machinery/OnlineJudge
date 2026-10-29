@@ -1,5 +1,7 @@
 # CI/CD、环境与发布规范
 
+2026-10-29 当前入口：backend-tests 使用 `docker compose run --build --rm toolchain backend`；frontend-tests 使用 `frontend-check`；integration-tests 使用 `toolchain sqlc` 与 `toolchain db`。编译器、sqlc、PostgreSQL 14 和依赖在镜像内，不依赖 runner 的 Go/Node/Make。稳定门禁、影响范围分类和失败传播保持不变。下文带日期的 Make/专用 VM 结果为历史证据，不是现行命令；当前本机真实 Worker 入口见 README。
+
 日期：2026-10-25。本规范区分仓库已提供的配置与尚未执行的远端控制，不把文件存在视为流水线生效。
 
 ## 当前状态
@@ -48,7 +50,7 @@
 | `web/` 中其余文件（含依赖、锁文件、Node 和构建配置） | frontend |
 | `cmd/`、`internal/`、`db/`、集成/沙箱测试目录、`go.mod`/`go.sum`、`sqlc.yaml`、`scripts/test-postgres.sh` | backend + integration |
 | hooks、仓库策略/安装脚本、普通治理测试 | 治理检查及治理回归 |
-| 分流脚本及其测试、workflow、共享 Makefile、仓库配置、其他未识别路径 | 全量应用测试 |
+| 分流脚本及其测试、workflow、Dockerfile/Compose/工具脚本、仓库配置、其他未识别路径 | 全量应用测试 |
 | 手动触发、无法取得有效差异、空差异 | 全量应用测试 |
 
 混合改动取并集。新增模块须先确定依赖影响再缩小默认全量范围；不通过后缀全局排除 Markdown（例如应用目录里的 Markdown 测试夹具仍触发应用测试）。本次不做包级测试裁剪，也不修改应用断言、部署或特权沙箱边界。
@@ -73,7 +75,7 @@ Go 标准 testing、真实 PostgreSQL/Redis（Testcontainers for Go 优先验证
 
 同日材料子项沿用上述 jobs：`backend` 验证有界快照、摘要、异常文件和读取后再次授权；`integration` 验证双控制端的源码/清单/四文件下载、失效授权、真实行锁等待及 CLI 合成初始化。单元测试的授权竞态为依赖注入，协议和锁测试使用真实 TLS/进程/PostgreSQL；不把这些测试当成 Worker 缓存、沙箱执行或容量验收。
 
-已有 `backend-tests` / `frontend-tests` jobs，受影响时分别执行 `make go-check go-build`、`make web-check`。`integration-tests` job 受影响时使用独立 PostgreSQL 14 临时服务，检查 sqlc v1.31.1 生成差异及事务/迁移/租约真实测试；loopback trust 仅限一次性 CI 数据库，不作为部署配置。本地 `make db-test` 额外启动两个真实 API 子进程。专用 VM 的 `sandbox-test` 与普通 PR CI 分离。本地与 PR #1 首轮 CI 均已通过，具体 head 及运行见[交付日志](delivery-log.md)，实验边界见[M0 记录](m0-experiment.md)。
+当前 `backend-tests` / `frontend-tests` 分别运行容器内 `toolchain backend` 与 `frontend-check`。`integration-tests` 使用同一工具镜像内的 PostgreSQL 14 私有临时集群，运行 sqlc v1.31.1 生成差异、事务/迁移/租约和双 API/mTLS 控制端测试；不连接现有数据库。Docker Desktop 真实沙箱通过 `python3 scripts/test-worker.py all` 独立验收，不进入普通 PR CI。旧 Make 命令仅存在于历史验证记录；本次远端 CI 未运行，不能借用 PR #1 或 #19 的结果。
 
 ### 随功能交付建立的验收目录
 

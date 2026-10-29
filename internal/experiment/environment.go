@@ -1,7 +1,7 @@
 package experiment
 
 // ExecutionProfile describes the exact local M0 artifact and command budgets.
-// ImageID is a Docker config digest, not a distributable registry manifest digest.
+// ImageID is the immutable identity reported by the validated Docker image store.
 // A rebuild or another architecture requires a new profile and material version.
 type ExecutionProfile struct {
 	ID               string   `json:"id"`
@@ -32,6 +32,16 @@ type Limits struct {
 // PinnedEnvironment returns fresh values so callers cannot mutate later manifests.
 // These settings are for the dedicated, offline Linux arm64 experiment only.
 func PinnedEnvironment() ExecutionProfile {
+	p := legacyEnvironment()
+	p.ID = "m0-gnu17-desktop-arm64-v1"
+	p.KernelRelease = "7.0.14-linuxkit"
+	p.DockerfileSHA256 = "7f9004c43fe1c7f8e4f142419bff67bd837927ecba8cfe71ab1ff45b0051e1ed"
+	p.ImageID = "sha256:cd40ffdb32619806a8d97e59fe03e890fe4066835f57efa6ae13f919ef3262c5"
+	return p
+}
+
+// Preserve immutable v2 material for existing databases; new execution uses v3.
+func legacyEnvironment() ExecutionProfile {
 	return ExecutionProfile{
 		ID: "m0-gnu17-linux-arm64-v1", Platform: "linux/arm64",
 		KernelRelease:    "6.8.0-100-generic",

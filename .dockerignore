@@ -2,6 +2,9 @@
 **
 !go.mod
 !go.sum
+!sqlc.yaml
+!scripts/
+!scripts/**
 !cmd/
 !cmd/**
 !internal/

@@ -33,7 +33,7 @@ const token = "synthetic-test-only-token-never-a-real-credential"
 func TestAcceptance(t *testing.T) {
 	dsn := os.Getenv("OJ_TEST_DATABASE_URL")
 	if dsn == "" {
-		t.Fatal("OJ_TEST_DATABASE_URL must point to a disposable test database; use make db-test")
+		t.Fatal("OJ_TEST_DATABASE_URL must point to a disposable test database; use docker compose run --rm toolchain db")
 	}
 	ctx := context.Background()
 	conn, err := sql.Open("pgx", dsn)

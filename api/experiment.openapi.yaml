@@ -102,8 +102,8 @@ components:
       required: [material_version, language, source]
       properties:
         material_version:
-          enum: [m0-sum-v1, m0-sum-v2]
-          description: 必须匹配当前进程 OJ_EXPERIMENT_MATERIAL_VERSION（默认 m0-sum-v1）；不匹配返回 MATERIAL_UNAVAILABLE。v2 固定本机实验环境，v1 保持 unvalidated；不是任意环境选择接口。
+          enum: [m0-sum-v1, m0-sum-v2, m0-sum-v3]
+          description: 必须匹配当前进程 OJ_EXPERIMENT_MATERIAL_VERSION（默认 m0-sum-v1）；不匹配返回 MATERIAL_UNAVAILABLE。v3 固定 Docker Desktop 实验环境；v2 历史清单保留但当前执行器拒绝；v1 保持 unvalidated。不是任意环境选择接口。
         language: {const: 'gnu++17'}
         source:
           type: string

@@ -27,7 +27,7 @@ import (
 func TestLeasedExecutionConfirmsHostStop(t *testing.T) {
 	verifyEnvironment(t)
 	docker := func(ctx context.Context, args ...string) ([]byte, error) {
-		return exec.CommandContext(ctx, "docker", append([]string{"--context", "colima-oj-m0"}, args...)...).CombinedOutput()
+		return exec.CommandContext(ctx, "docker", append([]string{"--context", "desktop-linux"}, args...)...).CombinedOutput()
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -80,9 +80,8 @@ func TestLeasedExecutionConfirmsHostStop(t *testing.T) {
 		if pid <= 1 {
 			return errors.New("contestant process was not observed")
 		}
-		probe := exec.CommandContext(stopCtx, "colima", "--profile", "oj-m0", "ssh", "--", "test", "!", "-e", "/proc/"+strconv.FormatInt(pid, 10))
-		// Colima tries to mirror the host cwd; the offline VM deliberately has no
-		// repository mount. /tmp exists in both environments.
+		probe := exec.CommandContext(stopCtx, "docker", workerhost.PIDProbeArgs(strconv.FormatInt(pid, 10))...)
+		// The observation container has no repository mount.
 		probe.Dir = "/tmp"
 		if err := probe.Run(); err != nil {
 			return errors.New("contestant process exit unconfirmed")

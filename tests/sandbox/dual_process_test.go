@@ -18,6 +18,7 @@ import (
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/testpki"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/workerhost"
 )
 
 type dualProcess struct {
@@ -132,7 +133,7 @@ func dualDocker(t *testing.T, args ...string) string {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "docker", append([]string{"--context", "colima-oj-m0"}, args...)...).Output()
+	out, err := exec.CommandContext(ctx, "docker", append([]string{"--context", "desktop-linux"}, args...)...).Output()
 	if err != nil {
 		t.Fatal("sandbox control failed: ", err)
 	}
@@ -158,7 +159,7 @@ func dualStopped(t *testing.T, id, pid string) {
 	if pid != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, "colima", "--profile", "oj-m0", "ssh", "--", "test", "!", "-e", "/proc/"+pid)
+		cmd := exec.CommandContext(ctx, "docker", workerhost.PIDProbeArgs(pid)...)
 		cmd.Dir = "/tmp"
 		if err := cmd.Run(); err != nil {
 			t.Fatal("contestant PID still present")

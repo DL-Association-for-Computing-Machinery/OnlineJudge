@@ -189,14 +189,19 @@ class PolicyTests(unittest.TestCase):
         # gate with skip-on-missing manifests or a successful placeholder job.
         workflow = (SOURCE / ".github/workflows/governance.yml").read_text()
         self.assertNotIn("repo_policy.py bootstrap-ci", workflow)
-        for step in ("backend-tests:", "frontend-tests:", "make go-check go-build",
-                     "make web-check", "--frozen-lockfile"):
+        for step in ("backend-tests:", "frontend-tests:", "toolchain backend", "toolchain db",
+                     "toolchain sqlc", "frontend-check"):
             self.assertIn(step, workflow)
-        makefile = (SOURCE / "Makefile").read_text()
-        for command in ("go vet ./...", "go test -race ./...", "./cmd/api",
-                        "./cmd/worker", "web lint", "web typecheck", "web test", "web build"):
-            self.assertIn(command, makefile)
-        self.assertNotIn("--if-present", workflow + makefile)
+        script = (SOURCE / "scripts/toolchain.sh").read_text()
+        dockerfile = (SOURCE / "Dockerfile").read_text()
+        compose = (SOURCE / "compose.yaml").read_text()
+        self.assertFalse((SOURCE / "Makefile").exists())
+        for command in ("go vet ./...", "go test -race -count=1 ./...", "api worker worker-api migrate"):
+            self.assertIn(command, script)
+        self.assertIn("--frozen-lockfile", dockerfile)
+        self.assertIn("pnpm lint && pnpm typecheck && pnpm test && pnpm build", compose)
+        self.assertNotIn("docker.sock", compose)
+        self.assertNotIn("--if-present", workflow + script)
         self.assertNotIn("continue-on-error", workflow)
 
     def test_installer_preserves_existing_configuration(self):

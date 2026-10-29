@@ -12,7 +12,7 @@ import (
 const Version = "m0-sum-v1"
 
 // PinnedVersion retains the original inputs while fixing the execution profile.
-const PinnedVersion = "m0-sum-v2"
+const PinnedVersion = "m0-sum-v3"
 
 // SelectFixture accepts only built-in fixtures; empty preserves the legacy default.
 // This is explicit process configuration, never a caller-supplied image or command.
@@ -22,6 +22,8 @@ func SelectFixture(version string) (string, []byte, error) {
 		return Version, Manifest(), nil
 	case PinnedVersion:
 		return PinnedVersion, manifest(PinnedVersion, PinnedEnvironment()), nil
+	case "m0-sum-v2":
+		return version, manifest(version, legacyEnvironment()), nil
 	default:
 		return "", nil, errors.New("unknown M0 material version")
 	}

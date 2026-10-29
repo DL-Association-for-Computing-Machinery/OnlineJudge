@@ -1,13 +1,43 @@
-FROM golang:1.26.10-bookworm@sha256:386f0cbb8fb3402ff5a15048c96731e6ff37142d31182f3b72306359a1f5e9b7 AS backend-source
+FROM golang:1.26.10-bookworm@sha256:386f0cbb8fb3402ff5a15048c96731e6ff37142d31182f3b72306359a1f5e9b7 AS backend-deps
 WORKDIR /src
 ENV GOTOOLCHAIN=local
 COPY go.mod go.sum ./
 RUN go mod download && go mod verify
+FROM backend-deps AS backend-source
 COPY cmd/ cmd/
 COPY internal/ internal/
 COPY db/ db/
 COPY tests/ tests/
 COPY deploy/experiments/go-judge.Dockerfile deploy/experiments/go-judge.Dockerfile
+
+FROM backend-source AS host-build
+ARG HOSTOS=darwin
+ARG HOSTARCH=arm64
+RUN set -eu; mkdir /out; for app in api worker worker-api migrate; do \
+    GOOS=$HOSTOS GOARCH=$HOSTARCH CGO_ENABLED=0 go build -trimpath -o /out/$app ./cmd/$app; done \
+    && GOOS=$HOSTOS GOARCH=$HOSTARCH CGO_ENABLED=0 go test -c -tags=sandbox -o /out/sandbox.test ./tests/sandbox
+
+FROM scratch AS host-artifacts
+COPY --from=host-build /out/ /
+
+FROM backend-deps AS sqlc-build
+RUN GOBIN=/out go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
+
+FROM postgres:14-bookworm@sha256:a389ed49344afc8f4444efd4eb512965df07aaa6ed84b239b54a23246e9fe347 AS toolchain
+COPY --from=backend-source /usr/local/go /usr/local/go
+COPY --from=backend-source /go/pkg/mod /go/pkg/mod
+COPY --from=backend-source /src /src
+COPY --from=sqlc-build /out/sqlc /usr/local/bin/sqlc
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev python3 diffutils \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+COPY scripts/ scripts/
+COPY sqlc.yaml ./
+ENV PATH="/usr/local/go/bin:${PATH}" GOTOOLCHAIN=local GOCACHE=/tmp/go-build GOMODCACHE=/go/pkg/mod
+RUN mkdir /tmp/go-build && chown -R postgres:postgres /src /go/pkg/mod /tmp/go-build
+USER postgres
+ENTRYPOINT ["sh", "scripts/toolchain.sh"]
+CMD ["backend"]
 
 FROM backend-source AS backend-build
 RUN --mount=type=cache,target=/root/.cache/go-build \

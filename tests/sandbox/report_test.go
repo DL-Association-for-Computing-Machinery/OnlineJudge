@@ -33,7 +33,7 @@ import (
 // fixture submission and sandbox lifecycle remain test-driver responsibilities.
 func TestExecutionReport(t *testing.T) {
 	if os.Getenv("OJ_SANDBOX_REPORT") != "1" {
-		t.Skip("run make report-test with the dedicated sandbox")
+		t.Skip("run python3 scripts/test-worker.py report with the dedicated sandbox")
 	}
 	verifyEnvironment(t)
 	dsn := os.Getenv("OJ_TEST_DATABASE_URL")

@@ -58,7 +58,7 @@ func (h *Host) Stop(ctx context.Context) error {
 		return errors.New("sandbox stopped state unconfirmed")
 	}
 	for _, pid := range pids {
-		_, err := h.run(ctx, nil, "colima", "--profile", "oj-m0", "ssh", "--", "test", "!", "-e", "/proc/"+strconv.Itoa(pid))
+		_, err := h.run(ctx, nil, "docker", PIDProbeArgs(strconv.Itoa(pid))...)
 		if err != nil {
 			return errors.New("sandbox process exit unconfirmed")
 		}

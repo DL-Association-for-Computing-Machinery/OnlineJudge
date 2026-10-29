@@ -31,7 +31,7 @@ func (d *dockerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	if r.URL.Path == "/run" {
 		d.runs++
 	}
-	args := []string{"--context", "colima-oj-m0", "exec", "-i", container, "curl", "-fsS", "--max-time", "20", "-X", r.Method, "-H", "Content-Type: application/json"}
+	args := []string{"--context", "desktop-linux", "exec", "-i", container, "curl", "-fsS", "--max-time", "20", "-X", r.Method, "-H", "Content-Type: application/json"}
 	if r.Body != nil {
 		args = append(args, "--data-binary", "@-")
 	}

@@ -115,8 +115,9 @@ paths:
         当前节点有效租约限定的源码与固定清单。每次重新授权；已完成/过期/旧尝试或旧代次拒绝。
         manifest 是规范 JSON 原始字节的 base64，解码后核验 manifest_sha256；source 的 UTF-8 字节
         核验 source_sha256。清单 execution_environment=unvalidated 不得解释为可执行环境。
-        m0-sum-v2 将 execution_environment 固定为环境对象，包含本机镜像 ID、平台、工具版本、参数及预算；
-        image_id 是 Docker config digest，不是可拉取的 registry digest。执行端仍须核验实际环境并拒绝未知配置。
+        m0-sum-v3 将 execution_environment 固定为环境对象，包含本机镜像 ID、平台、工具版本、参数及预算；
+        image_id 是核验过的 Docker image store 报告的不可变身份，不包含可直接拉取的仓库名。
+        v2 历史清单保持不变；当前执行端仅接受 v3，仍须核验实际环境并拒绝未知配置。
         控制端只领取/提供配置版本的材料；切换版本时不能把旧租约转交给新版本控制端。
       requestBody:
         required: true
