@@ -1,6 +1,6 @@
 # API、事件与 Worker 协议
 
-日期：2026-10-28。版本：0.12。状态：M0 提交/租约、mTLS、材料授权、固定 v2 环境、受限编排、租约守护及结果回报已实测；单槽循环和可信宿主已接入可运行 Worker 命令。控制端自动恢复、两个固定槽的真实双 Worker 竞争执行及 SIGTERM 后自然租约到期接管已验证。执行端自动恢复、生产宿主、缓存和产品 API 仍待完成，完整 M0 未通过。协议见 [Worker OpenAPI](../../api/worker.openapi.yaml)，证据、模块边界及预算见[M0 记录](../m0-experiment.md)。关联 [总体架构](system-design.md)、[判题](judging-design.md)、[存储](storage-design.md)。
+本页维护 API、事件与 Worker 设计。已实现字段与错误以 [Worker OpenAPI](../../api/worker.openapi.yaml)为准，当前实现、验证证据与缺口见 [M0 记录](../m0-experiment.md)。关联 [总体架构](system-design.md)、[判题](judging-design.md)、[存储](storage-design.md)。
 
 固定槽映射由 `workerhost.M0Slot` 统一持有：命令配置只接受 primary/secondary（空值为原 primary），独占锁名与容器名不可分别配置；所有执行与停止继续绑定不可变容器 ID/启动时间。核心 Worker/执行模块不依赖槽选择或 Docker，控制端协议不变。双进程实验的恢复只增加尝试编号，灾备恢复代次不随普通重试递增；详见[双 Worker 实验](../m0-experiment.md#双-worker-真实执行与接管)。
 
@@ -37,7 +37,7 @@ M0 执行端增加 `workerclient.Renewer` 和 `execution.LeasedRunner`：前者�
 
 真实结果通过 `LeasedRunner.JudgeReport` 在执行/清理成功后形成绑定尝试及材料的 `submission.Result` 摘要值；`workerclient.Reporter` 只负责有界 mTLS 发送与确认分类，不依赖数据库或沙箱。原契约与存储指纹不变；只有 204 确认成功，状态未知保留原租约/原结果供显式重报，不自动重跑选手代码。执行错误不产生回报，详细证据归档及待回报持久化尚未实现。摘要语义、真实数据库/沙箱联合证据和测试夹具边界见[真实结果回报](../m0-experiment.md#真实结果回报)。
 
-实验版本由 `OJ_EXPERIMENT_MATERIAL_VERSION` 显式选择，默认 v1；v2 把本机镜像身份、平台/内核、工具版本、启动参数与预算纳入清单摘要。提交入口和控制端必须匹配版本，旧任务不重标，历史回执仍可查询。当前执行端仅消费固定 v2 已知配置，在领取前和执行时核验环境，不能把清单中的命令当成任意可执行输入。配置归 `internal/experiment`，SQL/租约模型不变，详见[M0 固定环境](../m0-experiment.md#固定执行环境与新材料版本)。
+实验版本由 `OJ_EXPERIMENT_MATERIAL_VERSION` 显式选择，默认 v1；v2 把本机镜像身份、平台/内核、工具版本、启动参数与预算纳入清单摘要。提交入口和控制端必须匹配版本，旧任务不重标，历史回执仍可查询。当前执行端仅消费 `internal/experiment.PinnedVersion` 指定的已知配置（目前为 `m0-sum-v3`），在领取前和执行时核验环境，不能把清单中的命令当成任意可执行输入。配置归 `internal/experiment`，SQL/租约模型不变，详见[M0 固定环境](../m0-experiment.md#固定执行环境与新材料版本)。
 
 - 服务端每次领取、续租、下载和回报均检查节点启用状态、凭据版本及授权，不能只在 TLS 握手时检查。证书签发、续期、轮换、吊销和到期告警须支持校内离线运维，具体工具和窗口待验证。
 - 私钥及节点凭据不进入选手沙箱、普通日志或公开离线交付包。Worker 不持有数据库凭据，不使用浏览器 Session，不获取全私有题库。
@@ -47,7 +47,7 @@ M0 执行端增加 `workerclient.Renewer` 和 `execution.LeasedRunner`：前者�
 
 ## 4. 调度与过载
 
-`workerclient.Acquirer` 负责一次领取及当前租约的材料准备，通过已有 POST 接口交互，不依赖数据库或沙箱。204 表示无可领任务；领取回执未知不自动重领。`Fetch` 只接受执行器支持的固定 v2，核对提交归属、源码/清单及逐文件哈希，全部成功后返回内存描述与材料集合。每请求 3 秒、整次下载 15 秒；与续租独立连接预算，执行前仍须由 `LeasedRunner` 重新续租。无持久缓存或自动恢复；详细预算与失败语义见[客户端实验](../m0-experiment.md#领取与材料客户端)。
+`workerclient.Acquirer` 负责一次领取及当前租约的材料准备，通过已有 POST 接口交互，不依赖数据库或沙箱。204 表示无可领任务；领取回执未知不自动重领。`Fetch` 只接受执行器支持的固定材料版本，核对提交归属、源码/清单及逐文件哈希，全部成功后返回内存描述与材料集合。每请求 3 秒、整次下载 15 秒；与续租独立连接预算，执行前仍须由 `LeasedRunner` 重新续租。无持久缓存或自动恢复；详细预算与失败语义见[客户端实验](../m0-experiment.md#领取与材料客户端)。
 
 采用比赛优先、参与者公平排序、有界队列。后续用户要求参考 DOMjudge 后，公平性采用其虚拟排队时间思路，替代早期严格逐参与者轮转提案；不是复制完整实现或固定常数。
 

@@ -1,6 +1,6 @@
 # ADR-001：Go + Gin 自研与成熟组件复用边界
 
-日期：2026-10-25。状态：Go + Gin 自研、模块化单体＋独立判题 Worker 和 React＋TypeScript＋Vite 前端已由用户确认；已有 API/Worker/前端工程骨架，业务细化设计尚未实现或压测；精简阶段见 [交付基线](../delivery-plan.md)。文档修订以 Git 历史为准。
+初始决策日期：2026-10-25。以下选型理由及未实现措辞记录当时背景；当前引入、验证和缺口见 [M0 记录](../m0-experiment.md)与 [README](../../README.md)。原始状态：Go + Gin 自研、模块化单体＋独立判题 Worker 和 React＋TypeScript＋Vite 前端已由用户确认；已有 API/Worker/前端工程骨架，业务细化设计尚未实现或压测；精简阶段见 [交付基线](../phase-1-development-plan.md)。文档修订以 Git 历史为准。
 
 ## 决策来源与背景
 
