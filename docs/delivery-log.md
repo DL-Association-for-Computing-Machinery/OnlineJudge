@@ -1,5 +1,20 @@
 # 工程交付记录
 
+## 2026-10-29：开发配置收敛与交付回读
+
+本节为当前交付索引；下方各节保留其验证时点的快照，不能将“提交前/未运行”误读为当前状态。按顺序已核验并合并：
+
+| PR | 唯一目标 | 合并提交 | 最新 head CI |
+| --- | --- | --- | --- |
+| [#21](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/21) | 分支起点与单目标规则对齐 | `daefe65` | [40876716530](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/actions/runs/40876716530)，四门禁成功，应用按文档范围跳过 |
+| [#22](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/22) | 容器结果接入必需门禁 | `b4be2f5` | [40877073240](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/actions/runs/40877073240)，八项成功 |
+| [#23](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/23) | 秘密与依赖扫描 | `fc95ada` | [40878643154](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/actions/runs/40878643154)，九项成功 |
+| [#24](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/24) | 只读开发自检 | `d790f65` | [40880041335](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/actions/runs/40880041335)，九项成功 |
+
+每项合并前核对本地/远端/PR head 一致、base 未变、完整差异自审、无现有 review/未解决讨论及 CLEAN/MERGEABLE，以 match-head-commit squash，合并后回读主线。没有独立人工批准、远端保护修改或部署。Go 三个未触达模块漏洞仍保留，未当作修复。
+
+第五项唯一目标为当前文档入口去重：从成功 fetch 后的 `d790f65` 创建任务分支，纠正 README 的 v2/旧交付状态，移除 CI 文档中已被 Docker 迁移替代的当前命令，授权以根规则为唯一入口，操作和历史证据分别引用。旧原克隆五处改动仍保留。验证：仓库策略（172 文件）、diff 检查、配置/路径/引用人工核对通过；本项不改应用或流水线，提交时 CI 与知识库事务尚待完成，最终结果以本 PR 和知识库事务回读为准。
+
 ## 2026-10-29：只读开发环境自检
 
 唯一目标：提供 `python3 scripts/doctor.py`（可选 `--json`、`--strict`、`--port`）检查工作区与 Docker 前置条件。禁用 Git 可选锁避免刷新 index，不 fetch、安装、切换分支或启动容器；工具错误不输出原始 stderr。缓存主线不能证明远端最新，资源展示不设未经压测的容量合格线。
@@ -30,7 +45,9 @@
 
 验证：`python3 scripts/repo_policy.py repository`（168 文件）及 `git diff --check` 通过；完整差异自审核对了根规则、流程与模板的范围及授权一致性。本次为文档变更，未运行应用测试；提交时未运行远端 CI，合并结果以 PR 为准，无部署。
 
-## 2026-10-29：Docker Desktop 工具链与 Worker 测试迁移（未提交）
+## 2026-10-29：Docker Desktop 工具链与 Worker 测试迁移（提交前快照）
+
+本节保留提交前记录。后续 [PR #20](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/20) 已合并为 `d419df6`，CI 40873232906 八项成功；当前命令见 README，下文“未提交/未运行远端 CI”仅描述当时。
 
 唯一目标：本机使用 Docker Desktop，构建/数据库工具容器化，移除 Makefile。基于本地 origin/main `436204c`，独立工作区 `/Users/huangqijun/.codex/worktrees/docker-tooling/OnlineJudge`，分支 `codex/docker-tooling`；原克隆五处既有改动未变。未提交、未推送、未建 PR、未运行远端 CI、未部署。
 
