@@ -68,7 +68,16 @@ def gate_passes(suite, needs):
     governance = needs.get("governance", {})
     if suite not in SUITES or governance.get("result") != "success":
         return False
-    selected = governance.get("outputs", {}).get(suite)
+    outputs = governance.get("outputs", {})
+    # Every existing required context also guards the Compose smoke test.
+    # Missing classifier outputs must not turn a cancelled job into a valid skip.
+    if any(outputs.get(name) not in ("true", "false") for name in SUITES):
+        return False
+    container_result = needs.get("containers", {}).get("result")
+    container_selected = any(outputs[name] == "true" for name in ("backend", "frontend"))
+    if container_result != ("success" if container_selected else "skipped"):
+        return False
+    selected = outputs[suite]
     result = needs.get(suite + "-tests", {}).get("result")
     return (selected, result) in (("true", "success"), ("false", "skipped"))
 

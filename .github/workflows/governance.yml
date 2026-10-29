@@ -96,7 +96,7 @@ jobs:
   required:
     # Stable required contexts; an upstream failure must never become a green skip.
     name: ${{ matrix.suite }}
-    needs: [governance, backend-tests, frontend-tests, integration-tests]
+    needs: [governance, backend-tests, frontend-tests, integration-tests, containers]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5

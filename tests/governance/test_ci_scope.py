@@ -30,7 +30,9 @@ class ScopeTests(unittest.TestCase):
         self.assertIn("fetch-depth: 0", jobs["governance"])
         self.assertIn("python3 scripts/ci_scope.py plan", jobs["governance"])
         self.assertIn("if: always()", jobs["required"])
-        self.assertIn("needs: [governance, backend-tests, frontend-tests, integration-tests]", jobs["required"])
+        self.assertIn("needs: [governance, backend-tests, frontend-tests, integration-tests, containers]", jobs["required"])
+        self.assertIn("needs: governance", jobs["containers"])
+        self.assertIn("if: needs.governance.outputs.backend == 'true' || needs.governance.outputs.frontend == 'true'", jobs["containers"])
         self.assertIn("suite: [backend, frontend, integration]", jobs["required"])
         self.assertIn("name: ${{ matrix.suite }}", jobs["required"])
         self.assertIn("CI_NEEDS: ${{ toJSON(needs) }}", jobs["required"])
@@ -71,8 +73,11 @@ class ScopeTests(unittest.TestCase):
         for suite in scope.SUITES:
             for selected in ("true", "false", "", "yes"):
                 for result in ("success", "failure", "cancelled", "skipped", "", "neutral"):
-                    needs = {"governance": {"result": "success", "outputs": {suite: selected}},
-                             suite + "-tests": {"result": result}}
+                    outputs = dict.fromkeys(scope.SUITES, "false")
+                    outputs[suite] = selected
+                    containers = "success" if any(outputs[name] == "true" for name in ("backend", "frontend")) else "skipped"
+                    needs = {"governance": {"result": "success", "outputs": outputs},
+                             "containers": {"result": containers}, suite + "-tests": {"result": result}}
                     expected = (selected, result) in (("true", "success"), ("false", "skipped"))
                     with self.subTest(suite=suite, selected=selected, result=result):
                         self.assertEqual(scope.gate_passes(suite, needs), expected)
@@ -85,13 +90,32 @@ class ScopeTests(unittest.TestCase):
     def test_gate_command_exits_nonzero_on_failure(self):
         for selected, result, expected in (("true", "success", 0), ("false", "skipped", 0),
                                            ("true", "failure", 1), ("true", "skipped", 1)):
-            needs = {"governance": {"result": "success", "outputs": {"backend": selected}},
+            needs = {"governance": {"result": "success", "outputs": {
+                         "backend": selected, "frontend": "false", "integration": "false"}},
+                     "containers": {"result": "success" if selected == "true" else "skipped"},
                      "backend-tests": {"result": result}}
             env = dict(os.environ, CI_SUITE="backend", CI_NEEDS=json.dumps(needs))
             env.pop("GITHUB_STEP_SUMMARY", None)
             process = subprocess.run([sys.executable, "-B", str(SOURCE / "scripts/ci_scope.py"), "gate"],
                                      env=env, capture_output=True)
             self.assertEqual(process.returncode, expected)
+
+    def test_container_failure_blocks_every_required_context(self):
+        for backend, frontend in (("true", "false"), ("false", "true"), ("true", "true"), ("false", "false")):
+            outputs = {"backend": backend, "frontend": frontend, "integration": backend}
+            expected = "success" if "true" in (backend, frontend) else "skipped"
+            needs = {"governance": {"result": "success", "outputs": outputs}}
+            needs.update({name + "-tests": {"result": "success" if outputs[name] == "true" else "skipped"}
+                          for name in scope.SUITES})
+            for result in ("success", "skipped", "failure", "cancelled", "neutral", ""):
+                needs["containers"] = {"result": result}
+                for suite in scope.SUITES:
+                    self.assertEqual(scope.gate_passes(suite, needs), result == expected)
+            del needs["containers"]
+            self.assertFalse(any(scope.gate_passes(suite, needs) for suite in scope.SUITES))
+        needs["containers"] = {"result": "skipped"}
+        del outputs["frontend"]
+        self.assertFalse(scope.gate_passes("backend", needs))
 
 
 class DiffTests(unittest.TestCase):
