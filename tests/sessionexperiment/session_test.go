@@ -108,6 +108,14 @@ func setupAuthorizedReplicasWithProfiles(t *testing.T, prefix string, replicas i
 				if cookie, err := r.Cookie(manager.Cookie.Name); err == nil {
 					token = cookie.Value
 				}
+				rotate := path == "/rotate-fixture" || path == "/late-rotate-fixture"
+				if rotate {
+					if r.Method != http.MethodPost {
+						w.WriteHeader(http.StatusMethodNotAllowed)
+						return
+					}
+					manager.Store = &rotationStore{guardedStore: store, old: token}
+				}
 				ctx, err := manager.Load(ctx, token)
 				if errors.Is(err, errStale) {
 					w.WriteHeader(http.StatusUnauthorized)
@@ -150,6 +158,7 @@ func setupAuthorizedReplicasWithProfiles(t *testing.T, prefix string, replicas i
 						return
 					}
 					switch path {
+					case "/rotate-fixture", "/late-rotate-fixture":
 					case "/me":
 						w.WriteHeader(http.StatusOK)
 						return
@@ -172,7 +181,12 @@ func setupAuthorizedReplicasWithProfiles(t *testing.T, prefix string, replicas i
 						w.WriteHeader(http.StatusNoContent)
 						return
 					case "/late-save":
-						f.loaded <- struct{}{}
+						select {
+						case f.loaded <- struct{}{}:
+						case <-ctx.Done():
+							w.WriteHeader(http.StatusServiceUnavailable)
+							return
+						}
 						select {
 						case <-f.resume:
 						case <-ctx.Done():
@@ -184,8 +198,13 @@ func setupAuthorizedReplicasWithProfiles(t *testing.T, prefix string, replicas i
 						return
 					}
 				}
-				if path == "/late-login-fixture" {
-					f.loaded <- struct{}{}
+				if path == "/late-login-fixture" || path == "/late-rotate-fixture" {
+					select {
+					case f.loaded <- struct{}{}:
+					case <-ctx.Done():
+						w.WriteHeader(http.StatusServiceUnavailable)
+						return
+					}
 					select {
 					case <-f.resume:
 					case <-ctx.Done():
@@ -196,8 +215,16 @@ func setupAuthorizedReplicasWithProfiles(t *testing.T, prefix string, replicas i
 				if !store.admin && manager.GetBool(ctx, "remember_login") {
 					manager.IdleTimeout = remember.idle
 				}
+				if rotate {
+					deadline := manager.Deadline(ctx)
+					if err := manager.RenewToken(ctx); err != nil {
+						w.WriteHeader(http.StatusServiceUnavailable)
+						return
+					}
+					manager.SetDeadline(ctx, deadline)
+				}
 				token, expiry, err := manager.Commit(ctx)
-				if errors.Is(err, errLimit) {
+				if errors.Is(err, errLimit) || errors.Is(err, errRotationConflict) {
 					w.WriteHeader(http.StatusConflict)
 					return
 				}
