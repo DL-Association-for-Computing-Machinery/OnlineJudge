@@ -6,7 +6,9 @@
 
 ## 管理会话期限与 scope 隔离（2026-10-30）
 
-`codex/session-admin-lifetime` 从成功 fetch 后的 `2485f9f` 创建。两个现有 TLS API 各自增加启动前配置的管理 manager 和存储适配器，使用独立 `admin_session` Cookie、`/admin-fixture` Cookie Path、`admin:` Redis 子命名空间；同一 API 的两个 scope 共用一个有界 Redis 连接池和 PostgreSQL 账号/恢复代次。管理登录仍是预认证测试身份，**不验证真实管理资格、密码或敏感操作再次验证**，不接入生产。
+`codex/session-admin-lifetime` 从成功 fetch 后的 `2485f9f` 创建。两个现有 TLS API 各自增加启动前配置的管理 manager 和存储适配器，使用独立 `admin_session` Cookie、`/admin-fixture` Cookie Path、`admin:` Redis 子命名空间；同一 API 的两个 scope 共用一个配置 `PoolSize=8` 的 Redis 客户端和 PostgreSQL 账号/恢复代次。管理登录仍是预认证测试身份，**不验证真实管理资格、密码或敏感操作再次验证**，不接入生产。
+
+`PoolSize` 是基础池大小，不能据此宣称最大连接数为 8；锁定 [go-redis v9.23.0 的配置源码](https://github.com/redis/go-redis/blob/v9.23.0/options.go)说明须用 `MaxActiveConns` 限制最大连接数，零值不设上限。当前夹具未设置该项，也没有验证跨副本总连接预算或负载上限；连接总上限是待补项，本轮仅证明两个 scope 复用同一客户端。
 
 - 管理默认空闲 30 分钟、绝对 8 小时，Cookie 始终非持久化，保留 Secure、HttpOnly、SameSite=Strict。管理登录及活动的 `remember=true` 都不能开启保持登录或延长期限；普通 2 小时/12 小时和个人保持登录 24 小时/7 天保持不变。
 - 读取和保存都检查服务端 `session_scope=admin`，拒绝缺失/错误类型/错误 scope、个人 remember 标记及固定 SCS v2.9.0 的持久化标记混入；普通存储拒绝管理 scope。Redis TIME 检查管理记录的 8 小时上界，使用全新凭据单独证明超界保存被拒绝且没有写入副作用。
