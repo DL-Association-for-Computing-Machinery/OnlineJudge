@@ -105,6 +105,12 @@ func setupAuthorizedReplicas(t *testing.T, prefix string, replicas int, authorit
 				case "/me":
 					w.WriteHeader(http.StatusOK)
 					return
+				case "/activity-fixture":
+					// Trusted activity probe, not a production activity/CSRF policy.
+					if r.Method != http.MethodPost {
+						w.WriteHeader(http.StatusMethodNotAllowed)
+						return
+					}
 				case "/logout":
 					if r.Method != http.MethodPost {
 						w.WriteHeader(http.StatusMethodNotAllowed)
