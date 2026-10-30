@@ -97,6 +97,14 @@ func setupAuthorizedReplicasWithProfiles(t *testing.T, prefix string, replicas i
 				if store.admin {
 					path = strings.TrimPrefix(path, "/admin-fixture")
 				}
+				switch path {
+				case "/login-fixture", "/late-login-fixture", "/activity-fixture", "/logout", "/late-save", "/rotate-fixture", "/late-rotate-fixture":
+					if r.Method != http.MethodPost {
+						w.Header().Set("Allow", http.MethodPost)
+						w.WriteHeader(http.StatusMethodNotAllowed)
+						return
+					}
+				}
 				login := (path == "/login-fixture" || path == "/late-login-fixture") && r.Method == http.MethodPost
 				rememberLogin := !store.admin && login && r.URL.Query().Get("remember") == "true"
 				if rememberLogin {
@@ -110,10 +118,6 @@ func setupAuthorizedReplicasWithProfiles(t *testing.T, prefix string, replicas i
 				}
 				rotate := path == "/rotate-fixture" || path == "/late-rotate-fixture"
 				if rotate {
-					if r.Method != http.MethodPost {
-						w.WriteHeader(http.StatusMethodNotAllowed)
-						return
-					}
 					manager.Store = &rotationStore{guardedStore: store, old: token}
 				}
 				ctx, err := manager.Load(ctx, token)
@@ -164,15 +168,7 @@ func setupAuthorizedReplicasWithProfiles(t *testing.T, prefix string, replicas i
 						return
 					case "/activity-fixture":
 						// Trusted activity probe, not a production activity/CSRF policy.
-						if r.Method != http.MethodPost {
-							w.WriteHeader(http.StatusMethodNotAllowed)
-							return
-						}
 					case "/logout":
-						if r.Method != http.MethodPost {
-							w.WriteHeader(http.StatusMethodNotAllowed)
-							return
-						}
 						if err := manager.Destroy(ctx); err != nil {
 							w.WriteHeader(http.StatusServiceUnavailable)
 							return
@@ -240,13 +236,13 @@ func setupAuthorizedReplicasWithProfiles(t *testing.T, prefix string, replicas i
 				w.WriteHeader(http.StatusCreated)
 			})
 		}
-		f.servers[i] = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		f.servers[i] = httptest.NewTLSServer(sessionOriginProtection(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			profile := 0
 			if strings.HasPrefix(r.URL.Path, "/admin-fixture/") {
 				profile = 1
 			}
 			handlers[profile].ServeHTTP(w, r)
-		}))
+		})))
 		f.servers[i].Client().Timeout = 5 * time.Second
 		t.Cleanup(f.servers[i].Close)
 	}
