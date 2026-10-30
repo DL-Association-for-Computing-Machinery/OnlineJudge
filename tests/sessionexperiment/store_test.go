@@ -20,7 +20,10 @@ var (
 // This adapter exists only in the experiment, with optional fixture authority.
 // Retain expired/revoked records until their absolute deadline: deleting them
 // early would let a request that loaded old data recreate the same token.
-const commitLua = `
+// Redis 7 declared-script defaults reject an already-OOM write before running
+// ZREMRANGEBYSCORE; legacy eval lets this first non-allocating write bypass OOM
+// checks for the later HSET/ZADD. This is not a hard cap during script execution.
+const commitLua = `#!lua
 local t = redis.call('TIME')
 local now = tonumber(t[1])*1000 + math.floor(tonumber(t[2])/1000)
 local deadline, expiry = tonumber(ARGV[3]), tonumber(ARGV[4])
