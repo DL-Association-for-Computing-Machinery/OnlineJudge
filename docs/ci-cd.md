@@ -68,6 +68,8 @@ Go 标准 testing、真实 PostgreSQL 与 Vitest 已配置，版本以依赖清�
 
 当前 `backend-tests` / `frontend-tests` 分别运行容器内 `toolchain backend` 与 `frontend-check`。`integration-tests` 使用同一工具镜像内的 PostgreSQL 14 私有临时集群，运行 sqlc v1.31.1 生成差异、事务/迁移/租约和双 API/mTLS 控制端测试；不连接现有数据库。Docker Desktop 真实沙箱通过 `python3 scripts/test-worker.py all` 独立验收，不进入普通 PR CI。每次交付须核验对应 head 的结果，不借用旧 PR 的通过状态。
 
+Dockerfile 的 sqlc 与 golangci-lint 两条固定版本安装命令局部使用 `GODEBUG=http2client=0`，将 Go 工具安装的 HTTPS 客户端切到 HTTP/1.1，缓解已观察到的校验站 HTTP/2 stream `INTERNAL_ERROR`。该开关受 [Go net/http 文档](https://pkg.go.dev/net/http#hdr-HTTP_2)支持，并已核对锁定 Go 1.26.10 的本地文档；它不是全局 ENV，不改变应用/运行镜像的 HTTP 配置，不关闭 TLS、Go checksum 或更换代理。传输切换不保证远端服务可达，不能解决 TCP 拒绝连接或视为已定位上游根因；实际构建与 CI 验收状态见[交付记录](delivery-log.md)。回退两处命令级赋值即可，无运行配置或数据库迁移。
+
 ### 随功能交付建立的验收目录
 
 已实现 Worker/控制端的快速行为与真实 PostgreSQL/mTLS 测试由 backend-tests/integration-tests 维护；实际选手程序执行、PID 停止与故障恢复依赖独立 Worker 专项。各次引入时的测试数量和旧命令只在 [M0 记录](m0-experiment.md)与交付日志保存，不在本页并行维护另一套状态。
