@@ -16,13 +16,17 @@ type postgresSessionFixture struct {
 	api    *fixture
 }
 
-func setupPostgresSessions(t *testing.T) *postgresSessionFixture {
+func setupPostgresSessions(t *testing.T, guarded ...bool) *postgresSessionFixture {
 	t.Helper()
+	if len(guarded) > 1 {
+		t.Fatal("at most one account-guard option is allowed")
+	}
 	f := &postgresSessionFixture{api: &fixture{loaded: make(chan struct{}, 1), resume: make(chan struct{})}}
 	namespace := digest(t.Name())
 	for i := range 2 {
 		a := newAuthority(t, namespace)
 		s := &postgresSessionStore{pool: a.pool, namespace: namespace}
+		s.account = len(guarded) == 1 && guarded[0]
 		f.stores[i] = s
 		if i == 0 {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -30,6 +34,14 @@ func setupPostgresSessions(t *testing.T) *postgresSessionFixture {
 			cancel()
 			if err != nil {
 				t.Fatal(err)
+			}
+			if s.account {
+				if _, err := s.pool.Exec(context.Background(), postgresAccountSchema); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := s.pool.Exec(context.Background(), `INSERT INTO session_pg_account_fixture VALUES($1,$2,1,true)`, namespace, digest("fixture-user")); err != nil {
+					t.Fatal(err)
+				}
 			}
 		}
 		manager := scs.New()
@@ -55,7 +67,8 @@ func setupPostgresSessions(t *testing.T) *postgresSessionFixture {
 				postgresSessionError(w, err)
 				return
 			}
-			if r.URL.Path == "/login-fixture" {
+			login := r.URL.Path == "/login-fixture" || r.URL.Path == "/late-login-fixture"
+			if login {
 				if token != "" {
 					w.WriteHeader(http.StatusConflict)
 					return
@@ -64,6 +77,14 @@ func setupPostgresSessions(t *testing.T) *postgresSessionFixture {
 				manager.Put(ctx, "subject", "fixture-user")
 				manager.Put(ctx, "remember_login", false)
 				manager.RememberMe(ctx, false)
+				if s.account {
+					generation, err := s.currentAccount(ctx, "fixture-user")
+					if err != nil {
+						postgresSessionError(w, err)
+						return
+					}
+					manager.Put(ctx, "auth_generation", generation)
+				}
 			} else {
 				if manager.GetString(ctx, "subject") != "fixture-user" {
 					w.WriteHeader(http.StatusUnauthorized)
@@ -83,20 +104,22 @@ func setupPostgresSessions(t *testing.T) *postgresSessionFixture {
 					return
 				case "/activity-fixture":
 				case "/late-save":
-					select {
-					case f.api.loaded <- struct{}{}:
-					case <-ctx.Done():
-						postgresSessionError(w, ctx.Err())
-						return
-					}
-					select {
-					case <-f.api.resume:
-					case <-ctx.Done():
-						postgresSessionError(w, ctx.Err())
-						return
-					}
 				default:
 					w.WriteHeader(http.StatusNotFound)
+					return
+				}
+			}
+			if r.URL.Path == "/late-save" || r.URL.Path == "/late-login-fixture" {
+				select {
+				case f.api.loaded <- struct{}{}:
+				case <-ctx.Done():
+					postgresSessionError(w, ctx.Err())
+					return
+				}
+				select {
+				case <-f.api.resume:
+				case <-ctx.Done():
+					postgresSessionError(w, ctx.Err())
 					return
 				}
 			}
