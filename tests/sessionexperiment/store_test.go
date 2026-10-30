@@ -91,9 +91,13 @@ func (s *guardedStore) CommitCtx(ctx context.Context, token string, b []byte, ex
 		if !ok || generation <= 0 {
 			return errStale
 		}
+		recovery, ok := values["recovery_generation"].(int64)
+		if !ok || recovery <= 0 {
+			return errStale
+		}
 		// A new generation gets new slots; old records remain until expiry.
-		hash = digest(subject + ":" + strconv.FormatInt(generation, 10))
-		return s.auth.withValid(ctx, subject, generation, func() error {
+		hash = digest(subject + ":" + strconv.FormatInt(generation, 10) + ":" + strconv.FormatInt(recovery, 10))
+		return s.auth.withValid(ctx, subject, authVersion{generation, recovery}, func() error {
 			return s.commit(ctx, token, b, hash, deadline, expiry)
 		})
 	}
@@ -128,7 +132,8 @@ func (s *guardedStore) FindCtx(ctx context.Context, token string) ([]byte, bool,
 		}
 		subject, _ := values["subject"].(string)
 		generation, _ := values["auth_generation"].(int64)
-		err = s.auth.withValid(ctx, subject, generation, func() error { return nil })
+		recovery, _ := values["recovery_generation"].(int64)
+		err = s.auth.withValid(ctx, subject, authVersion{generation, recovery}, func() error { return nil })
 	}
 	return []byte(b), err == nil, err
 }

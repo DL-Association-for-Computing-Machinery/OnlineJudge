@@ -17,18 +17,33 @@ type authAuthority struct {
 	namespace string
 }
 
-func (a *authAuthority) current(ctx context.Context, subject string) (int64, error) {
-	var generation int64
-	var enabled bool
-	err := a.pool.QueryRow(ctx, `SELECT generation, enabled FROM session_auth_fixture
-		WHERE namespace=$1 AND subject=$2`, a.namespace, subject).Scan(&generation, &enabled)
-	if errors.Is(err, pgx.ErrNoRows) || (err == nil && !enabled) {
-		return 0, errStale
-	}
-	return generation, err
+type authVersion struct {
+	account, recovery int64
 }
 
-func (a *authAuthority) withValid(ctx context.Context, subject string, expected int64, operation func() error) error {
+var errRecovering = errors.New("session recovery unavailable")
+
+func (a *authAuthority) current(ctx context.Context, subject string) (authVersion, error) {
+	var version authVersion
+	var open bool
+	err := a.pool.QueryRow(ctx, `SELECT generation, enabled FROM session_recovery_fixture
+		WHERE namespace=$1`, a.namespace).Scan(&version.recovery, &open)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && !open) {
+		return authVersion{}, errRecovering
+	}
+	if err != nil {
+		return authVersion{}, err
+	}
+	var enabled bool
+	err = a.pool.QueryRow(ctx, `SELECT generation, enabled FROM session_auth_fixture
+		WHERE namespace=$1 AND subject=$2`, a.namespace, subject).Scan(&version.account, &enabled)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && !enabled) {
+		return authVersion{}, errStale
+	}
+	return version, err
+}
+
+func (a *authAuthority) withValid(ctx context.Context, subject string, expected authVersion, operation func() error) error {
 	tx, err := a.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -38,6 +53,21 @@ func (a *authAuthority) withValid(ctx context.Context, subject string, expected 
 		defer cancel()
 		_ = tx.Rollback(cleanup)
 	}()
+	// Always lock recovery before account state. Recovery waits for every guarded
+	// save before closing admission, and stale saves recheck after it reopens.
+	var recovery int64
+	var open bool
+	err = tx.QueryRow(ctx, `SELECT generation, enabled FROM session_recovery_fixture
+		WHERE namespace=$1 FOR SHARE`, a.namespace).Scan(&recovery, &open)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && !open) {
+		return errRecovering
+	}
+	if err != nil {
+		return err
+	}
+	if expected.recovery <= 0 || recovery != expected.recovery {
+		return errStale
+	}
 	var generation int64
 	var enabled bool
 	err = tx.QueryRow(ctx, `SELECT generation, enabled FROM session_auth_fixture
@@ -48,7 +78,7 @@ func (a *authAuthority) withValid(ctx context.Context, subject string, expected 
 	if err != nil {
 		return err
 	}
-	if !enabled || expected <= 0 || generation != expected {
+	if !enabled || expected.account <= 0 || generation != expected.account {
 		return errStale
 	}
 	// Serialize Redis saves with account invalidation. This is NOT a distributed
@@ -93,6 +123,15 @@ func setupAuth(t *testing.T) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	_, err = a.pool.Exec(ctx, `CREATE TABLE IF NOT EXISTS session_recovery_fixture (
+		namespace text PRIMARY KEY, generation bigint NOT NULL CHECK (generation>0), enabled boolean NOT NULL)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = a.pool.Exec(ctx, `INSERT INTO session_recovery_fixture VALUES ($1,1,true)`, namespace)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return setupAuthorizedReplicas(t, "auth:"+namespace+":", 2,
 		[]*authAuthority{a, newAuthority(t, namespace)})
 }
@@ -109,4 +148,20 @@ func invalidate(t *testing.T, a *authAuthority, enabled bool) {
 	if tag.RowsAffected() != 1 {
 		t.Fatal("account invalidation did not update exactly one row")
 	}
+}
+
+func (a *authAuthority) beginRecovery(ctx context.Context) (int64, error) {
+	var generation int64
+	err := a.pool.QueryRow(ctx, `UPDATE session_recovery_fixture
+		SET generation=generation+1, enabled=false WHERE namespace=$1 RETURNING generation`, a.namespace).Scan(&generation)
+	return generation, err
+}
+
+func (a *authAuthority) finishRecovery(ctx context.Context, expected int64) error {
+	tag, err := a.pool.Exec(ctx, `UPDATE session_recovery_fixture SET enabled=true
+		WHERE namespace=$1 AND generation=$2 AND enabled=false`, a.namespace, expected)
+	if err == nil && tag.RowsAffected() != 1 {
+		return errRecovering
+	}
+	return err
 }

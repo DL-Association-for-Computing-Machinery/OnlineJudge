@@ -88,7 +88,8 @@ func setupAuthorizedReplicas(t *testing.T, prefix string, replicas int, authorit
 						w.WriteHeader(http.StatusServiceUnavailable)
 						return
 					}
-					manager.Put(ctx, "auth_generation", generation)
+					manager.Put(ctx, "auth_generation", generation.account)
+					manager.Put(ctx, "recovery_generation", generation.recovery)
 				}
 			} else {
 				if manager.GetString(ctx, "subject") != "fixture-user" {

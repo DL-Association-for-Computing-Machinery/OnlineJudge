@@ -33,8 +33,8 @@ func TestAccountGenerationAcrossAPIs(t *testing.T) {
 	// Fresh DB connections read the persisted generation, with no local cache.
 	fresh := newAuthority(t, f.stores[0].auth.namespace)
 	generation, err := fresh.current(context.Background(), "fixture-user")
-	if err != nil || generation != 2 {
-		t.Fatalf("persisted generation=%d err=%v", generation, err)
+	if err != nil || generation != (authVersion{2, 1}) {
+		t.Fatalf("persisted generation=%+v err=%v", generation, err)
 	}
 	var current []*http.Cookie
 	for i := range 3 {
@@ -118,7 +118,7 @@ func TestAccountInvalidationWaitsForSaveGuard(t *testing.T) {
 	f := setupAuth(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	err := f.stores[0].auth.withValid(ctx, "fixture-user", 1, func() error {
+	err := f.stores[0].auth.withValid(ctx, "fixture-user", authVersion{1, 1}, func() error {
 		tx, err := f.stores[1].auth.pool.Begin(ctx)
 		if err != nil {
 			return err
@@ -138,7 +138,7 @@ func TestAccountInvalidationWaitsForSaveGuard(t *testing.T) {
 		t.Fatal(err)
 	}
 	invalidate(t, f.stores[1].auth, true)
-	err = f.stores[0].auth.withValid(ctx, "fixture-user", 1, func() error { t.Error("stale operation executed"); return nil })
+	err = f.stores[0].auth.withValid(ctx, "fixture-user", authVersion{1, 1}, func() error { t.Error("stale operation executed"); return nil })
 	if !errors.Is(err, errStale) {
 		t.Fatalf("old generation: %v", err)
 	}
