@@ -67,10 +67,11 @@ return 0
 `
 
 type guardedStore struct {
-	client *redis.Client
-	prefix string
-	auth   *authAuthority
-	admin  bool
+	client          *redis.Client
+	prefix          string
+	auth            *authAuthority
+	admin           bool
+	rotationReceipt func(saveAttempt) error
 }
 
 var _ scs.CtxStore = (*guardedStore)(nil)
