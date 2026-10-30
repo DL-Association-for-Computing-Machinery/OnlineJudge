@@ -1,5 +1,15 @@
 # 工程交付记录
 
+## 2026-10-31：会话写请求来源防护与安全方法边界
+
+从成功 fetch 后的 `428ea2f` 创建独立 `codex/session-origin-protection` worktree，唯一目标为 P3/M0、AC23 的测试 API 来源防护子项。复用锁定 Go 1.26.10 CrossOriginProtection，在路由/会话加载前加显式 HTTPS/Host 精确来源与头值检查；无 trusted origin/绕过/CORS 授权。两来源头缺失仍兼容非浏览器驱动，不代替认证。七条写探针在 Load 前统一限制 POST，失败 405/Allow: POST。
+
+原 69 项行为/race 基线通过（67.162 秒）。接入前的负向完整运行实测非法来源登录返回 201/进入业务处理，GET `/late-save` 返回 201 并保存会话；后端关闭时非法来源得到503、混合活动中的非法来源得到201，均不能通过新增断言。修复后 20 种非法来源×两 API×三 profile×七写路径共 840 个 POST 拒绝403/no-store、无原始Set-Cookie、全载荷/索引/绝对期限不变，未进入屏障。四种合法来源模式生命周期、安全方法只读、后端故障前置拒绝对照和48个混合来源并发通过。
+
+最终完整 74 项行为/race、234 个子例通过（67.796 秒），格式、模块校验、vet、已有质量镜像 golangci-lint 零问题，repository policy 205 文件通过；命令 `python3 scripts/test-session.py --toolchain-image oj-go-quality-toolchain:latest --module-cache /private/tmp/oj-session-mod`。Astra 定向复核及主代理完整差异自审无剩余阻断，不替代独立人工审批。403处理器只写状态、不输出内部错误正文；行为断言验证状态、缓存头、Cookie和逻辑状态，未把正文检查列作实测证据。实际 PR/head/CI/合并结果按交付回读及知识库记录。
+
+仅直连同进程双 TLS 测试 API；精确来源可能保守拒绝Host大小写/默认端口表示不同的非浏览器请求，不实现公共origin/反代信任、浏览器兼容或正式Gin/CSRF。没有新依赖、生产程序、SQL、迁移或驱动改动；回退包装器及门禁即可。未验证XSS/点击劫持/真实管理授权，不宣称完整AC23/M0或生产准入，未部署。
+
 ## 2026-10-31：会话凭据原子轮换与原期限保持
 
 从成功 fetch 后的 `bc0c138` 创建独立 `codex/session-token-rotation` worktree，唯一目标为 P3/M0、AC23 的凭据轮换子实验。SCS 默认 RenewToken 会先删除旧记录并重置期限；新增每请求存储包装器，暂存准确旧凭据的单次删除意图，生成新凭据后恢复原 deadline，双代次守卫下单 Lua 转移原名额、旧记录保留原期限墓碑。没有新增依赖、生产程序、SQL、迁移或驱动。

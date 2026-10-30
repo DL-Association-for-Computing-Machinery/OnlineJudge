@@ -4,6 +4,17 @@
 
 实验目标：用 SCS 和真实 Redis 验证普通会话三名额，以及跨 API 撤销后迟到保存不能复活会话；后续子项补齐独立 API 进程与进程重启证据。所有适配器和 HTTP 处理器只存在于 `_test.go`，不接入应用，不提供可部署登录入口。独立 Go 模块避免把实验依赖引入正式程序；根目录 `go test ./...` **不会执行本模块**。后端 CI 已单独纳入本模块静态分析，真实 Redis 行为测试仍按下文专项执行。
 
+## 浏览器写请求的来源防护（2026-10-31）
+
+`codex/session-origin-protection` 从成功 fetch 后的 `428ea2f` 创建。两个现有 TLS API 在路由/scope 分发及任何会话读取前，统一使用锁定 Go 1.26.10 的 [`http.CrossOriginProtection`](https://go.dev/src/net/http/csrf.go)；没有 trusted origin、路径绕过或 CORS 授权。此机制保护测试夹具，不是正式 Gin 中间件或完整浏览器 CSRF 验收。
+
+- 非安全方法先检查显式 Origin 必须为唯一且非空、精确匹配 `https://`＋请求 Host；Sec-Fetch-Site 多值/显式空值拒绝，其余由标准库判定。`cross-site`、`same-site`、未知或逗号合并值拒绝；矛盾的 `same-origin`/`none` 不能放行外来 Origin。标准库的旧浏览器回退只比较 Host，本项额外拒绝 HTTP 降级、其他端口、opaque/null、路径和畸形来源；忽略 Forwarded/X-Forwarded-* 的来源声明。拒绝为 403、no-store、无 Cookie，处理器不输出内部错误正文。
+- 两头均缺失时保留既有非浏览器驱动路径，`same-origin` 和无 Origin 的 `none` 也可通过来源检查；它们不是身份凭据，后续账号/会话守卫仍必需。精确字符串匹配适用于本实验直连 TLS；Host 大小写或默认端口等语义等价但表示不同的非浏览器来源可能被保守拒绝。反代/公共规范 origin、浏览器及代理剥除头的兼容策略仍待设计，不能把此策略直接当作生产部署配置。
+- 标准库始终放行 GET/HEAD/OPTIONS，因此全部七条写探针在 Load 前统一限制为 POST（405、Allow: POST）。负向运行实证原 `/late-save` 的 GET 会保存并返回 201；现在安全方法访问任一写路径都不进入屏障、不写 Cookie/状态。跨站 GET `/me` 仍只读、不续期；没有设置 Access-Control-Allow-Origin/Credentials，不代表浏览器获准跨站读取。
+- 20 类非法来源组合、两 API、普通/保持登录/管理 profile 和七条写路径共 840 个 POST 均拒绝，完整载荷/索引/绝对期限不变、屏障未触发。现代同源、只带合法 Origin、两头缺失、`none` 四种模式均验证完整登录→活动→轮换→读取→退出；安全方法、Redis/PostgreSQL 客户端关闭时非法来源 403/合法来源 503 对照，以及 48 个混合来源并发活动均有独立验证。
+
+没有新依赖、生产程序、SQL、迁移或驱动改动；回退新增来源包装器及方法门禁即可。原有 Cookie 属性、名额、轮换、双代次和故障恢复规则不变；未验证真实浏览器/反代、XSS、防点击劫持、正式管理授权或完整 AC23/M0，未部署。实际负向及最终结果见[交付记录](../../docs/delivery-log.md)。
+
 ## 凭据原子轮换与原期限保持（2026-10-31）
 
 `codex/session-token-rotation` 从成功 fetch 后的 `bc0c138` 创建。新增受信 `POST /rotate-fixture` 和屏障探针；仍只在 `_test.go`，不提供正式登录、权限提升或 CSRF 接口。普通、保持登录和管理均维持原 scope、载荷、Cookie 持久策略及登录起绝对 deadline；轮换作为显式活动可刷新空闲期限，但不能延长绝对期限或接受查询参数升级策略。
