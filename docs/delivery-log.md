@@ -1,5 +1,15 @@
 # 工程交付记录
 
+## 2026-10-31：PostgreSQL 普通会话名额与撤销对照
+
+从成功 fetch 后的 `274368c` 创建独立 `codex/session-postgres-admission` worktree。唯一目标为 P3/M0、AC23 存储比较的普通会话正确性子项，新增三个 `_test.go`，不替换 Redis、不修改生产代码/依赖/迁移。两个同进程 TLS API 各用最多4条连接，SCS普通2小时空闲/12小时绝对期限与非持久 Cookie；测试表按 namespace/主体摘要行→凭据摘要行锁序，在全部锁之后读数据库时钟，名额与写入同事务。毫秒列保留原Gob载荷（含纳秒deadline），撤销/过期记录不提前删除。
+
+Docker Desktop Linux arm64、已有 Go 1.26.10 质量镜像/缓存，私有 Redis7.2.4、PostgreSQL14.24。原74项行为/race基线通过（67.835秒）；首次仅缓存路径不存在，在创建容器前失败，改用既有缓存后正常执行。首轮新增8项连同原74项通过（68.389秒）；复核后补齐普通策略拒绝、错放载荷和过期前可读断言，84项通过（68.900秒）。最后将策略拒绝收紧为明确errStale后完整84项行为/race、247子例通过（68.878秒），命令 `python3 scripts/test-session.py --toolchain-image oj-go-quality-toolchain:latest --module-cache /private/tmp/oj-session-mod`。格式、模块校验、vet、模块静态分析零问题；最初静态提示改用tagged switch已修。仓库策略210文件通过，Astra设计/增量复核和主代理完整差异自审无剩余阻断，不替代独立人工审批。
+
+24并发跨API登录恰3成功/21冲突；跨副本撤销与补位后，已加载保存401/无Cookie且不挤成第四名额。十二次保存只占一名额、原绝对期限不变；主体/期限变更、scope/保持登录/畸形期限拒绝且无行残留，错放载荷双API拒绝且完整快照不变。真实时钟先可读再验证idle/absolute过期、旧保存拒绝与三名额回收；`pg_blocking_pids`实际观察主体锁等待，撤销提交后保存重新核验并拒绝。AFTER INSERT触发器实证P0001，登记及会话行同事务回滚，HTTP503/无Cookie，移除故障后登录恢复；关闭一池时读/活动/退出/登录503/无Cookie，全记录/期限不变，另一池仍可读。
+
+三条有效目标会话与2000个其他主体的 `EXPLAIN (ANALYZE,BUFFERS)` 使用 `session_pg_active_fixture` 部分索引，实际访问3条目标记录；索引节约墓碑计数访问，但增加存储、续期索引写和撤销移出成本。未做吞吐、WAL、CPU/RSS或公平Redis/PG负载比较。夹具没有清理任务、账号/恢复代次、旧备份恢复、管理/长会话/轮换、跨进程/主机；池关闭不是数据库宕机，INSERT异常不代表UPDATE/COMMIT失联。回退移除新增测试，一次性数据库随脚本销毁；完整存储比较、AC23/M0未通过，未部署。PR/head/CI/合并回读见远端及知识库，根模块CI不代替本地专项。
+
 ## 2026-10-31：Worker 显式排空式下线
 
 从成功 fetch 后的 `bf041fc` 创建独立 `codex/worker-drain` worktree，唯一目标为 P2/M0、AC28/29 的单槽排空式下线。核心新增 `RunWithDrain`，原 `Run` 传 nil；同一单次门禁、每轮领取检查许可，检查后的至多一个在途领取完成整题及回报。空队列可唤醒，原样未知回报重试/错误传播和 context 取消优先不变。命令独立注册 SIGUSR1 请求排空，SIGINT/SIGTERM 仍取消；原一次性 Stop、独立停止确认与正常锁标记清理不变，不自动重启或清异常隔离。
