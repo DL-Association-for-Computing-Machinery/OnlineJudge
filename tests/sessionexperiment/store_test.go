@@ -101,12 +101,12 @@ func (s *guardedStore) withPayload(ctx context.Context, b []byte, operation func
 		if !ok || generation <= 0 {
 			return errStale
 		}
-		recovery, ok := values["recovery_generation"].(int64)
-		if !ok || recovery <= 0 {
+		recovery, ok := values["recovery_generation"].(string)
+		if !ok || recovery == "" {
 			return errStale
 		}
 		// A new generation gets new slots; old records remain until expiry.
-		hash = digest(subject + ":" + strconv.FormatInt(generation, 10) + ":" + strconv.FormatInt(recovery, 10))
+		hash = digest(subject + ":" + strconv.FormatInt(generation, 10) + ":" + recovery)
 		return s.auth.withValid(ctx, subject, authVersion{generation, recovery}, func() error {
 			return operation(hash, deadline)
 		})
@@ -142,7 +142,7 @@ func (s *guardedStore) FindCtx(ctx context.Context, token string) ([]byte, bool,
 		}
 		subject, _ := values["subject"].(string)
 		generation, _ := values["auth_generation"].(int64)
-		recovery, _ := values["recovery_generation"].(int64)
+		recovery, _ := values["recovery_generation"].(string)
 		err = s.auth.withValid(ctx, subject, authVersion{generation, recovery}, func() error { return nil })
 	}
 	return []byte(b), err == nil, err

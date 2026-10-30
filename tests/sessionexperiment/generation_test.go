@@ -20,6 +20,10 @@ func rejectWithoutCookie(t *testing.T, f *fixture, replica int, method, path str
 
 func TestAccountGenerationAcrossAPIs(t *testing.T) {
 	f := setupAuth(t)
+	initial, err := f.stores[0].auth.current(context.Background(), "fixture-user")
+	if err != nil {
+		t.Fatal(err)
+	}
 	var old []*http.Cookie
 	for i := range 3 {
 		old = append(old, expect(t, f, i%2, "POST", "/login-fixture", nil, 201).Cookies()[0])
@@ -33,7 +37,7 @@ func TestAccountGenerationAcrossAPIs(t *testing.T) {
 	// Fresh DB connections read the persisted generation, with no local cache.
 	fresh := newAuthority(t, f.stores[0].auth.namespace)
 	generation, err := fresh.current(context.Background(), "fixture-user")
-	if err != nil || generation != (authVersion{2, 1}) {
+	if err != nil || generation != (authVersion{2, initial.recovery}) {
 		t.Fatalf("persisted generation=%+v err=%v", generation, err)
 	}
 	var current []*http.Cookie
@@ -118,7 +122,11 @@ func TestAccountInvalidationWaitsForSaveGuard(t *testing.T) {
 	f := setupAuth(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	err := f.stores[0].auth.withValid(ctx, "fixture-user", authVersion{1, 1}, func() error {
+	version, err := f.stores[0].auth.current(ctx, "fixture-user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = f.stores[0].auth.withValid(ctx, "fixture-user", version, func() error {
 		tx, err := f.stores[1].auth.pool.Begin(ctx)
 		if err != nil {
 			return err
@@ -138,7 +146,7 @@ func TestAccountInvalidationWaitsForSaveGuard(t *testing.T) {
 		t.Fatal(err)
 	}
 	invalidate(t, f.stores[1].auth, true)
-	err = f.stores[0].auth.withValid(ctx, "fixture-user", authVersion{1, 1}, func() error { t.Error("stale operation executed"); return nil })
+	err = f.stores[0].auth.withValid(ctx, "fixture-user", version, func() error { t.Error("stale operation executed"); return nil })
 	if !errors.Is(err, errStale) {
 		t.Fatalf("old generation: %v", err)
 	}

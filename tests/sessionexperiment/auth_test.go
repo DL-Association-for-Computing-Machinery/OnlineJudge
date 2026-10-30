@@ -2,6 +2,7 @@ package sessionexperiment
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"os"
 	"testing"
@@ -18,7 +19,8 @@ type authAuthority struct {
 }
 
 type authVersion struct {
-	account, recovery int64
+	account  int64
+	recovery string
 }
 
 var errRecovering = errors.New("session recovery unavailable")
@@ -55,7 +57,7 @@ func (a *authAuthority) withValid(ctx context.Context, subject string, expected 
 	}()
 	// Always lock recovery before account state. Recovery waits for every guarded
 	// save before closing admission, and stale saves recheck after it reopens.
-	var recovery int64
+	var recovery string
 	var open bool
 	err = tx.QueryRow(ctx, `SELECT generation, enabled FROM session_recovery_fixture
 		WHERE namespace=$1 FOR SHARE`, a.namespace).Scan(&recovery, &open)
@@ -65,7 +67,7 @@ func (a *authAuthority) withValid(ctx context.Context, subject string, expected 
 	if err != nil {
 		return err
 	}
-	if expected.recovery <= 0 || recovery != expected.recovery {
+	if expected.recovery == "" || recovery != expected.recovery {
 		return errStale
 	}
 	var generation int64
@@ -124,11 +126,11 @@ func setupAuth(t *testing.T, configure ...sessionConfigurer) *fixture {
 		t.Fatal(err)
 	}
 	_, err = a.pool.Exec(ctx, `CREATE TABLE IF NOT EXISTS session_recovery_fixture (
-		namespace text PRIMARY KEY, generation bigint NOT NULL CHECK (generation>0), enabled boolean NOT NULL)`)
+		namespace text PRIMARY KEY, generation text NOT NULL CHECK (length(generation)>=26), enabled boolean NOT NULL)`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = a.pool.Exec(ctx, `INSERT INTO session_recovery_fixture VALUES ($1,1,true)`, namespace)
+	_, err = a.pool.Exec(ctx, `INSERT INTO session_recovery_fixture VALUES ($1,$2,true)`, namespace, rand.Text())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,14 +152,17 @@ func invalidate(t *testing.T, a *authAuthority, enabled bool) {
 	}
 }
 
-func (a *authAuthority) beginRecovery(ctx context.Context) (int64, error) {
-	var generation int64
+func (a *authAuthority) beginRecovery(ctx context.Context) (string, error) {
+	var generation string
+	// A counter restored from an old database backup can repeat a generation
+	// still present in Redis. An independently random ID avoids that deterministic
+	// reuse; it is not an external monotonic fence or a restore-operator lock.
 	err := a.pool.QueryRow(ctx, `UPDATE session_recovery_fixture
-		SET generation=generation+1, enabled=false WHERE namespace=$1 RETURNING generation`, a.namespace).Scan(&generation)
+		SET generation=$2, enabled=false WHERE namespace=$1 RETURNING generation`, a.namespace, rand.Text()).Scan(&generation)
 	return generation, err
 }
 
-func (a *authAuthority) finishRecovery(ctx context.Context, expected int64) error {
+func (a *authAuthority) finishRecovery(ctx context.Context, expected string) error {
 	tag, err := a.pool.Exec(ctx, `UPDATE session_recovery_fixture SET enabled=true
 		WHERE namespace=$1 AND generation=$2 AND enabled=false`, a.namespace, expected)
 	if err == nil && tag.RowsAffected() != 1 {
