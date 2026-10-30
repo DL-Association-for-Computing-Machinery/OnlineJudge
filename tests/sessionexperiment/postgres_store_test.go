@@ -17,6 +17,7 @@ import (
 type postgresSessionStore struct {
 	pool      *pgxpool.Pool
 	namespace string
+	account   bool
 }
 
 var _ scs.CtxStore = (*postgresSessionStore)(nil)
@@ -51,7 +52,7 @@ func ordinaryPayload(b []byte) (string, int64, error) {
 	return digest(subject), deadline.UnixMilli(), nil
 }
 
-func (s *postgresSessionStore) withSubject(ctx context.Context, subject string, operation func(pgx.Tx) error) error {
+func (s *postgresSessionStore) transact(ctx context.Context, operation func(pgx.Tx) error) error {
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
 		return err
@@ -61,19 +62,34 @@ func (s *postgresSessionStore) withSubject(ctx context.Context, subject string, 
 		defer cancel()
 		_ = tx.Rollback(cleanup)
 	}()
-	if _, err := tx.Exec(ctx, `INSERT INTO session_pg_subject_fixture VALUES($1,$2) ON CONFLICT DO NOTHING`, s.namespace, subject); err != nil {
-		return err
-	}
-	var locked string
-	if err := tx.QueryRow(ctx, `SELECT subject FROM session_pg_subject_fixture
-		WHERE namespace=$1 AND subject=$2 FOR UPDATE`, s.namespace, subject).Scan(&locked); err != nil {
-		return err
-	}
 	if err := operation(tx); err != nil {
 		return err
 	}
 	// A commit acknowledgement failure is unknown, not proof of rollback.
 	return tx.Commit(ctx)
+}
+
+func (s *postgresSessionStore) lockSubject(ctx context.Context, tx pgx.Tx, subject string) error {
+	if _, err := tx.Exec(ctx, `INSERT INTO session_pg_subject_fixture VALUES($1,$2) ON CONFLICT DO NOTHING`, s.namespace, subject); err != nil {
+		return err
+	}
+	var locked string
+	return tx.QueryRow(ctx, `SELECT subject FROM session_pg_subject_fixture
+		WHERE namespace=$1 AND subject=$2 FOR UPDATE`, s.namespace, subject).Scan(&locked)
+}
+
+func (s *postgresSessionStore) withSubject(ctx context.Context, subject string, generation int64, operation func(pgx.Tx) error) error {
+	return s.transact(ctx, func(tx pgx.Tx) error {
+		if s.account && generation > 0 {
+			if err := s.lockAccount(ctx, tx, subject, generation); err != nil {
+				return err
+			}
+		}
+		if err := s.lockSubject(ctx, tx, subject); err != nil {
+			return err
+		}
+		return operation(tx)
+	})
 }
 
 func (s *postgresSessionStore) CommitCtx(ctx context.Context, token string, b []byte, expiry time.Time) error {
@@ -84,7 +100,14 @@ func (s *postgresSessionStore) CommitCtx(ctx context.Context, token string, b []
 	if token == "" {
 		return errStale
 	}
-	return s.withSubject(ctx, subject, func(tx pgx.Tx) error {
+	var generation int64
+	if s.account {
+		generation, err = postgresAccountGeneration(b)
+		if err != nil {
+			return err
+		}
+	}
+	return s.withSubject(ctx, subject, generation, func(tx pgx.Tx) error {
 		var oldSubject string
 		var oldDeadline, oldExpiry int64
 		var oldData []byte
@@ -108,6 +131,12 @@ func (s *postgresSessionStore) CommitCtx(ctx context.Context, token string, b []
 			if oldSubject != subject || oldDeadline != deadline || oldExpiry <= now || oldData == nil {
 				return errStale
 			}
+			if s.account {
+				oldGeneration, err := postgresAccountGeneration(oldData)
+				if err != nil || oldGeneration != generation {
+					return errStale
+				}
+			}
 			_, err := tx.Exec(ctx, `UPDATE session_pg_store_fixture SET data=$3,expiry_ms=$4
 				WHERE namespace=$1 AND token=$2`, s.namespace, digest(token), b, expires)
 			return err
@@ -130,10 +159,22 @@ func (s *postgresSessionStore) FindCtx(ctx context.Context, token string) ([]byt
 	var b []byte
 	var subject string
 	var deadline int64
-	err := s.pool.QueryRow(ctx, `SELECT data,subject,deadline_ms FROM session_pg_store_fixture
+	var generation int64
+	var err error
+	if s.account {
+		err = s.pool.QueryRow(ctx, `SELECT s.data,s.subject,s.deadline_ms,a.generation
+			FROM session_pg_store_fixture s JOIN session_pg_account_fixture a
+			ON a.namespace=s.namespace AND a.subject=s.subject
+			WHERE s.namespace=$1 AND s.token=$2 AND s.data IS NOT NULL AND a.enabled
+			AND s.expiry_ms>floor(extract(epoch FROM clock_timestamp())*1000)::bigint
+			AND s.deadline_ms<=floor(extract(epoch FROM clock_timestamp())*1000)::bigint+$3`,
+			s.namespace, digest(token), (12*time.Hour).Milliseconds()).Scan(&b, &subject, &deadline, &generation)
+	} else {
+		err = s.pool.QueryRow(ctx, `SELECT data,subject,deadline_ms FROM session_pg_store_fixture
 		WHERE namespace=$1 AND token=$2 AND data IS NOT NULL AND expiry_ms>floor(extract(epoch FROM clock_timestamp())*1000)::bigint
 		AND deadline_ms<=floor(extract(epoch FROM clock_timestamp())*1000)::bigint+$3`,
-		s.namespace, digest(token), (12*time.Hour).Milliseconds()).Scan(&b, &subject, &deadline)
+			s.namespace, digest(token), (12*time.Hour).Milliseconds()).Scan(&b, &subject, &deadline)
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, false, nil
 	}
@@ -143,6 +184,12 @@ func (s *postgresSessionStore) FindCtx(ctx context.Context, token string) ([]byt
 	decodedSubject, decodedDeadline, err := ordinaryPayload(b)
 	if err != nil || decodedSubject != subject || decodedDeadline != deadline {
 		return nil, false, errStale
+	}
+	if s.account {
+		payloadGeneration, err := postgresAccountGeneration(b)
+		if err != nil || payloadGeneration != generation {
+			return nil, false, errStale
+		}
 	}
 	return b, true, nil
 }
@@ -157,7 +204,9 @@ func (s *postgresSessionStore) DeleteCtx(ctx context.Context, token string) erro
 	if err != nil {
 		return err
 	}
-	return s.withSubject(ctx, subject, func(tx pgx.Tx) error {
+	// Deletion only removes this token's payload. It never restores authority
+	// or accesses the account lock after acquiring the subject lock.
+	return s.withSubject(ctx, subject, 0, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `UPDATE session_pg_store_fixture SET data=NULL WHERE namespace=$1 AND token=$2`,
 			s.namespace, digest(token))
 		return err
