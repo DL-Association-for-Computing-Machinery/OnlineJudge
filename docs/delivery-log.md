@@ -1,5 +1,15 @@
 # 工程交付记录
 
+## 2026-10-30：Redis 服务端空闲连接断开后的重连预算
+
+从成功 fetch 后的 `1545a60` 创建独立 `codex/session-reconnect-budget` worktree，唯一目标为 P3/M0、AC23 的有限重连预算/状态恢复子项。只新增测试，沿用 PR #45 每 API 主池上限 8、共享 pipeline 和无自动重试配置；没有新依赖、SQL、迁移、驱动或生产程序变化。
+
+原五十九项行为/race 基线通过（57.190 秒）。真实借满并归还 8+8 条连接后，observer 按精确随机 API 标签提取 ID，逐条 CLIENT KILL ID、每条返回 1，再确认两个 API 均归零。连续两轮各 32 个 worker/128 次只读请求，仅允许有界 200/503 且原始 Set-Cookie 头为空；最终双 API/双 scope 全部恢复 200，重新借满新 8+8 并确认旧 ID 不再出现。完整只读快照保持载荷、键集合、索引和绝对到期不变，恢复后活动/退出/三名额正确；个人和管理分别验证跨 API 撤销、断连重连后已加载保存仍 401/无 Cookie、不改撤销后状态。
+
+Docker Desktop Linux arm64、Go 1.26.10、Redis 7.2.4、PostgreSQL 14.24：最终完整六十一项行为/race、五十个子用例通过（57.609 秒），两轮 256 次断连后读取均成功，283 次采样未见超预算；格式、模块校验、vet 和已有质量镜像 golangci-lint 零问题，repository policy 201 文件通过。Astra 针对性复核后补齐并发读取失败清理和恢复读原始 Cookie/超时断言，最终代码重新执行完整验证；主代理核验完整差异及新增文件，AI 复核不替代独立人工审批。实际命令为 `python3 scripts/test-session.py --toolchain-image oj-go-quality-toolchain:latest --module-cache /private/tmp/oj-session-mod`；远端 PR/head/CI/合并状态以交付回读和知识库为准。
+
+这是同进程双 TLS API、Redis 持续存活时的已建立空闲连接断开；观察到的带标签连接计数不超过每 API 8，但离散采样不保证捕获所有瞬时或未命名连接。observer ID 和 Redis run_id 不变，不是 Redis 重启、网络分区、在途写入回执丢失、跨进程/主机或生产容量验收。回退新增测试即可；完整 M0 未通过、未部署。
+
 ## 2026-10-30：会话 Redis 连接预算、饱和与恢复
 
 从成功 fetch 后的 `ff6b4a9` 创建独立 `codex/session-pool-budget` worktree，唯一目标为 P3/M0、AC23 的实验 Redis 连接预算与饱和恢复。每 API 共享客户端显式主池上限 8，禁独立 pipeline 池，保留 1 秒取池/网络超时、3 秒 HTTP 上下文及无自动重试。随机客户端标签只用于观测，不包含凭据；独立观察客户端另限 1 条，不计入 API 的 16 条。
