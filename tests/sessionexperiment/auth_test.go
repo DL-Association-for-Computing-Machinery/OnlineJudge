@@ -107,7 +107,7 @@ func newAuthority(t *testing.T, namespace string) *authAuthority {
 	return &authAuthority{pool: pool, namespace: namespace}
 }
 
-func setupAuth(t *testing.T) *fixture {
+func setupAuth(t *testing.T, configure ...sessionConfigurer) *fixture {
 	t.Helper()
 	namespace := digest(t.Name())
 	a := newAuthority(t, namespace)
@@ -133,7 +133,7 @@ func setupAuth(t *testing.T) *fixture {
 		t.Fatal(err)
 	}
 	return setupAuthorizedReplicas(t, "auth:"+namespace+":", 2,
-		[]*authAuthority{a, newAuthority(t, namespace)})
+		[]*authAuthority{a, newAuthority(t, namespace)}, configure...)
 }
 
 func invalidate(t *testing.T, a *authAuthority, enabled bool) {

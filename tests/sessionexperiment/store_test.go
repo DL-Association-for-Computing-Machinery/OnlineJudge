@@ -80,6 +80,13 @@ func digest(s string) string {
 func (s *guardedStore) key(token string) string { return s.prefix + "token:" + digest(token) }
 
 func (s *guardedStore) CommitCtx(ctx context.Context, token string, b []byte, expiry time.Time) error {
+	return s.withPayload(ctx, b, func(hash string, deadline time.Time) error {
+		return s.commit(ctx, token, b, hash, deadline, expiry)
+	})
+}
+
+// Keep candidate operations on the same identity parsing and lock order as save.
+func (s *guardedStore) withPayload(ctx context.Context, b []byte, operation func(string, time.Time) error) error {
 	deadline, values, err := (scs.GobCodec{}).Decode(b)
 	if err != nil {
 		return err
@@ -101,10 +108,10 @@ func (s *guardedStore) CommitCtx(ctx context.Context, token string, b []byte, ex
 		// A new generation gets new slots; old records remain until expiry.
 		hash = digest(subject + ":" + strconv.FormatInt(generation, 10) + ":" + strconv.FormatInt(recovery, 10))
 		return s.auth.withValid(ctx, subject, authVersion{generation, recovery}, func() error {
-			return s.commit(ctx, token, b, hash, deadline, expiry)
+			return operation(hash, deadline)
 		})
 	}
-	return s.commit(ctx, token, b, hash, deadline, expiry)
+	return operation(hash, deadline)
 }
 
 func (s *guardedStore) commit(ctx context.Context, token string, b []byte, hash string, deadline, expiry time.Time) error {

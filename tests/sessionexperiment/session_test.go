@@ -32,7 +32,9 @@ func setupReplicas(t *testing.T, prefix string, replicas int) *fixture {
 	return setupAuthorizedReplicas(t, prefix, replicas, nil)
 }
 
-func setupAuthorizedReplicas(t *testing.T, prefix string, replicas int, authorities []*authAuthority) *fixture {
+type sessionConfigurer func(*scs.SessionManager, *guardedStore)
+
+func setupAuthorizedReplicas(t *testing.T, prefix string, replicas int, authorities []*authAuthority, configure ...sessionConfigurer) *fixture {
 	t.Helper()
 	addr := os.Getenv("OJ_SESSION_REDIS_ADDR")
 	if addr == "" {
@@ -58,6 +60,9 @@ func setupAuthorizedReplicas(t *testing.T, prefix string, replicas int, authorit
 		manager.Cookie.Secure = true
 		manager.Cookie.HttpOnly = true
 		manager.Cookie.SameSite = http.SameSiteStrictMode
+		for _, option := range configure {
+			option(manager, store)
+		}
 		f.stores[i], f.managers[i] = store, manager
 		f.servers[i] = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
