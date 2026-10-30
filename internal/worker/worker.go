@@ -70,6 +70,17 @@ func New(claim Claimer, fetch Fetcher, execute Executor, report Reporter) (*Work
 // stop and drain before returning. No detached reporting or shutdown retry occurs.
 // Reports live only in memory: process death still requires controller recovery.
 func (w *Worker) Run(ctx context.Context) error {
+	return w.RunWithDrain(ctx, nil)
+}
+
+// RunWithDrain stops polling when drain closes, completing any attempt already
+// admitted by the check before Claim. A closure racing that check can therefore
+// allow one more claim to finish. It never cancels an admitted attempt or its
+// bounded report retries, and never turns an operation failure into success.
+// A nil drain disables draining. Cancellation still aborts work and takes
+// precedence when observed together with drain; callers must wait for return
+// before closing transports or releasing the exclusively owned sandbox.
+func (w *Worker) RunWithDrain(ctx context.Context, drain <-chan struct{}) error {
 	if !w.started.CompareAndSwap(false, true) {
 		return ErrStarted
 	}
@@ -77,12 +88,17 @@ func (w *Worker) Run(ctx context.Context) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		select {
+		case <-drain:
+			return ctx.Err()
+		default:
+		}
 		lease, err := w.claim.Claim(ctx)
 		if ctx.Err() != nil {
 			return errors.Join(ctx.Err(), err)
 		}
 		if errors.Is(err, submission.ErrNoTask) {
-			if err := wait(ctx, w.idleDelay); err != nil {
+			if done, err := waitIdle(ctx, drain, w.idleDelay); done || err != nil {
 				return err
 			}
 			continue
@@ -93,6 +109,19 @@ func (w *Worker) Run(ctx context.Context) error {
 		if err := w.attempt(ctx, lease); err != nil {
 			return err
 		}
+	}
+}
+
+func waitIdle(ctx context.Context, drain <-chan struct{}, delay time.Duration) (bool, error) {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false, ctx.Err()
+	case <-drain:
+		return true, ctx.Err()
+	case <-timer.C:
+		return false, ctx.Err()
 	}
 }
 

@@ -44,7 +44,7 @@ func (h *testHost) RoundTrip(r *http.Request) (*http.Response, error) {
 }
 
 func TestSlotPreflightAndShutdown(t *testing.T) {
-	for _, scenario := range []string{"idle-cancel", "claim-failure", "protocol-failure", "open-failure", "stop-failure"} {
+	for _, scenario := range []string{"idle-cancel", "drain", "drain-stop-failure", "claim-failure", "protocol-failure", "open-failure", "stop-failure"} {
 		t.Run(scenario, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -73,20 +73,26 @@ func TestSlotPreflightAndShutdown(t *testing.T) {
 				t.Fatal(err)
 			}
 			h := &testHost{bad: scenario == "protocol-failure"}
-			if scenario == "stop-failure" {
+			if scenario == "stop-failure" || scenario == "drain-stop-failure" {
 				h.stopErr = errors.New("unconfirmed")
+			}
+			var drain <-chan struct{}
+			if strings.HasPrefix(scenario, "drain") {
+				closed := make(chan struct{})
+				close(closed)
+				drain = closed
 			}
 			err = runSlot(ctx, config{endpoint: s.URL, roots: ca.Roots, cert: cert}, slog.New(slog.NewTextHandler(io.Discard, nil)), lock, func(context.Context) (sandboxHost, error) {
 				if scenario == "open-failure" {
 					return nil, errors.New("private error")
 				}
 				return h, nil
-			})
+			}, drain)
 			lock.Close()
-			if (err == nil) != (scenario == "idle-cancel") {
+			if (err == nil) != (scenario == "idle-cancel" || scenario == "drain") {
 				t.Fatalf("unexpected exit: %v", err)
 			}
-			preflight := scenario == "open-failure" || scenario == "protocol-failure"
+			preflight := scenario == "open-failure" || scenario == "protocol-failure" || strings.HasPrefix(scenario, "drain")
 			if preflight && claims.Load() != 0 {
 				t.Fatal("claimed before preflight")
 			}
@@ -100,7 +106,7 @@ func TestSlotPreflightAndShutdown(t *testing.T) {
 			if lock != nil {
 				lock.Close()
 			}
-			if (err != nil) != (scenario == "stop-failure") {
+			if (err != nil) != (scenario == "stop-failure" || scenario == "drain-stop-failure") {
 				t.Fatalf("quarantine: %v", err)
 			}
 		})

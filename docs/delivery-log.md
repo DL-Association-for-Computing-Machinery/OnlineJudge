@@ -1,5 +1,15 @@
 # 工程交付记录
 
+## 2026-10-31：Worker 显式排空式下线
+
+从成功 fetch 后的 `bf041fc` 创建独立 `codex/worker-drain` worktree，唯一目标为 P2/M0、AC28/29 的单槽排空式下线。核心新增 `RunWithDrain`，原 `Run` 传 nil；同一单次门禁、每轮领取检查许可，检查后的至多一个在途领取完成整题及回报。空队列可唤醒，原样未知回报重试/错误传播和 context 取消优先不变。命令独立注册 SIGUSR1 请求排空，SIGINT/SIGTERM 仍取消；原一次性 Stop、独立停止确认与正常锁标记清理不变，不自动重启或清异常隔离。
+
+Docker Desktop Linux arm64、Go 1.26.10：原 Worker/cmd race 基线通过，原真实 report 10 子例通过（9.57 秒）。最终完整后端格式/vet、四规则正反例及主模块/sandbox/独立会话模块静态检查、根模块 race 和四个命令构建通过。新增单元覆盖每个阶段排空、未知回报三次/终端拒绝一次、错误不被掩盖、空闲唤醒、共享单次门禁、同时取消/排空及命令停止失败继续隔离；Astra 定向复核与主代理完整差异自审无剩余阻断，不替代独立人工审批。
+
+`python3 scripts/test-worker.py report` 最终 11 子例通过（18.01 秒），新增 worker-drain 5.02 秒：观察真实 main PID 后再入队第二题、发 SIGUSR1，首题 AC 持久化且仅一次尝试，第二题 queued/零尝试；进程0退出、容器/PID停止确认后，显式重启同一固定沙箱和新 Worker，第二题AC/仅一次尝试，再空闲排空。原报告与取消命令用例均继续通过。初轮新增用例在 Accept 前因夹具幂等键短于16字节被拒，未启动新Worker；修为符合既有契约的键后重验，没有放宽输入校验。最终两槽均停止、私有DB容器删除，规范锁均0字节，未清未知标记。
+
+仅新单槽信号行为、必要测试与文档，无新依赖、HTTP、SQL/租约协议或迁移。宿主程序由 Docker 跨编译，实际沙箱专项不含 race；Linux 单元保留 race。排空检查与信号到达竞态可允许一个在途领取完成，下线时延受原有预算影响，无固定SLA；不是SIGKILL、断电、网络分区、自动重启/解封、跨主机或部署验收。回退旧程序后不使用新增信号，数据库保持；完整M0未通过、未部署。PR/head/CI/合并回读见远端及知识库。
+
 ## 2026-10-31：会话写请求来源防护与安全方法边界
 
 从成功 fetch 后的 `428ea2f` 创建独立 `codex/session-origin-protection` worktree，唯一目标为 P3/M0、AC23 的测试 API 来源防护子项。复用锁定 Go 1.26.10 CrossOriginProtection，在路由/会话加载前加显式 HTTPS/Host 精确来源与头值检查；无 trusted origin/绕过/CORS 授权。两来源头缺失仍兼容非浏览器驱动，不代替认证。七条写探针在 Load 前统一限制 POST，失败 405/Allow: POST。

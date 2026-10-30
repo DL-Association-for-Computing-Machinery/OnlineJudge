@@ -22,7 +22,7 @@ type sandboxHost interface {
 	Stop(context.Context) error
 }
 
-func run(ctx context.Context, logger *slog.Logger) error {
+func run(ctx context.Context, logger *slog.Logger, drain <-chan struct{}) error {
 	c, err := loadConfig(os.Getenv)
 	if err != nil {
 		return err
@@ -32,10 +32,10 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		return err
 	}
 	defer lock.Close()
-	return runSlot(ctx, c, logger, lock, func(ctx context.Context) (sandboxHost, error) { return workerhost.OpenM0Slot(ctx, c.slot) })
+	return runSlot(ctx, c, logger, lock, func(ctx context.Context) (sandboxHost, error) { return workerhost.OpenM0Slot(ctx, c.slot) }, drain)
 }
 
-func runSlot(ctx context.Context, c config, logger *slog.Logger, lock *slotLock, open func(context.Context) (sandboxHost, error)) (result error) {
+func runSlot(ctx context.Context, c config, logger *slog.Logger, lock *slotLock, open func(context.Context) (sandboxHost, error), drain <-chan struct{}) (result error) {
 	acquirer, err := workerclient.NewAcquirer(c.endpoint, c.roots, c.cert)
 	if err != nil {
 		return err
@@ -89,7 +89,7 @@ func runSlot(ctx context.Context, c config, logger *slog.Logger, lock *slotLock,
 		return err
 	}
 	logger.Info("Worker 已就绪", "mode", "m0-single-slot")
-	err = w.Run(ctx)
+	err = w.RunWithDrain(ctx, drain)
 	if errors.Is(err, execution.ErrStopUnconfirmed) {
 		return errors.New("sandbox stop unconfirmed")
 	}
