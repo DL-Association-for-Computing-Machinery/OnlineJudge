@@ -20,7 +20,7 @@ local t = redis.call('TIME')
 local now = tonumber(t[1])*1000 + math.floor(tonumber(t[2])/1000)
 local deadline, expiry = tonumber(ARGV[3]), tonumber(ARGV[4])
 if deadline <= now or expiry <= now then return 2 end
-if expiry > deadline or deadline > now + 43200000 then return 3 end
+if expiry > deadline or deadline > now + tonumber(ARGV[5]) then return 3 end
 if redis.call('EXISTS', KEYS[1]) == 0 then return 0 end
 if redis.call('HGET', KEYS[1], 'subject') ~= ARGV[1]
   or redis.call('HGET', KEYS[1], 'deadline') ~= ARGV[3] then return 3 end
@@ -42,7 +42,7 @@ local t = redis.call('TIME')
 local now = tonumber(t[1])*1000 + math.floor(tonumber(t[2])/1000)
 local deadline, expiry = tonumber(ARGV[2]), tonumber(ARGV[3])
 if deadline <= now or expiry <= now then return 2 end
-if expiry > deadline or deadline > now + 43200000 then return 3 end
+if expiry > deadline or deadline > now + tonumber(ARGV[4]) then return 3 end
 if redis.call('EXISTS', KEYS[1]) == 1 then
   if redis.call('HGET', KEYS[1], 'subject') ~= ARGV[1]
     or redis.call('HGET', KEYS[1], 'deadline') ~= ARGV[2] then return 3 end
@@ -73,19 +73,19 @@ func (a saveAttempt) retry(ctx context.Context, store *guardedStore) error {
 }
 
 func (a saveAttempt) check(ctx context.Context, store *guardedStore) error {
-	return store.withPayload(ctx, a.data, func(hash string, deadline time.Time) error {
+	return store.withPayload(ctx, a.data, func(hash string, deadline time.Time, maxLifetime time.Duration) error {
 		result, err := store.client.Eval(ctx, checkAdmissionLua,
 			[]string{store.key(a.token), store.prefix + "subject:" + hash},
-			hash, a.data, deadline.UnixMilli(), a.expiry.UnixMilli()).Int()
+			hash, a.data, deadline.UnixMilli(), a.expiry.UnixMilli(), maxLifetime.Milliseconds()).Int()
 		return admissionResult(result, err)
 	})
 }
 
 func (a saveAttempt) abandon(ctx context.Context, store *guardedStore) error {
-	return store.withPayload(ctx, a.data, func(hash string, deadline time.Time) error {
+	return store.withPayload(ctx, a.data, func(hash string, deadline time.Time, maxLifetime time.Duration) error {
 		result, err := store.client.Eval(ctx, abandonAdmissionLua,
 			[]string{store.key(a.token), store.prefix + "subject:" + hash},
-			hash, deadline.UnixMilli(), a.expiry.UnixMilli()).Int()
+			hash, deadline.UnixMilli(), a.expiry.UnixMilli(), maxLifetime.Milliseconds()).Int()
 		return admissionResult(result, err)
 	})
 }

@@ -87,7 +87,12 @@ func readLifetime(t *testing.T, f *fixture, cookie *http.Cookie) lifetimeState {
 
 func TestPollingDoesNotRenewIdleLifetime(t *testing.T) {
 	f := setupAuth(t, shortLifetime(6*time.Second, 2*time.Second))
-	cookie := expect(t, f, 0, "POST", "/login-fixture", nil, 201).Cookies()[0]
+	testPollingLifetime(t, f, "/login-fixture")
+}
+
+func testPollingLifetime(t *testing.T, f *fixture, login string) {
+	t.Helper()
+	cookie := expect(t, f, 0, "POST", login, nil, 201).Cookies()[0]
 	state := readLifetime(t, f, cookie)
 	before := memorySnapshot(t, f)
 	// Multiple successful background reads cross replicas without any write.
@@ -122,7 +127,12 @@ func TestPollingDoesNotRenewIdleLifetime(t *testing.T) {
 
 func TestActivityRenewsIdleButNotAbsoluteLifetime(t *testing.T) {
 	f := setupAuth(t, shortLifetime(6*time.Second, 2*time.Second))
-	cookie := expect(t, f, 0, "POST", "/login-fixture", nil, 201).Cookies()[0]
+	testActivityLifetime(t, f, "/login-fixture")
+}
+
+func testActivityLifetime(t *testing.T, f *fixture, login string) {
+	t.Helper()
+	cookie := expect(t, f, 0, "POST", login, nil, 201).Cookies()[0]
 	original := readLifetime(t, f, cookie)
 	before := memorySnapshot(t, f)
 	rejectWithoutCookie(t, f, 1, "GET", "/activity-fixture", cookie, 405)
@@ -133,6 +143,9 @@ func TestActivityRenewsIdleButNotAbsoluteLifetime(t *testing.T) {
 		r := expect(t, f, i%2, "POST", "/activity-fixture", cookie, 201)
 		if len(r.Cookies()) != 1 || r.Cookies()[0].Value != cookie.Value {
 			t.Fatal("activity changed credential or omitted renewal cookie")
+		}
+		if (r.Cookies()[0].MaxAge > 0) != (cookie.MaxAge > 0) {
+			t.Fatal("activity changed cookie persistence policy")
 		}
 		next := readLifetime(t, f, cookie)
 		if !next.deadline.Equal(original.deadline) || next.expiry.Before(current.expiry) {
@@ -181,14 +194,23 @@ func TestOrdinaryLifetimeDefaults(t *testing.T) {
 }
 
 func TestLifetimeExpiryRejectsLoadedActivity(t *testing.T) {
+	testLoadedLifetimeExpiry(t, false)
+}
+
+func testLoadedLifetimeExpiry(t *testing.T, remembered bool) {
+	t.Helper()
 	for _, boundary := range []string{"idle", "absolute"} {
 		t.Run(boundary, func(t *testing.T) {
 			lifetime, idle := 6*time.Second, time.Second
 			if boundary == "absolute" {
 				lifetime, idle = time.Second, 4*time.Second
 			}
-			f := setupAuth(t, shortLifetime(lifetime, idle))
-			cookie := expect(t, f, 0, "POST", "/login-fixture", nil, 201).Cookies()[0]
+			f := setupAuthWithRemember(t, rememberPolicy{lifetime, idle}, shortLifetime(lifetime, idle))
+			login := "/login-fixture"
+			if remembered {
+				login += "?remember=true"
+			}
+			cookie := expect(t, f, 0, "POST", login, nil, 201).Cookies()[0]
 			state := readLifetime(t, f, cookie)
 			finished := make(chan error, 1)
 			go func() {

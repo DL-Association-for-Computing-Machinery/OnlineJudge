@@ -28,7 +28,7 @@ local t = redis.call('TIME')
 local now = tonumber(t[1])*1000 + math.floor(tonumber(t[2])/1000)
 local deadline, expiry = tonumber(ARGV[3]), tonumber(ARGV[4])
 if expiry <= now or deadline <= now or expiry > deadline then return 2 end
-if deadline > now + 43200000 then return 2 end
+if deadline > now + tonumber(ARGV[5]) then return 2 end
 if redis.call('EXISTS', KEYS[1]) == 1 then
   if redis.call('HGET', KEYS[1], 'subject') ~= ARGV[1]
     or redis.call('HGET', KEYS[1], 'deadline') ~= ARGV[3]
@@ -80,13 +80,13 @@ func digest(s string) string {
 func (s *guardedStore) key(token string) string { return s.prefix + "token:" + digest(token) }
 
 func (s *guardedStore) CommitCtx(ctx context.Context, token string, b []byte, expiry time.Time) error {
-	return s.withPayload(ctx, b, func(hash string, deadline time.Time) error {
-		return s.commit(ctx, token, b, hash, deadline, expiry)
+	return s.withPayload(ctx, b, func(hash string, deadline time.Time, maxLifetime time.Duration) error {
+		return s.commit(ctx, token, b, hash, deadline, expiry, maxLifetime)
 	})
 }
 
 // Keep candidate operations on the same identity parsing and lock order as save.
-func (s *guardedStore) withPayload(ctx context.Context, b []byte, operation func(string, time.Time) error) error {
+func (s *guardedStore) withPayload(ctx context.Context, b []byte, operation func(string, time.Time, time.Duration) error) error {
 	deadline, values, err := (scs.GobCodec{}).Decode(b)
 	if err != nil {
 		return err
@@ -96,6 +96,10 @@ func (s *guardedStore) withPayload(ctx context.Context, b []byte, operation func
 		return errors.New("missing authenticated fixture subject")
 	}
 	hash := digest(subject)
+	maxLifetime := 12 * time.Hour
+	if remembered, _ := values["remember_login"].(bool); remembered {
+		maxLifetime = 7 * 24 * time.Hour
+	}
 	if s.auth != nil {
 		generation, ok := values["auth_generation"].(int64)
 		if !ok || generation <= 0 {
@@ -108,15 +112,15 @@ func (s *guardedStore) withPayload(ctx context.Context, b []byte, operation func
 		// A new generation gets new slots; old records remain until expiry.
 		hash = digest(subject + ":" + strconv.FormatInt(generation, 10) + ":" + recovery)
 		return s.auth.withValid(ctx, subject, authVersion{generation, recovery}, func() error {
-			return operation(hash, deadline)
+			return operation(hash, deadline, maxLifetime)
 		})
 	}
-	return operation(hash, deadline)
+	return operation(hash, deadline, maxLifetime)
 }
 
-func (s *guardedStore) commit(ctx context.Context, token string, b []byte, hash string, deadline, expiry time.Time) error {
+func (s *guardedStore) commit(ctx context.Context, token string, b []byte, hash string, deadline, expiry time.Time, maxLifetime time.Duration) error {
 	result, err := s.client.Eval(ctx, commitLua, []string{s.key(token), s.prefix + "subject:" + hash},
-		hash, b, deadline.UnixMilli(), expiry.UnixMilli()).Int()
+		hash, b, deadline.UnixMilli(), expiry.UnixMilli(), maxLifetime.Milliseconds()).Int()
 	if err != nil {
 		return err
 	}

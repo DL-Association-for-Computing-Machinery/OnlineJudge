@@ -35,6 +35,14 @@ func setupReplicas(t *testing.T, prefix string, replicas int) *fixture {
 type sessionConfigurer func(*scs.SessionManager, *guardedStore)
 
 func setupAuthorizedReplicas(t *testing.T, prefix string, replicas int, authorities []*authAuthority, configure ...sessionConfigurer) *fixture {
+	return setupAuthorizedReplicasWithRemember(t, prefix, replicas, authorities, rememberPolicy{7 * 24 * time.Hour, 24 * time.Hour}, configure...)
+}
+
+type rememberPolicy struct {
+	lifetime, idle time.Duration
+}
+
+func setupAuthorizedReplicasWithRemember(t *testing.T, prefix string, replicas int, authorities []*authAuthority, remember rememberPolicy, configure ...sessionConfigurer) *fixture {
 	t.Helper()
 	addr := os.Getenv("OJ_SESSION_REDIS_ADDR")
 	if addr == "" {
@@ -60,11 +68,21 @@ func setupAuthorizedReplicas(t *testing.T, prefix string, replicas int, authorit
 		manager.Cookie.Secure = true
 		manager.Cookie.HttpOnly = true
 		manager.Cookie.SameSite = http.SameSiteStrictMode
+		manager.Cookie.Persist = false
 		for _, option := range configure {
 			option(manager, store)
 		}
 		f.stores[i], f.managers[i] = store, manager
 		f.servers[i] = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Configuration is immutable after startup. Each request selects its
+			// idle policy without changing another request's shared manager.
+			localManager := *manager
+			manager := &localManager
+			login := (r.URL.Path == "/login-fixture" || r.URL.Path == "/late-login-fixture") && r.Method == http.MethodPost
+			rememberLogin := login && r.URL.Query().Get("remember") == "true"
+			if rememberLogin {
+				manager.Lifetime = remember.lifetime
+			}
 			ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 			defer cancel()
 			token := ""
@@ -80,9 +98,17 @@ func setupAuthorizedReplicas(t *testing.T, prefix string, replicas int, authorit
 				w.WriteHeader(http.StatusServiceUnavailable)
 				return
 			}
-			if (r.URL.Path == "/login-fixture" || r.URL.Path == "/late-login-fixture") && r.Method == http.MethodPost {
+			if login {
+				// Policy selection is only allowed for a fresh pre-authenticated
+				// login, never by upgrading an existing credential in place.
+				if token != "" {
+					w.WriteHeader(http.StatusConflict)
+					return
+				}
 				// Pre-authenticated test identity, never a production login endpoint.
 				manager.Put(ctx, "subject", "fixture-user")
+				manager.Put(ctx, "remember_login", rememberLogin)
+				manager.RememberMe(ctx, rememberLogin)
 				if store.auth != nil {
 					generation, err := store.auth.current(ctx, "fixture-user")
 					if errors.Is(err, errStale) {
@@ -144,6 +170,9 @@ func setupAuthorizedReplicas(t *testing.T, prefix string, replicas int, authorit
 					w.WriteHeader(http.StatusServiceUnavailable)
 					return
 				}
+			}
+			if manager.GetBool(ctx, "remember_login") {
+				manager.IdleTimeout = remember.idle
 			}
 			token, expiry, err := manager.Commit(ctx)
 			if errors.Is(err, errLimit) {

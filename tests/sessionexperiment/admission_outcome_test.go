@@ -13,6 +13,10 @@ import (
 )
 
 func uncertainLogin(t *testing.T, write bool, configure ...sessionConfigurer) (*fixture, saveAttempt) {
+	return uncertainLoginPath(t, write, "/login-fixture", configure...)
+}
+
+func uncertainLoginPath(t *testing.T, write bool, path string, configure ...sessionConfigurer) (*fixture, saveAttempt) {
 	t.Helper()
 	pending := make(chan saveAttempt, 1)
 	configured := false
@@ -22,7 +26,7 @@ func uncertainLogin(t *testing.T, write bool, configure ...sessionConfigurer) (*
 			configured = true
 		}
 	})...)
-	rejectWithoutCookie(t, f, 0, "POST", "/login-fixture", nil, 503)
+	rejectWithoutCookie(t, f, 0, "POST", path, nil, 503)
 	select {
 	case attempt := <-pending:
 		return f, attempt
@@ -48,7 +52,12 @@ func admittedIndex(t *testing.T, f *fixture, a saveAttempt) string {
 }
 
 func TestAdmissionLostAcknowledgement(t *testing.T) {
-	f, a := uncertainLogin(t, true)
+	testAdmissionLostAcknowledgement(t, "/login-fixture")
+}
+
+func testAdmissionLostAcknowledgement(t *testing.T, path string) {
+	t.Helper()
+	f, a := uncertainLoginPath(t, true, path)
 	ctx := context.Background()
 	before := memorySnapshot(t, f)
 	if len(before) != 2 {
@@ -95,7 +104,12 @@ func TestAdmissionLostAcknowledgement(t *testing.T) {
 }
 
 func TestAdmissionAbandonBeforeDelayedSave(t *testing.T) {
-	f, a := uncertainLogin(t, false)
+	testAdmissionAbandonBeforeDelayedSave(t, "/login-fixture")
+}
+
+func testAdmissionAbandonBeforeDelayedSave(t *testing.T, path string) {
+	t.Helper()
+	f, a := uncertainLoginPath(t, false, path)
 	ctx := context.Background()
 	for replica := range 2 {
 		if err := a.check(ctx, f.stores[replica]); !errors.Is(err, errOutcomeUnknown) {
