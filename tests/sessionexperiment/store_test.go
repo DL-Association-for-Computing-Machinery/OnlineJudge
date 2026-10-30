@@ -52,6 +52,8 @@ local t = redis.call('TIME')
 local now = tonumber(t[1])*1000 + math.floor(tonumber(t[2])/1000)
 local expiry = redis.call('HGET', KEYS[1], 'expiry')
 if not expiry or tonumber(expiry) <= now then return false end
+local deadline = tonumber(redis.call('HGET', KEYS[1], 'deadline'))
+if not deadline or deadline <= now or deadline > now + tonumber(ARGV[1]) then return false end
 return redis.call('HGET', KEYS[1], 'data')
 `
 
@@ -68,6 +70,7 @@ type guardedStore struct {
 	client *redis.Client
 	prefix string
 	auth   *authAuthority
+	admin  bool
 }
 
 var _ scs.CtxStore = (*guardedStore)(nil)
@@ -96,9 +99,9 @@ func (s *guardedStore) withPayload(ctx context.Context, b []byte, operation func
 		return errors.New("missing authenticated fixture subject")
 	}
 	hash := digest(subject)
-	maxLifetime := 12 * time.Hour
-	if remembered, _ := values["remember_login"].(bool); remembered {
-		maxLifetime = 7 * 24 * time.Hour
+	maxLifetime, err := s.payloadLifetime(values)
+	if err != nil {
+		return err
 	}
 	if s.auth != nil {
 		generation, ok := values["auth_generation"].(int64)
@@ -118,6 +121,27 @@ func (s *guardedStore) withPayload(ctx context.Context, b []byte, operation func
 	return operation(hash, deadline, maxLifetime)
 }
 
+// Scope is a server-side contract, checked on both read and write. Namespaced
+// keys and browser Cookie paths alone cannot authorize a misplaced payload.
+func (s *guardedStore) payloadLifetime(values map[string]interface{}) (time.Duration, error) {
+	scope, scoped := values["session_scope"]
+	if s.admin {
+		// __rememberMe is the locked SCS v2.9.0 persistence flag. Reject it
+		// alongside our policy marker; Cookie default tests guard upgrades.
+		if scope != "admin" || values["remember_login"] != false || values["__rememberMe"] != false {
+			return 0, errStale
+		}
+		return 8 * time.Hour, nil
+	}
+	if scoped {
+		return 0, errStale
+	}
+	if remembered, _ := values["remember_login"].(bool); remembered {
+		return 7 * 24 * time.Hour, nil
+	}
+	return 12 * time.Hour, nil
+}
+
 func (s *guardedStore) commit(ctx context.Context, token string, b []byte, hash string, deadline, expiry time.Time, maxLifetime time.Duration) error {
 	result, err := s.client.Eval(ctx, commitLua, []string{s.key(token), s.prefix + "subject:" + hash},
 		hash, b, deadline.UnixMilli(), expiry.UnixMilli(), maxLifetime.Milliseconds()).Int()
@@ -135,19 +159,28 @@ func (s *guardedStore) commit(ctx context.Context, token string, b []byte, hash 
 }
 
 func (s *guardedStore) FindCtx(ctx context.Context, token string) ([]byte, bool, error) {
-	b, err := s.client.Eval(ctx, findLua, []string{s.key(token)}).Text()
+	maxLifetime := 7 * 24 * time.Hour
+	if s.admin {
+		maxLifetime = 8 * time.Hour
+	}
+	b, err := s.client.Eval(ctx, findLua, []string{s.key(token)}, maxLifetime.Milliseconds()).Text()
 	if errors.Is(err, redis.Nil) {
 		return nil, false, nil
 	}
-	if err == nil && s.auth != nil {
+	if err == nil {
 		_, values, decodeErr := (scs.GobCodec{}).Decode([]byte(b))
 		if decodeErr != nil {
 			return nil, false, decodeErr
 		}
+		if _, scopeErr := s.payloadLifetime(values); scopeErr != nil {
+			return nil, false, scopeErr
+		}
 		subject, _ := values["subject"].(string)
 		generation, _ := values["auth_generation"].(int64)
 		recovery, _ := values["recovery_generation"].(string)
-		err = s.auth.withValid(ctx, subject, authVersion{generation, recovery}, func() error { return nil })
+		if s.auth != nil {
+			err = s.auth.withValid(ctx, subject, authVersion{generation, recovery}, func() error { return nil })
+		}
 	}
 	return []byte(b), err == nil, err
 }
