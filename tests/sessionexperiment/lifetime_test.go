@@ -198,6 +198,10 @@ func TestLifetimeExpiryRejectsLoadedActivity(t *testing.T) {
 }
 
 func testLoadedLifetimeExpiry(t *testing.T, remembered bool) {
+	testScopedLoadedLifetimeExpiry(t, remembered, false)
+}
+
+func testScopedLoadedLifetimeExpiry(t *testing.T, remembered, admin bool) {
 	t.Helper()
 	for _, boundary := range []string{"idle", "absolute"} {
 		t.Run(boundary, func(t *testing.T) {
@@ -205,7 +209,12 @@ func testLoadedLifetimeExpiry(t *testing.T, remembered bool) {
 			if boundary == "absolute" {
 				lifetime, idle = time.Second, 4*time.Second
 			}
-			f := setupAuthWithRemember(t, rememberPolicy{lifetime, idle}, shortLifetime(lifetime, idle))
+			var f *fixture
+			if admin {
+				f = adminView(setupAuthWithProfiles(t, rememberPolicy{7 * 24 * time.Hour, 24 * time.Hour}, rememberPolicy{lifetime, idle}))
+			} else {
+				f = setupAuthWithRemember(t, rememberPolicy{lifetime, idle}, shortLifetime(lifetime, idle))
+			}
 			login := "/login-fixture"
 			if remembered {
 				login += "?remember=true"

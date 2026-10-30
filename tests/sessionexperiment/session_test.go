@@ -17,11 +17,14 @@ import (
 )
 
 type fixture struct {
-	stores   [2]*guardedStore
-	managers [2]*scs.SessionManager
-	servers  [2]*httptest.Server
-	loaded   chan struct{}
-	resume   chan struct{}
+	stores        [2]*guardedStore
+	managers      [2]*scs.SessionManager
+	servers       [2]*httptest.Server
+	loaded        chan struct{}
+	resume        chan struct{}
+	adminStores   [2]*guardedStore
+	adminManagers [2]*scs.SessionManager
+	routePrefix   string
 }
 
 func setup(t *testing.T) *fixture {
@@ -43,6 +46,10 @@ type rememberPolicy struct {
 }
 
 func setupAuthorizedReplicasWithRemember(t *testing.T, prefix string, replicas int, authorities []*authAuthority, remember rememberPolicy, configure ...sessionConfigurer) *fixture {
+	return setupAuthorizedReplicasWithProfiles(t, prefix, replicas, authorities, remember, rememberPolicy{8 * time.Hour, 30 * time.Minute}, configure...)
+}
+
+func setupAuthorizedReplicasWithProfiles(t *testing.T, prefix string, replicas int, authorities []*authAuthority, remember, admin rememberPolicy, configure ...sessionConfigurer) *fixture {
 	t.Helper()
 	addr := os.Getenv("OJ_SESSION_REDIS_ADDR")
 	if addr == "" {
@@ -57,99 +64,130 @@ func setupAuthorizedReplicasWithRemember(t *testing.T, prefix string, replicas i
 		if err := client.Ping(context.Background()).Err(); err != nil {
 			t.Fatal(err)
 		}
-		store := &guardedStore{client: client, prefix: prefix}
-		if authorities != nil {
-			store.auth = authorities[i]
-		}
-		manager := scs.New()
-		manager.Store = store
-		manager.Lifetime = 12 * time.Hour
-		manager.IdleTimeout = 2 * time.Hour
-		manager.Cookie.Secure = true
-		manager.Cookie.HttpOnly = true
-		manager.Cookie.SameSite = http.SameSiteStrictMode
-		manager.Cookie.Persist = false
-		for _, option := range configure {
-			option(manager, store)
-		}
-		f.stores[i], f.managers[i] = store, manager
-		f.servers[i] = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Configuration is immutable after startup. Each request selects its
-			// idle policy without changing another request's shared manager.
-			localManager := *manager
-			manager := &localManager
-			login := (r.URL.Path == "/login-fixture" || r.URL.Path == "/late-login-fixture") && r.Method == http.MethodPost
-			rememberLogin := login && r.URL.Query().Get("remember") == "true"
-			if rememberLogin {
-				manager.Lifetime = remember.lifetime
+		var handlers [2]http.Handler
+		for profile := range 2 {
+			store := &guardedStore{client: client, prefix: prefix, admin: profile == 1}
+			if store.admin {
+				store.prefix += "admin:"
 			}
-			ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
-			defer cancel()
-			token := ""
-			if cookie, err := r.Cookie(manager.Cookie.Name); err == nil {
-				token = cookie.Value
+			if authorities != nil {
+				store.auth = authorities[i]
 			}
-			ctx, err := manager.Load(ctx, token)
-			if errors.Is(err, errStale) {
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			}
-			if err != nil {
-				w.WriteHeader(http.StatusServiceUnavailable)
-				return
-			}
-			if login {
-				// Policy selection is only allowed for a fresh pre-authenticated
-				// login, never by upgrading an existing credential in place.
-				if token != "" {
-					w.WriteHeader(http.StatusConflict)
-					return
-				}
-				// Pre-authenticated test identity, never a production login endpoint.
-				manager.Put(ctx, "subject", "fixture-user")
-				manager.Put(ctx, "remember_login", rememberLogin)
-				manager.RememberMe(ctx, rememberLogin)
-				if store.auth != nil {
-					generation, err := store.auth.current(ctx, "fixture-user")
-					if errors.Is(err, errStale) {
-						w.WriteHeader(http.StatusUnauthorized)
-						return
-					}
-					if err != nil {
-						w.WriteHeader(http.StatusServiceUnavailable)
-						return
-					}
-					manager.Put(ctx, "auth_generation", generation.account)
-					manager.Put(ctx, "recovery_generation", generation.recovery)
-				}
+			manager := scs.New()
+			manager.Store = store
+			manager.Lifetime = 12 * time.Hour
+			manager.IdleTimeout = 2 * time.Hour
+			manager.Cookie.Secure = true
+			manager.Cookie.HttpOnly = true
+			manager.Cookie.SameSite = http.SameSiteStrictMode
+			manager.Cookie.Persist = false
+			if store.admin {
+				manager.Lifetime, manager.IdleTimeout = admin.lifetime, admin.idle
+				manager.Cookie.Name, manager.Cookie.Path = "admin_session", "/admin-fixture"
+				f.adminStores[i], f.adminManagers[i] = store, manager
 			} else {
-				if manager.GetString(ctx, "subject") != "fixture-user" {
+				for _, option := range configure {
+					option(manager, store)
+				}
+				f.stores[i], f.managers[i] = store, manager
+			}
+			handlers[profile] = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Configuration is immutable after startup. Each request selects its
+				// idle policy without changing another request's shared manager.
+				localManager := *manager
+				manager := &localManager
+				path := r.URL.Path
+				if store.admin {
+					path = strings.TrimPrefix(path, "/admin-fixture")
+				}
+				login := (path == "/login-fixture" || path == "/late-login-fixture") && r.Method == http.MethodPost
+				rememberLogin := !store.admin && login && r.URL.Query().Get("remember") == "true"
+				if rememberLogin {
+					manager.Lifetime = remember.lifetime
+				}
+				ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+				defer cancel()
+				token := ""
+				if cookie, err := r.Cookie(manager.Cookie.Name); err == nil {
+					token = cookie.Value
+				}
+				ctx, err := manager.Load(ctx, token)
+				if errors.Is(err, errStale) {
 					w.WriteHeader(http.StatusUnauthorized)
 					return
 				}
-				switch r.URL.Path {
-				case "/me":
-					w.WriteHeader(http.StatusOK)
+				if err != nil {
+					w.WriteHeader(http.StatusServiceUnavailable)
 					return
-				case "/activity-fixture":
-					// Trusted activity probe, not a production activity/CSRF policy.
-					if r.Method != http.MethodPost {
-						w.WriteHeader(http.StatusMethodNotAllowed)
+				}
+				if login {
+					// Policy selection is only allowed for a fresh pre-authenticated
+					// login, never by upgrading an existing credential in place.
+					if token != "" {
+						w.WriteHeader(http.StatusConflict)
 						return
 					}
-				case "/logout":
-					if r.Method != http.MethodPost {
-						w.WriteHeader(http.StatusMethodNotAllowed)
+					// Pre-authenticated test identity, never a production login endpoint.
+					manager.Put(ctx, "subject", "fixture-user")
+					manager.Put(ctx, "remember_login", rememberLogin)
+					manager.RememberMe(ctx, rememberLogin)
+					if store.admin {
+						manager.Put(ctx, "session_scope", "admin")
+					}
+					if store.auth != nil {
+						generation, err := store.auth.current(ctx, "fixture-user")
+						if errors.Is(err, errStale) {
+							w.WriteHeader(http.StatusUnauthorized)
+							return
+						}
+						if err != nil {
+							w.WriteHeader(http.StatusServiceUnavailable)
+							return
+						}
+						manager.Put(ctx, "auth_generation", generation.account)
+						manager.Put(ctx, "recovery_generation", generation.recovery)
+					}
+				} else {
+					if manager.GetString(ctx, "subject") != "fixture-user" {
+						w.WriteHeader(http.StatusUnauthorized)
 						return
 					}
-					if err := manager.Destroy(ctx); err != nil {
-						w.WriteHeader(http.StatusServiceUnavailable)
+					switch path {
+					case "/me":
+						w.WriteHeader(http.StatusOK)
+						return
+					case "/activity-fixture":
+						// Trusted activity probe, not a production activity/CSRF policy.
+						if r.Method != http.MethodPost {
+							w.WriteHeader(http.StatusMethodNotAllowed)
+							return
+						}
+					case "/logout":
+						if r.Method != http.MethodPost {
+							w.WriteHeader(http.StatusMethodNotAllowed)
+							return
+						}
+						if err := manager.Destroy(ctx); err != nil {
+							w.WriteHeader(http.StatusServiceUnavailable)
+							return
+						}
+						manager.WriteSessionCookie(ctx, w, "", time.Time{})
+						w.WriteHeader(http.StatusNoContent)
+						return
+					case "/late-save":
+						f.loaded <- struct{}{}
+						select {
+						case <-f.resume:
+						case <-ctx.Done():
+							w.WriteHeader(http.StatusServiceUnavailable)
+							return
+						}
+					default:
+						w.WriteHeader(http.StatusNotFound)
 						return
 					}
-					manager.WriteSessionCookie(ctx, w, "", time.Time{})
-					w.WriteHeader(http.StatusNoContent)
-					return
-				case "/late-save":
+				}
+				if path == "/late-login-fixture" {
 					f.loaded <- struct{}{}
 					select {
 					case <-f.resume:
@@ -157,38 +195,33 @@ func setupAuthorizedReplicasWithRemember(t *testing.T, prefix string, replicas i
 						w.WriteHeader(http.StatusServiceUnavailable)
 						return
 					}
-				default:
-					w.WriteHeader(http.StatusNotFound)
+				}
+				if !store.admin && manager.GetBool(ctx, "remember_login") {
+					manager.IdleTimeout = remember.idle
+				}
+				token, expiry, err := manager.Commit(ctx)
+				if errors.Is(err, errLimit) {
+					w.WriteHeader(http.StatusConflict)
 					return
 				}
-			}
-			if r.URL.Path == "/late-login-fixture" {
-				f.loaded <- struct{}{}
-				select {
-				case <-f.resume:
-				case <-ctx.Done():
+				if errors.Is(err, errStale) {
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				if err != nil {
 					w.WriteHeader(http.StatusServiceUnavailable)
 					return
 				}
+				manager.WriteSessionCookie(ctx, w, token, expiry)
+				w.WriteHeader(http.StatusCreated)
+			})
+		}
+		f.servers[i] = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			profile := 0
+			if strings.HasPrefix(r.URL.Path, "/admin-fixture/") {
+				profile = 1
 			}
-			if manager.GetBool(ctx, "remember_login") {
-				manager.IdleTimeout = remember.idle
-			}
-			token, expiry, err := manager.Commit(ctx)
-			if errors.Is(err, errLimit) {
-				w.WriteHeader(http.StatusConflict)
-				return
-			}
-			if errors.Is(err, errStale) {
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			}
-			if err != nil {
-				w.WriteHeader(http.StatusServiceUnavailable)
-				return
-			}
-			manager.WriteSessionCookie(ctx, w, token, expiry)
-			w.WriteHeader(http.StatusCreated)
+			handlers[profile].ServeHTTP(w, r)
 		}))
 		f.servers[i].Client().Timeout = 5 * time.Second
 		t.Cleanup(f.servers[i].Close)
@@ -197,7 +230,7 @@ func setupAuthorizedReplicasWithRemember(t *testing.T, prefix string, replicas i
 }
 
 func request(f *fixture, replica int, method, path string, cookie *http.Cookie) (*http.Response, error) {
-	req, err := http.NewRequest(method, f.servers[replica].URL+path, nil)
+	req, err := http.NewRequest(method, f.servers[replica].URL+f.routePrefix+path, nil)
 	if err != nil {
 		return nil, err
 	}

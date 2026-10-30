@@ -114,6 +114,10 @@ func setupAuth(t *testing.T, configure ...sessionConfigurer) *fixture {
 }
 
 func setupAuthWithRemember(t *testing.T, remember rememberPolicy, configure ...sessionConfigurer) *fixture {
+	return setupAuthWithProfiles(t, remember, rememberPolicy{8 * time.Hour, 30 * time.Minute}, configure...)
+}
+
+func setupAuthWithProfiles(t *testing.T, remember, admin rememberPolicy, configure ...sessionConfigurer) *fixture {
 	t.Helper()
 	namespace := digest(t.Name())
 	a := newAuthority(t, namespace)
@@ -138,8 +142,8 @@ func setupAuthWithRemember(t *testing.T, remember rememberPolicy, configure ...s
 	if err != nil {
 		t.Fatal(err)
 	}
-	return setupAuthorizedReplicasWithRemember(t, "auth:"+namespace+":", 2,
-		[]*authAuthority{a, newAuthority(t, namespace)}, remember, configure...)
+	return setupAuthorizedReplicasWithProfiles(t, "auth:"+namespace+":", 2,
+		[]*authAuthority{a, newAuthority(t, namespace)}, remember, admin, configure...)
 }
 
 func invalidate(t *testing.T, a *authAuthority, enabled bool) {
