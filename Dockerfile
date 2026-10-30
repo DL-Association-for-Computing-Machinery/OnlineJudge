@@ -21,7 +21,9 @@ FROM scratch AS host-artifacts
 COPY --from=host-build /out/ /
 
 FROM backend-deps AS sqlc-build
-RUN GOBIN=/out go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
+# Clean CI builds hit HTTP/2 stream errors at the checksum endpoint.
+# Limit HTTPS/1.1 to these pinned tool installs; keep TLS and checksum checks.
+RUN GODEBUG=http2client=0 GOBIN=/out go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
 
 # Scanner tools are development-only; runtime images do not inherit them.
 FROM backend-deps AS security-tools
@@ -36,7 +38,7 @@ CMD ["govulncheck", "-show", "verbose", "./..."]
 
 FROM backend-deps AS quality-tools
 ENV GOTELEMETRY=off
-RUN GOBIN=/out go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+RUN GODEBUG=http2client=0 GOBIN=/out go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 
 FROM backend-source AS backend-quality
 COPY --from=quality-tools /out/golangci-lint /usr/local/bin/golangci-lint
