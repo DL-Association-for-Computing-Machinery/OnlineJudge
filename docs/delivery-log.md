@@ -1,14 +1,16 @@
 # 工程交付记录
 
-## 2026-10-31：固定 Go 工具安装的局部传输缓解（待联网验收）
+## 2026-10-31：固定 Go 工具安装的局部传输缓解
 
 PR #51 的账号撤权目标在本机91项行为/race、261子例及完整离线后端检查通过后，CI head `cf12d06` 两轮均在应用检查之前失败：运行41099633376首次backend job124214395987安装golangci-lint时，sum.golang.org校验exhaustive模块的tile发生HTTP/2 INTERNAL_ERROR；同head一次失败任务重试的job124216969218安装sqlc时，wazero模块的校验tile同类失败。没有关闭校验/门禁或继续盲目重跑，PR51保留草稿。为保持一个PR一个目标，成功fetch后从最新主线`1d31678`另建`codex/go-tool-install-http1`。
 
 仅在Dockerfile的sqlc1.31.1、golangci-lint2.15.0两个RUN上加命令级`GODEBUG=http2client=0`，绕开已观察到的HTTP/2传输路径，不改固定版本、TLS、GOSUMDB、代理、运行时ENV或CI断言。Astra定向设计复核无安全阻断，要求真实安装成功、版本与最终镜像环境核验以及完整CI后才交付；此为缓解建议，不是已证明消除网络故障。
 
-锁定Go1.26.10、已有Docker工具链在禁网容器内实际验证：默认HTTP/2→命令级开关HTTP/1.1→默认HTTP/2，三轮均有已验证TLS证书链，且拒绝不受信证书，进程exit0。临时探针及日志在本机`/private/tmp/oj-http1-probe.go`、`/private/tmp/oj-http1-probe.log`，不纳入仓库。两个修改后的安装层均实际执行，但分别因proxy.golang.org/sum.golang.org TCP连接拒绝而失败；同机gh访问api.github.com亦连续连接拒绝，尚不能验证安装产物版本、最终镜像环境或远端CI。仓库策略/差异检查通过，未降低验证要求。
+锁定Go1.26.10、已有Docker工具链在禁网容器内实际验证：默认HTTP/2→命令级开关HTTP/1.1→默认HTTP/2，三轮均有已验证TLS证书链，且拒绝不受信证书，进程exit0。临时探针及日志在本机`/private/tmp/oj-http1-probe.go`、`/private/tmp/oj-http1-probe.log`，不纳入仓库。本机首次及后续完整工具链尝试因Go代理/校验站/CDN的TCP拒绝或超时失败，GitHub API也曾间歇不可达；用户报告恢复后，API镜像实际构建成功，实际inspect无GODEBUG环境项，本机工具链下载仍不稳定。未关闭校验、改代理或降低门禁。
 
-本项尚未完成联网验收，不记录为已修复、已合并或已部署。网络恢复后须完成两个安装层、工具版本、最终toolchain/api环境及最新head必需CI，再交付本独立目标；随后同步主线到PR51，重验账号目标。没有生产代码、依赖版本或数据库迁移，完整M0仍未通过。
+PR #52初始head `08c4d67` 的CI运行41103361476已完整成功。backend job124225937735日志确认两条修改安装命令真实执行、并非CACHED：golangci-lint@v2.15.0层103.7秒、sqlc@v1.31.1层106.2秒，最终toolchain构建及后端/数据库集成检查通过。版本按固定@v安装日志、精确产物流转和生成代码校验核对，未对候选产物另跑版本命令；toolchain无新增GODEBUG采用Dockerfile命令作用域/独立FROM阶段的结构证据，未另做该最终镜像inspect，API镜像环境另有实际检查。Astra复核确认该等价证据覆盖局部改动，仍须核验文档后续head的完整CI和审查条件，实际PR/head/合并结果见远端与知识库。
+
+这只证明候选在该次runner构建成功，不证明上游HTTP/2根因或全部网络故障消失。回退两处命令级赋值即可，无生产代码、依赖版本或数据库迁移；完整M0未通过、未部署。本独立目标交付后，再同步主线到PR51并重验账号目标。
 
 ## 2026-10-31：PostgreSQL 普通会话名额与撤销对照
 
