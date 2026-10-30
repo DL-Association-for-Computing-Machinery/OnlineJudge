@@ -2,6 +2,7 @@ package sessionexperiment
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"net/http"
@@ -16,7 +17,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func beginRecovery(t *testing.T, a *authAuthority) int64 {
+func beginRecovery(t *testing.T, a *authAuthority) string {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -27,7 +28,7 @@ func beginRecovery(t *testing.T, a *authAuthority) int64 {
 	return generation
 }
 
-func finishRecovery(t *testing.T, a *authAuthority, generation int64) {
+func finishRecovery(t *testing.T, a *authAuthority, generation string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -115,12 +116,16 @@ func TestRedisSnapshotRecovery(t *testing.T) {
 	// A second account changes only its account generation after the snapshot;
 	// fixture-user stays at account generation 1, isolating the global fence.
 	a := f.stores[0].auth
+	initial, err := a.current(ctx, "fixture-user")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := a.pool.Exec(ctx, `INSERT INTO session_auth_fixture VALUES ($1,$2,1,true)`, a.namespace, "reset-user"); err != nil {
 		t.Fatal(err)
 	}
 	resetDeadline := time.Now().Add(time.Hour)
 	resetData, err := (scs.GobCodec{}).Encode(resetDeadline, map[string]interface{}{
-		"subject": "reset-user", "auth_generation": int64(1), "recovery_generation": int64(1),
+		"subject": "reset-user", "auth_generation": int64(1), "recovery_generation": initial.recovery,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -215,7 +220,7 @@ func TestRedisSnapshotRecovery(t *testing.T) {
 	}
 	finishRecovery(t, fresh, generation)
 	version, err := fresh.current(ctx, "fixture-user")
-	if err != nil || version != (authVersion{1, 2}) {
+	if err != nil || version != (authVersion{1, generation}) {
 		t.Fatalf("persisted versions=%+v err=%v", version, err)
 	}
 	if _, _, err := f.stores[1].FindCtx(ctx, "reset-fixture"); !errors.Is(err, errStale) {
@@ -298,7 +303,11 @@ func TestRecoveryWaitsForSaveGuard(t *testing.T) {
 	f := setupAuth(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	err := f.stores[0].auth.withValid(ctx, "fixture-user", authVersion{1, 1}, func() error {
+	version, err := f.stores[0].auth.current(ctx, "fixture-user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = f.stores[0].auth.withValid(ctx, "fixture-user", version, func() error {
 		tx, err := f.stores[1].auth.pool.Begin(ctx)
 		if err != nil {
 			return err
@@ -307,8 +316,8 @@ func TestRecoveryWaitsForSaveGuard(t *testing.T) {
 		if _, err = tx.Exec(ctx, `SET LOCAL lock_timeout='100ms'`); err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `UPDATE session_recovery_fixture SET generation=generation+1, enabled=false
-			WHERE namespace=$1`, f.stores[1].auth.namespace)
+		_, err = tx.Exec(ctx, `UPDATE session_recovery_fixture SET generation=$2, enabled=false
+			WHERE namespace=$1`, f.stores[1].auth.namespace, rand.Text())
 		var pgErr *pgconn.PgError
 		if !errors.As(err, &pgErr) || pgErr.Code != "55P03" {
 			return fmt.Errorf("expected blocked recovery, got %v", err)
@@ -320,7 +329,7 @@ func TestRecoveryWaitsForSaveGuard(t *testing.T) {
 	}
 	generation := beginRecovery(t, f.stores[1].auth)
 	finishRecovery(t, f.stores[1].auth, generation)
-	err = f.stores[0].auth.withValid(ctx, "fixture-user", authVersion{1, 1}, func() error {
+	err = f.stores[0].auth.withValid(ctx, "fixture-user", version, func() error {
 		t.Error("old recovery generation entered save")
 		return nil
 	})

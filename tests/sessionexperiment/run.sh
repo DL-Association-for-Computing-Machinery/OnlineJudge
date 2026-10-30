@@ -12,6 +12,7 @@ trap 'exit 143' TERM
 initdb -D "$oj_session_pg/data" --username=oj_session --auth-local=trust --auth-host=reject --no-locale --encoding=UTF8 >"$oj_session_pg/init.log"
 pg_ctl -D "$oj_session_pg/data" -l "$oj_session_pg/server.log" -o "-k $oj_session_pg -c listen_addresses='' -c max_connections=30" -w start >/dev/null
 export OJ_SESSION_DATABASE_URL="host=$oj_session_pg user=oj_session dbname=postgres sslmode=disable"
+export OJ_SESSION_DATABASE_FIXTURE=1
 test -z "$(gofmt -l .)"
 go mod verify
 go vet ./...
