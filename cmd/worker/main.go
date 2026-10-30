@@ -13,7 +13,9 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	if err := run(ctx, logger); err != nil {
+	drain, stopDrain := signal.NotifyContext(context.Background(), syscall.SIGUSR1)
+	defer stopDrain()
+	if err := run(ctx, logger, drain.Done()); err != nil {
 		logger.Error("Worker 已停止", "error", err.Error())
 		os.Exit(1)
 	}

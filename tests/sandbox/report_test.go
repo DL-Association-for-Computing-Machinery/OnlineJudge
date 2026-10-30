@@ -71,7 +71,7 @@ func TestExecutionReport(t *testing.T) {
 	if err := store.RegisterFixture(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `INSERT INTO worker_nodes(id,credential_version) VALUES('report-node',1),('other-node',1),('entry-node',1)`); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO worker_nodes(id,credential_version) VALUES('report-node',1),('other-node',1),('entry-node',1),('drain-node',1)`); err != nil {
 		t.Fatal(err)
 	}
 	ca := testpki.New(t)
@@ -233,5 +233,8 @@ func TestExecutionReport(t *testing.T) {
 	}
 	t.Run("worker-command", func(t *testing.T) {
 		testWorkerCommand(t, store, ca, first.URL)
+	})
+	t.Run("worker-drain", func(t *testing.T) {
+		testWorkerDrain(t, store, pool, ca, first.URL)
 	})
 }
