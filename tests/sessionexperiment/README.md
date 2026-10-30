@@ -4,11 +4,22 @@
 
 实验目标：用 SCS 和真实 Redis 验证普通会话三名额，以及跨 API 撤销后迟到保存不能复活会话；后续子项补齐独立 API 进程与进程重启证据。所有适配器和 HTTP 处理器只存在于 `_test.go`，不接入应用，不提供可部署登录入口。独立 Go 模块避免把实验依赖引入正式程序；根目录 `go test ./...` **不会执行本模块**。后端 CI 已单独纳入本模块静态分析，真实 Redis 行为测试仍按下文专项执行。
 
+## Redis 连接预算、饱和与恢复（2026-10-30）
+
+`codex/session-pool-budget` 从成功 fetch 后的 `ff6b4a9` 创建。每个实验 API 的共享 Redis 客户端现在明确设置 `PoolSize=8`、`MaxActiveConns=8`，并用 `PipelinePoolSize=-1` 禁用独立 pipeline 池，使普通命令和本实验 pipeline 共用主池。仍禁用自动重试，保留 1 秒连接/读/写/取池超时及 3 秒 HTTP 上下文；每个客户端有独立随机观测标签，不包含会话凭据。
+
+- 先占住真实初始化的主池连接，再执行 PING pipeline：原配置可通过额外 pipeline 池成功执行，修复后明确取池失败，释放后同一路径可用。锁定版本中 pipeline 池不受主池 `MaxActiveConns` 额度约束，不能只设置后者；依据见 [go-redis v9.23.0 配置源码](https://github.com/redis/go-redis/blob/v9.23.0/options.go)。
+- 同进程两个 TLS API 各持有 8 条连接，用独立观察客户端读取 Redis `CLIENT LIST`、按精确标签分组，实际观察合计 16 条。16 个跨 API/个人及管理 scope 的读取、活动、退出和新登录请求并发执行；持有期间实时采样连接数，均在 4 秒验证预算内返回 503、无 Cookie，全载荷、索引及绝对到期时刻不变。释放后原会话可读、退出/撤销生效、名额恢复。
+- 屏障先确认已加载会话，再占满一个 API 的池：该副本保存失败、无 Cookie/状态改写，另一 API 仍可读取；释放后可续期且保留原绝对期限。两种 scope 均有独立用例；失败路径也归还持有连接并释放屏障。
+- 压力观测沿用的旧快照辅助函数在负向运行中暴露 `KEYS → 内容 → PEXPIRETIME` 自然到期竞态。现在单次 `EvalRO` 原子读取、以嵌套 RESP 保留二进制载荷，对有效键严格检查 TTL/类型；仅排除按 Redis TIME 已自然到期的正期限项。新增同截止时间 hash/index 的实时过期观察，以及缺失 TTL/错误类型拒绝且不改写记录的验证。它只扫描私有 standalone 夹具前缀，不能作为生产/Cluster 扫描方案；[Redis 脚本原子与只读/OOM 语义](https://redis.io/docs/latest/develop/programmability/)是机制依据，行为仍以实际实验为准。
+
+16 条仅指本实验两个 API 普通命令/共用主池 pipeline 路径的连接，不含观察客户端另 1 条、驱动或其他客户端，也未覆盖 PubSub、AutoPipeline、维护通知等其他路径；不是整个 Redis 服务或进程所有可能用法的全局连接上限。8 是实验参数，生产额度、跨进程/主机、吞吐、RSS/CPU、数据库连接及重连峰值仍待验收。无新依赖、SQL、迁移、驱动或生产入口；回退本项测试配置即可。实际验证和失败记录见[交付日志](../../docs/delivery-log.md)，完整 M0 未通过、未部署。
+
 ## 管理会话期限与 scope 隔离（2026-10-30）
 
 `codex/session-admin-lifetime` 从成功 fetch 后的 `2485f9f` 创建。两个现有 TLS API 各自增加启动前配置的管理 manager 和存储适配器，使用独立 `admin_session` Cookie、`/admin-fixture` Cookie Path、`admin:` Redis 子命名空间；同一 API 的两个 scope 共用一个配置 `PoolSize=8` 的 Redis 客户端和 PostgreSQL 账号/恢复代次。管理登录仍是预认证测试身份，**不验证真实管理资格、密码或敏感操作再次验证**，不接入生产。
 
-`PoolSize` 是基础池大小，不能据此宣称最大连接数为 8；锁定 [go-redis v9.23.0 的配置源码](https://github.com/redis/go-redis/blob/v9.23.0/options.go)说明须用 `MaxActiveConns` 限制最大连接数，零值不设上限。当前夹具未设置该项，也没有验证跨副本总连接预算或负载上限；连接总上限是待补项，本轮仅证明两个 scope 复用同一客户端。
+PR #44 记录了当时 `PoolSize=8` 不能代表最大连接数、夹具尚未设置 `MaxActiveConns` 的缺口；上述后续连接实验已补显式主池上限及双 API 有限路径验证，仍不代表生产负载或全部连接来源已验收。管理实验本身只证明两个 scope 复用同一客户端。
 
 - 管理默认空闲 30 分钟、绝对 8 小时，Cookie 始终非持久化，保留 Secure、HttpOnly、SameSite=Strict。管理登录及活动的 `remember=true` 都不能开启保持登录或延长期限；普通 2 小时/12 小时和个人保持登录 24 小时/7 天保持不变。
 - 读取和保存都检查服务端 `session_scope=admin`，拒绝缺失/错误类型/错误 scope、个人 remember 标记及固定 SCS v2.9.0 的持久化标记混入；普通存储拒绝管理 scope。Redis TIME 检查管理记录的 8 小时上界，使用全新凭据单独证明超界保存被拒绝且没有写入副作用。

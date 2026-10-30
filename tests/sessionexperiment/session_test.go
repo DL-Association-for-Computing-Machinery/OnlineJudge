@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/alexedwards/scs/v2"
-	"github.com/redis/go-redis/v9"
 )
 
 type fixture struct {
@@ -57,9 +56,7 @@ func setupAuthorizedReplicasWithProfiles(t *testing.T, prefix string, replicas i
 	}
 	f := &fixture{loaded: make(chan struct{}, 1), resume: make(chan struct{})}
 	for i := range replicas {
-		client := redis.NewClient(&redis.Options{Addr: addr, MaxRetries: -1,
-			DialTimeout: time.Second, ReadTimeout: time.Second, WriteTimeout: time.Second,
-			PoolSize: 8, PoolTimeout: time.Second, ContextTimeoutEnabled: true})
+		client := sessionRedisClient(addr, prefix+"api:", sessionRedisPoolLimit)
 		t.Cleanup(func() { _ = client.Close() })
 		if err := client.Ping(context.Background()).Err(); err != nil {
 			t.Fatal(err)

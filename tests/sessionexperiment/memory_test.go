@@ -92,28 +92,11 @@ type memoryRecord struct {
 
 func memorySnapshot(t *testing.T, f *fixture) map[string]memoryRecord {
 	t.Helper()
-	ctx := context.Background()
-	client := f.stores[0].client
-	keys, err := client.Keys(ctx, f.stores[0].prefix+"*").Result()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	state, err := readMemorySnapshot(ctx, f.stores[0].client, f.stores[0].prefix)
 	if err != nil {
 		t.Fatal(err)
-	}
-	state := make(map[string]memoryRecord)
-	for _, key := range keys {
-		entry := memoryRecord{}
-		if strings.Contains(key, ":token:") {
-			entry.fields, err = client.HGetAll(ctx, key).Result()
-		} else {
-			entry.slots, err = client.ZRangeWithScores(ctx, key, 0, -1).Result()
-		}
-		if err != nil {
-			t.Fatal(err)
-		}
-		entry.expires, err = client.PExpireTime(ctx, key).Result()
-		if err != nil || entry.expires <= 0 {
-			t.Fatalf("session key expiry missing: %v", err)
-		}
-		state[key] = entry
 	}
 	return state
 }
