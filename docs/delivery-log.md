@@ -1,5 +1,19 @@
 # 工程交付记录
 
+## 2026-10-31：密码验证与条件升级用例
+
+成功 fetch 主线 `ed1475a` 后建立独立 `codex/credential-verification`。新增 `CredentialVerifier.VerifyPassword`，连接凭据读取、共享 BoundedHasher、Legacy 同密码 Current 创建、两代次 CAS 升级和末次 State 复核。Current 匹配只读，升级须返回精确预期版本且不溢出，失败不降级为成功、不盲重试或补偿。完整合同归[会话设计](architecture/session-design.md#74-密码验证与条件升级用例)。输入是未来邮箱映射已解析的主体 ID，不改变个人邮箱登录规则；Store/Hasher 须使用兼容批准策略。成功仅描述末次读取时点，不是会话或权限授权；升级已提交后仍可能因回执、末次读取、撤权或取消而返回零结果。
+
+已有 Docker 工具链 `oj-go-quality-toolchain`、Linux arm64/Go1.26.10、禁网 2 CPU/2 GiB 与原编译缓存执行检查，无安装/下载、Docker socket 或选手程序。编辑前 `go mod verify && go test -race -count=1 -v ./internal/identity/...` 的原密码包 21 项/51 子例通过（3.536 秒），当时身份包无单元用例；日志 `/private/tmp/oj-credential-verification-baseline-20261031.log`。检查运行时冻结 Go/SQL 输入。
+
+单元首轮因测试辅助误用不存在的 `slices.LastIndex` 编译失败，已换显式计数，失败日志 `unit-20261031.log` 保留。按原命令重验身份 9 项/33 子例 race 1.041 秒、密码包 21 项/51 子例 3.678 秒通过（`/private/tmp/oj-credential-verification-unit2-20261031.log`）。覆盖 Current 只读、同密码升级、拒绝路径、升级失败/溢出/返回合同、末次每字段不符、逐阶段取消与未知写入不重试/补偿。
+
+`sh scripts/toolchain.sh sqlc && sh scripts/toolchain.sh db` 的两包生成差异、真实 PostgreSQL/race 完整 79 子条目（新增应用用例 11，18.141 秒）及原双 API 子进程通过（`/private/tmp/oj-credential-verification-postgres-20261031.log`）。真实 KDF 与两个 Store 竞争同一旧版本，仅一赢家；Current 校验后、Legacy 升级前/后分别交错改密或禁用六场景，零结果且完整新状态不被覆盖。屏障位于应用 Store 调用之前，不声称 PostgreSQL 锁等待。真实提交后返回合成 ErrStore+Canceled 的夹具只模拟回执错误，不冒称网络故障；真实新行仍保留。
+
+全后端首轮静态检查指出嵌入字段可简化和故意空 context 输入的测试表达问题（`/private/tmp/oj-credential-verification-backend-20261031.log`）。改为同一嵌入方法简写及 typed absent context，保留原断言，无禁用/抑制检查或行为变化。最终 `go mod verify && sh scripts/toolchain.sh backend` 格式、vet、检测器正负夹具、三范围静态各 0 问题、全部 race 与四入口构建通过，身份 1.122 秒、密码包 3.570 秒（`/private/tmp/oj-credential-verification-backend2-20261031.log`）。
+
+251 文件仓库策略、全部新增文件和目标分支完整差异审查通过，README、计划、会话设计与 M0 同步。Astra 设计、完整实现/测试及等价增量/文档复核无阻断，主代理负责实测和完整差异，AI 不替代人工审批；最新 head CI/反馈/合并条件在交付时另行回读。无新依赖、SQL/迁移、HTTP、邮件或 Redis 变更，本地未重复 Redis/真实 Worker 专项；合成参数不证明生产资源或 100 人登录容量。回退移除内部用例和测试，无数据迁移；未来调用方回退须同时停用依赖功能。邮箱映射、正式登录/会话原子门禁、激活/权限、多 API 总预算、生产参数及完整 AC24/AC23/M0 仍待验收，未部署。
+
 ## 2026-10-31：共享实例密码计算准入
 
 PR #61 合并后成功 fetch，并从 `75e5b53` 建立独立 `codex/password-admission`。唯一目标为密码核心的同步计算准入；`NewBounded` 显式配置计算名额、等待人数与排队期限，Create/Verify 共享同一实例。输入与记录先做廉价校验；等待满额返回 Busy，自身超时与调用方取消/期限分开，等待位先于计算释放。计算开始后不以超时 goroutine 提前返回，实际派生/随机源调用返回后才释放名额；已观察的调用方取消优先并清零结果。没有账号接口、SQL/迁移、Redis 或跨进程协调，详细合同归[会话设计](architecture/session-design.md#73-密码计算准入)。
