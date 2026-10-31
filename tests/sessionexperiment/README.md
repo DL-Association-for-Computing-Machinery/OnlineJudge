@@ -271,7 +271,7 @@ GOPROXY=https://proxy.golang.org GOSUMDB=sum.golang.org GOMODCACHE=/private/tmp/
 python3 scripts/test-session.py --module-cache /private/tmp/oj-session-mod
 ```
 
-驱动创建随机命名的 internal 网络及两个一次性 Redis：原夹具保持 tmpfs，恢复夹具仅挂载本次新建的私有临时目录保存 RDB。无宿主端口、用户数据库或 Docker socket 挂载；有限轮询就绪，测试执行预算 300 秒，各恢复命令另有超时。测试容器只读挂载实验源码/缓存，`GOPROXY=off`，`run.sh` 创建私有 PostgreSQL 后校验模块并运行 vet/race。恢复请求使用一次性随机 nonce，驱动只执行固定的本次容器 kill/start，再写入固定完成标记；测试输出不能指定容器、宿主路径或命令。正常完成或命令失败后清理本次容器、网络及 RDB 临时目录，不操作既有 volume；强制终止宿主驱动后的残留清理未验收。
+驱动创建随机命名的 internal 网络及两个一次性 Redis：原夹具保持 tmpfs，恢复夹具仅挂载本次新建的私有临时目录保存 RDB。无宿主端口、用户数据库或 Docker socket 挂载；有限轮询就绪，测试容器执行阶段预算 300 秒（含容器内 PostgreSQL 准备、校验/编译和运行，不含此前网络/Redis 创建就绪及最终清理），Go 行为套件聚合 watchdog 为 120 秒，各请求/恢复命令和行为断言仍各自受原时限约束。120 秒只为累积的真实过期/故障暂停及测试数量增长保留有限执行空间，不是业务延迟或性能 SLA；不得以此放宽单项验收。测试容器只读挂载实验源码/缓存，`GOPROXY=off`，`run.sh` 创建私有 PostgreSQL 后校验模块并运行 vet/race。恢复请求使用一次性随机 nonce，驱动只执行固定的本次容器 kill/start，再写入固定完成标记；测试输出不能指定容器、宿主路径或命令。正常完成或命令失败后清理本次容器、网络及 RDB 临时目录，不操作既有 volume；强制终止宿主驱动后的残留清理未验收。
 
 RDB 是时点快照，恢复可能回退其后的退出/撤销，原理见 [Redis 持久化说明](https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/)。本实验用外部 PostgreSQL 代次拒绝恢复后的旧数据，不把 RDB 本身视为撤销连续性的保证。
 

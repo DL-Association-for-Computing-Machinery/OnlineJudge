@@ -1,12 +1,24 @@
 # 工程交付记录
 
-## 2026-10-31：PostgreSQL 会话与账号同库旧备份恢复（验收进行中）
+## 2026-10-31：PostgreSQL 会话与账号同库旧备份恢复
+
+前置PR #56已按head`b76b809`的九项CI全部成功后合并为`40970b200a5a90b2a948a2268eec0773180834a4`。本次正常合入最新主线，保留两份交付记录解决唯一文档冲突，不重写历史；恢复Go源码与原审查`6fc175d`一致。按实际120秒聚合watchdog的原驱动完整100项行为/race、272子例通过（89.684秒，新增恢复用例0.64秒），格式/模块校验/vet随驱动执行；模块静态已零问题，218文件仓库策略及完整diff通过。最终head CI及合并状态另行回读，不沿用原head检查。
 
 从成功fetch后的`7572ab9`创建独立`codex/session-postgres-restore`。仅测试模块：提取现有私有schema创建/绑定helper，保持原Redis侧逻辑回档验证行为；PostgreSQL夹具分离初始化与serve，恢复时新连接启动既有状态，不重建账号或门禁。新增私有schema真实pg_dump/pg_restore，用四表全部列的逻辑快照核对Gob/期限、主体、账号与门禁精确回档；备份后新增凭据/禁用账号/轮换门禁，再关闭排空全部旧API及池后还原。无API时observer直接证实旧凭据复活、后来凭据丢失；新随机恢复标识闭门清载荷、拒旧完成、双新API闭门503/重开拒旧与三名额，并保留备份后更新的独立schema sentinel。账号启用/认证代次仍回到备份状态，未重建最新安全事实，三名额仅为合成预认证主体；不是生产复服许可或整实例/PITR、自动恢复协调验收。
 
-Docker Desktop Linux arm64、已有质量镜像/校验缓存，保持Go套件90秒/驱动300秒和所有业务断言。原99项主线基线（容器内两待改文件SHA与main逐一相同）在90秒总超时中止：98项完成85.65秒，最后已有Redis暂停恢复用例4秒，无断言/race失败。新增100项完整运行中恢复用例通过0.58秒，99项完成84.86秒，最后同一已有用例5秒且已输出核验记录后仍被总超时中止；完整验收未通过，不把单项通过替代整套结果。行为阶段一次资源采样27.17%CPU、262.3MiB/7.748GiB、OOMKilled=false；这不是峰值或已定位性能根因。未改timeout/断言、并行或分片，也不把SCS默认memstore清理协程当作已证实的变慢原因。
+首次验证使用Docker Desktop Linux arm64、已有质量镜像/校验缓存，保持原Go套件90秒/测试容器执行阶段300秒和所有业务断言。原99项主线基线（容器内两待改文件SHA与main逐一相同）在90秒总超时中止：98项完成85.65秒，最后已有Redis暂停恢复用例4秒，无断言/race失败。新增100项中恢复用例通过0.58秒，99项完成84.86秒，最后同一已有用例5秒且已输出核验记录后仍被总超时中止；当时完整验收未通过，不把单项通过替代整套结果。行为阶段一次资源采样27.17%CPU、262.3MiB/7.748GiB、OOMKilled=false；这不是峰值或已定位性能根因。未改业务断言/时限、并行或分片，也不把SCS默认memstore清理协程当作已证实的变慢原因。
 
-原样重复超时后停止随机重跑，拟独立校准聚合套件watchdog，恢复目标保留未完成状态，等待前置交付后重验。Astra设计、完整源码差异及文档复核无实现阻断；主代理实际单项证据与失败日志保留于`/private/tmp/oj-pg-restore-baseline.log`、`/private/tmp/oj-pg-restore-test.log`、`/private/tmp/oj-pg-restore-runtime-resources.log`。模块格式/校验/vet已执行，静态分析及当前head CI另行核验；无新依赖、生产程序或迁移，不替换Redis，完整存储比较、AC23/M0未通过、未部署。
+停止随机重跑后以独立PR #56校准聚合watchdog，并在交付后完整重验，结果见本节首段。Astra设计、完整源码差异及文档复核无实现阻断；失败日志保留于`/private/tmp/oj-pg-restore-baseline.log`、`/private/tmp/oj-pg-restore-test.log`，资源采样为`/private/tmp/oj-pg-restore-runtime-resources.log`，最终通过日志为`/private/tmp/oj-pg-restore-final.log`。无新依赖、生产程序或迁移，不替换Redis，完整存储比较、AC23/M0未通过、未部署。
+
+## 2026-10-31：会话实验聚合 watchdog 校准
+
+恢复草稿PR #55（head`6fc175d`）的局部恢复用例0.58秒通过，但原主线99项和新增100项都被整套90秒watchdog截断：前者98项完成85.65秒、最后已有Redis暂停恢复用例4秒；后者99项完成84.86秒、最后同一用例5秒且已输出初次核验记录。均无行为断言/race失败，完整验收不能计通过。失败日志保留于`/private/tmp/oj-pg-restore-baseline.log`及`/private/tmp/oj-pg-restore-test.log`；同次行为资源一次采样27.17%CPU、262.3MiB/7.748GiB、OOMKilled=false，不是峰值或已定位全部变慢根因。
+
+成功fetch后从`7572ab9`独立创建`codex/session-suite-watchdog`，只把`run.sh`聚合Go watchdog从90秒校准为120秒并同步执行说明。保留-mod=readonly/race/count=1、全部测试/断言、请求与故障暂停/过期/恢复命令原时限；不分片、并行共享Redis、升级依赖或猜测性修补memstore清理。120秒是测试数量及有意等待累积后的有限执行预算，不是业务延迟/性能SLA；测试容器执行阶段300秒预算保持（不覆盖此前网络/Redis创建就绪及最终清理）。
+
+Docker Desktop Linux arm64、已有Go1.26.10质量镜像/校验缓存、私有Redis7.2.4/PostgreSQL14.24，实际`python3 scripts/test-session.py --toolchain-image oj-go-quality-toolchain:latest --module-cache /private/tmp/oj-session-mod`完整原主线99项行为/race、272子例通过（91.629秒，另子进程专用入口按既有合同跳过）；格式、模块校验、vet随原驱动执行。临时负向探针从真实run.sh提取全部go test参数，禁网/1GiB/2CPU私有模块用select{}挂起；Go明确报`panic: test timed out after 2m0s`，包耗时120.111秒、非零退出，证明不是关闭watchdog。探针含编译总182.962秒，260秒外层保护未触发，唯一自建容器已清理；脚本`/private/tmp/oj-session-watchdog-probe.py`、负向日志/JSON及正向日志保留。该探针不属于持续CI，其断言摘要和实际命令供复现。
+
+shell语法、仓库策略及完整diff检查通过，Astra方案和实际差异/探针定向复核无阻断；主代理实测，不冒充独立人工审批。未解释所有运行时波动或解决默认memstore清理协程生命周期；回退到90秒会恢复已复现的聚合预算不足风险。无业务/数据库迁移/部署变化，完整AC23/M0未通过。PR55继续保持草稿，须在本独立目标交付后正常合入主线，重跑完整100项再核验最终head CI。
 
 ## 2026-10-31：PostgreSQL 会话全局恢复门禁
 
