@@ -29,7 +29,7 @@ func setupPostgresSessionOptions(t *testing.T, account, recovery bool) *postgres
 	if recovery && !account {
 		t.Fatal("recovery comparison requires account guards")
 	}
-	f := &postgresSessionFixture{api: &fixture{loaded: make(chan struct{}, 1), resume: make(chan struct{})}}
+	f := &postgresSessionFixture{}
 	namespace := digest(t.Name())
 	for i := range 2 {
 		a := newAuthority(t, namespace)
@@ -57,6 +57,15 @@ func setupPostgresSessionOptions(t *testing.T, account, recovery bool) *postgres
 				}
 			}
 		}
+	}
+	return servePostgresSessions(t, f.stores)
+}
+
+// Reopening a restored fixture must not run schema or identity initialization.
+func servePostgresSessions(t *testing.T, stores [2]*postgresSessionStore) *postgresSessionFixture {
+	t.Helper()
+	f := &postgresSessionFixture{stores: stores, api: &fixture{loaded: make(chan struct{}, 1), resume: make(chan struct{})}}
+	for i, s := range stores {
 		manager := scs.New()
 		manager.Store = s
 		manager.Lifetime, manager.IdleTimeout = 12*time.Hour, 2*time.Hour
