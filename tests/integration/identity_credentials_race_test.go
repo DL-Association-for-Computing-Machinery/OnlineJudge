@@ -6,7 +6,10 @@ import (
 	"context"
 	"errors"
 	"math"
+	"net"
 	"reflect"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,19 +21,50 @@ import (
 	identitypg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/postgres"
 )
 
+type identityBackend struct {
+	pid     int32
+	started time.Time
+}
+
 func waitIdentityBlocked(t *testing.T, ctx context.Context, pool *pgxpool.Pool, pid int32) {
+	t.Helper()
+	_ = blockedIdentityBackend(t, ctx, pool, pid)
+}
+
+func blockedIdentityBackend(t *testing.T, ctx context.Context, pool *pgxpool.Pool, pid int32) identityBackend {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	for {
-		var blocked bool
-		must(t, pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1::integer=ANY(pg_blocking_pids(pid)))`, pid).Scan(&blocked))
-		if blocked {
-			return
+		var backend identityBackend
+		err := pool.QueryRow(ctx, `SELECT pid,backend_start FROM pg_stat_activity WHERE $1::integer=ANY(pg_blocking_pids(pid)) ORDER BY pid LIMIT 1`, pid).Scan(&backend.pid, &backend.started)
+		if err == nil {
+			return backend
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			must(t, err)
 		}
 		select {
 		case <-ctx.Done():
 			t.Fatal("identity writer never blocked")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}
+
+func waitIdentityBackendGone(t *testing.T, ctx context.Context, pool *pgxpool.Pool, backend identityBackend) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	for {
+		var gone bool
+		must(t, pool.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM pg_stat_activity WHERE pid=$1 AND backend_start=$2)`, backend.pid, backend.started).Scan(&gone))
+		if gone {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal("cancelled identity backend did not exit")
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
@@ -143,7 +177,7 @@ func testIdentityRaces(t *testing.T, ctx context.Context, a, b *pgxpool.Pool, fi
 			sameIdentity(t, ctx, first, want)
 		})
 	}
-	t.Run("caller cancellation while row locked", func(t *testing.T) {
+	t.Run("caller cancellation with backend exit confirmed before unlock", func(t *testing.T) {
 		old, err := first.Initialize(ctx, identityID(220), true, identityRecord(t, h, "synthetic original"))
 		must(t, err)
 		tx, err := a.Begin(ctx)
@@ -155,14 +189,90 @@ func testIdentityRaces(t *testing.T, ctx context.Context, a, b *pgxpool.Pool, fi
 		defer cancel()
 		result := make(chan error, 1)
 		go func() { _, err := second.DisableCAS(short, old.ID, old.Revision); result <- err }()
-		waitIdentityBlocked(t, ctx, a, pid)
+		backend := blockedIdentityBackend(t, ctx, a, pid)
 		cancel()
 		err = <-result
 		if !errors.Is(err, identity.ErrStore) || !errors.Is(err, context.Canceled) {
 			t.Fatal("cancellation lost driver cause or storage uncertainty")
 		}
+		// pgx returns the context error before asyncClose has completed. Keep
+		// the row locked until the exact backend is gone, not merely unblocked.
+		waitIdentityBackendGone(t, ctx, a, backend)
 		must(t, tx.Rollback(ctx))
 		sameIdentity(t, ctx, first, old)
+	})
+	t.Run("cancelled client can still have a committed update", func(t *testing.T) {
+		old, err := first.Initialize(ctx, identityID(250), true, identityRecord(t, h, "synthetic unknown result"))
+		must(t, err)
+		cfg := b.Config()
+		cfg.MaxConns, cfg.MinConns, cfg.MinIdleConns = 1, 0, 0
+		dial := cfg.ConnConfig.DialFunc
+		var dials atomic.Int32
+		cancelEntered, allowCancel := make(chan struct{}), make(chan struct{})
+		var release sync.Once
+		unblock := func() { release.Do(func() { close(allowCancel) }) }
+		cfg.ConnConfig.DialFunc = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			if dials.Add(1) == 2 {
+				// This private one-connection pool's second dial is asyncClose's
+				// CancelRequest. Leave the original socket alive until the write
+				// is independently observed committed, without altering the SQL.
+				close(cancelEntered)
+				select {
+				case <-allowCancel:
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				}
+			}
+			return dial(ctx, network, addr)
+		}
+		pool, err := pgxpool.NewWithConfig(ctx, cfg)
+		must(t, err)
+		defer pool.Close()
+		defer unblock()
+		store, err := identitypg.New(pool, h)
+		must(t, err)
+		tx, err := a.Begin(ctx)
+		must(t, err)
+		defer tx.Rollback(ctx)
+		var pid int32
+		must(t, tx.QueryRow(ctx, `SELECT pg_backend_pid() FROM identity_credentials WHERE id=$1 FOR UPDATE`, old.ID).Scan(&pid))
+		short, cancel := context.WithCancel(ctx)
+		defer cancel()
+		result := make(chan error, 1)
+		go func() { _, err := store.DisableCAS(short, old.ID, old.Revision); result <- err }()
+		backend := blockedIdentityBackend(t, ctx, a, pid)
+		cancel()
+		if err := <-result; !errors.Is(err, identity.ErrStore) || !errors.Is(err, context.Canceled) {
+			t.Fatal("cancelled write did not retain uncertain outcome")
+		}
+		select {
+		case <-cancelEntered:
+		case <-time.After(2 * time.Second):
+			t.Fatal("CancelRequest did not reach controlled dial")
+		}
+		must(t, tx.Rollback(ctx))
+		want := old
+		want.Enabled, want.AuthGeneration = false, 2
+		observe, stop := context.WithTimeout(ctx, 2*time.Second)
+		defer stop()
+		for {
+			got, err := first.Get(observe, old.ID)
+			must(t, err)
+			if reflect.DeepEqual(got, want) {
+				break
+			}
+			if !reflect.DeepEqual(got, old) {
+				t.Fatal("cancelled write produced a partial state")
+			}
+			select {
+			case <-observe.Done():
+				t.Fatal("write did not commit behind delayed cancellation")
+			case <-time.After(10 * time.Millisecond):
+			}
+		}
+		unblock()
+		waitIdentityBackendGone(t, ctx, a, backend)
+		sameIdentity(t, ctx, first, want)
 	})
 	t.Run("statement failure rolls back every field", func(t *testing.T) {
 		old, err := first.Initialize(ctx, identityID(221), true, identityRecord(t, h, "synthetic original"))

@@ -45,7 +45,8 @@ func sameIdentity(t *testing.T, ctx context.Context, s *identitypg.Store, want i
 	got, err := s.Get(ctx, want.ID)
 	must(t, err)
 	if !reflect.DeepEqual(got, want) {
-		t.Fatal("complete identity snapshot changed unexpectedly")
+		t.Fatalf("complete identity snapshot changed: enabled=%v credential_version=%d auth_generation=%d record_equal=%v",
+			got.Enabled, got.CredentialVersion, got.AuthGeneration, reflect.DeepEqual(got.Record, want.Record))
 	}
 }
 

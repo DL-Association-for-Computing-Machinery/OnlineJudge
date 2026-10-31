@@ -10,7 +10,11 @@
 
 首个完整候选冻结 Go/SQL 源码，在已有 `oj-go-quality-toolchain`、Linux arm64/Go1.26.10、禁网 2 CPU/2 GiB、既有 Go 缓存下串行执行：`go mod verify`、核心 `go test -race -count=1 -v ./internal/identity/...`（11 项/47 子例，1.375 秒）、两包 `toolchain sqlc`、完整 `toolchain backend` 和 `toolchain db` 全部通过。主模块、sandbox 标签和独立会话模块静态各 0 问题，检测器正负夹具仍有效，全部主模块 race 及四入口构建通过；真实 PG 集成 67 子例（身份新增 19，14.590 秒），双 API 进程的 24 并发、重启/回执与旧材料保持通过。未执行 sandbox 选手程序或完整 Redis 会话专项；日志 `/private/tmp/oj-identity-credentials-final-20261031.log`。
 
-主代理最终自审再补三个更新方法各自“仅凭据版本不匹配/仅认证代次不匹配”的六种断言：主体仍启用、版本均正且记录有效，每次拒绝后完整行不变，不能被输入校验或启用门禁提前挡住。Astra 对该增量复核有效；未改产品 Go/SQL、原用例或时限。两包生成差异、原完整 PG/race 67 子例及 Python 双 API 再次通过（16.585 秒），最终日志 `/private/tmp/oj-identity-credentials-revision-guards-20261031.log`；PR 以新增测试提交后的最新 head CI 为准，不复用首个 head 的检查。
+主代理最终自审再补三个更新方法各自“仅凭据版本不匹配/仅认证代次不匹配”的六种断言：主体仍启用、版本均正且记录有效，每次拒绝后完整行不变，不能被输入校验或启用门禁提前挡住。Astra 对该增量复核有效；未改产品 Go/SQL、原用例或时限。两包生成差异、原完整 PG/race 67 子例及 Python 双 API 再次通过（16.585 秒），该候选日志 `/private/tmp/oj-identity-credentials-revision-guards-20261031.log`；PR 以新增测试提交后的最新 head CI 为准，不复用首个 head 的检查。
+
+远端 head `069a4ff` 的 CI `41175219123` 在取消用例失败：收到客户端 `context.Canceled` 后立即释放 holder，原完整行断言失败；其他身份用例及后端、安全、前端、容器检查通过，PR 转草稿。该日志只证明快照不同，不能追认它恰为完整禁用新行。读取固定 pgx v5.11.0 的默认 deadline watcher/asyncClose 和 PostgreSQL 14 取消协议，Astra 定向复核确认原测试误把客户端返回当作后台清理完成屏障；产品的 `ErrStore` 未知结果合同无需改变。失败日志 `/private/tmp/oj-identity-credentials-ci-integration-failed-20261031.log`。
+
+修复测试因果顺序：捕获实际阻塞的 `pid + backend_start`，取消后保持 holder 锁，用独立 observer 自动提交查询确认精确 backend 消失，再解锁并保留完整原行断言。另建独立单连接测试池，保留默认 watcher/Store SQL，只在第二次 CancelRequest 拨号处用通道屏障延后取消；确认客户端错误后解锁、独立观察完整禁用新行提交，再放行取消并确认 backend 消失。未用“不再阻塞”或宽泛 idle 状态代替退出，也未把原断言放宽为任意旧/新结果。所有观察仍用原 2 秒预算，无睡眠碰概率，不改产品代码/SQL或请求时限。Astra 增量复核无阻断；两包生成差异、完整 PG/race 68 子例（身份 20，14.419 秒）及双 API 进程通过，日志 `/private/tmp/oj-identity-credentials-cancel-barrier-20261031.log`。最新 head CI 仍须重新核验后才能交付。
 
 新用例包括双 Store/独立池的两重哈希及两替换仅一赢家、完整最终行核对，`pg_blocking_pids` 观测实际等待后由持锁夹具直接改变权威行并提交、旧 Store 写入拒绝（不声称双方均经 Store），以及调用方取消、AFTER UPDATE P0001 整条回滚、bigint 上界、策略退役后的无密码撤权。迁移保留旧源码/任务/租约，空库回退升级、并发初始化提交时 Down 拒绝/回滚时允许，以及原版本 1/2 的提交竞态断言保留。原 future-schema 夹具改为 4，不降低兼容性拒绝要求。
 

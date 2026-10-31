@@ -181,7 +181,7 @@ SCS 的官方 goredisstore 文档示例采用 go-redis/v9，默认键含 token�
 | `ReplacePasswordCAS` | 预期两代次匹配，两代次均 +1；不重新启用禁用账号 |
 | `DisableCAS` | 仍启用且预期两代次匹配，仅认证代次 +1、关闭账号；不解析旧密码材料，不清 Redis |
 
-递增字段到 bigint 上界后拒绝，不回绕。零行更新为冲突，不读后自动重试；数据库错误保留内部原因，但稳定错误文字不回显 PostgreSQL 的完整失败记录。每次操作有最多 5 秒的调用方 context，短期限优先；数据库/连接错误仍可能是写结果未知，不能视为确定未写入或自动改用新版本重试。池由调用方创建、限制并关闭，Store 不创建第二份连接池。
+递增字段到 bigint 上界后拒绝，不回绕。零行更新为冲突，不读后自动重试；数据库错误保留内部原因，但稳定错误文字不回显 PostgreSQL 的完整失败记录。每次操作有最多 5 秒的调用方 context，短期限优先；数据库/连接错误仍可能是写结果未知，不能视为确定未写入或自动改用新版本重试。已受控验证客户端收到取消错误后，后台 UPDATE 仍可提交完整新行；取消错误不是服务端已停止的屏障。[pgx v5.11.0](https://github.com/jackc/pgx/blob/v5.11.0/pgconn/pgconn.go) 的后台清理及 [PostgreSQL 14 取消协议](https://www.postgresql.org/docs/14/protocol-flow.html#PROTOCOL-FLOW-CANCELING-REQUESTS)支持此边界。池由调用方创建、限制并关闭，Store 不创建第二份连接池。
 
 这些方法**不是公开账号管理或完整登录/自动升级服务**。`enabled` 只是账号开关，不代表邮箱已验证、训练访问或管理权限。`RehashCAS` 无法证明新旧记录属于同一密码：受信用例必须先成功验证旧快照，再以同一密码生成 Current，全部 KDF 在事务/行锁外进行，最后提交 CAS。重置令牌消费、操作人授权、审计、真实发会话前复核及 Redis 撤权联动仍待实现；不能凭旧 `Get`/`State` 结果发放权限。
 
