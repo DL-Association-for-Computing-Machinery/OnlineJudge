@@ -21,12 +21,20 @@ func setupPostgresSessions(t *testing.T, guarded ...bool) *postgresSessionFixtur
 	if len(guarded) > 1 {
 		t.Fatal("at most one account-guard option is allowed")
 	}
+	return setupPostgresSessionOptions(t, len(guarded) == 1 && guarded[0], false)
+}
+
+func setupPostgresSessionOptions(t *testing.T, account, recovery bool) *postgresSessionFixture {
+	t.Helper()
+	if recovery && !account {
+		t.Fatal("recovery comparison requires account guards")
+	}
 	f := &postgresSessionFixture{api: &fixture{loaded: make(chan struct{}, 1), resume: make(chan struct{})}}
 	namespace := digest(t.Name())
 	for i := range 2 {
 		a := newAuthority(t, namespace)
 		s := &postgresSessionStore{pool: a.pool, namespace: namespace}
-		s.account = len(guarded) == 1 && guarded[0]
+		s.account, s.recovery = account, recovery
 		f.stores[i] = s
 		if i == 0 {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -40,6 +48,11 @@ func setupPostgresSessions(t *testing.T, guarded ...bool) *postgresSessionFixtur
 					t.Fatal(err)
 				}
 				if _, err := s.pool.Exec(context.Background(), `INSERT INTO session_pg_account_fixture VALUES($1,$2,1,true)`, namespace, digest("fixture-user")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if s.recovery {
+				if err := s.initializeRecovery(context.Background()); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -58,6 +71,15 @@ func setupPostgresSessions(t *testing.T, guarded ...bool) *postgresSessionFixtur
 			}
 			ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 			defer cancel()
+			var recovery string
+			if s.recovery {
+				var err error
+				recovery, err = s.currentRecovery(ctx)
+				if err != nil {
+					postgresSessionError(w, err)
+					return
+				}
+			}
 			token := ""
 			if c, err := r.Cookie(manager.Cookie.Name); err == nil {
 				token = c.Value
@@ -77,6 +99,9 @@ func setupPostgresSessions(t *testing.T, guarded ...bool) *postgresSessionFixtur
 				manager.Put(ctx, "subject", "fixture-user")
 				manager.Put(ctx, "remember_login", false)
 				manager.RememberMe(ctx, false)
+				if s.recovery {
+					manager.Put(ctx, "recovery_generation", recovery)
+				}
 				if s.account {
 					generation, err := s.currentAccount(ctx, "fixture-user")
 					if err != nil {

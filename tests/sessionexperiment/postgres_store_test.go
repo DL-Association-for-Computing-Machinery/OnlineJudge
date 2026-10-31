@@ -18,6 +18,7 @@ type postgresSessionStore struct {
 	pool      *pgxpool.Pool
 	namespace string
 	account   bool
+	recovery  bool
 }
 
 var _ scs.CtxStore = (*postgresSessionStore)(nil)
@@ -78,10 +79,15 @@ func (s *postgresSessionStore) lockSubject(ctx context.Context, tx pgx.Tx, subje
 		WHERE namespace=$1 AND subject=$2 FOR UPDATE`, s.namespace, subject).Scan(&locked)
 }
 
-func (s *postgresSessionStore) withSubject(ctx context.Context, subject string, generation int64, operation func(pgx.Tx) error) error {
+func (s *postgresSessionStore) withSubject(ctx context.Context, subject string, version authVersion, operation func(pgx.Tx) error) error {
 	return s.transact(ctx, func(tx pgx.Tx) error {
-		if s.account && generation > 0 {
-			if err := s.lockAccount(ctx, tx, subject, generation); err != nil {
+		if s.recovery && version.account > 0 {
+			if err := s.lockRecovery(ctx, tx, version.recovery); err != nil {
+				return err
+			}
+		}
+		if s.account && version.account > 0 {
+			if err := s.lockAccount(ctx, tx, subject, version.account); err != nil {
 				return err
 			}
 		}
@@ -107,7 +113,14 @@ func (s *postgresSessionStore) CommitCtx(ctx context.Context, token string, b []
 			return err
 		}
 	}
-	return s.withSubject(ctx, subject, generation, func(tx pgx.Tx) error {
+	var recovery string
+	if s.recovery {
+		recovery, err = postgresRecoveryGeneration(b)
+		if err != nil {
+			return err
+		}
+	}
+	return s.withSubject(ctx, subject, authVersion{generation, recovery}, func(tx pgx.Tx) error {
 		var oldSubject string
 		var oldDeadline, oldExpiry int64
 		var oldData []byte
@@ -137,6 +150,12 @@ func (s *postgresSessionStore) CommitCtx(ctx context.Context, token string, b []
 					return errStale
 				}
 			}
+			if s.recovery {
+				oldRecovery, err := postgresRecoveryGeneration(oldData)
+				if err != nil || oldRecovery != recovery {
+					return errStale
+				}
+			}
 			_, err := tx.Exec(ctx, `UPDATE session_pg_store_fixture SET data=$3,expiry_ms=$4
 				WHERE namespace=$1 AND token=$2`, s.namespace, digest(token), b, expires)
 			return err
@@ -156,6 +175,9 @@ func (s *postgresSessionStore) CommitCtx(ctx context.Context, token string, b []
 }
 
 func (s *postgresSessionStore) FindCtx(ctx context.Context, token string) ([]byte, bool, error) {
+	if s.recovery {
+		return s.findWithRecovery(ctx, token)
+	}
 	var b []byte
 	var subject string
 	var deadline int64
@@ -206,7 +228,7 @@ func (s *postgresSessionStore) DeleteCtx(ctx context.Context, token string) erro
 	}
 	// Deletion only removes this token's payload. It never restores authority
 	// or accesses the account lock after acquiring the subject lock.
-	return s.withSubject(ctx, subject, 0, func(tx pgx.Tx) error {
+	return s.withSubject(ctx, subject, authVersion{}, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `UPDATE session_pg_store_fixture SET data=NULL WHERE namespace=$1 AND token=$2`,
 			s.namespace, digest(token))
 		return err

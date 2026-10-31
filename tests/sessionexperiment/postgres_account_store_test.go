@@ -60,6 +60,11 @@ func (s *postgresSessionStore) invalidateAccount(ctx context.Context, subject st
 }
 
 func (s *postgresSessionStore) invalidateAccountTx(ctx context.Context, tx pgx.Tx, subject string, enabled bool) error {
+	if s.recovery {
+		if err := s.lockRecovery(ctx, tx, ""); err != nil {
+			return err
+		}
+	}
 	hash := digest(subject)
 	var generation int64
 	if err := tx.QueryRow(ctx, `SELECT generation FROM session_pg_account_fixture
