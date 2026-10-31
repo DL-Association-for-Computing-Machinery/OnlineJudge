@@ -135,6 +135,7 @@ func TestAcceptance(t *testing.T) {
 	t.Run("identity authority", func(t *testing.T) { testIdentityAuthority(t, ctx, pool, secondPool) })
 	t.Run("session recovery authority", func(t *testing.T) { testSessionRecoveryAuthority(t, ctx, pool, secondPool) })
 	t.Run("personal email identities", func(t *testing.T) { testPersonalEmails(t, ctx, pool, secondPool) })
+	t.Run("personal credential workflow", func(t *testing.T) { testPersonalCredentialGate(t, ctx, pool, secondPool) })
 	servers := []*httptest.Server{
 		httptest.NewServer(httpapi.NewHandler(httpapi.Experiment{Store: store, Token: token})),
 		httptest.NewServer(httpapi.NewHandler(httpapi.Experiment{Store: secondStore, Token: token})),

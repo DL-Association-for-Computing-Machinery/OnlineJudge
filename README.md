@@ -13,6 +13,7 @@
 - [主体状态协调](docs/architecture/session-design.md#75-会话存储操作的主体状态协调)：共享行锁协调受信会话存储操作与账号变更；回调失败仍可能有外部效果，正式 Redis/恢复与会话协议待接入。
 - [全局恢复状态](docs/architecture/session-design.md#76-正式全局恢复状态与双层协调)：schema 4 默认闭门、显式换代次与条件开门，同事务全局→主体双层检查；没有自动 Redis 清理或恢复编排。
 - [个人邮箱映射](docs/architecture/session-design.md#77-个人邮箱映射与原子初始化)：schema 5 原子初始化凭据与未验证邮箱，整址忽略大小写、保留原始显示；当前限 ASCII 裸址，无公开注册或邮件验证接口。
+- [个人凭据认证路径](docs/architecture/session-design.md#78-个人凭据到会话门禁的认证路径)：在邮箱查找与密码验证前捕获恢复代次，携带同一代次进入最终双层门禁；只接受信存储回调，尚未发放 Redis 会话或 Cookie。
 
 ## 运行环境
 

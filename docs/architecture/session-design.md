@@ -2,7 +2,7 @@
 
 2026-10-30：[会话子实验](../../tests/sessionexperiment/README.md)已有名额、撤销、API 进程重启、Redis 超时/超限/旧 RDB、账号代次和保存结果不明原语证据。专用 schema 的 PostgreSQL 逻辑回档实验复现整数全局代次重复导致旧会话复活，改用随机新恢复标识并验证外部停机后重建双 API 的拒旧流程。普通会话以缩短期限验证只读轮询不续期、显式活动延长空闲但不越原绝对期限，以及过期后的迟到保存拒绝。只验证有限流程，不代表全库/PITR、账号安全事实恢复、自动故障协调、脚本执行中内存硬界限或生产准入。登录写入超时不能视为回滚，正式跨请求结果核验/遗留名额处置及 Cookie 发放协议待完成。正式应用仍无账号/会话实现；Gin/CSRF、参赛期限、正式登录/权限提升轮换、浏览器活动协议与 PostgreSQL 会话存储对比尚未验证，下文产品规则保持不变。
 
-日期：2026-10-31。版本：0.16。状态：Session＋Redis、分场景期限、比赛账号、Argon2id、日常邮箱验证注册/找回及可替换 SMTP 接口已确认；SCS＋go-redis、go-mail 及 PostgreSQL 持久化发信任务＋独立受限发送执行器优先验证，Gin sessions 备选。River 开源核心优先验证，专用任务表备选；短期 AES-GCM 载荷、River 仅存业务 ID、独立密钥文件、不考虑付费方案及第 12 节令牌/重发/重试规则已确认；PostgreSQL 会话只作对比，不替换 Redis 基线。密码/凭据、邮箱映射、主体及全局恢复状态协调已有分项实现与测试；生产参数、邮件和正式登录/会话仍待交付，未部署。关联 [总体架构](system-design.md)、[ADR-001](001-go-gin.md)、[需求](../requirements.md)。
+日期：2026-10-31。版本：0.17。状态：Session＋Redis、分场景期限、比赛账号、Argon2id、日常邮箱验证注册/找回及可替换 SMTP 接口已确认；SCS＋go-redis、go-mail 及 PostgreSQL 持久化发信任务＋独立受限发送执行器优先验证，Gin sessions 备选。River 开源核心优先验证，专用任务表备选；短期 AES-GCM 载荷、River 仅存业务 ID、独立密钥文件、不考虑付费方案及第 12 节令牌/重发/重试规则已确认；PostgreSQL 会话只作对比，不替换 Redis 基线。密码/凭据、邮箱映射、主体/全局恢复协调及其认证编排已有分项实现与测试；生产参数、邮件和正式登录/会话仍待交付，未部署。关联 [总体架构](system-design.md)、[ADR-001](001-go-gin.md)、[需求](../requirements.md)。
 
 保持登录的后续子实验已覆盖默认关闭、主动选择 24 小时/7 天、Cookie 持久化、跨副本共享三名额，以及缩短期限下的续期/过期/迟到保存。SCS `RememberMe` 只控制持久化，期限由请求独立配置和服务端载荷选择；保存、结果核验、放弃共用策略上界，原绝对期限不变。普通 Cookie 改为非持久化，带 Cookie 再登录拒绝，活动参数不能改变登录时选择。仅测试夹具和同进程 TLS API，参赛期限、正式权限提升轮换、浏览器关闭/重开及完整 Gin/CSRF 仍待验证；细节见实验 README。
 
@@ -203,7 +203,7 @@ SCS 的官方 goredisstore 文档示例采用 go-redis/v9，默认键含 token�
 
 ### 7.4 密码验证与条件升级用例
 
-`identity.NewCredentialVerifier(store, boundedHasher)` 连接第 7.2/7.3 节的能力，`VerifyPassword(ctx, subjectID, secret)` 以已解析的不透明主体 ID 为内部输入，不将 ID 作为个人登录标识。个人仅邮箱登录、昵称可重复的决定保持；邮箱解析/映射见第 7.7 节，正式登录编排及 HTTP 另行实现。Store 与共享 BoundedHasher 必须使用兼容的批准策略，所有密码流程共用同一预算实例。
+`identity.NewCredentialVerifier(store, boundedHasher)` 连接第 7.2/7.3 节的能力，`VerifyPassword(ctx, subjectID, secret)` 以已解析的不透明主体 ID 为内部输入，不将 ID 作为个人登录标识。个人仅邮箱登录、昵称可重复的决定保持；邮箱解析/映射见第 7.7 节，其认证编排见第 7.8 节，正式登录 HTTP/会话协议另行实现。Store 与共享 BoundedHasher 必须使用兼容的批准策略，所有密码流程共用同一预算实例。
 
 流程为读取 Snapshot → 核对主体 ID、启用状态与有效两代次 → 有界密码验证。Current 匹配只读；Legacy 匹配后，以**同一密码**生成 Current，再按旧两代次执行 `RehashCAS`。两次计算分别准入且均在数据库锁外；调用方在整个用例返回前不得修改密码字节。错误密码、禁用或不存在的主体返回 `ErrCredentials`，没有防枚举耗时保证；非法记录、准入满额/超时、随机失败和存储错误分别保留，不将升级失败降级为验证成功。
 
@@ -237,7 +237,7 @@ Begin/Finish 是维护原语，**不执行或证明**旧 API 隔离、Redis 清�
 
 新候选使用 `WithSessionCredentials(ctx, id, verifiedRevision, recoveryID, operation)`，已有会话使用 `WithSession(ctx, id, SessionVersion{AuthGeneration, RecoveryID}, operation)`。公共入口严格拒绝空/非法代次；私有实现用明确 scope 区分纯主体和 Session 路径，不会因空字符串退回旧门禁。新路径在**同一** READ COMMITTED 事务先锁全局行、检查 open/预期代次，再锁主体行检查两代次或仅认证代次；回调接收无密码 SessionState，包含已经核验的主体与恢复标识。合作 context、至多一次回调、ErrGuardedOperation/ErrStore、取消/panic 清理与非跨存储事务的合同均沿用第 7.5 节。
 
-恢复代次必须在密码验证**开始前**从 enabled=true 且代次有效的 RecoveryState 捕获，闭门时不启动验证，再随候选贯穿整个验证/升级流程；恢复或冲突后不能读取新代次给旧验证结果重新贴标签。接口本身不能证明调用方遵守捕获顺序，正式登录编排仍须落实。真实交错验证了：先捕获 A、密码用例未返回时完成 B、主体两代次不变，A 候选仍拒绝；重新捕获并重启整个验证才可使用 B。这不是完整登录、Redis 名额/条件写入/结果确认或恢复验收。
+恢复代次必须在密码验证**开始前**从 enabled=true 且代次有效的 RecoveryState 捕获，闭门时不启动验证，再随候选贯穿整个验证/升级流程；恢复或冲突后不能读取新代次给旧验证结果重新贴标签。底层 Store 接口不能独自证明调用方遵守顺序，第 7.8 节为个人邮箱密码流程固定该执行路径。真实交错验证了：先捕获 A、密码用例未返回时完成 B、主体两代次不变，A 候选仍拒绝；重新捕获并重启整个验证才可使用 B。这不是完整登录、Redis 名额/条件写入/结果确认或恢复验收。
 
 迁移 4 的 Down 按全局表→主体表→submissions 加排他锁，仅在**确实唯一的空代次闭门占位行**且 credentials/submissions 均空时允许回退；缺失行、已初始化代次（即使已闭门）或任一业务表非空均拒绝，须前滚修复。当前 schema 要求见第 7.7 节；旧 migration-3/4 回归各自固定在版本 3/4，不让新保护掩盖旧保护。完整实测、两种单表保留分支、双向等待及自然单行计划见[交付日志](../delivery-log.md)；未部署，真实 Redis 与生产恢复仍待交付。
 
@@ -254,6 +254,18 @@ Begin/Finish 是维护原语，**不执行或证明**旧 API 隔离、Redis 清�
 `PersonalByID` 与 `LookupPersonalByEmail` 只返回无密码 State、Email 和 EmailVerified 的时点元数据；通用主体没有邮箱时返回 NotFound。它们不验证密码、不发会话、不授权训练。Enabled 与 EmailVerified 独立，验证不能复活封禁；本次只验证事实分离，未接入“未验证不能提交”的业务门禁，不代表 AC25 已完成。公开注册前仍须解决未验证占位保留/清理、重复注册安全恢复/重发、防枚举、令牌原子消费、邮件任务与最终权限复核，不能直接暴露 InitializePersonal 为 signup。
 
 当前 API 精确要求 schema 5，旧要求 4 的二进制拒绝 5；停旧实例、独立迁移后启动匹配新版，无滚动混跑或部署。迁移不为旧主体补邮箱。Down 5 按凭据→邮箱顺序加排他表锁并拒绝任何非空映射（包括未验证/禁用），需前滚修复；只有邮箱表为空才可移除，保留既有通用凭据、全局恢复及提交数据。此锁序与初始化一致，避免先锁邮箱再删除外键触发器时反向请求凭据锁；不承诺任意并发读取/DDL 无死锁，迁移仍须在维护期协调。多个 Down 不整体原子，Down 5 成功不豁免迁移 4/3 的保护。实际初始化分别在第一写/第二写后等待，与 Down 的提交/回滚交错、原始显示、唯一竞争和无孤儿证据见[交付日志](../delivery-log.md)。
+
+### 7.8 个人凭据到会话门禁的认证路径
+
+`NewPersonalCredentialGate(store, sharedBoundedHasher)` 只接受一个组合 PersonalCredentialStore：同一依赖拥有邮箱映射、凭据读写、全局恢复状态和最终 Session 门禁，内部构造既有 CredentialVerifier，避免误拼不同 Store 的相同 ID/版本。一个接口实例不是物理同库证明；受信实现必须让所有方法使用同一权威数据库/主体命名空间，不能按方法路由到不同租户、缓存或滞后副本。Store 与密码工作使用兼容批准策略，所有流程共享既有计算预算，不在构造器里另建预算或选择生产参数。
+
+`WithPersonalCredentials(ctx, email, secret, operation)` 固定：校验 context/Email/回调 → **只读取一次有效 open 恢复代次** → 邮箱定位主体 → VerifyPassword 的真实验证/可选同密码升级及末次 State → 以原恢复代次和验证返回的完整 Revision 调用 WithSessionCredentials → 在同事务 global→account 门禁内至多执行一次受信存储回调。映射返回的旧 Revision 不作最终凭据证据；Legacy 升级后必须使用新 credential_version。无缓存候选、代次补读/重贴、自动重试、失败升级降级成功或补偿已提交升级。
+
+closed/missing 恢复状态在邮箱查找与 KDF 前失败，格式错误恢复状态及坏映射失败关闭；邮箱不存在、密码不匹配或当前主体禁用均不运行回调。密码字节策略继续由共享 BoundedHasher 检查，无防枚举耗时保证。调用方提供整条路径的期限并在返回前保持 secret 不变；底层每次数据库操作的五秒合作预算不等于整个用例五秒硬上限。回调不得运行 KDF、重入、启动逃逸任务或发布 HTTP/Cookie，沿用第 7.5/7.6 节合作取消、锁丢失及未知外部效果限制。除不存在邮箱/主体等明确归一为 ErrCredentials 的情形外，保留原有错误分类，特别是 ErrStore 与 ErrGuardedOperation 不被 ctx.Err 覆盖；失败不证明升级或回调未生效。
+
+EmailVerified 与 Enabled/密码认证仍分离；本入口仅为后续会话存储的受信接入点，不决定未验证用户的完整会话产品策略，也不授予训练权限。没有公开登录、Redis 候选/名额/结果确认、Cookie/CSRF、邮件验证或角色/资源权限实现，不能据此宣称 AC01/23/24/25 完整通过。下一步接入正式 Redis 协议，不再增加候选包装层。
+
+本次无 SQL、迁移、索引或模块依赖变化，仍精确要求 schema 5；回退需停用依赖此入口的调用方，移除用例即可，数据库无需回退。真实双池验证恢复发生在查找后/验证用例中的 KDF 完成后且末次 State 前/最终门禁前时旧请求均拒绝；应用屏障不冒充数据库锁等待。未知升级用例在真实提交后由 wrapper 注入回执错误，不是真实网络故障。升级/改密/禁用、回调持有全局锁及取消的证据归[交付日志](../delivery-log.md)。未部署，完整登录/恢复与生产容量仍待验收。
 
 ## 8. 注册、找回与账号发放
 
