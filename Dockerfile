@@ -79,7 +79,7 @@ ENTRYPOINT ["/usr/local/bin/oj-api"]
 FROM node:24.19.0-bookworm-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df AS frontend-source
 WORKDIR /src/web
 RUN npm install --global pnpm@11.25.0
-COPY web/package.json web/pnpm-lock.yaml web/.npmrc ./
+COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml web/.npmrc ./
 RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY web/ ./
 

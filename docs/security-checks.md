@@ -33,6 +33,10 @@ Linux CI 使用相同镜像与命令，省略 `--context desktop-linux`。PR、�
 
 ## 告警与例外
 
+2026-10-31：前端开发依赖 `minimatch 10.2.6` 命中 [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249)，公告修复版为 11.0.1。`web/pnpm-workspace.yaml` 仅对当前 `eslint 10.13.0`、`@eslint/config-array 0.23.5`、`@typescript-eslint/typescript-estree 8.72.0` 三个精确父版本固定该修复版，Docker 在冻结安装前复制配置。这是依赖解析覆盖，不是审计忽略；原低等级阻断和 TLS/完整性/供应链策略保持。
+
+11版移除 makeRe/regexp/AST 等接口并改变部分匹配行为，不能当作兼容补丁自动全局替换。已核对当前调用方的 match/partial/pattern/minimatch 用法，新增 lint 文件枚举与忽略回归，实际前后文件集合及检查结果见[交付记录](delivery-log.md)。必要新增间接依赖 `@isaacs/nonrecursive-glob-match 1.0.3`，两包为 BlueOak-1.0.0；Node24.19.0 实测，其他平台不据此宣称通过。父依赖正式支持修复版后移除对应 override 并重生成锁文件、复验；精确父版本变更或新增调用方会重新触发审计/兼容性核验，不扩大覆盖范围。回退解析配置与锁文件会重新引入已知告警，不能作为可合并安全状态。
+
 当前维护者负责处理阻断；Codex 可在授权任务内定位和修复，但不得静默禁用检测器、增加忽略、降低等级或升级无关依赖。
 
 1. 秘密疑似泄漏：日志只记录规则、路径和位置，先由凭据所有者撤销/轮换，再处理历史及外部副本；删除代码不是撤销。历史重写需单独授权。
