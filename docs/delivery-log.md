@@ -1,5 +1,17 @@
 # 工程交付记录
 
+## 2026-10-31：共享实例密码计算准入
+
+PR #61 合并后成功 fetch，并从 `75e5b53` 建立独立 `codex/password-admission`。唯一目标为密码核心的同步计算准入；`NewBounded` 显式配置计算名额、等待人数与排队期限，Create/Verify 共享同一实例。输入与记录先做廉价校验；等待满额返回 Busy，自身超时与调用方取消/期限分开，等待位先于计算释放。计算开始后不以超时 goroutine 提前返回，实际派生/随机源调用返回后才释放名额；已观察的调用方取消优先并清零结果。没有账号接口、SQL/迁移、Redis 或跨进程协调，详细合同归[会话设计](architecture/session-design.md#73-密码计算准入)。
+
+复用已锁定的 x/sync v0.24.0，仅改直接依赖标记，go.sum 不变；核对官方 semaphore 合同与固定版本实现/BSD-3-Clause。使用已有 `oj-go-quality-toolchain`、Linux arm64/Go1.26.10、禁网 2 CPU/2 GiB及既有编译缓存，无安装、下载、Docker socket 或选手程序。编辑前密码包基线 11 项/47 子例 race 1.225 秒通过，日志 `/private/tmp/oj-password-admission-baseline-20261031.log`，测试运行期间冻结 Go 输入。
+
+首轮完整密码包 21 项/51 子例 race 3.472 秒通过（`/private/tmp/oj-password-admission-focused-20261031.log`）。`go mod verify && sh scripts/toolchain.sh backend` 的格式、vet、检测器正负夹具、主模块/sandbox 静态/独立会话模块三范围静态各 0 问题、全部 race 及四入口构建通过，密码包 3.465 秒（`/private/tmp/oj-password-admission-backend-20261031.log`）。Astra 复核发现 50ms deadline 子例要求捕获瞬时排队窗口的测试脆弱点，尚未观察实际失败；已移除该子例的窗口观察要求，仍检查 DeadlineExceeded、零派生/结果、原持有者许可和等待容量，cancel 子例继续用屏障证明真实排队。没有扩大时限或改产品逻辑。最终相同命令的密码包 race 21 项/51 子例 3.472 秒及包静态 0 问题通过（`/private/tmp/oj-password-admission-verified-20261031.log`）。
+
+246 文件仓库策略、全部新增文件与目标分支完整差异审查通过，README、会话设计、计划、CI 与 M0 状态同步。Astra 设计/完整实现/测试增量与文档复核无未解决阻断；主代理负责完整差异和实际测试，AI 不代替人工审批。最新 head CI、反馈及合并条件在交付时另行回读。本地未重复数据库/Redis/真实 Worker 专项；本项测试使用合成小成本与受控派生屏障，不作生产 KDF 参数或 CPU/RSS/100 人容量证据。
+
+这是每实例预算；所有相关流程须共享同一实例才可称进程额度，各 API 额度总和仍须结合目标硬件实测。没有账号/来源限流、公平性、防枚举或生产默认数值；用户已确认同时在线 100 人，登录峰值/延迟仍未定。回退移除包装及依赖直接标记即可，无数据迁移；未来生产准入必须确保所有计算路径均有预算，不能将无包装回退当作安全上线。正式账号与完整 AC24/AC23/M0 未验收，未部署。
+
 ## 2026-10-31：个人账号登录标识确认
 
 PR #60 合并为 `8c13e79` 后成功 fetch，并从同一 SHA 建立独立 `codex/personal-email-login`。用户确认日常个人账号仅邮箱登录、昵称允许重复；需求、账号设计与计划同步，比赛专用账号继续按校内发号方案。昵称用于显示，不是唯一账号标识；邮箱规范化、重复注册、变更及其余注册字段规则仍待账号流程设计。邮箱验证、训练提交权限及找回规则保持。
