@@ -84,6 +84,29 @@ func (q *Queries) GetState(ctx context.Context, id string) (GetStateRow, error) 
 	return i, err
 }
 
+const getStateForShare = `-- name: GetStateForShare :one
+SELECT id, enabled, credential_version, auth_generation FROM identity_credentials WHERE id = $1 FOR SHARE
+`
+
+type GetStateForShareRow struct {
+	ID                string
+	Enabled           bool
+	CredentialVersion int64
+	AuthGeneration    int64
+}
+
+func (q *Queries) GetStateForShare(ctx context.Context, id string) (GetStateForShareRow, error) {
+	row := q.db.QueryRow(ctx, getStateForShare, id)
+	var i GetStateForShareRow
+	err := row.Scan(
+		&i.ID,
+		&i.Enabled,
+		&i.CredentialVersion,
+		&i.AuthGeneration,
+	)
+	return i, err
+}
+
 const initialize = `-- name: Initialize :one
 INSERT INTO identity_credentials
     (id, enabled, format_version, algorithm, argon_version, memory_kib, iterations,

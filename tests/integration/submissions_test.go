@@ -132,6 +132,7 @@ func TestAcceptance(t *testing.T) {
 	must(t, err)
 	t.Run("identity credentials", func(t *testing.T) { testIdentityCredentials(t, ctx, pool, secondPool, provider, store) })
 	t.Run("credential verification", func(t *testing.T) { testCredentialVerification(t, ctx, pool, secondPool) })
+	t.Run("identity authority", func(t *testing.T) { testIdentityAuthority(t, ctx, pool, secondPool) })
 	servers := []*httptest.Server{
 		httptest.NewServer(httpapi.NewHandler(httpapi.Experiment{Store: store, Token: token})),
 		httptest.NewServer(httpapi.NewHandler(httpapi.Experiment{Store: secondStore, Token: token})),
