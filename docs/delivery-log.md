@@ -1,5 +1,17 @@
 # 工程交付记录
 
+## 2026-10-31：正式 P3 同步密码记录核心
+
+PR #58 合并为 `d10c9e3` 并完成证据归档后，成功 fetch 最新主线，从同一 SHA 建立独立 `codex/password-record-core`。目标是无数据库、网络和持久化副作用的密码记录核心；Create 仍读取系统密码学随机源。账号数据库、编码入口、登录/会话、邮件和计算准入不在本次实现范围，不把有限核心当作 AC24 全项通过。
+
+新增 `internal/identity/password`，`New(Policy, Limits)` 校验并复制当前/旧完整参数 tuple 和显式预算；构造后策略不可变。固定记录格式 1/Argon2id 版本 0x13，逐项长度/成本/版本及 tuple 匹配均先于派生；拒绝库会规范化的内存布局，宽整数和平台 int 边界先校验。Create 使用密码学随机盐，随机失败返回空记录；Verify 只在旧策略匹配时返回迁移提示，无重哈希或写库。输入原始字节不规范化/截断，空值和超字节上限拒绝，零值失败关闭；同步调用无伪取消语义，不承诺总并发预算或完整内存擦除。详细合同归[会话设计](architecture/session-design.md#71-同步密码记录核心)。
+
+依赖沿用 `x/crypto v0.58.0`，仅改直接依赖标记，go.sum 不变。核对该锁定版本官方文档、BSD-3-Clause、IDKey 源码及 CLI 生成向量；新增测试不重算期望摘要。已有 Docker 工具链 `oj-go-quality-toolchain`/Linux arm64/Go1.26.10，禁网、2 CPU/2 GiB、只挂本任务源码，无 Docker socket 或依赖下载。`go mod verify` 与 `go test -race -count=1 -v ./internal/identity/password` 的 10 项/47 子例通过（1.201 秒），日志 `/private/tmp/oj-password-core-focused-20261031.log`；覆盖随机失败零派生、未知版本/畸形/超限/未批准 tuple 派生前拒绝、字节边界、策略复制和并发调用。结构最小值/合成低成本不作为生产参数建议。
+
+同一离线工具链及本仓库 Compose Go 编译缓存执行 `go mod verify; sh scripts/toolchain.sh backend` 完整通过：格式、vet、检测器正负夹具、主模块/sandbox 标签/独立会话模块静态各 0 问题、主模块全部 race 及四入口构建；密码包在整套中 1.222 秒通过。日志 `/private/tmp/oj-password-core-backend-20261031.log`，没有执行 sandbox 选手程序或将静态编译记作会话真实联调。231 文件仓库策略、全部新增文件及目标分支完整 diff 审查通过，README、计划、架构和 M0 状态同步；远端最新 head CI 与合并状态在交付时另行回读。
+
+Astra 完整四文件及依赖差异复核无阻断，主代理负责实际测试与完整差异审查，AI 不代替人工审批。生产硬件、集中登录峰值与延迟目标未定；用户确认的 100 同时在线不能推导同时密码计算数。未来网络入口必须有跨 API 计算准入，超时后名额不能早于计算结束释放；重哈希须凭据版本 CAS、发会话前复核，均继续待实现。当前无调用方/SQL/迁移，回退移除核心与直接依赖标记即可，不涉及用户凭据数据；生产启用后的记录兼容回退另行验收。未部署，完整 M0/账号验收仍未通过。
+
 ## 2026-10-31：普通会话 Store 有限成本采样
 
 从成功 fetch 后的 `143da27` 创建独立 `codex/session-storage-cost`。唯一目标为相同普通会话授权合同下的有限路径成本采样及决策记录，不替换 Redis，不是 HTTP/真实登录或生产容量验收。新增驱动只用已有固定镜像和离线缓存，每样本独立私有 TCP 网络及空 PostgreSQL，Redis 路径另加 Redis；两组客户端启用账号/恢复守卫，全部样本共用离线生成的原始 Gob、期限与 fixture SHA。读取、原样重复保存、独立主体准入、满额拒绝分别校验结果和数据状态；固定握手将资源结束采样放在语义验证/统计前。方法、固定场景和局限见[专项说明](../tests/sessionexperiment/README.md#同等普通会话合同的-store-成本采样)。
