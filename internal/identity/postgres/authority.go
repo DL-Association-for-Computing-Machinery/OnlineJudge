@@ -11,17 +11,19 @@ import (
 )
 
 // WithCredentials coordinates a trusted, short session-storage operation with
-// account changes. New-session admission requires both verified revisions.
+// account changes. It checks both revisions but is only a subject-state primitive,
+// never a standalone formal-session gate; use WithSessionCredentials for that scope.
 // It does not verify passwords, activation, resource permissions or recovery.
 // Operation follows WithAccount's restrictions and uncertain-outcome contract.
 func (s *Store) WithCredentials(ctx context.Context, id string, want identity.Revision, operation func(context.Context, identity.State) error) error {
 	if !want.Valid() {
 		return identity.ErrInvalid
 	}
-	return s.withAuthority(ctx, id, want, true, operation)
+	return s.withAuthority(ctx, id, want, true, subjectScope, "", operation)
 }
 
-// WithAccount checks enabled state and auth generation for an existing session.
+// WithAccount only coordinates subject enabled state and auth generation.
+// It is not a standalone formal-session gate; session stores must use WithSession.
 // It intentionally ignores credential version: same-password rehashing does not
 // revoke sessions. Both methods invoke operation synchronously at most once.
 //
@@ -35,10 +37,10 @@ func (s *Store) WithAccount(ctx context.Context, id string, authGeneration int64
 	if authGeneration <= 0 {
 		return identity.ErrInvalid
 	}
-	return s.withAuthority(ctx, id, identity.Revision{AuthGeneration: authGeneration}, false, operation)
+	return s.withAuthority(ctx, id, identity.Revision{AuthGeneration: authGeneration}, false, subjectScope, "", operation)
 }
 
-func (s *Store) withAuthority(ctx context.Context, id string, want identity.Revision, credentials bool, operation func(context.Context, identity.State) error) error {
+func (s *Store) withAuthority(ctx context.Context, id string, want identity.Revision, credentials bool, scope authorityScope, recoveryID string, operation func(context.Context, identity.State) error) error {
 	if s == nil || s.pool == nil || ctx == nil || !identity.ValidID(id) || operation == nil {
 		return identity.ErrInvalid
 	}
@@ -58,7 +60,16 @@ func (s *Store) withAuthority(ctx context.Context, id string, want identity.Revi
 		defer stop()
 		_ = tx.Rollback(cleanup)
 	}()
-	row, err := s.q.WithTx(tx).GetStateForShare(ctx, id)
+	q := s.q.WithTx(tx)
+	if scope == sessionScope {
+		if !identity.ValidRecoveryID(recoveryID) {
+			return identity.ErrInvalid
+		}
+		if err := lockRecovery(ctx, q, recoveryID); err != nil {
+			return err
+		}
+	}
+	row, err := q.GetStateForShare(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return identity.ErrConflict
 	}

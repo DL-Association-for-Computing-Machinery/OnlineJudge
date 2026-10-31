@@ -1,5 +1,19 @@
 # 工程交付记录
 
+## 2026-10-31：全局恢复状态与双层会话协调
+
+成功 fetch `ee51db0` 后建立独立 `codex/session-recovery-authority`。迁移 4 增加唯一闭门占位行：generation 只允许空串或合法 32 位小写 hex，空串不能启用。RecoveryState 只读；Begin 在锁外生成随机 128 位代次，仅更新既有行并闭门；Finish 以预期代次和 closed 为条件开门，缺失行不自动补建。新 Session 两入口严格校验代次，在同一 READ COMMITTED 事务先全局 FOR SHARE、再主体 FOR SHARE，保留新候选两代次/已有会话仅认证代次的区别。旧纯主体入口签名保留，纠正文档为不可单独用于正式会话。接口及未知副作用合同归[会话设计](architecture/session-design.md#76-正式全局恢复状态与双层协调)。
+
+当前 API 精确要求 schema 4，旧 schema-3 二进制拒绝 4，启用须停旧实例后独立迁移，无滚动兼容或实际部署。Down 4 锁全局→主体→submissions，要求确实唯一的空代次闭门占位且凭据/提交均空，初始化后前滚；缺失行不被视作未使用。旧迁移 3 回归显式固定 DownTo/UpTo 3 并断言版本/表存在性，随后恢复最新，避免新增保护掩盖旧断言；未来版本夹具改为 5，未放宽旧数据保护。
+
+已有 Docker 工具链 `oj-go-quality-toolchain`、Linux arm64/Go1.26.10、禁网 2 CPU/2 GiB 与原编译缓存执行检查，无安装/下载、Docker socket 或选手程序。身份/密码包编辑前 race 基线通过（密码包 3.511 秒，`/private/tmp/oj-session-recovery-authority-baseline-20261031.log`）；生成后原 race 通过（`generated-20261031.log`，身份 1.115 秒、密码包 3.435 秒）。首轮新增 postgres 两项单元通过（1.050 秒），集成编译因未使用 import 失败，日志 `test-20261031.log` 保留；删除该 import 后原 sqlc/数据库/race/双 API 全套通过，119 子条目 24.552 秒（`test2-20261031.log`）。以上短日志名均以 `/private/tmp/oj-session-recovery-authority-` 为前缀。
+
+Astra 建议将仅凭据、仅提交两种 Down 拒绝分支独立实证，已补齐完整行/数据不变断言。容器内原命令串行 `go mod verify && sh scripts/toolchain.sh backend && sh scripts/toolchain.sh sqlc && sh scripts/toolchain.sh db` 全通过（`/private/tmp/oj-session-recovery-authority-final-20261031.log`）：格式、vet、检测器正负夹具、三范围静态各 0 问题、全部 race 与四入口构建；身份 1.091 秒、密码包 3.448 秒、postgres 两项 1.017 秒；两包生成差异、真实 PostgreSQL/race 121 子条目（恢复相关 23，14.824 秒）及原双 API 子进程通过。Go/SQL 输入在每次检查运行时冻结，没有扩大时限或抑制检查。
+
+实证包括完整凭据/源码/任务/租约 3→4 保留、占位/缺失/已初始化回退及闭门格式约束；实际 Begin 在 AFTER UPDATE advisory 屏障处持锁，Down 等待后分别因 Begin 回滚允许、提交拒绝。全局锁在等待主体时仍阻塞 Begin，双向等待后读取最新状态，过期/重复完成拒绝、并发完成一赢家；取消等待保持持锁方直到精确 backend 退出。真实密码用例未返回时换代次并开门、账号版本不变，旧候选仍拒绝；重新捕获 open 代次并重启完整验证才成功。单行 SELECT/UPDATE 的 EXPLAIN ANALYZE/BUFFERS 保留自然计划，不强制索引；新增单例主键服务唯一性，增加一份索引和全局更新/锁开销，无生产容量结论。按审查建议明确文档的有效 open 捕获要求，并在候选测试补上此前置断言后，原 sqlc/数据库/race/双 API 全套再次通过，121 子条目 15.750 秒（`/private/tmp/oj-session-recovery-authority-capture-20261031.log`）；产品代码未变。
+
+266 文件仓库策略、全部新增文件和目标分支完整差异审查通过，README、计划、架构与 M0 同步；Astra 设计、完整实现/测试和增量/文档复核无阻断，主代理实测，AI 不替代人工审批。最新 head CI/反馈/合并条件在交付时另行回读。Begin/Finish 不是维护编排，随机代次不是外部单调 fence；接口不能证明捕获时机、旧实例隔离、Redis 清理或最新账号事实已校验。锁丢失后旧回调仍可能运行的限制保留，错误不自动重试或补偿。本地未重复 Redis/真实 Worker/备份恢复专项，无新模块依赖；真实 Redis/恢复流程、正式登录/会话协议、权限与生产预算、完整 AC23/AC24/M0 仍待交付，未部署。
+
 ## 2026-10-31：会话存储操作的主体状态协调
 
 成功 fetch 主线 `b16d590` 后建立独立 `codex/identity-authority`。Store 复用调用方连接池，新增主键 `GetStateForShare` 与两个受信内部入口：WithCredentials 检查验证所得两代次，WithAccount 仅检查认证代次与启用状态，保持同密码重哈希不撤销已有会话。显式 READ COMMITTED/FOR SHARE 持锁协调同步且至多一次的短时会话存储回调；新候选不直接信任浏览器版本。合同、合作取消、锁丢失及后续协议边界归[会话设计](architecture/session-design.md#75-会话存储操作的主体状态协调)。

@@ -20,6 +20,11 @@ import (
 )
 
 func testIdentityMigrations(t *testing.T, ctx context.Context, pool *pgxpool.Pool, provider *goose.Provider, submissions *submissionpg.Store, h *password.Hasher) {
+	// Pin the old migration's tests to schema 3, so a refusal in migration 4
+	// cannot conceal a missing migration-3 rollback guard. Restore latest later.
+	_, err := provider.DownTo(ctx, 3)
+	must(t, err)
+	defer func() { _, err := provider.Up(ctx); must(t, err) }()
 	t.Run("upgrade version two retains accepted work and lease", func(t *testing.T) {
 		_, err := provider.DownTo(ctx, 2)
 		must(t, err)
@@ -43,16 +48,16 @@ func testIdentityMigrations(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 			return state
 		}
 		before := capture()
-		_, err = provider.Up(ctx)
+		_, err = provider.UpTo(ctx, 3)
 		must(t, err)
-		must(t, db.CheckSchema(ctx, pool))
+		requireIdentitySchemaThree(t, ctx, pool)
 		if capture() != before {
 			t.Fatal("migration changed accepted source, task, or lease")
 		}
 		if _, err := provider.Down(ctx); err == nil {
 			t.Fatal("rollback discarded schema after accepted work")
 		}
-		must(t, db.CheckSchema(ctx, pool))
+		requireIdentitySchemaThree(t, ctx, pool)
 		if capture() != before {
 			t.Fatal("refused rollback changed accepted work")
 		}
@@ -98,7 +103,7 @@ func testIdentityMigrations(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 				if err == nil {
 					t.Fatal("rollback removed newly committed identity")
 				}
-				must(t, db.CheckSchema(ctx, pool))
+				requireIdentitySchemaThree(t, ctx, pool)
 				store, err := identitypg.New(pool, h)
 				must(t, err)
 				got, err := store.Get(ctx, identityID(1))
@@ -110,14 +115,28 @@ func testIdentityMigrations(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 				must(t, err)
 			} else {
 				must(t, err)
+				var absent bool
+				must(t, pool.QueryRow(ctx, `SELECT to_regclass('identity_credentials') IS NULL`).Scan(&absent))
+				if !absent {
+					t.Fatal("rollback retained the identity table")
+				}
 				if db.CheckSchema(ctx, pool) == nil {
 					t.Fatal("removed identity schema still accepted")
 				}
-				_, err = provider.Up(ctx)
+				_, err = provider.UpTo(ctx, 3)
 				must(t, err)
-				must(t, db.CheckSchema(ctx, pool))
+				requireIdentitySchemaThree(t, ctx, pool)
 			}
 		})
+	}
+}
+
+func requireIdentitySchemaThree(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	var version int64
+	must(t, pool.QueryRow(ctx, `SELECT version_id FROM goose_db_version ORDER BY id DESC LIMIT 1`).Scan(&version))
+	if version != 3 || db.CheckSchema(ctx, pool) == nil {
+		t.Fatal("fixture must remain schema three and be rejected by the new API")
 	}
 }
 
