@@ -1,5 +1,15 @@
 # 工程交付记录
 
+## 2026-10-31：会话实验聚合 watchdog 校准
+
+恢复草稿PR #55（head`6fc175d`）的局部恢复用例0.58秒通过，但原主线99项和新增100项都被整套90秒watchdog截断：前者98项完成85.65秒、最后已有Redis暂停恢复用例4秒；后者99项完成84.86秒、最后同一用例5秒且已输出初次核验记录。均无行为断言/race失败，完整验收不能计通过。失败日志保留于`/private/tmp/oj-pg-restore-baseline.log`及`/private/tmp/oj-pg-restore-test.log`；同次行为资源一次采样27.17%CPU、262.3MiB/7.748GiB、OOMKilled=false，不是峰值或已定位全部变慢根因。
+
+成功fetch后从`7572ab9`独立创建`codex/session-suite-watchdog`，只把`run.sh`聚合Go watchdog从90秒校准为120秒并同步执行说明。保留-mod=readonly/race/count=1、全部测试/断言、请求与故障暂停/过期/恢复命令原时限；不分片、并行共享Redis、升级依赖或猜测性修补memstore清理。120秒是测试数量及有意等待累积后的有限执行预算，不是业务延迟/性能SLA；测试容器执行阶段300秒预算保持（不覆盖此前网络/Redis创建就绪及最终清理）。
+
+Docker Desktop Linux arm64、已有Go1.26.10质量镜像/校验缓存、私有Redis7.2.4/PostgreSQL14.24，实际`python3 scripts/test-session.py --toolchain-image oj-go-quality-toolchain:latest --module-cache /private/tmp/oj-session-mod`完整原主线99项行为/race、272子例通过（91.629秒，另子进程专用入口按既有合同跳过）；格式、模块校验、vet随原驱动执行。临时负向探针从真实run.sh提取全部go test参数，禁网/1GiB/2CPU私有模块用select{}挂起；Go明确报`panic: test timed out after 2m0s`，包耗时120.111秒、非零退出，证明不是关闭watchdog。探针含编译总182.962秒，260秒外层保护未触发，唯一自建容器已清理；脚本`/private/tmp/oj-session-watchdog-probe.py`、负向日志/JSON及正向日志保留。该探针不属于持续CI，其断言摘要和实际命令供复现。
+
+shell语法、仓库策略及完整diff检查通过，Astra方案和实际差异/探针定向复核无阻断；主代理实测，不冒充独立人工审批。未解释所有运行时波动或解决默认memstore清理协程生命周期；回退到90秒会恢复已复现的聚合预算不足风险。无业务/数据库迁移/部署变化，完整AC23/M0未通过。PR55继续保持草稿，须在本独立目标交付后正常合入主线，重跑完整100项再核验最终head CI。
+
 ## 2026-10-31：PostgreSQL 会话全局恢复门禁
 
 PR #53 首轮head `f7c8e28` 的应用/容器检查成功，但security因新minimatch公告失败；独立修复PR #54已按最新head九项CI成功后合并为`01c6078e1d55321eb16fbb964cc92e8eb49e968e`。本次正常合入主线，保留两份交付记录解决唯一文档冲突，不重写历史；会话模块与已审查版本逐文件一致。合入复验首轮在90秒套件总超时中止：98项已完成耗时87.09秒，最后已有Redis暂停恢复用例仅运行3秒，新增8项及子例已通过，无行为断言失败；Astra日志复核未见死锁，未确定整体变慢根因。相同命令/预算/断言原样重跑后99项行为/race、272子例通过（90.514秒），217文件仓库策略及diff检查通过；整套测试耗时余量有限是待跟进限制，不能据此宣称环境/夹具稳定性已解决。最终head CI另行回读。
