@@ -1,5 +1,21 @@
 # 工程交付记录
 
+## 2026-10-31：会话存储操作的主体状态协调
+
+成功 fetch 主线 `b16d590` 后建立独立 `codex/identity-authority`。Store 复用调用方连接池，新增主键 `GetStateForShare` 与两个受信内部入口：WithCredentials 检查验证所得两代次，WithAccount 仅检查认证代次与启用状态，保持同密码重哈希不撤销已有会话。显式 READ COMMITTED/FOR SHARE 持锁协调同步且至多一次的短时会话存储回调；新候选不直接信任浏览器版本。合同、合作取消、锁丢失及后续协议边界归[会话设计](architecture/session-design.md#75-会话存储操作的主体状态协调)。
+
+回调开始后错误统一带 ErrGuardedOperation，保留原 cause；Commit 数据库错误仍带 ErrStore，普通回调错误不伪装成数据库错误，Error 文本不回显私有内容。回调之前的冲突/取消不执行操作；之后的失败不证明外部效果未发生，无重试或补偿。五秒是合作 context，既不强制中断回调也不保证锁的硬时长；独立一秒尽力 rollback 覆盖取消/panic，panic 继续传播。没有恢复 schema、Redis 实现、HTTP/Cookie、权限或邮件，不能称完整生产会话授权/跨存储事务。
+
+已有 Docker 工具链 `oj-go-quality-toolchain`、Linux arm64/Go1.26.10、禁网 2 CPU/2 GiB 与既有编译缓存执行检查，无安装/下载、Docker socket 或选手程序。编辑前身份/密码包 race 基线通过（密码包 3.382 秒，`/private/tmp/oj-identity-authority-baseline-20261031.log`）；生成新查询及初步原 race 通过（`generated-20261031.log`，身份 1.100 秒、密码包 3.448 秒）。所有 Go/SQL 输入在检查运行时冻结。
+
+首轮两包 sqlc 生成一致性、真实 PostgreSQL/race 全套 98 子条目（门禁 19，14.826 秒）及原双 API 子进程通过（`/private/tmp/oj-identity-authority-postgres-20261031.log`）。完整 `go mod verify && sh scripts/toolchain.sh backend` 格式、vet、检测器正负夹具、三范围静态各 0 问题、全部 race 与四入口构建通过，身份 1.115 秒、密码包 3.434 秒（`/private/tmp/oj-identity-authority-backend-20261031.log`）。
+
+Astra 指出 backend 定位可进一步要求恰好一个匹配事务，已去掉 LIMIT 并检查完整结果集，异常时不终止任何 backend；尚未观察选错实例的失败。该夹具加固后按原命令重新完整执行 sqlc 与数据库/race/双 API，98 子条目 18.106 秒通过（`/private/tmp/oj-identity-authority-verified-20261031.log`），没有扩大时限或改变产品逻辑。
+
+实证包括两个 FOR SHARE 并行、通过 pg_blocking_pids 确认阻塞重哈希/改密/禁用、反向等待后读最新行，以及默认 REPEATABLE READ 的夹具池仍由入口显式覆盖为 READ COMMITTED。取消锁等待保持持锁方直到精确 backend 消失；故意忽略 context 的回调证明取消不假装停止。回调阻塞时终止唯一 backend，确认退出后另池先完成真实改密，再释放旧回调产生外部标记，包装器报未知结果且旧认证代次被拒。标记不是实际 Redis，不能撤回已执行效果。自然 LockRows/主键计划在已有 2000 条合成填充上通过，无强制禁用 Seq Scan、新索引/迁移/依赖或生产容量结论。
+
+255 文件仓库策略、全部新增文件和目标分支完整差异审查通过；README、计划、架构与 M0 同步。Astra 设计、完整实现/测试及夹具增量/文档复核无阻断，主代理实际验证，AI 不替代人工审批；最新 head CI/反馈/合并条件在交付时另行回读。未重复本地 Redis/真实 Worker 专项；未来恢复门禁须同一事务全局行→主体行，旧备份版本重复、会话条件写入/名额/结果确认、正式账号/权限、CPU/RSS及100人容量与完整AC23/AC24/M0仍待验收，未部署。回退移除入口/查询，无数据迁移；未来调用方回退须同时停用依赖流程。
+
 ## 2026-10-31：密码验证与条件升级用例
 
 成功 fetch 主线 `ed1475a` 后建立独立 `codex/credential-verification`。新增 `CredentialVerifier.VerifyPassword`，连接凭据读取、共享 BoundedHasher、Legacy 同密码 Current 创建、两代次 CAS 升级和末次 State 复核。Current 匹配只读，升级须返回精确预期版本且不溢出，失败不降级为成功、不盲重试或补偿。完整合同归[会话设计](architecture/session-design.md#74-密码验证与条件升级用例)。输入是未来邮箱映射已解析的主体 ID，不改变个人邮箱登录规则；Store/Hasher 须使用兼容批准策略。成功仅描述末次读取时点，不是会话或权限授权；升级已提交后仍可能因回执、末次读取、撤权或取消而返回零结果。

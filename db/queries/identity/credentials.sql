@@ -13,6 +13,9 @@ SELECT * FROM identity_credentials WHERE id = @id;
 -- name: GetState :one
 SELECT id, enabled, credential_version, auth_generation FROM identity_credentials WHERE id = @id;
 
+-- name: GetStateForShare :one
+SELECT id, enabled, credential_version, auth_generation FROM identity_credentials WHERE id = @id FOR SHARE;
+
 -- name: RehashCAS :one
 UPDATE identity_credentials
 SET credential_version = credential_version + 1,

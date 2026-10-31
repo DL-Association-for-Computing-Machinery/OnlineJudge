@@ -17,6 +17,11 @@ var (
 	ErrStore    = errors.New("identity storage operation failed; outcome may be unknown")
 )
 
+// ErrGuardedOperation means a guarded callback started and may have had external
+// effects. Inspect this before underlying conflict/cancellation classifications;
+// no error proves those effects were rolled back or permits an automatic retry.
+var ErrGuardedOperation = errors.New("guarded identity operation failed; external outcome may be unknown")
+
 // StoredSaltBytes and StoredDigestBytes bound the version-1 storage envelope.
 // They do not select production KDF parameters or an approved security policy.
 const (

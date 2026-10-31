@@ -1,5 +1,6 @@
 // Package postgres persists identity-owned credential state in PostgreSQL.
-// It has no public registration, password derivation, or session side effects.
+// It has no public registration or password derivation. Guarded callbacks may
+// perform caller-owned session-storage operations with uncertain side effects.
 package postgres
 
 import (
@@ -19,6 +20,7 @@ import (
 // A call has a five-second context ceiling; the caller may set a shorter one.
 // Database failures remain uncertain outcomes and must not be blindly retried.
 type Store struct {
+	pool   *pgxpool.Pool
 	q      *identitydb.Queries
 	hasher *password.Hasher
 }
@@ -30,7 +32,7 @@ func New(pool *pgxpool.Pool, hasher *password.Hasher) (*Store, error) {
 	if pool == nil || salt == 0 || digest == 0 || salt > identity.StoredSaltBytes || digest > identity.StoredDigestBytes {
 		return nil, identity.ErrInvalid
 	}
-	return &Store{q: identitydb.New(pool), hasher: hasher}, nil
+	return &Store{pool: pool, q: identitydb.New(pool), hasher: hasher}, nil
 }
 
 // Initialize inserts one new, non-reusable subject ID with revisions 1/1.
