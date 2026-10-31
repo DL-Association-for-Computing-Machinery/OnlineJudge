@@ -131,6 +131,7 @@ func TestAcceptance(t *testing.T) {
 	secondStore, err := postgres.New(secondPool, experiment.Version, experiment.Manifest())
 	must(t, err)
 	t.Run("identity credentials", func(t *testing.T) { testIdentityCredentials(t, ctx, pool, secondPool, provider, store) })
+	t.Run("credential verification", func(t *testing.T) { testCredentialVerification(t, ctx, pool, secondPool) })
 	servers := []*httptest.Server{
 		httptest.NewServer(httpapi.NewHandler(httpapi.Experiment{Store: store, Token: token})),
 		httptest.NewServer(httpapi.NewHandler(httpapi.Experiment{Store: secondStore, Token: token})),
