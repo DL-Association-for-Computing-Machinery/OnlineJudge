@@ -7,7 +7,7 @@
 - [开发与交付计划](docs/phase-1-development-plan.md)：发布范围、组件引入时机、P0—P7 与里程碑。
 - [M0 记录](docs/m0-experiment.md)：Worker、数据库与会话实验的证据及剩余缺口，是当前进度入口。
 - [会话实验](tests/sessionexperiment/README.md)：独立测试模块的复现与限制，尚未接入正式登录。
-- [密码记录核心](docs/architecture/session-design.md#71-同步密码记录核心)：显式策略的 Argon2id 创建/校验与迁移提示，未接入账号、数据库或 HTTP。
+- [密码记录核心](docs/architecture/session-design.md#71-同步密码记录核心)与[主体凭据](docs/architecture/session-design.md#72-主体凭据持久化与条件更新)：显式策略的 Argon2id、PostgreSQL 状态与条件更新，未开放账号 HTTP 或正式登录。
 
 ## 运行环境
 

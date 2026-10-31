@@ -106,3 +106,39 @@ func TestExactPolicyCeilingsAndStructuralMinima(t *testing.T) {
 		t.Fatalf("exact minima: result=%v error=%v", got, err)
 	}
 }
+
+func TestRecordMetadataWithoutDerivation(t *testing.T) {
+	h := testHasher(t)
+	current, err := h.Create([]byte("synthetic password"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.derive = func([]byte, []byte, Parameters) []byte { t.Fatal("metadata check derived"); return nil }
+	if class, err := h.CheckRecord(current); err != nil || class != CurrentRecord {
+		t.Fatalf("current classification: %v %v", class, err)
+	}
+	if class, err := h.CheckRecord(vectorRecord(t)); err != nil || class != LegacyRecord {
+		t.Fatalf("legacy classification: %v %v", class, err)
+	}
+	current.FormatVersion++
+	if class, err := h.CheckRecord(current); err != ErrRecord || class != 0 {
+		t.Fatal("invalid metadata accepted")
+	}
+	p, l := testPolicy()
+	p.Legacy[0].SaltBytes, p.Legacy[0].DigestBytes = 32, 64
+	h, err = New(p, l)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if salt, digest := h.RecordSizeBounds(); salt != 32 || digest != 64 {
+		t.Fatal("bounds did not cover legacy records")
+	}
+	for _, zero := range []*Hasher{nil, {}} {
+		if class, err := zero.CheckRecord(Record{}); err != ErrPolicy || class != 0 {
+			t.Fatal("uninitialized metadata checker accepted")
+		}
+		if salt, digest := zero.RecordSizeBounds(); salt != 0 || digest != 0 {
+			t.Fatal("uninitialized size bounds accepted")
+		}
+	}
+}

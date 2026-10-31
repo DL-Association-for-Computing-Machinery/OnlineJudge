@@ -19,11 +19,9 @@ func testConcurrentRollback(t *testing.T, pool *pgxpool.Pool, provider *goose.Pr
 		t.Run(fmt.Sprintf("version_%d", version), func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			if version == 1 {
-				_, err := provider.Down(ctx)
-				must(t, err)
-			}
-			_, err := pool.Exec(ctx, `INSERT INTO submission_materials VALUES ('rollback-fixture',repeat('a',64),'{}')`)
+			_, err := provider.DownTo(ctx, int64(version))
+			must(t, err)
+			_, err = pool.Exec(ctx, `INSERT INTO submission_materials VALUES ('rollback-fixture',repeat('a',64),'{}')`)
 			must(t, err)
 			writer, err := pool.Begin(ctx)
 			must(t, err)

@@ -32,6 +32,16 @@ type Verification struct {
 	NeedsUpgrade bool
 }
 
+// RecordClass distinguishes the current write policy from approved old tuples.
+type RecordClass uint8
+
+const (
+	// CurrentRecord is suitable for new writes under the configured policy.
+	CurrentRecord RecordClass = iota + 1
+	// LegacyRecord may be verified but should migrate after a successful match.
+	LegacyRecord
+)
+
 // Hasher holds an immutable policy. Use New; its zero value fails closed.
 // Calls are synchronous: a caller's timeout cannot stop an in-flight derivation.
 // Before network use, the caller must bound admission across all API processes
@@ -108,19 +118,49 @@ func (h *Hasher) Verify(password []byte, record Record) (Verification, error) {
 	if err := h.validatePassword(password); err != nil {
 		return Verification{}, err
 	}
+	class, err := h.CheckRecord(record)
+	if err != nil {
+		return Verification{}, err
+	}
+	// CheckRecord matched the entire tuple before any derivation.
+	derived := h.derive(password, record.Salt, record.Parameters)
+	match := subtle.ConstantTimeCompare(derived, record.Digest) == 1
+	clear(derived)
+	return Verification{Match: match, NeedsUpgrade: match && class == LegacyRecord}, nil
+}
+
+// CheckRecord validates metadata and policy without password work. It does not
+// prove knowledge of a password or the authenticity of the digest.
+func (h *Hasher) CheckRecord(record Record) (RecordClass, error) {
+	if h == nil || h.derive == nil || h.salt == nil {
+		return 0, ErrPolicy
+	}
 	p := record.Parameters
 	if record.FormatVersion != formatVersion || record.Algorithm != algorithm ||
 		record.ArgonVersion != argon2.Version || !p.valid(h.limits) ||
 		uint64(len(record.Salt)) != uint64(p.SaltBytes) || uint64(len(record.Digest)) != uint64(p.DigestBytes) {
-		return Verification{}, ErrRecord
+		return 0, ErrRecord
 	}
-	_, legacy := h.legacy[p]
-	if p != h.current && !legacy {
-		return Verification{}, ErrRecord
+	if p == h.current {
+		return CurrentRecord, nil
 	}
-	// Derive from a fully matched policy tuple, never unchecked record fields.
-	derived := h.derive(password, record.Salt, p)
-	match := subtle.ConstantTimeCompare(derived, record.Digest) == 1
-	clear(derived)
-	return Verification{Match: match, NeedsUpgrade: match && legacy}, nil
+	if _, legacy := h.legacy[p]; legacy {
+		return LegacyRecord, nil
+	}
+	return 0, ErrRecord
+}
+
+// RecordSizeBounds reports maximum salt/digest lengths across approved tuples,
+// so an adapter can reject an incompatible storage envelope at construction.
+// An uninitialized Hasher returns zero bounds.
+func (h *Hasher) RecordSizeBounds() (saltBytes, digestBytes uint32) {
+	if h == nil || h.derive == nil || h.salt == nil {
+		return 0, 0
+	}
+	saltBytes, digestBytes = h.current.SaltBytes, h.current.DigestBytes
+	for p := range h.legacy {
+		saltBytes = max(saltBytes, p.SaltBytes)
+		digestBytes = max(digestBytes, p.DigestBytes)
+	}
+	return saltBytes, digestBytes
 }

@@ -17,7 +17,9 @@ case "${1:-}" in
     db) build; sh scripts/test-postgres.sh ;;
     sqlc)
         cp -r internal/submission/postgres/submissiondb /tmp/submissiondb-before
+        cp -r internal/identity/postgres/identitydb /tmp/identitydb-before
         sqlc generate
-        diff -ru /tmp/submissiondb-before internal/submission/postgres/submissiondb ;;
+        diff -ru /tmp/submissiondb-before internal/submission/postgres/submissiondb
+        diff -ru /tmp/identitydb-before internal/identity/postgres/identitydb ;;
     *) echo 'Expected backend, db or sqlc' >&2; exit 2 ;;
 esac
