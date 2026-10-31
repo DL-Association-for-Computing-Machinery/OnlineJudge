@@ -2,6 +2,8 @@
 
 ## 2026-10-31：PostgreSQL 会话全局恢复门禁
 
+PR #53 首轮head `f7c8e28` 的应用/容器检查成功，但security因新minimatch公告失败；独立修复PR #54已按最新head九项CI成功后合并为`01c6078e1d55321eb16fbb964cc92e8eb49e968e`。本次正常合入主线，保留两份交付记录解决唯一文档冲突，不重写历史；会话模块与已审查版本逐文件一致。合入复验首轮在90秒套件总超时中止：98项已完成耗时87.09秒，最后已有Redis暂停恢复用例仅运行3秒，新增8项及子例已通过，无行为断言失败；Astra日志复核未见死锁，未确定整体变慢根因。相同命令/预算/断言原样重跑后99项行为/race、272子例通过（90.514秒），217文件仓库策略及diff检查通过；整套测试耗时余量有限是待跟进限制，不能据此宣称环境/夹具稳定性已解决。最终head CI另行回读。
+
 从成功 fetch 后的 `0c3ade7` 创建独立 `codex/session-postgres-recovery` worktree，唯一目标为 P3/M0、AC23 存储比较的全局恢复门禁子项。新增可选门禁只在测试模块，不替换 Redis，无生产程序、依赖或迁移。登录捕获随机恢复标识；保存按全局→账号→主体→凭据锁序同事务重查新旧载荷；读取从门禁 LEFT JOIN 会话/账号同快照核验。begin helper 同事务换标识/关闭/清本命名空间全部载荷，保留原期限墓碑；finish 仅按当前标识及闭门状态重开，无管理 HTTP 或自动恢复编排。
 
 Docker Desktop Linux arm64、已有 Go1.26.10 质量镜像与校验过缓存、私有 Redis7.2.4/PostgreSQL14.24。原91项行为/race、261子例基线69.980秒通过；首轮新增7项后98项/267子例71.726秒通过。Astra指出HTTP前置门禁可能掩盖存储闭门及新JOIN分支，补直接Find和五种单条件授权子例，并核验成功恢复仅清data、其他全部字段保留。最终 `python3 scripts/test-session.py --toolchain-image oj-go-quality-toolchain:latest --module-cache /private/tmp/oj-session-mod` 的99项行为/race、272子例77.173秒通过（另一个专供子进程启动的入口按既有约定跳过）；格式、模块校验、vet和最终完整离线后端三范围静态、检测器正反例、根模块race、四命令构建通过。仓库策略216文件及diff空白检查通过，未改治理脚本。Astra设计/完整差异/增量及文档定向复核无阻断，主代理自审实测，不冒充独立人工批准。
@@ -9,6 +11,16 @@ Docker Desktop Linux arm64、已有 Go1.26.10 质量镜像与校验过缓存、�
 双API覆盖缺失/关闭门禁503无Cookie，重开后旧凭据401、新三名额/第四409、旧删除不影响新记录；已加载登录/保存跨关闭重开补满仍拒绝。新旧Gob的缺失/错误类型/空/错标识拒绝且完整状态不变；新LEFT JOIN独立覆盖账号缺失/禁用/代次不匹配及未知/过期凭据。pg_blocking_pids观察两个方向真实锁等待，验证保存等恢复提交后重查、恢复等保存后清其刚提交载荷。AFTER UPDATE P0001使门禁与所有会话字段完整回滚；去故障后只清本命名空间，其他门禁/账号/会话不变。
 
 门禁主键定点查询/锁的读收益伴随每次保存共享行锁及恢复写入；批量清载荷持有受影响行锁，实测并发/回滚/范围隔离是关键SQL等价证据，无大规模UPDATE计划、WAL/吞吐或清理预算。关闭前已开始读取可按旧快照完成，不能撤回已加载请求或业务副作用；COMMIT回执失败仍未知。随机标识非外部单调版本或恢复操作者锁；会话与账号同库旧备份恢复、跨进程/主机、完整策略及公平性能对照仍未完成，完整存储比较、AC23/M0未通过，未部署。回退本项测试/可选夹具即可；PR/head/CI及合并回读见远端和知识库，CI静态不代替本地专项。
+
+## 2026-10-31：前端 minimatch 公告阻断修复
+
+会话恢复门禁 PR #53 的 head `f7c8e28` 在 CI41160776238/security job124417655807 命中 GHSA-g3hv-75wg-m249：现有开发依赖minimatch10.2.6受影响，公告修复版11.0.1。主线未改依赖也可能因公告更新失败；本次保留PR53草稿，不重试或忽略漏洞。从成功fetch后的`0c3ade7`独立创建`codex/minimatch-advisory`，仅为三个精确父版本配置override到11.0.1，自动生成锁文件并把配置加入Docker安装COPY；直接依赖版本不变，新增必要间接依赖@isaacs/nonrecursive-glob-match1.0.3。
+
+官方公告、上游修复commit77a0f5c4b80bdc641c3c930a1d9edf5ad2db57f8及changelog、npm元数据核验：11版移除makeRe/regexp/AST，set元素变Matcher，不能默认为兼容。实际三个调用方用match/partial/pattern/minimatch，未发现依赖被移除API；包许可BlueOak-1.0.0，minimatch引擎18||20||>=22，新间接包未声明Node引擎，解包体积分别420517/380111字节。npm确认11.0.1已发布（上游对应release API404，不以release缺失推断未发布）；未放宽TLS、完整性、供应链策略或审计门禁。
+
+Docker Desktop Linux arm64、锁定Node24.19.0/pnpm11.25.0，实际`docker build --target frontend-source`的`pnpm install --frozen-lockfile --ignore-scripts`成功；该镜像内`pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm audit --audit-level low`通过：7项lint自检、6项Vitest、构建成功，audit无已知漏洞。新增lintFiles('.')按文件系统独立枚举全部TS/TSX及vite配置，并检查dist/coverage/node_modules忽略；原镜像和修复镜像分别`pnpm exec eslint . --format json`，实际7文件集合完全相同且零错误/警告，不将跳过文件当作通过。
+
+临时探针`/private/tmp/oj-minimatch-probe.mjs`在禁网/512MiB/单CPU/10秒容器内，沿三个真实父包路径分别解析minimatch/package.json确认11.0.1、CJS/ESM匹配、partial目录匹配，以及上游30段`**/../a/b`/optimizationLevel2/braceExpandMax64扩张恰64与两个正常匹配，全部通过；该探针未加入持续CI，断言摘要供复现。完整diff/空白及214文件仓库策略通过；治理46项通过（首轮因沙箱禁止本机bind失败，按原命令获工具审批后9.847s通过，未改断言）。Astra设计及完整差异复核无阻断，主代理实测自审，不代替独立人工审批。兼容结论限当前三个父版本和项目用法，不宣称所有平台或任意glob兼容；未来父版本支持补丁时撤去对应override并复验。无业务代码/数据库迁移/部署；PR53须在本独立目标交付后正常合入主线重验。
 
 ## 2026-10-31：PostgreSQL 账号撤权与同事务会话变更
 

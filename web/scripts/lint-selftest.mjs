@@ -1,10 +1,28 @@
 import assert from 'node:assert/strict'
+import { readdir } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import { test } from 'node:test'
 import { ESLint } from 'eslint'
 
 const eslint = new ESLint()
 // Use an existing tsconfig member; lintText keeps fixtures off disk and out of builds.
 const filePath = 'src/services/health.ts'
+
+// Matching changes must not silently turn a successful lint into a partial scan.
+test('glob lint covers TypeScript sources and preserves output ignores', async () => {
+  const sources = (await readdir('src', { recursive: true, withFileTypes: true }))
+    .filter(entry => entry.isFile() && /\.tsx?$/.test(entry.name))
+    .map(entry => resolve(entry.parentPath, entry.name))
+  assert.ok(sources.length > 0)
+  const results = await eslint.lintFiles('.')
+  const scanned = new Set(results.map(result => result.filePath))
+  for (const source of [...sources, resolve('vite.config.ts')]) {
+    assert.ok(scanned.has(source), `not scanned: ${source}`)
+  }
+  for (const ignored of ['dist/nested/output.ts', 'coverage/report.ts', 'node_modules/fixture/index.ts']) {
+    assert.equal(await eslint.isPathIgnored(ignored), true, `not ignored: ${ignored}`)
+  }
+})
 
 test('typed lint accepts handled promises', async () => {
   const [result] = await eslint.lintText(`
