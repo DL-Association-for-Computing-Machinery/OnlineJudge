@@ -1,5 +1,21 @@
 # 工程交付记录
 
+## 2026-10-31：普通会话 Store 有限成本采样
+
+从成功 fetch 后的 `143da27` 创建独立 `codex/session-storage-cost`。唯一目标为相同普通会话授权合同下的有限路径成本采样及决策记录，不替换 Redis，不是 HTTP/真实登录或生产容量验收。新增驱动只用已有固定镜像和离线缓存，每样本独立私有 TCP 网络及空 PostgreSQL，Redis 路径另加 Redis；两组客户端启用账号/恢复守卫，全部样本共用离线生成的原始 Gob、期限与 fixture SHA。读取、原样重复保存、独立主体准入、满额拒绝分别校验结果和数据状态；固定握手将资源结束采样放在语义验证/统计前。方法、固定场景和局限见[专项说明](../tests/sessionexperiment/README.md#同等普通会话合同的-store-成本采样)。
+
+首轮构建非零，但初版未保存编译输出，不能追认其确切根因；已补 stdout/stderr 有界保留。第二轮实际复现锁定 go-redis v9.23.0 `ConfigGet` 只接受单模式，修为采样结束后逐项读取四个配置。第三轮构建成功后首个样本在 TCP 连接检查失败；独立空库探针明确复现 `no pg_hba.conf entry`，证明 initdb 的默认 host 规则未覆盖容器网段。仅在本次空库加入 `host postgres oj_cost samenet trust` 后同探针返回 `oj_cost`，前后均定向清理成功；仍依赖容器仅接入新建 internal 网络，无宿主端口，不是真实认证或生产配置。日志为 `/private/tmp/oj-session-cost-smoke{,2,3}-20261031.log` 与 `/private/tmp/oj-cost-tcp-probe-{before,after}.log`，对应 JSON 保留失败样本。
+
+后续并行启动小样本构建与原完整 race 专项，两者均触发各自原有 300 秒驱动总预算：成本构建未产生样本，race 已完成 108 项行为及 279 子例、无断言失败，最后已有 Redis 暂停恢复项被外预算中止，均不能计完整通过。并行干扰尚未归因 CPU/内存/I/O，未增加原预算或降低断言；已改为串行复验，日志 `/private/tmp/oj-session-cost-smoke4-20261031.log`、`/private/tmp/oj-session-cost-race-20261031.log` 和 `/private/tmp/oj-session-cost-race-serial-20261031.log` 保留。
+
+驱动单测 14 项及模块静态 0 问题通过。完整治理首次被宿主沙箱禁止本地监听/Docker 读取而失败，经工具审批按同一原命令重验 60 项通过（37.208 秒）；没有改断言。原完整行为/race 驱动在相同源码、预算和断言下独立串行重验，109 项行为/race、279 子例通过（91.652 秒），格式/模块校验/vet 随原驱动通过；另有三个既有/成本专用入口按合同跳过，日志 `/private/tmp/oj-session-cost-race-serial-20261031.log`。此结果不追认此前并行运行通过。
+
+其后同一原 1 CPU/1 GiB builder、300 秒构建预算独立执行小样本，14 场景全部通过（每样本 8 次，不能作跑分），fixture SHA/配置/结果计数/原载荷与名额语义校验均通过。按结果中的精确 owner label 回读，无残留容器或网络；日志和结果为 `/private/tmp/oj-session-cost-smoke5-20261031.{log,json}`。因此未据并行超时扩大 builder 资源或提高验证时限。
+
+最终以 `python3 scripts/test-session-cost.py --toolchain-image oj-go-quality-toolchain:latest --module-cache /private/tmp/oj-session-mod --rounds 3 --operations 2048 --output <新JSON文件>` 独立完成 42 样本、86016 次请求，61440 次成功、24576 次预期名额拒绝，其他结果类别为 0。独立核验完整场景矩阵、共同 fixture SHA、原始延迟重算分位数、语义与资源窗口，Astra 再次核对原始数据与决策边界无阻断；精确 owner label 回读无残留容器/网络。结果 `/private/tmp/oj-session-cost-full-20261031.json` SHA256 为 `0a86c18dd7cede46d58dc93d168ec6d03a963e9f99c63a937a1c8c3e31f14851`（2405876 字节），日志同名 `.log`；独立分析 `/private/tmp/oj-session-cost-analysis-20261031.{json,log}`，保留逐轮数据和对应代码哈希。最终模块静态 0 问题（`/private/tmp/oj-session-cost-lint-final-20261031.log`）。结果范围和继续 Redis/转正式 P3 决策统一见 [M0 记录](m0-experiment.md#普通会话-store-有限成本采样2026-10-31)，不把并行超时或小样本追认为正式结果。
+
+Astra 设计/完整实现及 HBA 定向复核、主代理完整差异审查，AI 不代替人工审批；新增中断及临时目录清理失败回归确保未完成任务不能报告通过。两镜像实测均 linux/arm64；Docker VM 为 10 CPU、8319504384 字节、LinuxKit 7.0.14。PostgreSQL 为 tmpfs、Redis 关闭持久化，外围 CPU/内存与操作延迟窗口不同，不能据此作引擎排名、RSS/持久盘或生产 SLA 结论。无生产程序/依赖/迁移，完整 AC23/M0 未通过、未部署。
+
 ## 2026-10-31：PostgreSQL 绝对过期凭据有界清理
 
 从成功 fetch 后的 `0337f1e` 创建独立 `codex/session-postgres-cleanup`。唯一目标为测试专用普通会话存储的显式过期清理：批量 1—128、派生 3 秒上下文、事务内一次数据库截止值、按 namespace/绝对期限/token 排序的带锁 CTE 删除；只取凭据锁，不反向取主体/账号/门禁锁。原有空闲过期或撤销墓碑在绝对期限内继续保留，所有主体/账号/门禁行均不删除。无新依赖、生产代码、迁移、后台调度或 Redis 替换，回退测试 helper/用例及测试 schema 索引即可。

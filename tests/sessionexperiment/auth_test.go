@@ -25,6 +25,13 @@ type authVersion struct {
 
 var errRecovering = errors.New("session recovery unavailable")
 
+const sessionAuthSchema = `CREATE TABLE IF NOT EXISTS session_auth_fixture (
+	namespace text NOT NULL, subject text NOT NULL, generation bigint NOT NULL CHECK (generation>0),
+	enabled boolean NOT NULL, PRIMARY KEY(namespace, subject))`
+
+const sessionRecoverySchema = `CREATE TABLE IF NOT EXISTS session_recovery_fixture (
+	namespace text PRIMARY KEY, generation text NOT NULL CHECK (length(generation)>=26), enabled boolean NOT NULL)`
+
 func (a *authAuthority) current(ctx context.Context, subject string) (authVersion, error) {
 	var version authVersion
 	var open bool
@@ -123,9 +130,7 @@ func setupAuthWithProfiles(t *testing.T, remember, admin rememberPolicy, configu
 	a := newAuthority(t, namespace)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	_, err := a.pool.Exec(ctx, `CREATE TABLE IF NOT EXISTS session_auth_fixture (
-		namespace text NOT NULL, subject text NOT NULL, generation bigint NOT NULL CHECK (generation>0),
-		enabled boolean NOT NULL, PRIMARY KEY(namespace, subject))`)
+	_, err := a.pool.Exec(ctx, sessionAuthSchema)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,8 +138,7 @@ func setupAuthWithProfiles(t *testing.T, remember, admin rememberPolicy, configu
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = a.pool.Exec(ctx, `CREATE TABLE IF NOT EXISTS session_recovery_fixture (
-		namespace text PRIMARY KEY, generation text NOT NULL CHECK (length(generation)>=26), enabled boolean NOT NULL)`)
+	_, err = a.pool.Exec(ctx, sessionRecoverySchema)
 	if err != nil {
 		t.Fatal(err)
 	}
