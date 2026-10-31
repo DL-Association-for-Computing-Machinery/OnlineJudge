@@ -42,16 +42,20 @@ func (s *Store) Initialize(ctx context.Context, id string, enabled bool, record 
 	if err := s.checkWrite(id, record); err != nil {
 		return identity.Snapshot{}, err
 	}
-	p := writeParams(id, identity.Revision{}, record)
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	row, err := s.q.Initialize(ctx, identitydb.InitializeParams{
+	row, err := s.q.Initialize(ctx, initializeParams(id, enabled, record))
+	return s.writeResult(row, err)
+}
+
+func initializeParams(id string, enabled bool, record password.Record) identitydb.InitializeParams {
+	p := writeParams(id, identity.Revision{}, record)
+	return identitydb.InitializeParams{
 		ID: id, Enabled: enabled, FormatVersion: p.FormatVersion, Algorithm: p.Algorithm,
 		ArgonVersion: p.ArgonVersion, MemoryKib: p.MemoryKib, Iterations: p.Iterations,
 		Parallelism: p.Parallelism, SaltBytes: p.SaltBytes, DigestBytes: p.DigestBytes,
 		Salt: p.Salt, Digest: p.Digest,
-	})
-	return s.writeResult(row, err)
+	}
 }
 
 // Get returns an internal snapshot, allowing both approved Current and Legacy

@@ -20,6 +20,10 @@ import (
 )
 
 func testSessionRecoveryMigrations(t *testing.T, ctx context.Context, a, b *pgxpool.Pool, provider *goose.Provider, submissions *submissionpg.Store, h *password.Hasher) {
+	// Exercise migration 4 itself; migration 5 must not mask its rollback guard.
+	_, err := provider.DownTo(ctx, 4)
+	must(t, err)
+	defer func() { _, err := provider.Up(ctx); must(t, err) }()
 	store, err := identitypg.New(a, h)
 	must(t, err)
 	t.Run("schema three upgrade preserves complete business data", func(t *testing.T) {
@@ -46,9 +50,9 @@ func testSessionRecoveryMigrations(t *testing.T, ctx context.Context, a, b *pgxp
 			return snapshot
 		}
 		before := capture()
-		_, err = provider.Up(ctx)
+		_, err = provider.UpTo(ctx, 4)
 		must(t, err)
-		must(t, db.CheckSchema(ctx, a))
+		requireRecoverySchemaFour(t, ctx, a)
 		if capture() != before {
 			t.Fatal("recovery migration changed identity, source, task, or lease")
 		}
@@ -97,7 +101,7 @@ func testSessionRecoveryMigrations(t *testing.T, ctx context.Context, a, b *pgxp
 				_, err = a.Exec(ctx, `DELETE FROM submissions WHERE id=$1`, work.ID)
 				must(t, err)
 			}
-			must(t, db.CheckSchema(ctx, a))
+			requireRecoverySchemaFour(t, ctx, a)
 		})
 	}
 	t.Run("closed placeholder constraints and missing authority", func(t *testing.T) {
@@ -140,9 +144,9 @@ func testSessionRecoveryMigrations(t *testing.T, ctx context.Context, a, b *pgxp
 		_, err = provider.Down(ctx)
 		must(t, err)
 		requireIdentitySchemaThree(t, ctx, a)
-		_, err = provider.Up(ctx)
+		_, err = provider.UpTo(ctx, 4)
 		must(t, err)
-		must(t, db.CheckSchema(ctx, a))
+		requireRecoverySchemaFour(t, ctx, a)
 	})
 	t.Run("rollback serializes actual recovery begin", func(t *testing.T) {
 		testRecoveryMigrationBegin(t, ctx, a, b, provider, store)
@@ -204,12 +208,21 @@ func testRecoveryMigrationBegin(t *testing.T, ctx context.Context, a, b *pgxpool
 				}
 				must(t, err)
 				requireIdentitySchemaThree(t, ctx, a)
-				_, err = provider.Up(ctx)
+				_, err = provider.UpTo(ctx, 4)
 				must(t, err)
 			}
 			_, err = a.Exec(ctx, `DROP TRIGGER IF EXISTS wait_recovery ON identity_session_recovery`)
 			must(t, err)
-			must(t, db.CheckSchema(ctx, a))
+			requireRecoverySchemaFour(t, ctx, a)
 		})
+	}
+}
+
+func requireRecoverySchemaFour(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	var version int64
+	must(t, pool.QueryRow(ctx, `SELECT version_id FROM goose_db_version ORDER BY id DESC LIMIT 1`).Scan(&version))
+	if version != 4 || db.CheckSchema(ctx, pool) == nil {
+		t.Fatal("expected schema four, rejected by the schema-five API")
 	}
 }

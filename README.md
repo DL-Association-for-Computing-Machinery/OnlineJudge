@@ -12,6 +12,7 @@
 - [密码验证用例](docs/architecture/session-design.md#74-密码验证与条件升级用例)：同密码升级、双版本条件更新与末次状态复核；结果只描述时点，不发放会话或资源权限。
 - [主体状态协调](docs/architecture/session-design.md#75-会话存储操作的主体状态协调)：共享行锁协调受信会话存储操作与账号变更；回调失败仍可能有外部效果，正式 Redis/恢复与会话协议待接入。
 - [全局恢复状态](docs/architecture/session-design.md#76-正式全局恢复状态与双层协调)：schema 4 默认闭门、显式换代次与条件开门，同事务全局→主体双层检查；没有自动 Redis 清理或恢复编排。
+- [个人邮箱映射](docs/architecture/session-design.md#77-个人邮箱映射与原子初始化)：schema 5 原子初始化凭据与未验证邮箱，整址忽略大小写、保留原始显示；当前限 ASCII 裸址，无公开注册或邮件验证接口。
 
 ## 运行环境
 
