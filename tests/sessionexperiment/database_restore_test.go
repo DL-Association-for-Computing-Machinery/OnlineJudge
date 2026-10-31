@@ -41,6 +41,12 @@ func validRestoreSchema(schema string) bool {
 
 func restoreSchemaFixture(t *testing.T) (*fixture, *pgx.ConnConfig, string) {
 	t.Helper()
+	config, schema := privateRestoreSchema(t)
+	return setupAuth(t), config, schema
+}
+
+func privateRestoreSchema(t *testing.T) (*pgx.ConnConfig, string) {
+	t.Helper()
 	config := privateRestoreConfig(t)
 	schema := "oj_restore_" + strings.ToLower(rand.Text())
 	if !validRestoreSchema(schema) {
@@ -65,8 +71,7 @@ func restoreSchemaFixture(t *testing.T) (*fixture, *pgx.ConnConfig, string) {
 	// The driver emits a keyword DSN. The schema is an internal safe identifier;
 	// no DSN or credential is sent to subprocess logs or interpolated into a shell.
 	t.Setenv("OJ_SESSION_DATABASE_URL", os.Getenv("OJ_SESSION_DATABASE_URL")+" search_path="+schema)
-	f := setupAuth(t)
-	return f, config, schema
+	return config, schema
 }
 
 func schemaSnapshotCommand(t *testing.T, config *pgx.ConnConfig, schema, archive string, restore bool) {
