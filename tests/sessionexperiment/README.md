@@ -4,6 +4,25 @@
 
 实验目标：用 SCS 和真实 Redis 验证普通会话三名额，以及跨 API 撤销后迟到保存不能复活会话；后续子项补齐独立 API 进程与进程重启证据，并新增 PostgreSQL 普通会话的有限对照。所有适配器和 HTTP 处理器只存在于 `_test.go`，不接入应用，不提供可部署登录入口。独立 Go 模块避免把实验依赖引入正式程序；根目录 `go test ./...` **不会执行本模块**。后端 CI 已单独纳入本模块静态分析，真实存储行为测试仍按下文专项执行。
 
+## 同等普通会话合同的 Store 成本采样
+
+独立 [成本驱动](../../scripts/test-session-cost.py)直接调用两组测试 Store 客户端，两个方案都启用账号与全局恢复守卫。它不包含 HTTP、SCS 中间件或真实密码登录，不替换下文的完整 race 行为专项。只使用已存在的本地工具链/Redis 镜像和只读模块缓存，不联网下载；结果、镜像 ID、共同 fixture 哈希、逐次延迟和资源原始快照写入指定的新 JSON 文件，拒绝覆盖已有输出。
+
+```sh
+python3 scripts/test-session-cost.py --module-cache /private/tmp/oj-session-mod \
+  --output /private/tmp/oj-session-cost-new.json
+```
+
+工具链默认 `oj-toolchain:local`，可显式指定已存在的 `--toolchain-image`；Redis 默认沿用行为专项固定镜像。默认 3 轮、每样本 2048 次请求，可用 `--rounds 1 --operations 8` 小样本联调（不得当作正式测量）。七个预先固定场景为分散 32 主体和单热点主体的读取/重复保存/满额拒绝，另加每请求独立预置账号的准入；后者主体数等于请求数。两方案执行顺序逐轮交替，原始样本不以平均 p99 代替。成功与预期拒绝分别统计，任何非预期 stale、缺失、载荷不符、超时或结果未知都使样本失效并保留失败输出。
+
+所有样本共用一次离线生成的相同原始 Gob、主体序列、1024 字节填充、2 小时空闲期限及生成时刻后 11 小时绝对期限。11 小时为整个有界采样留余量，仍受既有普通会话不超过 12 小时约束，不改产品期限。64 次预热使用独立 namespace，预热记录保留并计入全容器/表大小。每样本新建私有 internal 网络、空 PostgreSQL 和 loadgen；Redis 方案另加 Redis。两组 PostgreSQL 池各最多 4 连接，Redis 方案额外两池各最多 8，统一在途请求上限 8；这不是相同总进程/总连接或总资源配置。每个存储容器 1 CPU/512 MiB，loadgen 1 CPU/1 GiB。
+
+Go 先核验固定私有 TCP 目标和专用 nonce 标记。PG 的 trust 规则只匹配 `postgres` 数据库、`oj_cost` 角色与 `samenet`；它依赖容器仅接入本次私有网络，不是真实身份认证，不能复用为生产配置。测量启动/完成/验证通过固定握手，输出不能选择容器、文件或命令。资源结束采样早于语义校验/后续统计；Go 延迟、外围 cgroup CPU 窗口和操作前后 WAL LSN 窗口分别记录，不能用外围 CPU 除以内层 Go elapsed 伪算利用率。cgroup memory.current/anon/file/shmem 是容器口径，memory.peak 包含容器整个生命周期及初始化，不是进程 RSS 或精确计时段峰值；端点观测含等待和命令开销，短样本尤其噪声大。接口依据见 [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html)。
+
+PostgreSQL 使用临时 tmpfs，记录实际 fsync/synchronous_commit/full_page_writes 等配置和 cluster-wide WAL 插入量；即使设置开启，也不代表真实磁盘持久化成本。Redis 关闭 SAVE/AOF，记录实际配置和键内存估计；两者不是等价持久化合同。WAL 位置不是已刷盘位置，内存估计不是容器总内存，分别见 [PostgreSQL 管理函数](https://www.postgresql.org/docs/14/functions-admin.html)和 [Redis MEMORY USAGE](https://redis.io/docs/latest/commands/memory-usage/)。Redis 方案的 PostgreSQL 授权访问一并保留，不能只报 Redis 进程成本。
+
+每请求 3 秒、Go 入口 90 秒、单样本（含初始化和观测）120 秒、离线构建 300 秒、整体 1800 秒，Docker 调用按剩余预算收紧；失败清理另有有界操作，因此不是整个驱动的严格墙钟 SLA。正常完成、异常及可捕获中断定向清理已创建成功的资源 ID；SIGKILL 后自动恢复未验收，JSON 中 owner label 仅用于定位本次资源，不能批量清理其他项目。完整基准与决策见交付日志；生产负载、SLA、真实持久盘、长期容量、恢复/撤权后残留成本和完整 AC23/M0 仍待验收，未部署。
+
 ## PostgreSQL 绝对过期凭据有界清理（2026-10-31）
 
 `codex/session-postgres-cleanup` 从成功 fetch 后的 `0337f1e` 创建，仅补会话存储比较的显式清理子项。[清理 helper](postgres_cleanup_store_test.go)仍只在 `_test.go`：每批参数必须为 1—128 条，派生最多 3 秒上下文，失败回滚沿用独立 1 秒清理上下文，不承诺完整调用墙钟 SLA；事务内只取一次数据库 `clock_timestamp()` 毫秒截止值。按 namespace、绝对 deadline、token 排序，MATERIALIZED CTE 内 `FOR UPDATE SKIP LOCKED` 锁定到期凭据，再按相同 namespace/截止值删除；不反向获取主体、账号或门禁锁。只在成功提交后返回数量，提交回执失败仍是结果未知，返回 0 不证明回滚。没有后台调度或管理接口。
