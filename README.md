@@ -10,10 +10,11 @@
 - [密码记录核心](docs/architecture/session-design.md#71-同步密码记录核心)与[主体凭据](docs/architecture/session-design.md#72-主体凭据持久化与条件更新)：显式策略的 Argon2id、PostgreSQL 状态与条件更新，未开放账号 HTTP 或正式登录。
 - [密码计算准入](docs/architecture/session-design.md#73-密码计算准入)：创建/验证共享实例额度、有限排队及取消后保留实际计算名额；多 API 总预算与生产容量仍待验证。
 - [密码验证用例](docs/architecture/session-design.md#74-密码验证与条件升级用例)：同密码升级、双版本条件更新与末次状态复核；结果只描述时点，不发放会话或资源权限。
-- [主体状态协调](docs/architecture/session-design.md#75-会话存储操作的主体状态协调)：共享行锁协调受信会话存储操作与账号变更；回调失败仍可能有外部效果，正式 Redis/恢复与会话协议待接入。
+- [主体状态协调](docs/architecture/session-design.md#75-会话存储操作的主体状态协调)：共享行锁协调受信会话存储操作与账号变更；回调失败仍可能有外部效果，恢复编排待接入。
 - [全局恢复状态](docs/architecture/session-design.md#76-正式全局恢复状态与双层协调)：schema 4 默认闭门、显式换代次与条件开门，同事务全局→主体双层检查；没有自动 Redis 清理或恢复编排。
 - [个人邮箱映射](docs/architecture/session-design.md#77-个人邮箱映射与原子初始化)：schema 5 原子初始化凭据与未验证邮箱，整址忽略大小写、保留原始显示；当前限 ASCII 裸址，无公开注册或邮件验证接口。
-- [个人凭据认证路径](docs/architecture/session-design.md#78-个人凭据到会话门禁的认证路径)：在邮箱查找与密码验证前捕获恢复代次，携带同一代次进入最终双层门禁；只接受信存储回调，尚未发放 Redis 会话或 Cookie。
+- [个人凭据认证路径](docs/architecture/session-design.md#78-个人凭据到会话门禁的认证路径)：在邮箱查找与密码验证前捕获恢复代次，携带同一代次进入最终双层门禁。
+- [普通 Redis 会话协议](docs/architecture/session-design.md#79-普通-redis-会话协议)：正式核心的三名额、固定创建尝试、结果确认、续期和墓碑撤销；真实 Redis/PostgreSQL 专项接入集成 CI，尚无 HTTP 登录或 Cookie。
 
 ## 运行环境
 
@@ -63,6 +64,16 @@ python3 scripts/test-compose.py
 后端包含格式、vet、golangci-lint、race、全部命令构建；前端包含 lint、类型、测试、构建。Go 静态分析覆盖主模块、sandbox 标签测试源码及独立会话实验模块，并先验证检测器能接受正确样例、拒绝四类错误；不执行 sandbox 选手代码。规则与边界见[代码质量检查](docs/code-quality.md)。SQL 生成检查在容器内比较生成前后内容；数据库检查使用容器内临时 PostgreSQL 14、迁移、并发租约与两个真实 API/mTLS 控制端。工具镜像不挂载 Docker socket，不访问用户数据库。测试每次运行，不以构建缓存替代测试。
 
 测试专用会话 Store 成本采样使用 `python3 scripts/test-session-cost.py --module-cache <已校验缓存目录> --output <新JSON路径>`，只用已有本地镜像，独立私有 TCP 容器中比较启用相同授权守卫的路径；不是 API 跑分或容量准入。配置、采样窗口和持久化差异见[会话实验](tests/sessionexperiment/README.md#同等普通会话合同的-store-成本采样)，正确性仍执行原行为/race专项。
+
+普通 Redis 协议专项（只执行合成账号数据）：
+
+```sh
+docker --context desktop-linux build --target toolchain --tag oj-session-protocol-toolchain .
+docker --context desktop-linux pull redis:7.2.17@sha256:0312984fbfeb2ff1d4382ecef45b50e7d65478a6a58cf12ce28d6de7a4142e45
+python3 -B scripts/test-session-protocol.py --toolchain-image oj-session-protocol-toolchain --build-cache-volume ''
+```
+
+脚本只使用已有本地镜像，检查 Linux/架构，创建带唯一 owner 标签的私有 internal 网络、Redis 和工具链容器；无宿主发布端口或 Docker socket。临时 PostgreSQL 只开放容器内 Unix socket，复制源码白名单并运行真实存储/race 专项。结束检查退出码/OOM 并仅清理自有容器和网络，保留缓存卷。可用 `--redis-image` 指定已核验本地镜像、`--module-cache` 挂载既有只读模块缓存；合并缓存后执行 `go mod verify`，测试使用 `-mod=readonly`。Linux CI 使用 `--context default`；此专项不是完整 AC23、容量或部署验收。
 
 真实 Worker 专项（当前固定 macOS arm64、Docker Desktop LinuxKit 7.0.14）：
 

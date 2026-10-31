@@ -68,6 +68,11 @@ jobs:
         run: |
           docker compose run --build --rm toolchain sqlc
           docker compose run --rm toolchain db
+      - name: Check ordinary sessions with real Redis and PostgreSQL
+        run: |
+          docker build --target toolchain --tag oj-session-protocol-toolchain .
+          docker pull redis:7.2.17@sha256:0312984fbfeb2ff1d4382ecef45b50e7d65478a6a58cf12ce28d6de7a4142e45
+          python3 -B scripts/test-session-protocol.py --context default --toolchain-image oj-session-protocol-toolchain --build-cache-volume ''
 
   frontend-tests:
     needs: governance
