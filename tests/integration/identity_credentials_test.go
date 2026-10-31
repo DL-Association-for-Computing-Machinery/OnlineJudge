@@ -143,6 +143,21 @@ func testIdentityCredentials(t *testing.T, ctx context.Context, a, b *pgxpool.Po
 				t.Fatal("invalid revision disabled")
 			}
 		}
+		for _, rev := range []identity.Revision{
+			{CredentialVersion: row.CredentialVersion + 1, AuthGeneration: row.AuthGeneration},
+			{CredentialVersion: row.CredentialVersion, AuthGeneration: row.AuthGeneration + 1},
+		} {
+			if _, err := first.RehashCAS(ctx, row.ID, rev, r); err != identity.ErrConflict {
+				t.Fatal("rehash did not compare both positive revisions")
+			}
+			if _, err := second.ReplacePasswordCAS(ctx, row.ID, rev, r); err != identity.ErrConflict {
+				t.Fatal("replacement did not compare both positive revisions")
+			}
+			if _, err := second.DisableCAS(ctx, row.ID, rev); err != identity.ErrConflict {
+				t.Fatal("disable did not compare both positive revisions")
+			}
+			sameIdentity(t, ctx, first, row)
+		}
 		for _, mutate := range []func(*password.Record){
 			func(r *password.Record) { r.FormatVersion++ }, func(r *password.Record) { r.ArgonVersion++ },
 			func(r *password.Record) { r.Parameters.MemoryKiB = ^uint32(0) },

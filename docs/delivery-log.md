@@ -8,7 +8,9 @@
 
 首轮新实现的核心/race 与两包生成差异通过，真实集成编译发现旧迁移测试改起点后在同一作用域重复 `:=`；修为赋值后原样重验，真实 PG/67 子例和双 API 进程通过（17.643 秒）。Astra 完整审查要求独立覆盖仅 auth 过期的替换，以及匹配 65 字节载荷的存储上限，均补齐，并验证 64 字节合法回滚。新增无密码 `State` 查询，使新调用方在旧策略退役后可取版本并尝试撤权；仍由 CAS 防读取后的竞争。首轮和中间成功日志分别为 `/private/tmp/oj-identity-credentials-test-20261031.log`、`/private/tmp/oj-identity-credentials-test2-20261031.log`。
 
-最终冻结 Go/SQL 源码，在已有 `oj-go-quality-toolchain`、Linux arm64/Go1.26.10、禁网 2 CPU/2 GiB、既有 Go 缓存下串行执行：`go mod verify`、核心 `go test -race -count=1 -v ./internal/identity/...`（11 项/47 子例，1.375 秒）、两包 `toolchain sqlc`、完整 `toolchain backend` 和 `toolchain db` 全部通过。主模块、sandbox 标签和独立会话模块静态各 0 问题，检测器正负夹具仍有效，全部主模块 race 及四入口构建通过；真实 PG 集成 67 子例（身份新增 19，14.590 秒），双 API 进程的 24 并发、重启/回执与旧材料保持通过。未执行 sandbox 选手程序或完整 Redis 会话专项；日志 `/private/tmp/oj-identity-credentials-final-20261031.log`。
+首个完整候选冻结 Go/SQL 源码，在已有 `oj-go-quality-toolchain`、Linux arm64/Go1.26.10、禁网 2 CPU/2 GiB、既有 Go 缓存下串行执行：`go mod verify`、核心 `go test -race -count=1 -v ./internal/identity/...`（11 项/47 子例，1.375 秒）、两包 `toolchain sqlc`、完整 `toolchain backend` 和 `toolchain db` 全部通过。主模块、sandbox 标签和独立会话模块静态各 0 问题，检测器正负夹具仍有效，全部主模块 race 及四入口构建通过；真实 PG 集成 67 子例（身份新增 19，14.590 秒），双 API 进程的 24 并发、重启/回执与旧材料保持通过。未执行 sandbox 选手程序或完整 Redis 会话专项；日志 `/private/tmp/oj-identity-credentials-final-20261031.log`。
+
+主代理最终自审再补三个更新方法各自“仅凭据版本不匹配/仅认证代次不匹配”的六种断言：主体仍启用、版本均正且记录有效，每次拒绝后完整行不变，不能被输入校验或启用门禁提前挡住。Astra 对该增量复核有效；未改产品 Go/SQL、原用例或时限。两包生成差异、原完整 PG/race 67 子例及 Python 双 API 再次通过（16.585 秒），最终日志 `/private/tmp/oj-identity-credentials-revision-guards-20261031.log`；PR 以新增测试提交后的最新 head CI 为准，不复用首个 head 的检查。
 
 新用例包括双 Store/独立池的两重哈希及两替换仅一赢家、完整最终行核对，`pg_blocking_pids` 观测实际等待后由持锁夹具直接改变权威行并提交、旧 Store 写入拒绝（不声称双方均经 Store），以及调用方取消、AFTER UPDATE P0001 整条回滚、bigint 上界、策略退役后的无密码撤权。迁移保留旧源码/任务/租约，空库回退升级、并发初始化提交时 Down 拒绝/回滚时允许，以及原版本 1/2 的提交竞态断言保留。原 future-schema 夹具改为 4，不降低兼容性拒绝要求。
 
