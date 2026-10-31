@@ -13,7 +13,7 @@ import (
 // A test-only alternative, never a fallback or second authority for Redis.
 // Registry rows serialize admission and revocation for one subject. Retaining
 // token rows until the absolute deadline prevents late saves from recreating
-// revoked or idle-expired sessions. This experiment does not run a cleanup job.
+// revoked or idle-expired sessions. Cleanup is explicit, never a background job.
 type postgresSessionStore struct {
 	pool      *pgxpool.Pool
 	namespace string
@@ -36,6 +36,8 @@ CREATE TABLE IF NOT EXISTS session_pg_store_fixture (
 );
 CREATE INDEX IF NOT EXISTS session_pg_active_fixture
  ON session_pg_store_fixture(namespace,subject,expiry_ms) WHERE data IS NOT NULL;
+CREATE INDEX IF NOT EXISTS session_pg_cleanup_fixture
+ ON session_pg_store_fixture(namespace,deadline_ms,token);
 `
 
 func ordinaryPayload(b []byte) (string, int64, error) {

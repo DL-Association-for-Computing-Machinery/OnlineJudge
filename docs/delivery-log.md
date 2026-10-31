@@ -1,5 +1,17 @@
 # 工程交付记录
 
+## 2026-10-31：PostgreSQL 绝对过期凭据有界清理
+
+从成功 fetch 后的 `0337f1e` 创建独立 `codex/session-postgres-cleanup`。唯一目标为测试专用普通会话存储的显式过期清理：批量 1—128、派生 3 秒上下文、事务内一次数据库截止值、按 namespace/绝对期限/token 排序的带锁 CTE 删除；只取凭据锁，不反向取主体/账号/门禁锁。原有空闲过期或撤销墓碑在绝对期限内继续保留，所有主体/账号/门禁行均不删除。无新依赖、生产代码、迁移、后台调度或 Redis 替换，回退测试 helper/用例及测试 schema 索引即可。
+
+基线为前一已交付主线的完整 100 项行为/race、272 子例通过（89.684 秒）；本项不再重复无变化基线。首轮 Docker vet/typecheck 发现新增表锁测试把 pgx 的 uint32 PID 传给既有 int32 helper，未运行行为专项；按既有模式改为 `SELECT pg_backend_pid()` 扫描 int32，失败日志保留于 `/private/tmp/oj-pg-cleanup-test.log` 和 `/private/tmp/oj-pg-cleanup-lint.log`。修正后按原命令、120 秒 Go 聚合 watchdog/300 秒测试容器预算及全部业务断言完整重验：Docker Desktop Linux arm64、Go1.26.10、私有 Redis7.2.4/PostgreSQL14.24，`python3 scripts/test-session.py --toolchain-image oj-go-quality-toolchain:latest --module-cache /private/tmp/oj-session-mod` 的 106 项行为/race、274 子例全部通过（96.894 秒，另一个既有子进程专用入口跳过）；格式、模块校验和 vet 随驱动通过。完整日志 `/private/tmp/oj-pg-cleanup-final.log`。
+
+新增六项覆盖精确毫秒边界/有界多批/非法批量与 namespace 隔离、两清理事务交错提交或回滚、原 Gob 成功加载后真实到期→物理删除→两池迟到保存拒绝/新三名额、AFTER DELETE 语句级 P0001 整批回滚，以及 `pg_blocking_pids` 观察真实表锁等待后按调用方 1 秒期限失败/恢复。四表全部列快照只允许预期凭据删除。真实 `EXPLAIN ANALYZE` DELETE 在目标 4000 条未来＋32 条到期、其他 namespace 2000 条到期的合成数据上使用 `(namespace,deadline_ms,token)` 索引范围，实际上限 16 条、剩余 4016，随后回滚恢复 4032；共享夹具索引 1204224 字节，并非该 namespace 的独立容量或生产负载测量。
+
+后续静态检查要求边界测试的 if 链改为等价 switch（QF1003），保留失败日志 `/private/tmp/oj-pg-cleanup-static.log`；修正后模块静态 0 问题（`/private/tmp/oj-pg-cleanup-static-final.log`），最终源码完整 106 项行为/race、274 子例再次通过（96.111 秒，`/private/tmp/oj-pg-cleanup-verified.log`），原格式/校验/vet及预算/断言全部保留。221 文件仓库策略与完整暂存 diff 通过，专项、M0 及会话设计状态入口已同步；最新 head CI 在交付时另行回读。
+
+Astra 设计、完整实现及文档复核无阻断，主代理已自审并实测，AI 不代替人工审批。批量上限不保证固定扫描量，返回 0/不足上限可能仍有被锁到期记录；DELETE 不代表立即回收磁盘空间。索引增加写入维护和存储，主体行仍累积；数据库时钟回拨、VACUUM/膨胀、长期容量、自动调度、完整存储性能比较、正式账号与 AC23/M0 未验收，未部署。提交回执失败仍未知。
+
 ## 2026-10-31：PostgreSQL 会话与账号同库旧备份恢复
 
 前置PR #56已按head`b76b809`的九项CI全部成功后合并为`40970b200a5a90b2a948a2268eec0773180834a4`。本次正常合入最新主线，保留两份交付记录解决唯一文档冲突，不重写历史；恢复Go源码与原审查`6fc175d`一致。按实际120秒聚合watchdog的原驱动完整100项行为/race、272子例通过（89.684秒，新增恢复用例0.64秒），格式/模块校验/vet随驱动执行；模块静态已零问题，218文件仓库策略及完整diff通过。最终head CI及合并状态另行回读，不沿用原head检查。
