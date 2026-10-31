@@ -1,5 +1,21 @@
 # 工程交付记录
 
+## 2026-10-31：个人凭据到双层门禁的实际认证路径
+
+成功 fetch `b0f3ff0` 后建立独立 `codex/personal-credential-gate`；对应主线后续 CI `41183290661` 已成功。新增 PersonalCredentialGate，以一个组合存储 owner 和共享 BoundedHasher 内部构造既有 CredentialVerifier，避免误拼不同数据库的相同主体/版本；实现者仍须保证全部方法同一权威数据库/命名空间，接口不作物理证明。
+
+执行路径固定为有效 open 恢复代次的一次读取→邮箱定位主体→真实密码验证/条件同密码升级/末次 State→以原代次和验证返回的完整 Revision 进入原同事务 global→account 门禁→至多一次受信存储回调。不使用邮箱查找所得旧 Revision，不补读/重贴恢复代次、不缓存候选、不重试或补偿。closed/missing 在查找和 KDF 前拒绝，坏元数据失败关闭；错误分类与未知副作用保持，合同归[会话设计](architecture/session-design.md#78-个人凭据到会话门禁的认证路径)。没有 SQL/迁移/索引/依赖变化，schema 5 保持；回退停用依赖流程后移除用例，不回退数据库。
+
+已有 Docker 工具链 `oj-go-quality-toolchain`、Linux arm64/Go1.26.10、禁网 2 CPU/2 GiB 与既有缓存执行验证，无安装/下载、Docker socket 或选手程序。编辑前 `go mod verify` 与身份/密码/postgres race 基线通过（1.121/3.483/1.106 秒，`/private/tmp/oj-personal-credential-gate-baseline-20261031.log`）。首轮新增六项认证单元及原身份包/race、两包 sqlc、真实 PG/race **158 子条目（认证路径 20，17.694 秒）**及原双 API 通过（`test-20261031.log`；身份 1.112、密码 3.590、postgres 1.062 秒）。下列短日志名均用 `/private/tmp/oj-personal-credential-gate-` 前缀。
+
+完整 backend 曾因 QF1008 要求去掉提升字段选择器而失败（`backend-20261031.log`）；将 `personal.Revision.Valid()` 等价改为 `personal.Valid()`，独立 ID/Email 校验保留，未修改断言/时限。最终原命令串行 `go mod verify && sh scripts/toolchain.sh backend && sh scripts/toolchain.sh sqlc && sh scripts/toolchain.sh db` 全通过（`verified-20261031.log`）：格式/vet、检测器正负夹具、三范围静态各 0、全部 race 与四入口构建；身份 1.126、密码 3.589、postgres 1.095 秒。生成内容不变，真实 PG/race **158 子条目（新 20，16.479 秒）**及双 API 进程通过。全部 Go/SQL 输入在运行期间冻结。
+
+真实双池实证：有效恢复状态在邮箱/KDF 前捕获；大小写邮箱定位同主体，缺失/错密码/禁用/空密码不执行回调。恢复分别发生在查找后、真实 KDF 完成但 Verifier 末次 State 前、Verifier 成功后最终 guard 前，账号两版本不变，旧路径仍拒绝且恢复读取只一次；重新调用才重启完整验证。Legacy 升级后使用新 credential_version；升级前/升级后/最终门禁前×改密/禁用六交错均拒绝，保留变更后的完整凭据。屏障位于应用 Store 调用边界，不冒充数据库锁等待。
+
+真实升级提交后 wrapper 注入回执错误并取消，保留 ErrStore/Canceled、无回调/重试/补偿；不声称真实网络注入。回调实际持有双层锁时 BeginRecovery 通过 pg_blocking_pids 确认等待，释放回调后才换代次；回调错误和回调内取消保持 ErrGuardedOperation/原 cause，Error 不回显私有内容，回调前取消则不执行。整个用例期限由调用方提供，合作取消和连接丢失仍不能撤销外部效果；不是 Redis/HTTP 或跨存储原子事务。
+
+281 文件仓库策略、完整差异/新增文件与链接核验通过；README、设计、计划及 M0 同步。Astra 设计、完整实现/测试、等价增量及规范复核无阻断，主代理实测，AI 不替代人工审批；最新 head CI/讨论/合并条件交付时另行回读。EmailVerified 不冒充密码或训练权限；本次不决定未验证用户完整会话策略，不发 Cookie、不给训练授权。下一独立目标接入正式 Redis 协议；名额/条件写入/结果确认、HTTP/CSRF、邮件/令牌/权限、恢复编排、多 API 总预算/生产参数/100人容量及完整 AC01/23/24/25/M0 仍待交付，未部署。
+
 ## 2026-10-31：个人邮箱映射与原子初始化
 
 成功 fetch `4bdf06b` 后建立独立 `codex/personal-email-identity`。落实用户确认的整邮箱忽略大小写、保留原始显示且不合并 dot/plus 别名；仅邮箱登录、昵称允许重复及比赛校内发号保持。新增私有字段 Email 值对象，复用锁定 Go 1.26.10 标准库 net/mail，再限制 ASCII 裸址、未引号 local、DNS 式标签与长度；没有隐式 trim、DNS/MX 或投递证明。Unicode 输入/IDNA 转换与 SMTPUTF8 暂不支持，不据此取消后续国际化需求。
