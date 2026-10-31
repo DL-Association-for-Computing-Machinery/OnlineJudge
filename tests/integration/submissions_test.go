@@ -130,6 +130,7 @@ func TestAcceptance(t *testing.T) {
 	defer secondPool.Close()
 	secondStore, err := postgres.New(secondPool, experiment.Version, experiment.Manifest())
 	must(t, err)
+	t.Run("identity credentials", func(t *testing.T) { testIdentityCredentials(t, ctx, pool, secondPool, provider, store) })
 	servers := []*httptest.Server{
 		httptest.NewServer(httpapi.NewHandler(httpapi.Experiment{Store: store, Token: token})),
 		httptest.NewServer(httpapi.NewHandler(httpapi.Experiment{Store: secondStore, Token: token})),
@@ -346,7 +347,7 @@ func TestAcceptance(t *testing.T) {
 	t.Run("controller startup recovery", func(t *testing.T) { testControllerRecovery(t, ctx, pool, store) })
 	t.Run("authenticated worker protocol", func(t *testing.T) { testWorkerAPI(t, ctx, pool, store) })
 	t.Run("schema ahead rejected", func(t *testing.T) {
-		_, err := conn.Exec(`INSERT INTO goose_db_version(version_id,is_applied) VALUES(3,true)`)
+		_, err := conn.Exec(`INSERT INTO goose_db_version(version_id,is_applied) VALUES(4,true)`)
 		must(t, err)
 		if db.CheckSchema(ctx, pool) == nil {
 			t.Fatal("future schema accepted")

@@ -1,5 +1,21 @@
 # 工程交付记录
 
+## 2026-10-31：主体凭据持久化与条件更新
+
+从成功 fetch 的 `effafc3` 建立独立 `codex/identity-credentials`，目标为身份模块的一行主体/密码状态与 CAS，不提前决定邮箱/登录名、注册和角色规则。迁移 3 新增 `identity_credentials`，sqlc/pgx 提供 Current 初始化、支持 Legacy 的完整读取、无密码状态读取、重哈希/替换/禁用的两版本条件更新。单 SQL 自动提交，不在锁内计算密码；版本按操作递增且不回绕、无删除/复用或覆盖初始化接口。数据库错误保留内部原因而不回显失败记录，写结果错误仍可能未知，不自动重新读取或重试。具体合同、信任与授权边界见[会话设计](architecture/session-design.md#72-主体凭据持久化与条件更新)。
+
+开工基线首次在集成测试动态 `go build` 控制端期间编辑源文件，导致 schema 2 的测试进程混入要求 3 的新二进制，控制端未就绪；该基线无效，日志 `/private/tmp/oj-identity-credentials-baseline-20261031.log` 保留。随后用精确 `effafc3` Git archive 只读快照重跑：先遇嵌套 tmpfs 挂载点不存在，再因自建构建 tmpfs 缺 exec 而仅 Python 阶段失败；均未改产品/测试断言。补空挂载点并仅为本次可信构建输出指定 exec 后，原完整 48 子例与双 API 子进程基线成功，日志 `/private/tmp/oj-identity-credentials-baseline-frozen3-20261031.log`；早期 frozen/frozen2 日志保留，不追认为完整通过。
+
+首轮新实现的核心/race 与两包生成差异通过，真实集成编译发现旧迁移测试改起点后在同一作用域重复 `:=`；修为赋值后原样重验，真实 PG/67 子例和双 API 进程通过（17.643 秒）。Astra 完整审查要求独立覆盖仅 auth 过期的替换，以及匹配 65 字节载荷的存储上限，均补齐，并验证 64 字节合法回滚。新增无密码 `State` 查询，使新调用方在旧策略退役后可取版本并尝试撤权；仍由 CAS 防读取后的竞争。首轮和中间成功日志分别为 `/private/tmp/oj-identity-credentials-test-20261031.log`、`/private/tmp/oj-identity-credentials-test2-20261031.log`。
+
+最终冻结 Go/SQL 源码，在已有 `oj-go-quality-toolchain`、Linux arm64/Go1.26.10、禁网 2 CPU/2 GiB、既有 Go 缓存下串行执行：`go mod verify`、核心 `go test -race -count=1 -v ./internal/identity/...`（11 项/47 子例，1.375 秒）、两包 `toolchain sqlc`、完整 `toolchain backend` 和 `toolchain db` 全部通过。主模块、sandbox 标签和独立会话模块静态各 0 问题，检测器正负夹具仍有效，全部主模块 race 及四入口构建通过；真实 PG 集成 67 子例（身份新增 19，14.590 秒），双 API 进程的 24 并发、重启/回执与旧材料保持通过。未执行 sandbox 选手程序或完整 Redis 会话专项；日志 `/private/tmp/oj-identity-credentials-final-20261031.log`。
+
+新用例包括双 Store/独立池的两重哈希及两替换仅一赢家、完整最终行核对，`pg_blocking_pids` 观测实际等待后由持锁夹具直接改变权威行并提交、旧 Store 写入拒绝（不声称双方均经 Store），以及调用方取消、AFTER UPDATE P0001 整条回滚、bigint 上界、策略退役后的无密码撤权。迁移保留旧源码/任务/租约，空库回退升级、并发初始化提交时 Down 拒绝/回滚时允许，以及原版本 1/2 的提交竞态断言保留。原 future-schema 夹具改为 4，不降低兼容性拒绝要求。
+
+合成 2000 条填充下，真实读取与版本条件 UPDATE 等价形状自然使用 `identity_credentials_pkey`，未关闭 seqscan；样本主键索引 139264 字节。不按版本字段额外加索引；主键提供点查，但增加每行存储和写入维护，样本不作资源/容量结论。sqlc 两包共读权威 migrations，查询目录隔离，`omit_unused_structs` 只移除原生成包未引用的 33 行模型，未移动业务职责；锁定 [sqlc v1.31.1 配置](https://docs.sqlc.dev/en/v1.31.1/reference/config.html)已核对，生成差异检查覆盖两包，无依赖升级。额外在容器私有副本故意添加身份生成文件漂移，原检查按预期退出 1 且差异定位新包，负向探针通过（`/private/tmp/oj-identity-credentials-sqlc-negative-20261031.log`），未改仓库源文件或 CI 断言。
+
+Astra 设计、完整实现和状态/测试增量复核无阻断；文档复核已校正回退范围及旧编码待办，主代理负责实测和完整差异审查，AI 不代替人工审批。治理 60 项通过（37.808 秒，`/private/tmp/oj-identity-credentials-governance-20261031.log`），243 文件仓库策略及完整差异通过。新 API 精确要求 schema 3，旧 API 不接受 3；启用需停止旧实例后独立迁移，不承诺滚动兼容。Down 仅 identity_credentials 与 submissions 均空时可用，保留已有主体或提交时须前滚修复，跨迁移 DownTo 不具全局原子性。初始化/重哈希/替换均为受信持久化原语，不能代替操作人授权、同密码核验、重置令牌消费、审计、发会话前复核或 Redis 撤权。100 同时在线不代表计算峰值；生产参数、计算准入、真实账号及完整 M0 未验收，未部署。
+
 ## 2026-10-31：正式 P3 同步密码记录核心
 
 PR #58 合并为 `d10c9e3` 并完成证据归档后，成功 fetch 最新主线，从同一 SHA 建立独立 `codex/password-record-core`。目标是无数据库、网络和持久化副作用的密码记录核心；Create 仍读取系统密码学随机源。账号数据库、编码入口、登录/会话、邮件和计算准入不在本次实现范围，不把有限核心当作 AC24 全项通过。

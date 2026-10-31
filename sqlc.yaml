@@ -2,10 +2,24 @@ version: '2'
 sql:
   - engine: postgresql
     schema: db/migrations
-    queries: db/queries
+    queries:
+      - db/queries/materials.sql
+      - db/queries/leases.sql
+      - db/queries/submissions.sql
     gen:
       go:
         package: submissiondb
         out: internal/submission/postgres/submissiondb
         sql_package: pgx/v5
         emit_empty_slices: true
+        omit_unused_structs: true
+  - engine: postgresql
+    schema: db/migrations
+    queries: db/queries/identity
+    gen:
+      go:
+        package: identitydb
+        out: internal/identity/postgres/identitydb
+        sql_package: pgx/v5
+        emit_empty_slices: true
+        omit_unused_structs: true

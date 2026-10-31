@@ -8,20 +8,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type JudgeAttempt struct {
-	Token              string
-	SubmissionID       string
-	JudgeGeneration    int64
-	RecoveryGeneration int64
-	AttemptNumber      int32
-	NodeID             string
-	CredentialVersion  int64
-	LeaseUntil         pgtype.Timestamptz
-	State              string
-	ResultSha256       pgtype.Text
-	ResultPayload      []byte
-}
-
 type JudgeTask struct {
 	SubmissionID       string
 	State              string
@@ -29,25 +15,6 @@ type JudgeTask struct {
 	RecoveryGeneration int64
 	AttemptNumber      int32
 	Verdict            pgtype.Text
-}
-
-type Submission struct {
-	ID              string
-	SubjectID       string
-	ContextID       string
-	IdempotencyKey  string
-	RequestSha256   string
-	MaterialVersion string
-	ManifestSha256  string
-	Language        string
-	SourceCode      string
-	CreatedAt       pgtype.Timestamptz
-}
-
-type SubmissionMaterial struct {
-	VersionID      string
-	ManifestSha256 string
-	Manifest       []byte
 }
 
 type WorkerNode struct {
