@@ -1,5 +1,15 @@
 # 工程交付记录
 
+## 2026-10-31：前端 minimatch 公告阻断修复
+
+会话恢复门禁 PR #53 的 head `f7c8e28` 在 CI41160776238/security job124417655807 命中 GHSA-g3hv-75wg-m249：现有开发依赖minimatch10.2.6受影响，公告修复版11.0.1。主线未改依赖也可能因公告更新失败；本次保留PR53草稿，不重试或忽略漏洞。从成功fetch后的`0c3ade7`独立创建`codex/minimatch-advisory`，仅为三个精确父版本配置override到11.0.1，自动生成锁文件并把配置加入Docker安装COPY；直接依赖版本不变，新增必要间接依赖@isaacs/nonrecursive-glob-match1.0.3。
+
+官方公告、上游修复commit77a0f5c4b80bdc641c3c930a1d9edf5ad2db57f8及changelog、npm元数据核验：11版移除makeRe/regexp/AST，set元素变Matcher，不能默认为兼容。实际三个调用方用match/partial/pattern/minimatch，未发现依赖被移除API；包许可BlueOak-1.0.0，minimatch引擎18||20||>=22，新间接包未声明Node引擎，解包体积分别420517/380111字节。npm确认11.0.1已发布（上游对应release API404，不以release缺失推断未发布）；未放宽TLS、完整性、供应链策略或审计门禁。
+
+Docker Desktop Linux arm64、锁定Node24.19.0/pnpm11.25.0，实际`docker build --target frontend-source`的`pnpm install --frozen-lockfile --ignore-scripts`成功；该镜像内`pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm audit --audit-level low`通过：7项lint自检、6项Vitest、构建成功，audit无已知漏洞。新增lintFiles('.')按文件系统独立枚举全部TS/TSX及vite配置，并检查dist/coverage/node_modules忽略；原镜像和修复镜像分别`pnpm exec eslint . --format json`，实际7文件集合完全相同且零错误/警告，不将跳过文件当作通过。
+
+临时探针`/private/tmp/oj-minimatch-probe.mjs`在禁网/512MiB/单CPU/10秒容器内，沿三个真实父包路径分别解析minimatch/package.json确认11.0.1、CJS/ESM匹配、partial目录匹配，以及上游30段`**/../a/b`/optimizationLevel2/braceExpandMax64扩张恰64与两个正常匹配，全部通过；该探针未加入持续CI，断言摘要供复现。完整diff/空白及214文件仓库策略通过；治理46项通过（首轮因沙箱禁止本机bind失败，按原命令获工具审批后9.847s通过，未改断言）。Astra设计及完整差异复核无阻断，主代理实测自审，不代替独立人工审批。兼容结论限当前三个父版本和项目用法，不宣称所有平台或任意glob兼容；未来父版本支持补丁时撤去对应override并复验。无业务代码/数据库迁移/部署；PR53须在本独立目标交付后正常合入主线重验。
+
 ## 2026-10-31：PostgreSQL 账号撤权与同事务会话变更
 
 PR #51 修复续接：原 head `cf12d06` 的 CI 失败来自固定 Go 工具安装的校验站 HTTP/2 错误，尚未进入应用检查；独立修复 PR #52 已合并为 `39eae1a`。本次将该主线正常合入原任务分支，保留双方交付记录解决唯一文档冲突，不重写已推送历史。合入后重新执行真实 Redis/PostgreSQL 专项，91 项行为/race、261 子例通过（72.507 秒）；完整离线后端格式/vet、检测器正反例、三个范围静态分析、根模块 race 及四命令构建通过，仓库策略 213 文件通过。首次后端验证误挂载仅会话模块缓存，在测试前失败，改用质量镜像完整缓存后通过。Astra 对完整账号差异和文档定向复核无阻断，CodeRabbit CLI 本机未安装，未运行新的 CodeRabbit 审查；最新 head 的远端 CI 与合并结果以 PR/知识库回读为准。
