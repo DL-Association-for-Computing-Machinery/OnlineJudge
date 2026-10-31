@@ -2,6 +2,12 @@
 
 本页集中维护当前 M0 进度和证据入口。下方“迁移前”之后的记录均为 2026-10-25—28 历史快照，保留原材料版本和命令，仅供追溯；当前执行方式见 [README](../README.md)。完整 M0 尚未验收，未部署。
 
+## 正式 P3 普通 Redis 会话协议（2026-10-31）
+
+新增正式 `internal/session/redisstore`：同一 Authority 的真实个人凭据验证和 PG 双层门禁内执行三名额/固定 Attempt/结果确认/墓碑协议。普通空闲 2h、绝对 12h，Read 不续期，Touch 不越原期限，Rehash 不撤销现有会话；Retry 不覆盖 Touch 后的记录。冻结后所有失败仍保留原尝试，独立 Check 才返回 Credential；缺记录不证明未写入。完整合同、客户端预算、Redis 运行前提与回退归[会话设计](architecture/session-design.md#79-普通-redis-会话协议)。无 HTTP、Cookie/CSRF、跨请求尝试持久化、权限或自动恢复，schema 5 不变。
+
+隔离专项在真实 Redis 7.2.17 与临时 PostgreSQL/双池/双客户端验证并发名额、期限、13 类坏记录/索引、同密码升级/改密/禁用/恢复、int64 精度、OOM/实际 PAUSE 超时、真实锁等待取消及 PG backend 丢失后的迟到效果。未知回执/TIME 为客户端 hook，部分写入为测试脚本 put 后主动报错；不冒充自然网络/内存故障。源码快照、实际结果与 CI 归[交付记录](delivery-log.md)，命令归 README。专项接入既有 integration CI，失败阻断原必需门禁；不代表完整 AC23/M0、容量或生产版本准入，未部署。
+
 ## 正式 P3 个人凭据到双层门禁的认证路径（2026-10-31）
 
 PersonalCredentialGate 从同一组合存储 owner 内部构造既有密码验证器，固定一次 open 恢复状态捕获→邮箱定位→真实验证/条件升级→原恢复代次和验证后 Revision 进入最终双层门禁。closed/missing 在查找/KDF 前拒绝，不重贴代次、重试或补偿已提交升级；回调仅是受信存储接入点，EmailVerified 不授予训练权限。接口、整条路径期限及未知外部效果限制归[会话设计](architecture/session-design.md#78-个人凭据到会话门禁的认证路径)。

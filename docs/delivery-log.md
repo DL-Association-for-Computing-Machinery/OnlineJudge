@@ -1,5 +1,23 @@
 # 工程交付记录
 
+## 2026-10-31：正式普通 Redis 会话协议
+
+成功 fetch 主线 `7df407c2511342c950f1ee277f6d3d8974b44841` 后建立独立 `codex/ordinary-redis-protocol`，前置 PR67 主线 CI `41184439096` 已成功。新增 `internal/session/redisstore`，以同一权威 Authority 复用个人凭据认证及 PG 全局→主体门禁，落实普通空闲 2h/绝对 12h/三名额、冻结尝试的 Retry/Check/Abandon、Read/Touch/Revoke。合同归[会话设计](architecture/session-design.md#79-普通-redis-会话协议)。无 SQL/迁移变化，schema 5 保持；HTTP/SCS、Cookie/CSRF、跨请求持久化、权限、其他 profile/轮换及恢复编排不在本轮交付。
+
+Create 冻结前失败无 Attempt，冻结后未知 Redis 或 PG Commit 失败均保留原 Attempt，独立 Check 成功才发 Credential。Retry 不回退已 Touch 的 idle，Check 原始回执冲突而当前 Read 可有效；Rehash 后 Read/Touch 保持，原尝试仍可 Abandon。令牌仅摘要入 Redis，十二字段/TTL/索引/长度/版本/绑定一致性校验；绑定摘要不作 MAC 或旧快照防护。启动核验 Redis 7.2.x standalone primary/noeviction，不证明后续配置或恢复安全。
+
+锁定沿用实验的 go-redis/v9 v9.23.0（BSD-2-Clause），必须的 cpuid/v2 2.3.0→2.4.0 及其他传递依赖入锁。核对固定版本选项/许可证/依赖及历史 SETINFO 公告，显式池/超时、单次拨号、禁止隐式命令重试/额外 pipeline 池/维护通知并禁 SETINFO；完整漏洞扫描继续由 CI 执行。首轮既有 Redis Stack 镜像只运行裸 redis-server 7.2.4、无模块，属于隔离合成夹具；后续固定官方 Redis 7.2.17 多架构摘要 `0312984fbfeb2ff1d4382ecef45b50e7d65478a6a58cf12ce28d6de7a4142e45`，不把旧测试镜像当生产准入。
+
+实际故障证据：双客户端并发恰好三名额、释放后重试原候选；Read/Touch/到期实际 Redis TIME 与 TTL、13 类坏字段/索引、账号变化/新恢复分组及 int64 上界。实际 PG 行锁等待取消前不写 Redis；定位后重新校验；精确 backend 终止后 Touch 的 Redis 迟到写仍可发生但不能返回 View；Create 已写 Redis、PG Commit 失败仍返 Attempt，后续 Check/Abandon 可确认清理。真实 CLIENT PAUSE 产生有界未知结果；已 OOM 的只读 Check/Read 成功、写脚本拒绝。丢回执/TIME 由客户端 hook 注入，部分写入由测试脚本 put 后主动 error，均不声称自然故障。TIME 失败 nil Attempt，之前实际提交的 Legacy 升级仍保留。
+
+编排脚本仅创建带唯一 owner 标签的私有 internal 网络、自有 Redis/工具链容器，PG 仅 Unix socket；无发布端口、Docker socket 或选手执行。源码白名单复制、只读模块缓存合并后校验、readonly/race、显式仓库配置的 integration-tag 静态检查、退出/OOM 与 owner 清理都保留；不输出 PG 日志中的凭据记录。CI 在原 sqlc/PG 后执行同一专项，保持全部原检查和时限；README、计划、M0 与 CI/CD 同步。
+
+本地实测使用现有 `oj-go-quality-toolchain`、Go1.26.10/Linux arm64、2 CPU/2 GiB 与既有校验缓存；除上述固定 Redis 镜像外不下载新工具或依赖。前置普通协议真实/race 10.119s；补三故障用例后 Redis7.2.17 专项 39 个 PASS 条目（含父条目）9.839s。完整 backend 首次指出测试 Close 未检查；integration-tag 静态补查指出 Close/Rollback，均修正资源清理，不弱化断言；Astra 指出临时目录需显式静态配置，已修复并加入治理断言。早期治理因沙箱端口限制 1 fail/1 error，获准原样执行后 64 项通过，最终完整治理 64 项 52.744s、新增4项回归及 actionlint 通过。
+
+最终验证：`backend2-20261031.log` 中 go mod verify、完整 backend（格式/vet/检测器正负夹具/三范围静态各0/全部race/四入口构建）、两包 sqlc 无差异、真实 PG **158 子条目（20.255s）**及双 API 进程全通过，普通协议单元/race 1.107s。`integration5-20261031.log` 中仓库配置 integration-tag 静态0、真实 Redis7.2.17/PG/race **39 个 PASS 条目（含父条目，10.031s）**及正常退出/OOM/自有资源清理通过。日志统一前缀 `/private/tmp/oj-ordinary-redis-protocol-`；`verified-inputs.json` 记录核心/测试/脚本/锁文件/静态配置共22输入的 SHA-256，运行后逐字节哈希一致，模块校验不冒充源码快照。301 文件仓库策略、完整差异/新增文件及链接核验通过；无部署或生产容量结论。
+
+Astra 完整核心/脚本/测试/编排及增量/文档定向复核无产品阻断，主代理实际测试和完整差异审查；AI 不冒充人工审批。最新 head CI/讨论/合并条件在交付时独立回读。100 同时在线已确认，峰值/延迟、生产参数、多 API 总预算和容量仍未验收；完整 AC01/23/24/25/M0 未通过，未部署。用户要求做完这一轮即停止，本轮收尾后不自动推进下一目标。
+
 ## 2026-10-31：个人凭据到双层门禁的实际认证路径
 
 成功 fetch `b0f3ff0` 后建立独立 `codex/personal-credential-gate`；对应主线后续 CI `41183290661` 已成功。新增 PersonalCredentialGate，以一个组合存储 owner 和共享 BoundedHasher 内部构造既有 CredentialVerifier，避免误拼不同数据库的相同主体/版本；实现者仍须保证全部方法同一权威数据库/命名空间，接口不作物理证明。
