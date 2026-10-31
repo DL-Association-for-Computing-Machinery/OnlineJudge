@@ -20,3 +20,10 @@ type IdentityCredential struct {
 	Salt              []byte
 	Digest            []byte
 }
+
+type IdentityPersonalEmail struct {
+	SubjectID     string
+	EmailKey      string
+	OriginalEmail string
+	EmailVerified bool
+}

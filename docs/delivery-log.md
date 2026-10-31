@@ -1,5 +1,23 @@
 # 工程交付记录
 
+## 2026-10-31：个人邮箱映射与原子初始化
+
+成功 fetch `4bdf06b` 后建立独立 `codex/personal-email-identity`。落实用户确认的整邮箱忽略大小写、保留原始显示且不合并 dot/plus 别名；仅邮箱登录、昵称允许重复及比赛校内发号保持。新增私有字段 Email 值对象，复用锁定 Go 1.26.10 标准库 net/mail，再限制 ASCII 裸址、未引号 local、DNS 式标签与长度；没有隐式 trim、DNS/MX 或投递证明。Unicode 输入/IDNA 转换与 SMTPUTF8 暂不支持，不据此取消后续国际化需求。
+
+迁移 5 增加主体 PK/FK、C 排序规则邮箱唯一键、原始显示与默认 false 的验证事实。InitializePersonal 在同一 READ COMMITTED 事务插入凭据与映射，KDF 在调用前完成，已有主体/邮箱均冲突且不覆盖、不为通用/比赛主体附加邮箱；第二步失败回滚凭据。两个读取只返回无密码时点元数据，Enabled 与 EmailVerified 分离。接口、未知提交结果及未完成注册/权限边界归[会话设计](architecture/session-design.md#77-个人邮箱映射与原子初始化)。无新模块依赖、公开 HTTP、邮箱验证或训练授权接口。
+
+当前 API 精确要求 schema 5，旧要求 4 的二进制拒绝 5，无滚动混跑；停旧实例、独立迁移后启动新版，未部署。迁移不回填旧邮箱；Down 5 按凭据→邮箱固定锁序取得排他锁，仅邮箱表为空可移除，保留通用凭据/恢复/提交，任意非空映射（包括禁用/未验证）须前滚。多个 Down 不整体原子；旧迁移 4 用例固定版本 4 防止新保护掩盖旧断言，future fixture 为 6，迁移 3 原断言保持。
+
+验证使用已有 `oj-go-quality-toolchain`、Linux arm64/Go1.26.10、禁网 2 CPU/2 GiB 与既有缓存，无安装/下载/socket/选手程序。起初 shell 参数被镜像既有 ENTRYPOINT 拒绝，两次均未运行测试；显式 `--entrypoint sh` 后未改主线的只读身份基线通过（身份 1.063 秒、密码 3.427 秒、postgres 1.026 秒），生成后旧包 race 通过。日志 `/private/tmp/oj-personal-email-identity-baseline2-20261031.log`、`generated2-20261031.log`；下列短名均用此前缀。
+
+首轮 sqlc/邮箱单元与真实 PG/race 中，迁移、并发、故障回滚及计划通过，但新增运行用例复用既有恢复测试的 810/811/812 主体而失败（`test-20261031.log`，18.400 秒）；将其隔离为 1810—1851，没有修改产品行为或放宽断言。下一完整后端检查发现 QF1001，等价 switch 修复（`final-20261031.log`）。所有 Go/SQL 在检查运行期间冻结。
+
+Astra 复核指出 Down 原先邮箱先锁，而 DROP 外键删除父表 RI triggers 时还会请求凭据排他锁，与初始化反序；[PG14 官方实现](https://raw.githubusercontent.com/postgres/postgres/REL_14_STABLE/src/backend/commands/trigger.c)的 RemoveTriggerById 确认该锁。新增真实初始化第一写后的屏障，先复现 `40P01`（`lock-repro-20261031.log`，15.900 秒，失败中断清理导致依赖/后续旧迁移保护错误亦保留）。修正为凭据→邮箱后，第一写/第二写后×提交/回滚四因果用例均通过：实际观察 Down 等待再释放，提交必须正常保护 `P0001`、不能把死锁算成功；回滚无孤儿。该结论针对初始化路径，不代表任意并发查询/DDL 无死锁，仍须维护期迁移。
+
+最终原命令串行 `go mod verify && sh scripts/toolchain.sh backend && sh scripts/toolchain.sh sqlc && sh scripts/toolchain.sh db` 全部通过（`verified-20261031.log`）：格式/vet、检测器正负夹具、三个实际静态范围各 0 问题、全部 race 与四入口构建；身份 1.046 秒、密码 3.431 秒、postgres 1.077 秒。两包生成一致，真实 PG/race **138 子条目（邮箱相关 17，17.919 秒）**及原双 API 进程通过。覆盖原始显示/全址大小写、dot/plus 独立、两池竞争邮箱/主体且无孤儿、第二 INSERT 故障回滚、禁用/验证分离、数据库约束和坏元数据拒绝、4→5/空表回退旧数据不变、非空表拒绝；254 字节接受/255 拒绝边界亦通过。2000 合成映射的自然 EXPLAIN/BUFFERS 命中邮箱唯一/主体 PK 与凭据 PK，两个邮箱索引合计 311296 字节，不作生产负载/容量结论。
+
+275 文件仓库策略及完整差异/新增文件审查通过，需求、README、设计、计划与 M0 同步。Astra 设计、完整实现/测试与锁序增量/文档复核无阻断，主代理实测，AI 不替代人工审批；最新 head CI、讨论和合并条件交付时另行回读。没有真实 Redis/邮件/Worker 专项复跑；未验证邮箱占位保留/清理、公开重复申请恢复/重发、防枚举、令牌/发信任务、激活/权限、登录捕获/会话协议、多 API 总预算/生产参数/100人容量和完整 AC01/23/24/25/M0 仍待交付，未部署。
+
 ## 2026-10-31：全局恢复状态与双层会话协调
 
 成功 fetch `ee51db0` 后建立独立 `codex/session-recovery-authority`。迁移 4 增加唯一闭门占位行：generation 只允许空串或合法 32 位小写 hex，空串不能启用。RecoveryState 只读；Begin 在锁外生成随机 128 位代次，仅更新既有行并闭门；Finish 以预期代次和 closed 为条件开门，缺失行不自动补建。新 Session 两入口严格校验代次，在同一 READ COMMITTED 事务先全局 FOR SHARE、再主体 FOR SHARE，保留新候选两代次/已有会话仅认证代次的区别。旧纯主体入口签名保留，纠正文档为不可单独用于正式会话。接口及未知副作用合同归[会话设计](architecture/session-design.md#76-正式全局恢复状态与双层协调)。

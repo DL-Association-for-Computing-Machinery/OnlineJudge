@@ -56,6 +56,7 @@ func testIdentityCredentials(t *testing.T, ctx context.Context, a, b *pgxpool.Po
 	must(t, err)
 	second, err := identitypg.New(b, h)
 	must(t, err)
+	t.Run("personal email migrations", func(t *testing.T) { testPersonalEmailMigrations(t, ctx, a, b, provider, submissions, h) })
 	t.Run("migration and retained data", func(t *testing.T) { testIdentityMigrations(t, ctx, a, provider, submissions, h) })
 	t.Run("session recovery migrations", func(t *testing.T) { testSessionRecoveryMigrations(t, ctx, a, b, provider, submissions, h) })
 	t.Run("round trip and guarded lifecycle", func(t *testing.T) {

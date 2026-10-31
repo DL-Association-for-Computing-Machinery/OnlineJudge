@@ -134,6 +134,7 @@ func TestAcceptance(t *testing.T) {
 	t.Run("credential verification", func(t *testing.T) { testCredentialVerification(t, ctx, pool, secondPool) })
 	t.Run("identity authority", func(t *testing.T) { testIdentityAuthority(t, ctx, pool, secondPool) })
 	t.Run("session recovery authority", func(t *testing.T) { testSessionRecoveryAuthority(t, ctx, pool, secondPool) })
+	t.Run("personal email identities", func(t *testing.T) { testPersonalEmails(t, ctx, pool, secondPool) })
 	servers := []*httptest.Server{
 		httptest.NewServer(httpapi.NewHandler(httpapi.Experiment{Store: store, Token: token})),
 		httptest.NewServer(httpapi.NewHandler(httpapi.Experiment{Store: secondStore, Token: token})),
@@ -350,7 +351,7 @@ func TestAcceptance(t *testing.T) {
 	t.Run("controller startup recovery", func(t *testing.T) { testControllerRecovery(t, ctx, pool, store) })
 	t.Run("authenticated worker protocol", func(t *testing.T) { testWorkerAPI(t, ctx, pool, store) })
 	t.Run("schema ahead rejected", func(t *testing.T) {
-		_, err := conn.Exec(`INSERT INTO goose_db_version(version_id,is_applied) VALUES(5,true)`)
+		_, err := conn.Exec(`INSERT INTO goose_db_version(version_id,is_applied) VALUES(6,true)`)
 		must(t, err)
 		if db.CheckSchema(ctx, pool) == nil {
 			t.Fatal("future schema accepted")

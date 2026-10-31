@@ -40,7 +40,7 @@ func CheckSchema(ctx context.Context, pool *pgxpool.Pool) error {
 	if err := pool.QueryRow(ctx, `SELECT version_id FROM goose_db_version ORDER BY id DESC LIMIT 1`).Scan(&version); err != nil {
 		return errors.New("database schema unavailable; run the independent migration step")
 	}
-	if version != 4 {
+	if version != 5 {
 		return errors.New("incompatible database schema")
 	}
 	return nil
