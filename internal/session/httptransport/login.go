@@ -35,11 +35,23 @@ func NewLogin(login *redisstore.Login, config Config) (http.Handler, error) {
 // NewLimitedLogin requires an admission-configured manager. NewLogin also
 // automatically enforces admission whenever its manager is configured; callers
 // cannot accidentally bypass that configuration by using the older constructor.
-func NewLimitedLogin(login *redisstore.Login, config Config) (http.Handler, error) {
+// An optional password capability must belong to this exact Login. Omission
+// preserves the original six endpoints and grants no password-change route.
+func NewLimitedLogin(login *redisstore.Login, config Config, change ...*redisstore.PasswordChange) (http.Handler, error) {
 	if !login.RateLimited() {
 		return nil, redisstore.ErrInvalid
 	}
-	return NewLogin(login, config)
+	if len(change) > 1 || (len(change) == 1 && !change[0].ForLogin(login)) {
+		return nil, redisstore.ErrInvalid
+	}
+	base, err := NewLogin(login, config)
+	if err != nil {
+		return nil, err
+	}
+	if len(change) == 1 {
+		base.(*handler).passwordChange = change[0]
+	}
+	return base, nil
 }
 
 func (h *handler) serveLogin(w http.ResponseWriter, r *http.Request, source netip.Addr) {

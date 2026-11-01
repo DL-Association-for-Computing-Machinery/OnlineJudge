@@ -19,6 +19,8 @@ type Config struct {
 	DatabaseAuth, RedisAuth    string
 	TLS, DatabaseTLS, RedisTLS Material
 	Server                     ServerConfig
+	PasswordBlocklistFile      string
+	MinimumPasswordCharacters  int
 }
 
 // Material names explicit TLS files; Parse validates only their lexical paths.

@@ -4,15 +4,16 @@ import (
 	"net/http"
 )
 
-// NewSessionHandler delegates exactly the six session paths, for every method,
-// without rewriting transport metadata or enabling experiment routes. Health and
-// unknown routes retain the bootstrap router. No slash/prefix redirects apply.
+// NewSessionHandler delegates the six session paths and the optional account
+// password path for every method, without rewriting transport metadata. Runtime
+// capability controls the account route. Health/unknown paths retain bootstrap;
+// no slash/prefix redirects or experiment routes are added.
 func NewSessionHandler(session http.Handler) http.Handler {
 	bootstrap := NewHandler()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/v1/session", "/api/v1/session/activity", "/api/v1/session/logout",
-			"/api/v1/session/login/begin", "/api/v1/session/login/complete", "/api/v1/session/login/abandon":
+			"/api/v1/session/login/begin", "/api/v1/session/login/complete", "/api/v1/session/login/abandon", "/api/v1/account/password":
 			if session == nil {
 				sessionProblem(w)
 				return

@@ -30,6 +30,7 @@ type Store struct {
 	client    *redis.Client
 	authority Authority
 	gate      *identity.PersonalCredentialGate
+	work      *password.BoundedHasher
 	namespace string
 	policy    Policy
 	random    io.Reader
@@ -76,7 +77,7 @@ func New(ctx context.Context, client *redis.Client, authority Authority, work *p
 	if config["maxmemory-policy"] != "noeviction" {
 		return nil, ErrInvalid
 	}
-	return &Store{client: client, authority: authority, gate: gate, namespace: namespace, policy: policy, random: rand.Reader}, nil
+	return &Store{client: client, authority: authority, gate: gate, work: work, namespace: namespace, policy: policy, random: rand.Reader}, nil
 }
 
 func (s *Store) check(ctx context.Context) error {

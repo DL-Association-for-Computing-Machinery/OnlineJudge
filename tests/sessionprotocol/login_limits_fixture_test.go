@@ -45,8 +45,12 @@ type rateRecord struct {
 }
 
 func rateSnapshot(t *testing.T, f *fixture, ns string) map[string]rateRecord {
+	return admissionSnapshot(t, f, "oj-login-limit:"+ns+":*")
+}
+
+func admissionSnapshot(t *testing.T, f *fixture, pattern string) map[string]rateRecord {
 	t.Helper()
-	keys, err := f.control.Keys(f.ctx, "oj-login-limit:"+ns+":*").Result()
+	keys, err := f.control.Keys(f.ctx, pattern).Result()
 	must(t, err)
 	result := make(map[string]rateRecord, len(keys))
 	for _, k := range keys {

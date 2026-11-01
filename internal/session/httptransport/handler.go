@@ -33,12 +33,13 @@ type Config struct {
 }
 
 type handler struct {
-	store      Store
-	config     Config
-	host       string
-	protection http.CrossOriginProtection
-	login      *redisstore.Login
-	proxy      *proxyTrust
+	store          Store
+	config         Config
+	host           string
+	protection     http.CrossOriginProtection
+	login          *redisstore.Login
+	proxy          *proxyTrust
+	passwordChange *redisstore.PasswordChange
 }
 
 // New builds three explicit endpoints without registering any application route:
@@ -83,6 +84,12 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		method = http.MethodPost
+	case "/api/v1/account/password":
+		if h.passwordChange == nil {
+			problem(w, 404, "NOT_FOUND", "接口不存在")
+			return
+		}
+		method = http.MethodPost
 	default:
 		problem(w, http.StatusNotFound, "NOT_FOUND", "接口不存在")
 		return
@@ -94,6 +101,10 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if method == http.MethodPost && !h.sameOrigin(r) {
 		problem(w, http.StatusForbidden, "ORIGIN_REJECTED", "请求来源不允许")
+		return
+	}
+	if r.URL.Path == "/api/v1/account/password" {
+		h.servePasswordChange(w, r, source)
 		return
 	}
 	if h.login != nil && (r.URL.Path == "/api/v1/session/login/begin" || r.URL.Path == "/api/v1/session/login/complete" || r.URL.Path == "/api/v1/session/login/abandon") {

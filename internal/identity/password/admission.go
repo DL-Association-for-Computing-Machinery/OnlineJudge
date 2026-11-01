@@ -34,6 +34,16 @@ type BoundedHasher struct {
 	wait    time.Duration
 }
 
+// MaxPasswordBytes exposes the immutable input budget for compatible account
+// policy assembly, without exposing the underlying hasher or calculation slots.
+// Zero/uninitialized instances return zero and cannot enable an account flow.
+func (h *BoundedHasher) MaxPasswordBytes() uint32 {
+	if h == nil || h.hasher == nil || h.slots == nil || h.waiting == nil {
+		return 0
+	}
+	return h.hasher.limits.MaxPasswordBytes
+}
+
 // NewBounded requires an initialized Hasher and explicit admission limits.
 // MaxInFlight must be positive; MaxWaiting zero disables queuing. An enabled
 // queue requires positive MaxQueueWait. No limit receives a default.

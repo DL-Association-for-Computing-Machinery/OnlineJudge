@@ -77,6 +77,14 @@ type Config struct {
 	HTTP                        httptransport.Config
 	Mode                        Mode
 	Proxy                       httptransport.ProxyConfig
+	PasswordChange              *PasswordChangeConfig
+}
+
+// PasswordChangeConfig explicitly enables authenticated changes. Nil preserves
+// the six-route session-only contract; enabled limits/rules receive no defaults.
+type PasswordChangeConfig struct {
+	Limits     redisstore.PasswordChangeLimits
+	Acceptance *password.Acceptance
 }
 
 func (Config) String() string     { return "[redacted session runtime configuration]" }
@@ -113,6 +121,9 @@ func cloneTLS(mode Security, config *tls.Config) (*tls.Config, error) {
 func (c Config) validate() (*password.Hasher, *password.BoundedHasher, error) {
 	if c.StartupTimeout <= 0 || c.StartupTimeout > time.Minute || c.SecretsFile == "" || c.HTTP.Validate() != nil ||
 		redisstore.ValidateSetup(c.Namespace, redisstore.OrdinaryPolicy(), c.HTTP.Origin, c.LoginWindow, c.LoginLimits) != nil {
+		return nil, nil, ErrConfig
+	}
+	if change := c.PasswordChange; change != nil && (change.Limits.Validate() != nil || change.Acceptance.MinimumCharacters() < redisstore.MinimumNewPasswordCharacters || change.Acceptance.MaxBytes() != c.PasswordLimits.MaxPasswordBytes) {
 		return nil, nil, ErrConfig
 	}
 	if (c.Mode == DirectTLS && len(c.Proxy.CertificateSHA256) != 0) ||

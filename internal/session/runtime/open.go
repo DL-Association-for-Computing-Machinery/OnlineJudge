@@ -90,10 +90,18 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 		return nil, startupFailure(startup)
 	}
 	var handler http.Handler
+	var change []*redisstore.PasswordChange
+	if c.PasswordChange != nil {
+		capability, err := redisstore.NewPasswordChange(startup, login, secrets, c.PasswordChange.Limits, c.PasswordChange.Acceptance)
+		if err != nil {
+			return nil, startupFailure(startup)
+		}
+		change = append(change, capability)
+	}
 	if c.Mode == DirectTLS {
-		handler, err = httptransport.NewLimitedLogin(login, c.HTTP)
+		handler, err = httptransport.NewLimitedLogin(login, c.HTTP, change...)
 	} else {
-		handler, err = httptransport.NewProxiedLimitedLogin(login, c.HTTP, c.Proxy)
+		handler, err = httptransport.NewProxiedLimitedLogin(login, c.HTTP, c.Proxy, change...)
 	}
 	if err != nil {
 		return nil, ErrConfig

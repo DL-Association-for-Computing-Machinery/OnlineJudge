@@ -24,7 +24,7 @@ type proxyTrust struct {
 // and exactly one forwarded client IP, public host and HTTPS scheme. It never
 // falls back to direct mode. Pins are copied; rotation requires a new handler.
 // This authenticates the proxy's assertions, not its public TLS configuration.
-func NewProxiedLimitedLogin(login *redisstore.Login, config Config, proxy ProxyConfig) (http.Handler, error) {
+func NewProxiedLimitedLogin(login *redisstore.Login, config Config, proxy ProxyConfig, change ...*redisstore.PasswordChange) (http.Handler, error) {
 	if err := proxy.Validate(); err != nil {
 		return nil, err
 	}
@@ -32,7 +32,7 @@ func NewProxiedLimitedLogin(login *redisstore.Login, config Config, proxy ProxyC
 	for _, pin := range proxy.CertificateSHA256 {
 		pins[pin] = struct{}{}
 	}
-	base, err := NewLimitedLogin(login, config)
+	base, err := NewLimitedLogin(login, config, change...)
 	if err != nil {
 		return nil, err
 	}

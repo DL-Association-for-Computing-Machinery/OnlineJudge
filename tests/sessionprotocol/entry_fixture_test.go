@@ -188,7 +188,7 @@ func entryPath(t *testing.T, path string) string {
 	return canonical
 }
 
-func entryConfig(t *testing.T, c sessionruntime.Config, ca *testpki.Authority, shutdown time.Duration) string {
+func entryConfig(t *testing.T, c sessionruntime.Config, ca *testpki.Authority, shutdown time.Duration, blocklist ...string) string {
 	t.Helper()
 	_, cert, key := ca.Issue(t, "", x509.ExtKeyUsageServerAuth, time.Now().Add(time.Hour))
 	parameter := func(p password.Parameters) map[string]any {
@@ -229,6 +229,15 @@ func entryConfig(t *testing.T, c sessionruntime.Config, ca *testpki.Authority, s
 		}
 		doc["proxy_fingerprints"] = pins
 		doc["tls"].(map[string]any)["ca_file"] = entryPath(t, ca.CAFile)
+	}
+	if c.PasswordChange != nil {
+		if len(blocklist) != 1 {
+			t.Fatal("enabled password change needs explicit rule file")
+		}
+		limits := c.PasswordChange.Limits
+		doc["password_change"] = map[string]any{"minimum_characters": c.PasswordChange.Acceptance.MinimumCharacters(), "blocklist_file": blocklist[0], "global": bucket(limits.Global), "source": bucket(limits.Source), "subject": bucket(limits.Subject)}
+	} else if len(blocklist) != 0 {
+		t.Fatal("rule file supplied without enabled capability")
 	}
 	body, err := json.Marshal(doc)
 	must(t, err)
