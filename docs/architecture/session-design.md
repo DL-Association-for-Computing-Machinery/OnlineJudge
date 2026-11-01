@@ -367,7 +367,7 @@ Config 显式给定 KDF 当前/旧完整 tuple、执行上限、准入人数/队
 
 DatabaseConfig 不接受任意 DSN/callback/备用端点：显式 Host/Port/Database/Username/Password/ApplicationName、连接数 1—1024、整毫秒 1ms—5s 调用期限、最大寿命/空闲时间/健康检查周期。用锁定 pgx v5.11.0 官方 parser 的无秘密常量模板建立合法配置，禁止它消费的 24 个非空 PG 环境设置（完整列表随源码维护），不修改进程环境；PGDATA/PG_MAJOR/PG_VERSION 等非连接镜像元数据不受此限制。模板显式禁用 TLS 文件/指定空 passfile，随后成组替换端点/身份/TLS 并清空 Fallbacks，防止残留明文降级；parser 仍可能 stat 默认路径，不加载其中隐含凭据/证书。受控 RuntimeParams 固定 public search_path、应用标签及显式 statement/lock/idle-in-transaction 期限；pool 最小/最小空闲连接为零，所有数量与时间上限冻结在配置。Redis 使用原显式预算/无重试 ClientConfig，不读取其他隐含设置。
 
-PG/Redis 分别显式选择 PrivateTransport 或 VerifiedTLS。前者要求无 TLS config，仅适用于已验证的受信私网/本地连接，本组件不自动证明网络私密；后者要求 MinVersion 至少 TLS1.2、明确 ServerName、非 InsecureSkipVerify，克隆 TLS 和 RootCAs，无明文 fallback。调用方仍须管理并保持 TLS backing material 不变。Config/DatabaseConfig 的值和指针 fmt/JSON 固定脱敏；公开启动错误为固定配置/密钥/不可用分类或 context 取消/期限，不暴露路径、凭据或 driver cause。typed Config 的原始字段仍是敏感数据，不交给通用日志或无关编码器。
+PG/Redis 分别显式选择 PrivateTransport 或 VerifiedTLS。前者要求无 TLS config，仅适用于已验证的受信私网/本地连接，本组件不自动证明网络私密；后者要求 MinVersion 至少 TLS1.2、明确 ServerName、非 InsecureSkipVerify，克隆 TLS 和 RootCAs，无明文 fallback。调用方仍须管理并保持 TLS backing material 不变。Config/DatabaseConfig 的值和指针支持已测试的 16 种合法值格式（含数值动词）及 JSON 固定脱敏；非法 `%w` 等 Go 诊断、反射和主动字段访问不在此保证内，原始 Config 禁止进入日志或无关编码器。公开启动错误为固定配置/密钥/不可用分类或 context 取消/期限，不暴露路径、凭据或 driver cause。
 
 Open 只读检查 schema 5、有效 open 恢复状态、原 Redis 7.2 standalone/primary/noeviction 条件及已存在且匹配的限流 marker；失败释放自有资源，不迁移、不初始化 marker、不 Begin/FinishRecovery、不轮换 key。成功描述启动时的观察，不证明持续可用、备份连续、生产参数或外部恢复隔离；每个请求仍执行原权威/限流门禁。
 

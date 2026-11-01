@@ -6,7 +6,7 @@
 
 typed Config 的 Open/ServeHTTP/Close 装配单一身份权威、共享 KDF 和严格限流，不迁移/修复/开门，全部客户端自有且失败释放；关闭拒绝新工作，实际 Handler 返回后才清资源。显式私网/验证 TLS、PG 环境/隐含凭据隔离、调用预算与排空合同见[会话设计](architecture/session-design.md#715-显式配置与运行时装配)。无默认 API/监听器/配置文件接线、依赖或 SQL/迁移变化。
 
-完整离线 backend 格式/vet/静态/race/四入口构建通过；真实 Redis7.2.17/临时 PG/race 专项 **142 个 PASS 条目（含父条目，装配 11，14.933 秒）**通过：双 Runtime/Legacy/Cookie/代理、marker/恢复不修复、错 schema/Redis 失败、实际表锁等待后的启动取消/期限、精确 backend 退出及 PG/Redis 连接释放。首轮 PG 镜像元数据误判、最终 unit/审查结果归[交付日志](delivery-log.md)。真实存储 TLS、浏览器/生产参数、默认入口、权限恢复与完整 M0 继续待验，未部署。
+完整离线 backend 格式/vet/静态/race/四入口构建通过；最终 Formatter 修复后真实 Redis7.2.17/临时 PG/race 专项 **142 个 PASS 条目（含父条目，装配 11，14.767 秒）**通过：双 Runtime/Legacy/Cookie/代理、marker/恢复不修复、错 schema/Redis 失败、实际表锁等待后的启动取消/期限、精确 backend 退出及 PG/Redis 连接释放。首轮 PG 镜像元数据误判、非常见 fmt 动词脱敏复现及最终 unit/审查结果归[交付日志](delivery-log.md)。真实存储 TLS、浏览器/生产参数、默认入口、权限恢复与完整 M0 继续待验，未部署。
 
 ## 正式 P3 单跳受信反代（2026-11-01）
 

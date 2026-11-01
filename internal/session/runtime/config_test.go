@@ -117,9 +117,9 @@ func TestTLSChoiceAndConfigRedaction(t *testing.T) {
 	}
 	c := validConfig()
 	for _, value := range []any{c, &c, c.Database, &c.Database} {
-		for _, format := range []string{"%v", "%+v", "%#v", "%s", "%q"} {
-			if strings.Contains(fmt.Sprintf(format, value), "synthetic-secret") {
-				t.Fatal("configuration formatting leaked credentials")
+		for _, format := range []string{"%v", "%+v", "%#v", "%s", "%q", "%d", "%f", "%x", "%X", "%b", "%o", "%e", "%c", "%U", "%t", "%020.3v"} {
+			if fmt.Sprintf(format, value) != value.(fmt.Stringer).String() {
+				t.Fatal("configuration formatting did not remain fully redacted")
 			}
 		}
 		body, err := json.Marshal(value)

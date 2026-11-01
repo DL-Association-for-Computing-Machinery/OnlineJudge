@@ -12,7 +12,9 @@
 
 真实 Redis7.2.17/临时 PG/race 完整专项 **142 个 PASS 条目（含父条目，装配 11，14.933 秒）**及集成静态 0、退出/OOM/自有资源清理通过（`protocol-final.log`）。新增双 Runtime/共享 Cookie jar/Legacy 升级/活动/退出/关闭后拒绝、真实 TLS→mTLS 代理；缺失/不匹配 marker 快照不变、closed recovery 代次/状态不变、错 schema/Redis失败均拒绝并释放PG；Redis CLIENT LIST 前后计数相同，不关闭其他 owner。ACCESS EXCLUSIVE 表锁实际阻塞新恢复读取，观察唯一 waiter 后取消或等待 startup deadline，确认精确 backend 消失后再释放 blocker，且无 marker 变化。短日志名均以前缀 `/private/tmp/oj-session-runtime-` 定位。
 
-主代理完整差异/新增文件与日志核对、345 文件策略/本地链接/空白检查通过；Astra 设计、核心、测试与文档最终复核无剩余实质阻断，AI 不替代人工审批。无依赖/SQL/迁移变化；默认命令/JSON配置/监听器、真实存储 TLS 握手、浏览器/生产代理、生产KDF/限流/多API总预算、账号权限/恢复与完整AC01/23/24/25/M0仍待验，未部署。
+PR #74 初始 head `86a2f1e` 等待 CI 期间，补充 `%d/%f` 负向探针实证 Stringer 被非常见动词绕过，输出断言失败但日志不输出合成凭据（`format-probe.log`）。为新 Config/DatabaseConfig 增加值接收者 Formatter，并对值/指针、16 种合法动词/flags 逐字断言固定脱敏文本；修复以正常追加提交交付，不沿用旧 head 绿灯。Astra 按锁定 fmt 源码指出非法 `%w` 诊断先于 Formatter 且可能反射原值，独立合成探针确实未保持固定脱敏（`format-invalid-probe.log`），故明确只保证合法受支持格式，禁止原配置日志/反射；该非法探针不充作支持保证。冻结修复后的完整 backend/全部静态/race/四入口重验通过（`backend-verified.log`，独立 runtime 1.032 秒、全后端 runtime 1.030 秒）；完整真实专项再次 **142 个 PASS 条目（装配 11，14.767 秒）**、静态 0/退出/自有清理通过（`protocol-verified.log`）。
+
+主代理完整差异/新增文件与日志核对、345 文件策略/本地链接/空白检查通过；Astra 设计、核心、测试与文档复核按最终差异执行，AI 不替代人工审批。无依赖/SQL/迁移变化；默认命令/JSON配置/监听器、真实存储 TLS 握手、浏览器/生产代理、生产KDF/限流/多API总预算、账号权限/恢复与完整AC01/23/24/25/M0仍待验，未部署。
 
 ## 2026-11-01：单跳代理的会话信任与来源额度
 

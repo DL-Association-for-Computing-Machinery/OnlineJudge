@@ -5,6 +5,7 @@ package runtime
 import (
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
@@ -51,6 +52,10 @@ type DatabaseConfig struct {
 
 func (DatabaseConfig) String() string     { return "[redacted session database configuration]" }
 func (c DatabaseConfig) GoString() string { return c.String() }
+
+// Format redacts supported value verbs, including numeric verbs which bypass
+// Stringer. Invalid format diagnostics and reflection are outside this contract.
+func (c DatabaseConfig) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte(c.String())) }
 func (c DatabaseConfig) MarshalJSON() ([]byte, error) {
 	return []byte(`"[redacted session database configuration]"`), nil
 }
@@ -76,6 +81,10 @@ type Config struct {
 
 func (Config) String() string     { return "[redacted session runtime configuration]" }
 func (c Config) GoString() string { return c.String() }
+
+// Format redacts supported value verbs, including numeric verbs which bypass
+// Stringer. Invalid format diagnostics and reflection are outside this contract.
+func (c Config) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte(c.String())) }
 func (c Config) MarshalJSON() ([]byte, error) {
 	return []byte(`"[redacted session runtime configuration]"`), nil
 }
