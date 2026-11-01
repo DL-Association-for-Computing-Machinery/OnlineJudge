@@ -425,7 +425,7 @@ SIGTERM/interrupt 后 listener 停止接收，网络 Shutdown 与 Runtime.Close 
 
 Store 保留原共享 work；`redisstore.NewPasswordChange` 仅从同一 Login/store 的 authority/work 组装 Read、独立限流、规则与 native Changer。HTTP 构造器的可选 capability 须绑定同一个 `*Login`，原构造器不隐式新增能力。Runtime 追踪整个同步调用及 KDF，沿用第 7.15/7.17 节的实际排空和共享总退出预算。
 
-新密码强度由独立不可变 `password.Acceptance` 处理，不改变既有密码的原始字节校验。网络工程初始下限为 **15 个 Unicode code point**，显式最低长度可提高至 64；字节上限沿同一个 Hasher，至少容纳最低字符数的四倍字节。此初值参考 [NIST 单因素密码建议](https://pages.nist.gov/800-63-4/sp800-63b.html)，不是本轮用户另行确认的完整产品规范，也不声称 NIST 整体合规。允许空格和 Unicode，不要求字符组合、不 trim/归一化/截断；字节完全相同的新旧密码在当前密码验证成功后拒绝。Unicode NFC 没有引入，既有记录和输入语义保持。
+新密码强度由独立不可变 `password.Acceptance` 处理，不改变既有密码的原始字节校验。用户于 2026-11-01 明确接受首期规则：至少 **15 个 Unicode code point**、允许空格、不强制字符组合，并拒绝常见弱密码；按原始字节处理，不 trim/归一化/截断。显式最低长度可提高至 64；字节上限沿同一个 Hasher，至少容纳最低字符数的四倍字节。规则参考 [NIST 单因素密码建议](https://pages.nist.gov/800-63-4/sp800-63b.html)，用户确认不等于 NIST 整体合规或生产字典已通过验收。字节完全相同的新旧密码在当前密码验证成功后拒绝；Unicode NFC 没有引入，既有记录和输入语义保持。
 
 `password_change` 可选配置全部显式：`minimum_characters`、绝对规范 `blocklist_file`、三个 `{count,window}` 对象 `global`/`source`/`subject`。规则文件仅有词法整数 `version: 1` 和非空 `sha256` 数组；每项为完整原始 UTF-8 密码的 64 字符小写十六进制 SHA-256，拒绝零摘要、重复、未知/null/坏 Unicode/尾随内容。文件 ≤1 MiB，纯机制最多 16,384 摘要，文件字节预算可能先达到；不保存用户密码，摘要表是已知弱密码的精确整串比较，不是密码存储/KDF、子串匹配或在线泄漏查询。读取使用第 7.17 节 public 文件检查；不热重载、不自动下载字典。正式字典的来源、许可、覆盖充分性与更新/运维仍须生产验收，测试仅用合成词条。
 

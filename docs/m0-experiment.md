@@ -12,7 +12,7 @@
 
 ## 正式 P3 已登录用户修改密码（2026-11-01）
 
-新增可选 `POST /api/v1/account/password`：首次真实会话的主体/认证/恢复 fence、当前密码校验、锁外新 Current 派生和恢复→条件 UPDATE 的单事务换代；成功推进两代次并清两个 Cookie，旧会话/候选拒绝，新密码重新登录。独立三维额度绑定完整弱密码规则指纹；同一 Login/authority/共享 KDF 装配，默认配置不启用，缺失/不匹配 marker 或规则失败关闭。工程初始 15 code point 下限不冒称用户确认或 NIST 整体合规；完整合同与限制见[会话设计](architecture/session-design.md#718-已登录用户修改密码)和[账号 OpenAPI](../api/account.openapi.yaml)。
+新增可选 `POST /api/v1/account/password`：首次真实会话的主体/认证/恢复 fence、当前密码校验、锁外新 Current 派生和恢复→条件 UPDATE 的单事务换代；成功推进两代次并清两个 Cookie，旧会话/候选拒绝，新密码重新登录。独立三维额度绑定完整弱密码规则指纹；同一 Login/authority/共享 KDF 装配，默认配置不启用，缺失/不匹配 marker 或规则失败关闭。PR #77 交付时的 15 code point 工程初值，已于 2026-11-01 获用户确认，连同空格/无组合要求、常见弱密码拒绝及原始字节规则；这不代表 NIST 整体合规或生产字典覆盖已验。完整合同与限制见[会话设计](architecture/session-design.md#718-已登录用户修改密码)和[账号 OpenAPI](../api/account.openapi.yaml)。
 
 Docker 完整 backend 格式/vet/实际静态/race/四命令构建通过；最终真实 Redis7.2.17/临时 PG/race **187 个 PASS（含父条目，改密相关 34、改密 HTTP 8，32.431 秒）**、集成静态/退出/自有清理通过。已覆盖双客户端竞争、仅 CV 改变/禁用/恢复竞态、真实锁等待/取消/未知回执、溢出与主键 EXPLAIN，以及双 API/真实 mTLS 代理的旧凭证撤销、拒绝无写入和来源防伪。最终增量敏感格式 unit/race 与静态、OpenAPI 严格 YAML/结构/本地引用、389 文件策略通过。无依赖/迁移/索引变化，schema 5 保持；生产字典/预算、浏览器、邮箱找回/注册、完整权限恢复及 AC01/23/24/25/M0 继续待验，未部署。失败及修正证据归[交付日志](delivery-log.md)。
 

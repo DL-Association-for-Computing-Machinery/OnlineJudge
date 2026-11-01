@@ -2,6 +2,8 @@
 
 账号面板使用现有 React、原生 fetch 与 CSS，在同一页面提供已有个人账号的登录、原尝试恢复、当前会话检查、主动续期、退出和可选改密。页面不提供注册、邮箱找回、角色或训练授权；未验证邮箱也不会因此获得提交权限。六个会话接口归[会话 OpenAPI](../api/session.openapi.yaml)，改密归[账号 OpenAPI](../api/account.openapi.yaml)。
 
+新密码至少 15 个 Unicode code point、允许空格、不强制字符组合、拒绝常见弱密码及不 trim/归一化/截断的原始字节规则，已于 2026-11-01 由用户确认，见[需求](requirements.md#登录会话)。现有实现无需改变；这不代替生产弱密码字典的来源、许可和覆盖验收。
+
 ## 入口与操作
 
 静态页面和 API 必须来自同一个 HTTPS Origin。前端仅请求固定相对路径，不接受 API 地址覆盖；API 仍独立检查实际 TLS、Host、同源证据、Cookie 及账号/恢复状态。受信单跳代理须按[会话设计](architecture/session-design.md#714-单跳受信反向代理)配置已验证且固定指纹的 mTLS。默认 Compose 和 Vite 开发代理仍为 HTTP/bootstrap，不能用于密码操作；页面会显示 HTTPS 要求并在序列化或 fetch 前阻止账号请求。现有连接检查只说明进程连通。

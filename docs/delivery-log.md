@@ -4,6 +4,8 @@
 
 前置 PR #77 最终 head `1de02f6` 经 CI `41314309363` 九项成功后 squash 为 `76ec453`；精确 head/合并树与祖先核验、主线快进及定向清理完成，知识事务 `oj-password-change-delivered-20261101` 五页字节回读一致/lint 0。重新成功 fetch 后从该主线建立独立 `codex/browser-account-lifecycle` worktree，唯一目标为已有账号的浏览器生命周期，不涉及注册/邮件、角色/资源权限、训练或部署。
 
+本轮等待 CI 时，用户回复接受推荐密码规则：至少 15 个 Unicode code point、允许空格、无强制组合、拒绝常见弱密码，并保持原始字节不 trim/归一化/截断。实现及现有测试原已遵循这套规则，本次仅同步需求、设计、README、浏览器说明与当前验收记录，保留 PR #77 当时尚待确认的历史；生产字典覆盖/许可仍须验证。
+
 沿用 React/fetch/CSS，不引入依赖或多页面框架。账号面板提供登录、原候选恢复、只读检查、显式续期、退出及可选改密；单飞覆盖 Begin→Complete→Read，本地代次隔离卸载/StrictMode 后的成功/错误/finally，密码不进入 React 状态或浏览器存储。请求在 HTTP 下先于序列化关闭，固定同源 URL/Cookie/no-store/无 referrer/禁止重定向，有限读取/严格操作响应/固定本地错误文案；不自动重试 POST。会话观察与操作回执分开，初访未登录为正常提示；完整合同归[浏览器账号](account-browser.md)，六会话路径补齐[OpenAPI](../api/session.openapi.yaml)。默认 Compose/Nginx/Vite 不启用会话 HTTPS，无依赖/SQL/迁移/生产参数变化，回退静态构建即可，已有账号和会话持久状态不撤销。
 
 Astra 设计/代码复核要求 redirect:error 防止 307/308 重发密码、改密 401/404 不推导普通会话退出、Complete204/后续 Read 分别表述、单飞在首个 await 前占位，均已落实。复核发现 Abandon 可撤销原候选已发放的会话，已修正成功与未知 Abandon 的状态/文案并补回归；首次 Read403/405 不再停留“检查中”。改密未知标记只在当前 controller 实例保留，文档明确不能跨刷新/标签防止重提，表单始终提示先重新登录核验；未宣称控制浏览器密码管理器。
@@ -22,7 +24,7 @@ Astra 指出 route 异步回调异常不一定由外层捕获，已统一 safeRo
 
 前置 PR #76 已 squash 为 `5b9f541` 并完成工作区/知识回读；成功 fetch 后从该主线建立独立 `codex/authenticated-password-change` worktree。唯一目标为可选已登录改密的完整命令/API 路径，不涉及 SMTP/注册、管理权限或部署。新增身份用例/专用 SQL 与 sqlc 生成、独立 Redis 三维额度/规则指纹、同 owner/KDF capability、严格 HTTP 输入及可选配置；原 schema 5、密码格式、会话协议、旧配置和 login marker 保持，无新依赖/索引/迁移。接口和边界归[会话设计第 7.18 节](architecture/session-design.md#718-已登录用户修改密码)及[账号 OpenAPI](../api/account.openapi.yaml)。
 
-Astra 设计复核要求不复用带 Legacy 预升级的验证用例、不把原 session fence 换成新状态、不升级账号共享锁为写锁、专用 UPDATE 额外要求 enabled、独立 quota/marker 及规则指纹不进 bucket key，均已落实。最低强度经异步询问尚无用户答复；采用已告知的 NIST 15 字符工程初值并要求显式配置，可提高，不记为用户确认/整体 NIST 合规。规则机制仅做原始 UTF-8 code point/字节预算与整串摘要精确查表，未下载字典，生产覆盖/许可/配置另验。
+Astra 设计复核要求不复用带 Legacy 预升级的验证用例、不把原 session fence 换成新状态、不升级账号共享锁为写锁、专用 UPDATE 额外要求 enabled、独立 quota/marker 及规则指纹不进 bucket key，均已落实。当时最低强度经异步询问尚无用户答复，采用已告知的 NIST 15 字符工程初值并要求显式配置，可提高，未记为用户确认/整体 NIST 合规；用户后续确认见本页浏览器交付记录。规则机制仅做原始 UTF-8 code point/字节预算与整串摘要精确查表，未下载字典，生产覆盖/许可/配置另验。
 
 首轮身份/密码/PG unit race 通过，Redis 编译因共享 EVAL 提取漏 time import 失败；补回后各包 race 通过，静态指出字面 nil context 的测试写法，沿用已有表驱动上下文负例而未跳过检查。真实专项先发现故障 hook 签名和测试分支 QF1003，按既有 hook/显式 switch 修正；核心真实事务/额度专项 PASS（`protocol-core-verified.log`，27.403 秒）。随后完整接线首轮格式遗漏了新 owner 文件，已按 Git 完整新增/修改列表定向 gofmt；静态还指出新进程测试分支表达。接线编译暴露 apiapp 既有函数 password 与新包导入同名，改为显式 alias；原失败与二进制未构建结果保留（`backend.log`、`backend-fixed.log`、`protocol-http*.log`）。未关闭 lint、race、hooks 或放宽断言。
 
