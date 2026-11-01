@@ -1,5 +1,17 @@
 # 工程交付记录
 
+## 2026-11-01：单跳代理的会话信任与来源额度
+
+成功 fetch 主线 `b51119f` 后建立独立 `codex/session-proxy` worktree，无开放 PR/未知改动。唯一目标为显式固定单跳代理入口，默认 API/生产配置另验。`NewProxiedLimitedLogin` 要求已有共享限流、复制的 1—16 个唯一非零叶证书 DER SHA-256；全部路由先核对真实 backend TLS、同叶 VerifiedChains、固定 public Host 和严格唯一 XFF/XFH/XFP，拒绝其他转发方言或多跳。来源局部显式传递，不修改 RemoteAddr/TLS 或 handler 共享状态。原直连入口行为保持，无依赖/SQL/迁移。合同与回退归[会话设计](architecture/session-design.md#714-单跳受信反向代理)。
+
+基线旧镜像缺少锁定 cpuid 模块，禁网失败后合并本机既有 checksum 缓存，`go mod verify` 与原 HTTP race（1.028 秒）通过，未下载或变更锁文件。完整离线 Docker backend 通过格式/vet、检测器正负夹具、三实际静态范围各 0、全部 race（HTTP 1.035 秒）及四命令构建（`/private/tmp/oj-session-proxy-backend.log`）。随后仅测试/文档变更，最终 HTTP 静态 0、全树格式和 race 1.037 秒通过（`http-final.log`）。
+
+首次真实协议专项原有用例及代理 Cookie 生命周期通过，两个新断言失败：`httptest.Server.Client()` 返回共享指针，后创建的 .3 来源/证书 transport 覆盖先前客户端。修正为复制 http.Client 后再 clone/config transport，生产实现不变，原失败保留（`protocol.log`）。Astra 发现 nil manager 使 pin 错误测试空泛，改用有效 limited manager 核验 empty/zero/duplicate/17 个不同非零 pin，并确认 16 个有效 pin 可构造、有效 unlimited manager 被拒绝；补跨副本 Complete/Abandon 共享恢复来源额度。未放宽检查或断言。
+
+最终真实 Redis7.2.17/临时 PostgreSQL/race 专项 **131 个 PASS 条目（含父条目，新增代理 10，14.227 秒）**、集成静态 0、退出/OOM/自有资源清理通过（`protocol-final.log`）。短文件名均以前缀 `/private/tmp/oj-session-proxy-` 定位。两公开 TLS 代理经真实 RequireAndVerifyClientCert backend、同 CA 未列入 pin 拒绝和无证书握手失败有证据；两个真实 loopback socket 来源验证同源跨副本 Begin 限流、另一来源独立及恢复额度，认证入口探针确认 429 不到密码门禁。恶意 Forwarded/XFF/XFH/XFP/X-Real-IP/Connection 入站头经 Rewrite 删除覆写；共享 Go Cookie jar 登录/读/活动/CSRF/退出及撤销后拒绝通过。合成 TLS 状态单元测试另覆盖 nil/错链、映射地址和头边界，不冒充真实握手。
+
+Astra 设计、完整实现及测试/文档增量复核无剩余阻断，主代理核对完整差异/新增文件和日志；337 文件 repository、diff 空白与本地链接检查通过，AI 不代替人工批准。按建议区分 Handler 的 403 与无证书 TLS 握手失败。默认 Gin/Compose/OpenAPI、真实浏览器、生产证书/反代/阈值/总预算、完整账号权限/恢复及 AC01/23/24/25/M0 仍待验收，未部署。受信代理自身可伪造来源，应用不独立证明公开 HTTPS；不提供多跳/CIDR/明文后端或自动证书轮换。
+
 ## 2026-11-01：共享登录请求额度与严格 HTTP 构造入口
 
 前置私有密钥加载 PR #71（head `f8e2520`，CI `41277855976` 九项成功）已 squash 为 `135bf4e`，完成树内容一致/祖先核验、主工作区快进、对应 worktree/分支及四个自有构建产物清理，保留主克隆忽略资料。成功重新 fetch 后从该主线建立独立 `codex/login-rate-admission`。本轮同一 Login/Store 上提供显式五维预算、元数据初始化/只读构造和单次 Lua 联合准入，HTTP 严格入口要求配置存在，旧入口也自动执行已配置限流；默认 API 未挂载。合同、Redis key/TTL、配置不一致/恢复和边界归[会话设计](architecture/session-design.md#713-共享登录限流)。无新依赖/SQL/迁移，schema 5 与原会话记录不变。
