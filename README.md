@@ -24,6 +24,7 @@
 - [显式会话 API 入口](docs/architecture/session-design.md#717-显式会话-api-入口)：`OJ_SESSION_CONFIG_FILE` 启用严格配置的 TLS/mTLS 命令入口，必须同时指定 `OJ_API_ADDR`；默认 Compose 未启用。
 - [已登录改密](docs/architecture/session-design.md#718-已登录用户修改密码)：显式能力、独立三维额度和弱密码规则，核验当前密码后原子换代并撤销旧会话；[接口契约](api/account.openapi.yaml)。
 - [浏览器账号面板](docs/account-browser.md)：已有账号登录、原尝试恢复、检查/主动续期/退出和改密；[六路径契约](api/session.openapi.yaml)。默认 HTTP 预览阻止密码操作，不代表注册、训练或完整权限已开放。
+- [Web 界面](docs/frontend-design.md)：简洁题库首页、独立登录页和双栏做题预览；示例可搜索、筛选、编辑和导入导出，正式提交尚未开放。
 
 ## 运行环境
 
@@ -41,7 +42,7 @@ Docker 工具链使用 Go 1.26.10、pnpm 11.25.0、Node 24.19.0，与 `go.mod`�
 docker --context desktop-linux compose up -d --build --wait
 ```
 
-打开 [Docker 本机预览](http://127.0.0.1:8080/)，点击“检查 API 连接”。Nginx 提供 Vite 构建后的静态文件，将 `/api/` 转发到 Compose 内部的 `api:8080`；后端不发布宿主机端口。若 8080 被占用，执行 `OJ_WEB_PORT=18080 docker --context desktop-linux compose up -d --build --wait`，再访问 18080。后续源码修改需要重建，此入口不是热更新开发服务器。
+打开 [Docker 本机预览](http://127.0.0.1:8080/) 查看示例题库；连接诊断位于 `/account` 的折叠区域。Nginx 提供 Vite 构建后的静态文件，将 `/api/` 转发到 Compose 内部的 `api:8080`；后端不发布宿主机端口。若 8080 被占用，执行 `OJ_WEB_PORT=18080 docker --context desktop-linux compose up -d --build --wait`，再访问 18080。后续源码修改需要重建，此入口不是热更新开发服务器。
 
 ```sh
 docker --context desktop-linux compose build            # 构建默认应用镜像

@@ -1,5 +1,17 @@
 # 工程交付记录
 
+## 2026-11-01：简洁桌面首页、登录与做题预览替换
+
+用户确认以专业刷题工具为方向、桌面 Web 优先，依次接受简洁题库、独立登录与左右分栏做题稿后明确要求替换。成功 fetch 的 `origin/main 11fe7ef` 为独立 `codex/homepage-redesign` worktree 起点。唯一目标是替换这组界面和必要导航；没有增加生产题库、判题/提交、注册、持久草稿、迁移或部署。当前行为归 [Web 界面](frontend-design.md)，颜色/控件/动效归根 [设计约定](../DESIGN.md)。参考 shadcn/ui 与 Radix，沿用原生 CSS，不引入组件/动画库；新增已选 Router 与路由懒加载 CodeMirror，精确 MIT 版本见锁文件，Docker Node 24.19.0 满足 Router 22.22 下限。
+
+账号 controller 提升到应用生命周期，原服务协议和密码表单处理保持；站内导航不会清除改密未知标记。示例题目独立命名空间，编辑器在身份核对完成后才挂载；临时代码只存内存，按观察身份隔离，离开/刷新提示下载。上传用独立读取序号、编辑 revision 和卸载守卫，拒绝迟到成功/异常；原生文件输入退出 Tab 顺序，语言→上传→下载→代码均可键盘到达。没有把示例内存暂存称为 AC21 IndexedDB 草稿，也没有把禁用提交声称为真实判题。
+
+最终 Docker 前端 lint（7 项配置自测）/类型/**53 项 Vitest**/构建通过，`pnpm audit --audit-level low` 无已知漏洞；主包约 290.83 kB、编辑器懒加载包约 429.44 kB（gzip 92.78/141.25 kB），不等于性能或容量验收。已有 Playwright 1.64.1/Chromium 151.0.7922.34 的 **12 组**浏览器检查通过：保留原真实 HTTPS/race API/临时 PG/Redis/pinned mTLS 账号路径，新增跨页改密未知保护、初始身份门、内存保留、卸载后读取、两文件正反完成顺序/旧异常、UTF-8/Unicode/CRLF 下载、无效文本拒绝、全局 beforeunload、分栏键盘/可见焦点、搜索筛选分页、减少动画和示例零 POST。fixture race **18.843 秒**、fixture_exit0、browser/container/Redis/owner 清理分别成功，证据 `/private/tmp/oj-homepage-browser-qa-4`。1440×1000 三页及 1280×900 做题尺寸、旧账号锚点跳转另验通过，稳定截图在 `/private/tmp/oj-homepage-final-captures`；390px 仅保留已有账号基本回归，不声称新的移动端设计验收。
+
+补充最终候选：保留 UTF-8 BOM，原样测试和完整 12 组浏览器专项再次通过，fixture **18.515 秒**且全部结果/退出/清理为真（`/private/tmp/oj-homepage-browser-final`）；前端完整检查和 audit 见 `/private/tmp/oj-homepage-frontend-final.log`。占位文字由 4.16:1 调整为与正文辅助色一致的 4.97:1，代码行号和焦点也使用更清晰的已有 token；最终源码 lint/类型/53测试/构建见 `oj-homepage-frontend-contrast.log`。设计原稿、测量与未通过的像素门禁证据归档 `/private/tmp/oj-homepage-design-evidence`，大图不进入源码 Git。
+
+治理 **64 项，10.428 秒**、独立 Compose 静态资源/SPA/API合同/权限/重建/启停检查通过。早期浏览器首轮因未挂既有模块缓存而 `GOPROXY=off` 失败，改用 `/private/tmp/oj-session-mod` 并保留校验；后两轮预览测试超时定位为 `getByLabel` 精确匹配包含 option 文本的 label，改用实际可访问角色/名称，并未削弱筛选断言。Astra 指出并已修复页面生命周期、迟到上传/读取顺序、不可见焦点、当前栏目和 17px 高度预算问题；复验后 AI 代码/视觉审查给出 ship，不冒充人工批准。设计像素工具总体约 88% match，但区域裁剪对位误报表格文字缺失，自动 hero 门禁仍未通过，不宣称像素级复刻或自动全阶段完成；人工看图与功能专项分开记录。最终 PR/CI/合并状态依远端回读，默认 HTTP/bootstrap、生产 HTTPS/字典/预算/正式训练及完整 M0 仍待验，未部署。
+
 ## 2026-11-01：浏览器账号登录、恢复与会话管理
 
 前置 PR #77 最终 head `1de02f6` 经 CI `41314309363` 九项成功后 squash 为 `76ec453`；精确 head/合并树与祖先核验、主线快进及定向清理完成，知识事务 `oj-password-change-delivered-20261101` 五页字节回读一致/lint 0。重新成功 fetch 后从该主线建立独立 `codex/browser-account-lifecycle` worktree，唯一目标为已有账号的浏览器生命周期，不涉及注册/邮件、角色/资源权限、训练或部署。

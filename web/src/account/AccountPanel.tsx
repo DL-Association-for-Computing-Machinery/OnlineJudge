@@ -1,5 +1,8 @@
 import { LoginForm, PasswordForm } from './AccountForms'
-import { useAccount } from './useAccount'
+import { useCurrentAccount } from './context'
+import { AccountNotice } from './AccountNotice'
+import { AccountRecovery } from './AccountRecovery'
+import { ConnectionCheck } from './ConnectionCheck'
 import { SessionExpiry } from './SessionExpiry'
 import './account.css'
 
@@ -8,7 +11,7 @@ function date(value: string) {
 }
 
 export function AccountPanel() {
-  const { state, controller } = useAccount()
+  const { state, controller } = useCurrentAccount()
   const secure = state.status !== 'insecure'
   const unavailable = state.status === 'unavailable'
   const authenticated = state.status === 'authenticated' && state.session !== null
@@ -18,14 +21,13 @@ export function AccountPanel() {
   }
 
   return (
-    <section className="account-panel" aria-labelledby="account-title" aria-busy={state.busy}>
+    <section className="account-panel account-page page-width" aria-labelledby="account-title" aria-busy={state.busy}>
       <div className="account-heading">
-        <div><p className="eyebrow">个人账号</p><h2 id="account-title" tabIndex={-1}>账号与安全</h2></div>
+        <h1 id="account-title" tabIndex={-1}>账号与安全</h1>
         <span className={`account-badge ${state.status}`}>{labels[state.status]}</span>
       </div>
       <p className="account-intro">管理当前浏览器的会话与密码。训练、注册和邮箱找回尚未开放。</p>
-      <p className={`account-notice ${state.notice.tone}`} role="status" aria-live="polite">{state.notice.text}</p>
-      {state.passwordUnknown ? <p className="account-notice uncertain" role="alert">上次改密结果仍待核验。检查会话不能证明密码未改变，请退出并重新登录核验。</p> : null}
+      <AccountNotice />
 
       {authenticated && state.session ? (
         <div className="session-summary">
@@ -46,18 +48,8 @@ export function AccountPanel() {
         </div>
       ) : state.status === 'anonymous' ? <LoginForm controller={controller} disabled={disabled} /> : null}
 
-      <div className="account-recovery">
-        <button type="button" className="secondary" disabled={state.busy || !secure} onClick={() => void controller.run('check')}>检查当前会话</button>
-        {state.status === 'unknown' ? <button type="button" className="secondary" disabled={disabled} onClick={() => void controller.run('logout')}>确认退出当前会话</button> : null}
-        <details>
-          <summary>登录中断，或上次登录尚未完成？</summary>
-          <p>先检查当前会话；仍未登录时，可确认原尝试，无须再次输入密码。放弃会撤销原尝试，也可能使该尝试已发放的会话失效；这不等于确认退出当前会话。</p>
-          <div className="account-actions">
-            <button type="button" className="secondary" disabled={disabled} onClick={() => void controller.run('complete')}>继续确认原尝试</button>
-            <button type="button" className="secondary" disabled={disabled} onClick={() => void controller.run('abandon')}>放弃原登录尝试</button>
-          </div>
-        </details>
-      </div>
+      <AccountRecovery />
+      <ConnectionCheck />
     </section>
   )
 }

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-01T15:53:00Z",
+  "title": "ECUT OJ Web",
+  "extensions": {
+    "shadows": [{ "name": "filter-popover", "value": "0 8px 24px #1823380f", "purpose": "筛选浮层覆盖关系" }],
+    "motion": [
+      { "name": "state", "value": "150ms cubic-bezier(.2, .8, .2, 1)", "purpose": "控件颜色和边框反馈" },
+      { "name": "disclosure", "value": "160ms cubic-bezier(.2, .8, .2, 1)", "purpose": "折叠内容淡入；减少动画偏好时禁用" }
+    ],
+    "breakpoints": [{ "name": "compact-desktop", "value": "1100px" }, { "name": "narrow-window", "value": "800px" }, { "name": "baseline-small", "value": "480px" }]
+  },
+  "components": [
+    { "name": "主按钮", "kind": "button", "refersTo": "button-primary", "description": "当前页面主要操作", "html": "<button class=\"sample-primary\">登录</button>", "css": ".sample-primary{min-height:44px;padding:10px 18px;border:1px solid transparent;border-radius:6px;background:var(--accent,#c4510a);color:#fff;font:550 14px/1.5 sans-serif}.sample-primary:hover{background:var(--accent-hover,#a94305)}" },
+    { "name": "次按钮", "kind": "button", "description": "上传、下载及非主要操作", "html": "<button class=\"sample-neutral\">上传代码</button>", "css": ".sample-neutral{min-height:44px;padding:10px 18px;border:1px solid #dce1e8;border-radius:6px;background:#fff;color:#475467;font:550 14px/1.5 sans-serif}.sample-neutral:hover{background:#f7f8fa;border-color:#bcc4d0;color:var(--text,#152033)}" },
+    { "name": "输入框", "kind": "input", "description": "标签单独显示，键盘焦点可见", "html": "<input class=\"sample-input\" aria-label=\"搜索题目\" placeholder=\"搜索题号或题目名称\">", "css": ".sample-input{min-height:44px;box-sizing:border-box;padding:10px 12px;border:1px solid #cbd2dc;border-radius:6px;background:#fff;color:var(--text,#152033);font:14px sans-serif}.sample-input:focus-visible{outline:2px solid var(--accent,#c4510a);outline-offset:4px}" },
+    { "name": "栏目导航", "kind": "nav", "description": "细橙线标记当前栏目", "html": "<nav class=\"sample-nav\" aria-label=\"示例导航\"><a href=\"#\" aria-current=\"page\">题库</a><a href=\"#\">我的提交</a></nav>", "css": ".sample-nav{display:flex;gap:38px;min-height:70px;font:16px sans-serif}.sample-nav a{display:flex;align-items:center;text-decoration:none;color:var(--muted,#667085);border-bottom:3px solid transparent}.sample-nav a[aria-current]{color:#101828;font-weight:600;border-bottom-color:#f58228}" },
+    { "name": "折叠区域", "kind": "custom", "description": "恢复操作或提交结果默认收起", "html": "<details class=\"sample-disclosure\"><summary>提交结果</summary><p>正式提交尚未开放。</p></details>", "css": ".sample-disclosure{padding:12px 24px;border-top:1px solid var(--line,#e6e9ee);color:var(--text,#152033);font:14px/1.8 sans-serif}.sample-disclosure summary{min-height:36px;line-height:36px;cursor:pointer}.sample-disclosure summary:focus-visible{outline:2px solid var(--accent,#c4510a);outline-offset:4px}" }
+  ],
+  "narrative": {
+    "northStar": "以题目和代码为中心",
+    "overview": "白底、深色正文、克制橙色与开放布局。首页只保留题目浏览的必要入口，登录独立，做题页左右分栏。",
+    "keyCharacteristics": ["留白和细线建立层级", "状态反馈简短", "系统字体与离线静态资源"],
+    "rules": [{ "name": "状态真实", "body": "示例、临时保留和未开放的提交必须明确标注。", "section": "components" }],
+    "dos": ["沿用现有CSS变量", "保留键盘焦点和减少动画支持"],
+    "donts": ["首页不增加统计面板", "不以动画延迟操作"]
+  }
+}

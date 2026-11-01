@@ -5,6 +5,7 @@ import process from 'node:process'
 import console from 'node:console'
 import { URL } from 'node:url'
 import { createRequire } from 'node:module'
+import { runPreviewChecks } from './preview-qa.mjs'
 
 // The Python runner validates these local paths. This driver never installs a
 // browser or package, and always creates a fresh profile for synthetic accounts.
@@ -106,17 +107,18 @@ const problem = (status, code) => ({ status, contentType: 'application/problem+j
     })
     phase = 'initial screen'
     await page.goto(info.origin, { waitUntil: 'networkidle' })
-    await expectText('未登录')
+    await page.getByRole('heading', { name: '题库', exact: true }).waitFor()
     assert.equal(page.url(), info.origin + '/')
     assert((await page.title()).includes('OnlineJudge'), 'Expected page title')
-    assert((await page.locator('main').innerText()).includes('使用已有账号登录'), 'Meaningful rendered account content')
+    assert((await page.locator('main').innerText()).includes('A+B Problem'), 'Meaningful preview library')
+    assert.equal(await page.getByLabel('密码', { exact: true }).count(), 0, 'Home has no credential form')
+    await page.getByRole('link', { name: '登录', exact: true }).click()
+    await page.getByLabel('密码', { exact: true }).waitFor()
+    assert.equal(page.url(), info.origin + '/login', 'Standalone login route')
+    assert((await page.locator('main').innerText()).includes('使用已有账号登录'), 'Meaningful login content')
     assert.equal(await page.locator('vite-error-overlay').count(), 0)
     assert(!calls.some(call => call.startsWith('POST ')), 'Mount performs no mutation')
-    await page.getByRole('button', { name: '检查 API 连接', exact: true }).click()
-    await expectText('API 连接成功')
     await shot('desktop-anonymous')
-    await page.getByRole('link', { name: '个人账号', exact: true }).click()
-    assert(page.url().endsWith('#account-title'), 'Direct page navigation reaches account heading')
     await page.getByLabel('邮箱', { exact: true }).focus()
     await page.keyboard.press('Tab')
     assert(await page.getByLabel('密码', { exact: true }).evaluate(el => el === document.activeElement), 'Keyboard reaches password')
@@ -128,7 +130,12 @@ const problem = (status, code) => ({ status, contentType: 'application/problem+j
     const beforeLogin = await stats()
     await login(oldPassword, true)
     await expectText('登录成功，当前会话已核验。')
+    await page.getByRole('link', { name: '管理个人账号', exact: true }).click()
+    assert.equal(page.url(), info.origin + '/account', 'Login and account routes share one real session')
     await expectText(ready.subject_id)
+    await page.locator('.connection-check summary').click()
+    await page.getByRole('button', { name: '检查 API 连接', exact: true }).click()
+    await expectText('API 连接成功')
     assert.equal(count(await stats(), '/api/v1/session/login/begin') - count(beforeLogin, '/api/v1/session/login/begin'), 1)
     const cookies = await context.cookies(info.origin)
     assert(cookies.some(cookie => cookie.name === '__Host-oj_session' && cookie.secure && cookie.httpOnly && cookie.sameSite === 'Lax' && cookie.path === '/'), 'Real safe session cookie')
@@ -164,6 +171,24 @@ const problem = (status, code) => ({ status, contentType: 'application/problem+j
     await page.reload({ waitUntil: 'networkidle' })
     await expectText('已登录')
     passed('wrong current password preserves session, confirmation stays local, optional 404 preserves session')
+
+    phase = 'unknown password state across routes'
+    await injectOnce('/api/v1/account/password', problem(503, 'PASSWORD_CHANGE_UNAVAILABLE'), async () => {
+      await changePassword(oldPassword, replacement)
+      await expectText('改密结果无法确认，密码可能已经修改。请退出并重新登录核验，勿重复提交改密。')
+    })
+    await page.getByRole('button', { name: '检查当前会话', exact: true }).click()
+    await expectText('已登录')
+    await page.getByRole('link', { name: 'ECUT OJ 首页', exact: true }).click()
+    await page.getByRole('link', { name: 'A+B Problem', exact: true }).click()
+    await page.getByRole('textbox', { name: '代码编辑器', exact: true }).waitFor()
+    await page.getByRole('link', { name: '个人账号', exact: true }).click()
+    await expectText('上次改密结果仍待核验。检查会话不能证明密码未改变，请退出并重新登录核验。')
+    assert(await page.getByRole('button', { name: '确认修改密码', exact: true }).isDisabled(), 'SPA preview navigation cannot reset unknown password protection')
+    await page.getByRole('button', { name: '退出当前会话', exact: true }).click()
+    await login(oldPassword)
+    await expectText('登录成功，当前会话已核验。')
+    passed('unknown password guard survives library, preview and account navigation without document reload')
 
     phase = 'real password change and re-login'
     await changePassword(oldPassword, replacement)
@@ -268,6 +293,10 @@ const problem = (status, code) => ({ status, contentType: 'application/problem+j
     await checkStorage()
     passed('committed password with lost success stays uncertain, no retry, raw Unicode and spaces re-login')
 
+    phase = 'preview interaction and navigation regressions'
+    report.screenshots.push(...await runPreviewChecks(browser, info, output))
+    passed('preview identity gate, late upload isolation, source export, history retention, global leave guard and zero code POSTs')
+
     phase = 'mobile visual and HTTP boundary'
     await page.setViewportSize({ width: 390, height: 844 })
     await page.locator('#account-title').scrollIntoViewIfNeeded()
@@ -281,10 +310,10 @@ const problem = (status, code) => ({ status, contentType: 'application/problem+j
     const plain = await context.newPage()
     let plainAPI = 0
     plain.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/')) plainAPI++ })
-    await plain.goto(info.http_origin, { waitUntil: 'networkidle' })
-    await plain.getByText('需要 HTTPS', { exact: true }).waitFor()
+    await plain.goto(info.http_origin + '/login', { waitUntil: 'networkidle' })
+    await plain.getByText('账号操作需要 HTTPS，请通过安全入口访问。', { exact: true }).waitFor()
     assert.equal(plainAPI, 0, 'HTTP account screen sends no credential or account request')
-    assert.equal(await plain.getByLabel('密码', { exact: true }).count(), 0)
+    assert(await plain.getByLabel('密码', { exact: true }).isDisabled(), 'HTTP credential fields cannot be used')
     await plain.close()
     passed('390px layout fits, local expiry reminder makes no request, HTTP blocks account transport before fetch')
 
