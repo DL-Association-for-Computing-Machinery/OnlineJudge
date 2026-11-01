@@ -1,5 +1,19 @@
 # 工程交付记录
 
+## 2026-11-01：已有普通会话的 HTTPS 生命周期
+
+成功 fetch 主线 `ad27b2a` 后建立独立 `codex/session-http-lifecycle` worktree。新增只适配已有普通会话的 HTTPS Handler：只读身份 GET、显式活动 POST、退出 POST 分别调用 Read/Touch/Revoke。固定可信 HTTPS origin、直接 TLS 和精确 Host，不读取转发头建立信任；POST 标准来源防护后要求唯一精确 Origin 或 same-origin Fetch Metadata 正证，任一出现头都须有效。标准库逐行严格解析 Cookie、跨行要求恰一个规范凭据；所有结果 no-store。Read/Touch 不发 Cookie，只有明确撤销成功且 context 有效才以安全 host scope 清 Cookie。公共响应不含凭据或认证/恢复代次，身份观察不提供资源权限。合同、SCS/反代边界与回退归[会话设计](architecture/session-design.md#710-已有普通会话的-https-适配)。
+
+已有本地 Docker 质量工具链、Linux arm64/Go1.26.10、禁网 2 CPU/2 GiB 与已校验缓存运行基线，原会话/HTTP 包 race 通过（`/private/tmp/oj-session-http-baseline.log`）。首轮新 HTTP 行为/race 通过，但静态检查发现测试 Body.Close 未处理（`unit.log`）；已修复，未关闭规则。真实 Redis7.2.17/PostgreSQL 专项首次 9.391 秒复现三处退出/空闲过期误报 503（`protocol.log`）：协议明确 ErrStale 被通用 identity guard 包装，初版一律将 guarded 置为 503。结合实际 Lua 返回/写入次序与 Astra 复核，收窄为存储/恢复/未知/取消超时优先 503，明确协议拒绝可返回 401，即使 guarded；401 不确认撤销或回滚，所有错误无 Cookie/自动重试。原 Store/SQL/Lua 契约与实现均不变。
+
+修复后 HTTP 八项/49 子例 race（1.087 秒）及新包静态 0 问题通过（`unit2.log`），补齐六种未知故障覆盖 guarded+stale、真实合作超时和取消后已执行效果。以上短日志名均以前缀 `/private/tmp/oj-session-http-` 定位；完整后端和真实专项最终结果随本节交付核验记录。所有 Go 输入在运行检查期间冻结。
+
+第二轮完整真实专项 9.654 秒新增 HTTP 四子例全通过，但原 `protocol_test.go` 的绝对过期物理缺失断言读到 ErrStale 而非 ErrNotFound（`protocol2.log`）。[固定 Redis7.2.17 源码](https://github.com/redis/redis/blob/7.2.17/src/db.c)的 keyIsExpired 使用严格 `now > when`；现有等待只保证 TIME 大于等于目标，项目 Lua 在绝对期限小于等于当前时间时已拒绝。相等毫秒可出现尚未物理删除但已失效；只将该物理缺失断言前的等待延后一毫秒，保留 ErrNotFound 断言与所有产品期限，不改共用等待函数。Astra 定向复核认可该最小修正；这不代表延长会话有效期。
+
+最终 `python3 -B scripts/test-session-protocol.py --module-cache /private/tmp/oj-session-mod` 完整专项 **44 个 PASS 条目（含父条目，10.438 秒）**、integration 静态 0 问题与容器退出/OOM/自有资源清理核验通过（`protocol3.log`）。两 TLS 入口实证原轮询/拒绝请求记录及绝对 TTL 不变、仅显式活动推进空闲期限且不改绝对期限、跨入口退出与迟到 Retry 拒绝、真实撤销后 wrapper 丢回执 503/无 Cookie、真实空闲过期/全局恢复/双入口禁用拒绝。丢回执为真实命令完成后的适配器注入，不是网络故障。完整离线 `go mod verify && sh scripts/toolchain.sh backend` 通过格式/vet、检测器正负夹具、三实际静态范围各 0 问题、全模块 race（新增 HTTP 1.094 秒）和四命令构建（`backend.log`）；之后仅修改上述 integration 到期等待行，最终专项已覆盖。305 文件仓库策略与完整差异/新增文件审查通过，Astra 设计/完整实现/测试增量和文档复核无剩余阻断；主代理实际运行检查，未重复无改动的 SQL 生成、原数据库独立全套或真实 Worker 专项。
+
+默认 API/Gin、Compose、公开 OpenAPI 未挂载此 Handler，无登录、Cookie 发放或跨请求 Attempt；合成 Cookie 经受信 Create/Check 由测试注入，不代表真实浏览器 Cookie jar、关闭/重开或反代验收。无依赖/SQL/迁移/schema 变化，仍为 schema 5；不改变 Redis 基线，不在本阶段增加第二份状态。完整 SCS/Gin 生命周期、登录尝试恢复、邮箱/训练权限、活动采样/限流、恢复编排及生产容量另验，完整 AC01/23/24/25/M0 未通过，未部署。最新 head CI、反馈与合并条件须交付时回读，AI 审查不替代人工审批。
+
 ## 2026-10-31：正式普通 Redis 会话协议
 
 成功 fetch 主线 `7df407c2511342c950f1ee277f6d3d8974b44841` 后建立独立 `codex/ordinary-redis-protocol`，前置 PR67 主线 CI `41184439096` 已成功。新增 `internal/session/redisstore`，以同一权威 Authority 复用个人凭据认证及 PG 全局→主体门禁，落实普通空闲 2h/绝对 12h/三名额、冻结尝试的 Retry/Check/Abandon、Read/Touch/Revoke。合同归[会话设计](architecture/session-design.md#79-普通-redis-会话协议)。无 SQL/迁移变化，schema 5 保持；HTTP/SCS、Cookie/CSRF、跨请求持久化、权限、其他 profile/轮换及恢复编排不在本轮交付。
