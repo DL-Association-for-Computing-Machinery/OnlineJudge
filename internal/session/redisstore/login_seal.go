@@ -25,14 +25,11 @@ func NewLogin(store *Store, c LoginConfig) (*Login, error) {
 	if store == nil || store.client == nil || store.authority == nil || store.gate == nil ||
 		!namespacePattern.MatchString(store.namespace) || !store.policy.valid() || err != nil || u.Scheme != "https" || u.Hostname() == "" ||
 		c.Origin != "https://"+u.Host || u.User != nil || c.Window < time.Millisecond || c.Window > 5*time.Minute ||
-		c.Window > store.policy.Idle || c.Window%time.Millisecond != 0 || !keyIDPattern.MatchString(c.CurrentKey) || len(c.Keys) < 1 || len(c.Keys) > 4 {
+		c.Window > store.policy.Idle || c.Window%time.Millisecond != 0 || !validSealingKeys(c.CurrentKey, c.Keys) {
 		return nil, ErrInvalid
 	}
 	keys := make(map[string]cipher.AEAD, len(c.Keys))
 	for id, key := range c.Keys {
-		if !keyIDPattern.MatchString(id) || key == [32]byte{} {
-			return nil, ErrInvalid
-		}
 		block, err := aes.NewCipher(key[:])
 		if err != nil {
 			return nil, ErrInvalid
@@ -43,10 +40,19 @@ func NewLogin(store *Store, c LoginConfig) (*Login, error) {
 		}
 		keys[id] = aead
 	}
-	if keys[c.CurrentKey] == nil {
-		return nil, ErrInvalid
-	}
 	return &Login{store: store, origin: c.Origin, window: c.Window, current: c.CurrentKey, keys: keys}, nil
+}
+
+func validSealingKeys(current string, keys map[string][32]byte) bool {
+	if !keyIDPattern.MatchString(current) || len(keys) < 1 || len(keys) > 4 {
+		return false
+	}
+	for id, key := range keys {
+		if !keyIDPattern.MatchString(id) || key == [32]byte{} {
+			return false
+		}
+	}
+	return keys[current] != [32]byte{}
 }
 
 // ParseContinuation only bounds/canonicalizes browser syntax. Successful parsing

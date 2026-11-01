@@ -2,6 +2,10 @@
 
 本页集中维护当前 M0 进度和证据入口。下方“迁移前”之后的记录均为 2026-10-25—28 历史快照，保留原材料版本和命令，仅供追溯；当前执行方式见 [README](../README.md)。完整 M0 尚未验收，未部署。
 
+## 正式 P3 登录密钥加载（2026-11-01）
+
+新增显式私有文件到不透明密钥快照及原 Login 构造器的加载路径。逐级无符号链接 fd 检查、所有者/目录/文件权限、单硬链接、4 KiB 上限、读取前后元数据、严格 JSON、用途分离、轮换和格式化脱敏合同见[会话设计](architecture/session-design.md#712-登录密钥文件加载)。完整后端/全部 race、Darwin arm64 交叉编译与真实 Redis/PostgreSQL 双 TLS 专项 **84 个 PASS 条目（含父条目，17.600 秒）**通过；命令及脱敏缺口修复证据归[交付记录](delivery-log.md)。只提升已锁定 x/sys 为直接依赖，无版本/SQL/迁移变化；测试仅合成文件，不配置生产秘密、自动轮换或默认 API。限流组件、真实分发及生产参数继续待交付，完整 M0 未验收，未部署。
+
 ## 正式 P3 跨请求登录候选与 Cookie 发放（2026-11-01）
 
 新增同一权威 Store 上的两步登录：Prepare 验证并冻结但不写会话，以共享 key 的 AES-256-GCM 密文候选交给短期 HttpOnly Cookie；跨请求/副本重建后只恢复同一 tuple，经 Retry 和独立 Check 才发普通非持久 Cookie。固定恢复 Window 同时在实际 Redis 执行点约束 Retry/Check；Abandon 墓碑保留原协议边界，不会清另一个会话 Cookie。默认 API 未挂载，合同与密钥/遗失/迟到响应限制见[会话设计](architecture/session-design.md#711-跨请求登录尝试与-cookie-发放)。
