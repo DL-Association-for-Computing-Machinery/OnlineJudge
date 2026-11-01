@@ -37,6 +37,7 @@ type handler struct {
 	config     Config
 	host       string
 	protection http.CrossOriginProtection
+	login      *redisstore.Login
 }
 
 // New builds three explicit endpoints without registering any application route:
@@ -65,6 +66,12 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		method = http.MethodGet
 	case "/api/v1/session/activity", "/api/v1/session/logout":
 		method = http.MethodPost
+	case "/api/v1/session/login/begin", "/api/v1/session/login/complete", "/api/v1/session/login/abandon":
+		if h.login == nil {
+			problem(w, 404, "NOT_FOUND", "接口不存在")
+			return
+		}
+		method = http.MethodPost
 	default:
 		problem(w, http.StatusNotFound, "NOT_FOUND", "接口不存在")
 		return
@@ -76,6 +83,10 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if method == http.MethodPost && !h.sameOrigin(r) {
 		problem(w, http.StatusForbidden, "ORIGIN_REJECTED", "请求来源不允许")
+		return
+	}
+	if h.login != nil && (r.URL.Path == "/api/v1/session/login/begin" || r.URL.Path == "/api/v1/session/login/complete" || r.URL.Path == "/api/v1/session/login/abandon") {
+		h.serveLogin(w, r)
 		return
 	}
 	credential, err := requestCredential(r)
@@ -120,6 +131,13 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func sessionError(w http.ResponseWriter, err error) {
 	status, code, title := http.StatusServiceUnavailable, "SESSION_UNAVAILABLE", "会话服务暂时不可用"
+	if sessionDenied(err) {
+		status, code, title = http.StatusUnauthorized, "SESSION_REQUIRED", "会话无效或已过期"
+	}
+	problem(w, status, code, title)
+}
+
+func sessionDenied(err error) bool {
 	// Unknown effects always win. Explicit protocol refusal may deny identity
 	// even inside a guard, but never confirms logout or rollback of an effect.
 	failed := errors.Is(err, identity.ErrStore) || errors.Is(err, redisstore.ErrStore) ||
@@ -127,10 +145,7 @@ func sessionError(w http.ResponseWriter, err error) {
 		errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 	guarded := errors.Is(err, identity.ErrGuardedOperation)
 	refused := errors.Is(err, redisstore.ErrStale) || errors.Is(err, redisstore.ErrNotFound)
-	if !failed && (refused || (!guarded && (errors.Is(err, identity.ErrConflict) || errors.Is(err, identity.ErrNotFound)))) {
-		status, code, title = http.StatusUnauthorized, "SESSION_REQUIRED", "会话无效或已过期"
-	}
-	problem(w, status, code, title)
+	return !failed && (refused || (!guarded && (errors.Is(err, identity.ErrConflict) || errors.Is(err, identity.ErrNotFound))))
 }
 
 func problem(w http.ResponseWriter, status int, code, title string) {

@@ -1,4 +1,5 @@
-package httpapi
+// Package jsoninput preserves JSON string contents at untrusted HTTP boundaries.
+package jsoninput
 
 import (
 	"encoding/json"
@@ -7,10 +8,11 @@ import (
 	"unicode/utf8"
 )
 
+// ValidUnicode rejects inputs which encoding/json would silently replace.
 // encoding/json replaces unpaired UTF-16 surrogates with U+FFFD. Reject them
 // before decoding so the accepted source and its digest cannot silently change.
 // The standard library validates JSON grammar; this scan only checks pairing.
-func validJSONUnicode(data []byte) bool {
+func ValidUnicode(data []byte) bool {
 	if !utf8.Valid(data) || !json.Valid(data) {
 		return false
 	}

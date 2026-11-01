@@ -23,22 +23,30 @@ func (h *handler) sameOrigin(r *http.Request) bool {
 }
 
 func requestCredential(r *http.Request) (redisstore.Credential, error) {
+	value, present, err := cookieValue(r, CookieName)
+	if err != nil || !present {
+		return redisstore.Credential{}, redisstore.ErrInvalid
+	}
+	return redisstore.ParseCredential(value)
+}
+
+func cookieValue(r *http.Request, name string) (string, bool, error) {
 	var value string
 	count := 0
 	for _, line := range r.Header.Values("Cookie") {
 		cookies, err := http.ParseCookie(line)
 		if err != nil {
-			return redisstore.Credential{}, redisstore.ErrInvalid
+			return "", false, redisstore.ErrInvalid
 		}
 		for _, cookie := range cookies {
-			if cookie.Name == CookieName {
+			if cookie.Name == name {
 				count++
 				value = cookie.Value
 			}
 		}
 	}
-	if count != 1 {
-		return redisstore.Credential{}, redisstore.ErrInvalid
+	if count > 1 {
+		return "", false, redisstore.ErrInvalid
 	}
-	return redisstore.ParseCredential(value)
+	return value, count == 1, nil
 }
