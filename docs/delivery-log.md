@@ -1,5 +1,15 @@
 # 工程交付记录
 
+## 2026-11-01：会话敏感值的合法格式与配置 JSON 脱敏
+
+前置运行时 PR #74 最终 head `8ddd80a` 的 CI `41305405642` 九项成功，四必需门禁均来自最终运行，旧同 head 取消运行仅保留终态历史；完整diff/反馈/讨论及GitHub CLEAN核验后 squash 为 `369d38b`，主线快进/树一致与祖先核验、定向清理完成，知识事务 `oj-session-runtime-delivered-20261101` 五页字节回读一致/lint 0。重新成功 fetch 后从该主线建立独立 `codex/session-secret-redaction`，唯一目标为既有敏感类型输出保护，未混入默认 API 接线。
+
+先前 Docker 纯合成探针只输出布尔结果，已证明 Credential 数值格式包含 token、LoginConfig 数值格式/JSON 包含可恢复 key 数组；当前六类型回归进一步复现失败，日志 `/private/tmp/oj-session-redaction-before.log`、`before-all.log` 只记录类型/格式及通用断言，不打印材料。现有 String/GoString 只保护部分动词，不能把未出现原始 base64 子串当作未泄漏 key 数组的证据。
+
+新 `redaction.go` 给 Credential/Attempt/Continuation/LoginSecrets/LoginConfig/Login 增加值 Formatter，直接值/指针16组合法格式固定既有标签，nil保持标准输出；LoginConfig增加值MarshalJSON，直接/标准容器输出固定字符串，其他opaque JSON仍为{}。全仓核对未发现LoginConfig JSON业务消费者，私有key文件和密封payload为独立schema；显式Value/Parse、实际AEAD恢复、candidate原tuple和key不变有回归。非法Go诊断/反射/重新包装/主动字段访问不提供保证，仍禁止秘密对象日志，合同归[会话设计](architecture/session-design.md#716-会话敏感对象的输出保护)。无依赖/SQL/迁移或行为授权扩展。
+
+完整离线 Docker Desktop/Linux arm64、checksum缓存验证后，redisstore行为/race（1.022秒）、完整backend格式/vet/检测器正负夹具/三实际静态0/全部race（redisstore1.031秒）/四入口构建通过（`backend.log`）。真实 Redis7.2.17/临时PG/race完整专项 **142个PASS条目（含父条目，15.260秒）**、集成静态0、退出/OOM/自有资源清理通过（`protocol.log`）；上述短日志均以前缀`/private/tmp/oj-session-redaction-`定位。Astra设计与代码/测试复核无阻断，最终文档/差异/仓库策略交付前核验；AI不替代人工审批。默认命令/配置文件/TLS监听、真实存储TLS/浏览器/生产预算、完整权限恢复与AC01/23/24/25/M0仍待验，未部署。
+
 ## 2026-11-01：显式会话配置与资源生命周期装配
 
 前置单跳代理 PR #73 的 final head `b23f0d2` 经 CI `41303412108` 九项成功后 squash 为 `08c48a8`；完成最终 head/合并树一致及祖先核验、主线快进和定向 worktree/分支清理，知识事务 `oj-session-proxy-delivered-20261101` 五页回读一致/lint 0。重新成功 fetch 该主线后建立独立 `codex/session-runtime`，唯一目标为 typed 配置的 Open/ServeHTTP/Close，不扩大到默认 API/文件解析/监听器。

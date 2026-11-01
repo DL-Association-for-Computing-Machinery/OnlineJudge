@@ -327,7 +327,7 @@ Begin 已见尝试 Cookie 时拒绝再准备；Begin/Complete 已见有效普通
 
 叶文件须 root/当前 euid 所有、单硬链接、普通文件且仅 0400/0600，大小 1—4096 bytes。非阻塞打开避免 FIFO 挂起；有界读取前后核对 fd 的设备/inode/权限/所有者/链接/大小/mtime/ctime，错误统一为不含路径或底层错误的 `ErrLoginSecrets`。这些检查依赖受信本地文件系统和正确 ACL，不证明 NFS/ACL 或持钥特权进程安全，也不能证明恶意可信写入者下的原子快照。以新文件原子替换并显式重建 manager，禁止运行中原地改写；已加载 manager 不自动重读。
 
-JSON 必须恰有 `version`（整数词法 `1`）、`current`（key ID）、`sealing`（1—4 个 ID 到 key 的对象）、`limiting`（独立稳定 key）。每个 key 为 32 bytes 的规范无 padding base64url；拒绝零值、重复材料/用途复用、未知/重复/缺失/null 字段、坏 Unicode、尾随数据及超限内容。示意仅用占位符，不是可用配置：`{"version":1,"current":"active","sealing":{"active":"<32-byte raw base64url>"},"limiting":"<distinct 32-byte raw base64url>"}`。快照值/指针格式化脱敏，JSON 无私有字段；内存清理属尽力而为，Go 分配器/GC 不提供密钥完全擦除保证。
+JSON 必须恰有 `version`（整数词法 `1`）、`current`（key ID）、`sealing`（1—4 个 ID 到 key 的对象）、`limiting`（独立稳定 key）。每个 key 为 32 bytes 的规范无 padding base64url；拒绝零值、重复材料/用途复用、未知/重复/缺失/null 字段、坏 Unicode、尾随数据及超限内容。示意仅用占位符，不是可用配置：`{"version":1,"current":"active","sealing":{"active":"<32-byte raw base64url>"},"limiting":"<distinct 32-byte raw base64url>"}`。快照直接值/指针的已支持合法格式脱敏，JSON 无私有字段，完整输出边界见第 7.16 节；内存清理属尽力而为，Go 分配器/GC 不提供密钥完全擦除保证。
 
 封装轮换保留旧 key 并更新 current；限流 HMAC 材料须独立且跨副本/封装轮换稳定，加载器本身不执行限流，共享准入见下节。缺文件/坏权限/坏配置失败关闭，无自动生成、chmod、环境回退或秘密日志。未读取/创建真实生产密钥；生产路径、分发、备份、轮换操作和阈值仍待实际部署准备。无 SQL/迁移/会话记录变化；停用加载调用方即可回退。测试与验证证据见[交付记录](../delivery-log.md)。
 
@@ -374,6 +374,14 @@ Open 只读检查 schema 5、有效 open 恢复状态、原 Redis 7.2 standalone
 Close 在同一 mutex 下停止入口和登记活动请求，503/no-store/无 Cookie 拒绝后续请求，等待**实际 ServeHTTP 返回**后再恰一次关闭资源。运行中 KDF 超过请求期限仍被计入；每个 Close 调用仅用各自 context 等待同一完成信号，超时不提前关资源、不重新开放、不遗弃后台排空。先停止 listener，再等待服务器请求结束并 Close；单独 server.Close 不证明业务/KDF 已退出。零值 Runtime 失败关闭，Handler panic 仍注销活动计数，由服务器/上层既有恢复层处理 panic。
 
 真实 PG/Redis 专项验证双 Runtime/两步 Cookie 生命周期、Legacy 升级、TLS→mTLS 代理、缺失/不匹配 marker、闭门恢复、错 schema/Redis 失败、真实表锁等待后的启动取消/期限、精确 backend 消失及 PG/Redis 连接释放；确定性阻塞 Handler/取消、并发关闭和 panic 以 unit race 验证。数据库 TLS 最终配置有断言，真实存储 TLS 握手、浏览器/生产代理、命令入口/文件解析、生产参数/多 API 总预算、完整权限/恢复和 M0 另验，未部署。命令沿用 README backend/会话专项，实际结果归[交付记录](../delivery-log.md)；回退停用装配调用方，无 SQL/迁移/依赖变化。
+
+### 7.16 会话敏感对象的输出保护
+
+`Credential`、`Attempt`、`Continuation`、`LoginSecrets`、`LoginConfig`、`Login` 以值接收器实现 fmt.Formatter，直接值及非 nil 指针在已测试的 16 组合法值格式下只输出既有固定脱敏标签；包括原 Stringer 不覆盖的数值动词。宽度、精度和引用样式不应用到敏感表示，typed nil 保持 `<nil>`。这修复了数值动词反射展开 token/key 数组的问题，不改变显式 `Value()`、凭证解析、密文候选恢复、key 轮换或会话存储。
+
+`LoginConfig` 是受信 Go 构造输入，不是备份/导出或密钥文件格式。其值/指针标准 JSON 输出改为固定字符串 `"[redacted login sealing configuration]"`，标准 slice/map/导出结构字段编码同样不暴露 key map；typed nil 保持 `null`。其余五种 opaque 类型保留 `{}`/typed nil `null`。当前仓库没有业务消费 LoginConfig 的 JSON；第 7.12 节私有密钥文件与密封 payload 使用独立结构，格式均不变，无数据迁移或回滚步骤。回退代码会重新暴露旧输出风险，不能据此恢复秘密日志/配置 dump。
+
+范围仅限声明的直接值/指针合法格式和上述 JSON 行为。非法 `%w` 等 Go 诊断、反射、绕过类型方法的重新包装和主动字段/`Value()` 访问不在保证内；任何秘密对象仍禁止进入日志、错误或无关编码器。本保护降低意外输出风险，不提供日志安全隔离或完全内存擦除。回归使用真实 AEAD/admission 的合成对象，逐字检查固定输出及 nil/JSON 容器，并核对原凭证/密文 roundtrip 与 key 未变化；故障信息只含类型/动词，不输出敏感表示。实际 backend/race 与真实协议专项结果见[交付记录](../delivery-log.md)，默认 API、浏览器/生产部署与完整 M0 仍待验。
 
 ## 8. 注册、找回与账号发放
 

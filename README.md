@@ -20,6 +20,7 @@
 - [共享登录限流](docs/architecture/session-design.md#713-共享登录限流)：跨副本全局/来源/邮箱联合额度、独立恢复额度与失败关闭；严格 Handler 构造入口供后续默认 API 使用，生产阈值待验。
 - [单跳受信反代](docs/architecture/session-design.md#714-单跳受信反向代理)：显式 mTLS 证书指纹、固定公开来源与严格覆写头，独立代理入口要求登录限流；默认 API/生产代理配置与浏览器仍待验。
 - [会话运行时装配](docs/architecture/session-design.md#715-显式配置与运行时装配)：显式预算、单一身份权威、启动只读检查及关闭排空；typed 配置入口不启动监听器，默认 API/配置文件接线仍待完成。
+- [敏感对象输出保护](docs/architecture/session-design.md#716-会话敏感对象的输出保护)：六种会话敏感类型的直接值/指针合法格式保护，登录配置 JSON 隐藏密钥；不替代禁止秘密进入日志的规则。
 
 ## 运行环境
 
