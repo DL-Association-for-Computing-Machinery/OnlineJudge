@@ -14,6 +14,10 @@
 
 默认 API/Gin、Compose、公开 OpenAPI 未挂载此 Handler，无登录、Cookie 发放或跨请求 Attempt；合成 Cookie 经受信 Create/Check 由测试注入，不代表真实浏览器 Cookie jar、关闭/重开或反代验收。无依赖/SQL/迁移/schema 变化，仍为 schema 5；不改变 Redis 基线，不在本阶段增加第二份状态。完整 SCS/Gin 生命周期、登录尝试恢复、邮箱/训练权限、活动采样/限流、恢复编排及生产容量另验，完整 AC01/23/24/25/M0 未通过，未部署。最新 head CI、反馈与合并条件须交付时回读，AI 审查不替代人工审批。
 
+首个远端 head `2d8e780` 的[CI41272120843](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/actions/runs/41272120843)在普通会话专项 8.048 秒失败：另一条“活动续期到绝对期限”原测试同样在恰好到期时断言物理缺失，读到 ErrStale 而非 ErrNotFound；本轮新增 HTTPS 子例仍全通过。PR #69 转草稿后补齐第二处 deadline+1ms 等待，逐一核对所有 waitTime/ErrNotFound 组合，专项内仅这两处验证物理缺失；IdleExpiresAt 的逻辑失效等待保持原样。未改产品代码、原断言、聚合超时或公共等待函数。日志 `/private/tmp/oj-session-http-ci-integration.log` 保留失败证据，后续追加修复提交而不重写已推送历史。
+
+补齐后本地完整专项再次通过，44 个 PASS 条目（含父条目，10.518 秒）、静态 0 问题和自有容器/OOM/清理核验均成功（`protocol5.log`），Astra 增量复核无阻断。`protocol4.log` 仅记录默认 tag@digest 的本地 inspect 在创建容器前失败；只读回读确认同一 `redis@sha256:0312984fbfeb2ff1d4382ecef45b50e7d65478a6a58cf12ce28d6de7a4142e45` 仍存在，显式传驱动已有的 `--redis-image` 参数完成复验，没有下载或改版本；该本地名称解析差异原因未进一步确认。首轮远端除 integration 及其汇总外，其余七项检查成功；新 head 必须重新核验全部适用 CI。
+
 ## 2026-10-31：正式普通 Redis 会话协议
 
 成功 fetch 主线 `7df407c2511342c950f1ee277f6d3d8974b44841` 后建立独立 `codex/ordinary-redis-protocol`，前置 PR67 主线 CI `41184439096` 已成功。新增 `internal/session/redisstore`，以同一权威 Authority 复用个人凭据认证及 PG 全局→主体门禁，落实普通空闲 2h/绝对 12h/三名额、冻结尝试的 Retry/Check/Abandon、Read/Touch/Revoke。合同归[会话设计](architecture/session-design.md#79-普通-redis-会话协议)。无 SQL/迁移变化，schema 5 保持；HTTP/SCS、Cookie/CSRF、跨请求持久化、权限、其他 profile/轮换及恢复编排不在本轮交付。

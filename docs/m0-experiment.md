@@ -6,7 +6,7 @@
 
 新增只读身份、显式活动和确认退出的独立 HTTPS Handler；固定来源/direct TLS/Host、严格唯一 Cookie、方法和来源前置拒绝、统一 no-store，以及未知结果优先 503。成功退出才发送同 scope 的 Cookie 清理；Read/Touch 不发凭据、不隐式续期，具体合同见[会话设计](architecture/session-design.md#710-已有普通会话的-https-适配)。
 
-HTTP 八项/49 子例 race 和静态通过；完整真实 Redis7.2.17/PostgreSQL/race **44 个 PASS 条目（含父条目，10.438 秒）**及双 TLS 入口通过，完整后端格式/vet/静态/race/四入口构建和仓库策略通过。实证轮询不变、显式续期、跨入口退出、实际撤销后模拟丢回执无 Cookie、空闲过期/恢复/禁用拒绝；误分类与原到期断言竞态的复现/修正归[交付日志](delivery-log.md)。默认 Gin/Compose/公开 OpenAPI 尚未挂载，无登录发放/跨请求 Attempt、SCS 完整适配、真实浏览器/反代、邮箱与训练权限、恢复编排或容量验收。仍为 schema 5，无新依赖/SQL/迁移，完整 AC01/23/24/25/M0 未通过，未部署。
+HTTP 八项/49 子例 race 和静态通过；完整真实 Redis7.2.17/PostgreSQL/race **44 个 PASS 条目（含父条目，10.518 秒）**及双 TLS 入口通过，完整后端格式/vet/静态/race/四入口构建和仓库策略通过。实证轮询不变、显式续期、跨入口退出、实际撤销后模拟丢回执无 Cookie、空闲过期/恢复/禁用拒绝；误分类与原到期断言竞态的复现/修正归[交付日志](delivery-log.md)。默认 Gin/Compose/公开 OpenAPI 尚未挂载，无登录发放/跨请求 Attempt、SCS 完整适配、真实浏览器/反代、邮箱与训练权限、恢复编排或容量验收。仍为 schema 5，无新依赖/SQL/迁移，完整 AC01/23/24/25/M0 未通过，未部署。
 
 ## 正式 P3 普通 Redis 会话协议（2026-10-31）
 

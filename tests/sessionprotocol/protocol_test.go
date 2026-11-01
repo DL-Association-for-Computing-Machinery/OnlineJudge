@@ -156,7 +156,8 @@ func TestOrdinaryProtocol(t *testing.T) {
 		if v.IdleExpiresAt != absolute {
 			t.Fatal("late active expiry was not clamped to original deadline")
 		}
-		f.waitTime(t, absolute)
+		// As above, physical absence requires crossing Redis's strict boundary.
+		f.waitTime(t, absolute.Add(time.Millisecond))
 		_, err = s.Touch(f.ctx, c)
 		wantError(t, err, protocol.ErrNotFound)
 	})
