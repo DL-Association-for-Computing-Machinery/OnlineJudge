@@ -195,6 +195,12 @@ func browserStatic(directory string) http.Handler {
 			http.NotFound(w, r)
 			return
 		}
+		// Mirror the production SPA fallback for the explicit UI routes only.
+		if r.URL.Path == "/login" || r.URL.Path == "/account" || r.URL.Path == "/submissions" || strings.HasPrefix(r.URL.Path, "/preview/problems/") {
+			r = r.Clone(r.Context())
+			r.URL.Path = "/"
+			r.URL.RawPath = ""
+		}
 		files.ServeHTTP(w, r)
 	})
 }

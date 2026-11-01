@@ -1,6 +1,6 @@
 # 浏览器账号与会话
 
-账号面板使用现有 React、原生 fetch 与 CSS，在同一页面提供已有个人账号的登录、原尝试恢复、当前会话检查、主动续期、退出和可选改密。页面不提供注册、邮箱找回、角色或训练授权；未验证邮箱也不会因此获得提交权限。六个会话接口归[会话 OpenAPI](../api/session.openapi.yaml)，改密归[账号 OpenAPI](../api/account.openapi.yaml)。
+账号界面使用 React、原生 fetch 与 CSS，在 `/login` 提供已有个人账号登录与原尝试恢复，`/account` 提供当前会话检查、主动续期、退出和可选改密。页面由 React Router 导航，共享同一个账号 controller；旧 `/#account-title` 转到账号页。页面不提供注册、邮箱找回、角色或训练授权；未验证邮箱也不会因此获得提交权限。六个会话接口归[会话 OpenAPI](../api/session.openapi.yaml)，改密归[账号 OpenAPI](../api/account.openapi.yaml)。
 
 新密码至少 15 个 Unicode code point、允许空格、不强制字符组合、拒绝常见弱密码及不 trim/归一化/截断的原始字节规则，已于 2026-11-01 由用户确认，见[需求](requirements.md#登录会话)。现有实现无需改变；这不代替生产弱密码字典的来源、许可和覆盖验收。
 
@@ -30,7 +30,7 @@
 
 ## 验证与边界
 
-前端服务/状态机行为测试由现有 Vitest 与 frontend CI 执行。单页面暂不需要 Router/Query，也没有新增依赖；多页面和业务查询仍沿用已选路线，见[前端约定](architecture/frontend-sandbox-options.md#31-已确认的路由请求缓存与刷新约定)。
+前端服务/状态机行为测试由现有 Vitest 与 frontend CI 执行。本次多页面替换引入已选 React Router；未引入 Query 或改变账号请求协议，具体依赖和示例边界见 [Web 界面](frontend-design.md)。站内首页/做题预览/账号往返保持 controller 生命周期，改密未知标记不会因站内导航被清除；完整刷新限制仍如上所述。
 
 真实浏览器的[专用命令](../README.md#浏览器账号专项)只使用已有镜像、Node、Playwright 与浏览器，不自动安装/下载；构建仍在 Docker。它创建全新且位于仓库外的产物目录、自有测试 bridge/Redis/临时 PG，真实 race API 经 pinned mTLS 代理提供页面；仅将 9443/9444 映射到本机回环随机端口。外层临时证书仅在新测试浏览器 context 忽略校验，内部 mTLS 保持真实验证。合成低成本 KDF、200/hour 测试额度与词条不能充当生产配置。
 

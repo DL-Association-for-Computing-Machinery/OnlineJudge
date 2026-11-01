@@ -175,7 +175,7 @@ def main():
             if not (ROOT / "web" / name).exists():
                 raise ValueError("frontend source incomplete")
         expected_checks = re.findall(r"^\s+passed\('([^'\n]+)'\)", (ROOT / "tests/browser/account-qa.mjs").read_text(), re.M)
-        if len(expected_checks) != 10 or len(set(expected_checks)) != 10:
+        if len(expected_checks) != 12 or len(set(expected_checks)) != 12:
             raise ValueError("browser driver check contract changed")
         phase = "FRONTEND"
         print("Building assets with cached dependencies", flush=True)

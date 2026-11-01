@@ -49,7 +49,7 @@ Next.js 作为已比较的备选保留，不引入当前首期技术栈。若公
 
 ## 3. 前端配套与资源控制
 
-用户已确认 Tailwind CSS＋shadcn/ui；2026-10-25 进一步确认 React Router＋TanStack Query＋原生 fetch＋pnpm，并接受第 3.1 节请求、缓存与刷新约定。具体版本、兼容性和运行效果尚未验证；题面已确认 react-markdown＋remark-gfm＋remark-math＋rehype-katex／KaTeX 及第 3.3 节约定；表单等其他配套仍待选。
+用户已确认 Tailwind CSS＋shadcn/ui；2026-10-25 进一步确认 React Router＋TanStack Query＋原生 fetch＋pnpm，并接受第 3.1 节请求、缓存与刷新约定。已引入的 Router/CodeMirror 精确版本和桌面预览验证见 [Web 界面](../frontend-design.md)，其余依赖及生产预算仍待实施核验；题面已确认 react-markdown＋remark-gfm＋remark-math＋rehype-katex／KaTeX 及第 3.3 节约定；表单等其他配套仍待选。
 
 | 能力 | 已确认或候选 | 对资源与维护的影响 |
 | --- | --- | --- |
@@ -92,7 +92,7 @@ Next.js 作为已比较的备选保留，不引入当前首期技术栈。若公
 
 #### 3.1.1 已有账号的浏览器面板
 
-单页面沿用现有 React/fetch/CSS，尚不需要多页面 Router 或查询缓存，也没有新增依赖。实际同源 HTTPS 登录/恢复、只读检查、显式续期、确认退出和改密的用户流程、未知结果与密码处理归[浏览器账号](../account-browser.md)；不代表邮箱注册、草稿、训练或资源权限已实现。
+账号请求沿用现有 React/fetch/CSS 与状态机；本次多页面替换引入 React Router 和按路由懒加载的 CodeMirror，精确版本、简洁桌面布局及内存预览边界见 [Web 界面](../frontend-design.md)，查询缓存尚未引入。实际同源 HTTPS 登录/恢复、只读检查、显式续期、确认退出和改密归[浏览器账号](../account-browser.md)；示例编辑与导入导出不代表邮箱注册、IndexedDB 草稿、正式训练或资源权限已实现。
 
 账号请求禁止跳转、跨源和自动 POST 重试；初次挂载与刷新只读，输入不进入 React 状态或存储，同步单飞和本地代次隔离旧响应。改密 401/404 不能推导普通会话退出，放弃候选也不能当作通用 logout。真实浏览器和 Vitest 证据见[交付记录](../delivery-log.md)，完整页面/生产兼容与容量仍待验。
 
