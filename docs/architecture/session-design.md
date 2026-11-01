@@ -281,6 +281,20 @@ Redis 只存令牌 SHA-256 摘要。七个 Lua 文件组成六个脚本入口，
 
 构造检查当前服务为 Redis 7.2.x standalone primary、noeviction，持续配置和恢复隔离由运维保证；启动检查不能证明后续自动切换/时钟/回档安全。CI 隔离夹具固定 Redis 7.2.17 镜像摘要，真实 PG 使用 schema 5。测试含双客户端并发三名额、精确重试、实际 TTL、坏字段/索引、超时/OOM、PG 锁等待/连接终止与未知结果；注入丢回执、TIME 错误和改写测试脚本后的部分写入须与真实网络故障区分。命令见 [README](../../README.md)，实测归[交付记录](../delivery-log.md)。无 SQL/迁移变更；回退须先停止依赖调用方并隔离/换代次处理旧会话空间，不盲目复用旧数据。HTTP/SCS 生命周期、Cookie/CSRF、验证邮箱与训练权限、轮换/其他策略、恢复编排、生产容量及完整 AC23/M0 均待验收。
 
+### 7.10 已有普通会话的 HTTPS 适配
+
+`internal/session/httptransport.New(store, Config{Origin, Timeout})` 只适配同一 `redisstore.Store` 的已有普通会话。独立 Handler 提供 `GET /api/v1/session`（Read）、`POST /api/v1/session/activity`（Touch）及 `POST /api/v1/session/logout`（Revoke）。默认 Gin/API、Compose 和公开 OpenAPI **未挂载**这些路径；合成测试先经受信 Create/Check 取得凭据，没有 HTTP 登录、Cookie 发放或跨请求 Attempt。后续正式登录须先解决固定尝试管理/恢复及准入，不允许错误后盲目新建 Create。本阶段不引入 SCS 自动 LoadAndSave、第二份会话状态或隐式保活，后续 SCS/Gin 完整生命周期验证路线保持待验。
+
+构造器冻结无路径的可信 HTTPS origin 和大于零、至多五秒的合作调用期限；每个请求必须直接 TLS 且 Host 精确等于配置 authority。忽略 `Forwarded`/`X-Forwarded-*`，当前反代终止 TLS 的默认 Nginx 不兼容此约束；反代信任须单独设计验证，不得伪造 `r.TLS` 绕过。所有结果（含 401/403/404/405/503）为 `Cache-Control: no-store`，无 CORS 许可。安全方法只允许明确的 GET，HEAD/OPTIONS/写接口的 GET 不触库。
+
+POST 在触库前调用标准库 [CrossOriginProtection.Check](https://pkg.go.dev/net/http@go1.26.10#CrossOriginProtection.Check)，并额外要求至少一个正向来源证据：唯一、非空、精确匹配配置的 `Origin`，或唯一 `Sec-Fetch-Site: same-origin`。任一出现的头都须合法，拒绝跨站、same-site、none、null、空值、多值及相互矛盾的组合；两头皆无也拒绝。非浏览器客户端须显式提供来源，头本身不证明身份。该防护仅覆盖本 Handler 两个 POST，不代表全站 CSRF 或真实浏览器验收通过。
+
+仅从 Cookie 读取 `__Host-oj_session`；标准库逐行严格 ParseCookie，再跨所有行要求恰一个同名 Cookie，凭据须为规范 256-bit base64url。其他畸形 Cookie 同样失败关闭，不接受 query/body/Authorization 替代凭据。读取和活动响应仅含主体 ID 与创建/空闲/绝对期限，不暴露令牌、认证代次或恢复标识，不发送 Set-Cookie；身份时点观察不授予验证邮箱、训练、角色或资源权限。活动是显式 POST，后台轮询不能调用它无限保活；实际产品活动识别、采样和限流另验。
+
+只有 Revoke 返回成功且调用 context 仍有效才返回 204，并以相同名称、`Path=/`、无 Domain、Secure、HttpOnly、SameSite=Lax、Max-Age=0/过去 Expires 清理 Cookie。缺记录不代表确认撤销；任何失败不清 Cookie。两种 ErrStore、恢复闭门、明确未知结果、取消/超时优先 503。排除上述错误后，明确 Redis 失效/缺记录即使带 `ErrGuardedOperation` 也返回 401；401 只表示会话未被接受，不是退出确认或外部效果回滚证明。其他受保护错误保持 503，未受保护的账号失效返回 401；其余未知错误为 503。不自动重试、补偿或泄漏内部错误。合作期限不是强制终止或撤回外部效果。
+
+真实专项复用原私有 Redis/PostgreSQL 夹具和两个 TLS 测试服务器；合成 Cookie 由测试注入，没有浏览器 Cookie jar、跨浏览器关闭/重开、正式反代或公开账号流程验收。HTTP 单元测试覆盖来源/Cookie/方法前置拒绝及错误优先级；真实状态核对轮询不变、显式续期、跨入口退出、实际撤销后适配器丢回执与恢复拒绝。运行命令沿用 README 普通会话专项，证据归[交付记录](../delivery-log.md)。无依赖、SQL、迁移或 schema 变化；回退停用调用方并移除适配，不回滚数据库。未部署，完整 AC01/23/24/25/M0、生产容量与恢复编排继续待验收。
+
 ## 8. 注册、找回与账号发放
 
 用户确认采用“日常邮箱验证注册＋密码登录＋邮箱自助找回，正式比赛采用校内发号和人工核验重置”。这确认产品流程，不代表邮件供应商、发信组件或运行效果已验证。

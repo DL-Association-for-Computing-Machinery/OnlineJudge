@@ -129,7 +129,9 @@ func TestOrdinaryProtocol(t *testing.T) {
 		_, err = s.Check(f.ctx, a)
 		wantError(t, err, protocol.ErrStale)
 		must(t, s.Abandon(f.ctx, a))
-		f.waitTime(t, v.AbsoluteDeadline)
+		// Redis physically expires keys only when now > deadline, while the
+		// protocol already refuses them at equality. This assertion needs absence.
+		f.waitTime(t, v.AbsoluteDeadline.Add(time.Millisecond))
 		_, err = s.Read(f.ctx, c)
 		wantError(t, err, protocol.ErrNotFound)
 		wantError(t, s.Retry(f.ctx, a), protocol.ErrStale)
@@ -154,7 +156,8 @@ func TestOrdinaryProtocol(t *testing.T) {
 		if v.IdleExpiresAt != absolute {
 			t.Fatal("late active expiry was not clamped to original deadline")
 		}
-		f.waitTime(t, absolute)
+		// As above, physical absence requires crossing Redis's strict boundary.
+		f.waitTime(t, absolute.Add(time.Millisecond))
 		_, err = s.Touch(f.ctx, c)
 		wantError(t, err, protocol.ErrNotFound)
 	})
@@ -164,6 +167,7 @@ func TestOrdinaryProtocol(t *testing.T) {
 	t.Run("real locks and lost backend", func(t *testing.T) { testLocks(t, f) })
 	t.Run("OOM distinguishes readonly checks and writes", func(t *testing.T) { testOOM(t, f) })
 	t.Run("actual Redis pause retains uncertain attempt", func(t *testing.T) { testRedisPause(t, f) })
+	t.Run("existing session HTTPS lifecycle", func(t *testing.T) { testHTTP(t, f) })
 	for _, c := range f.clients {
 		if c.PoolStats().TotalConns > 8 {
 			t.Fatal("Redis client exceeded explicit connection ceiling")

@@ -2,6 +2,12 @@
 
 本页集中维护当前 M0 进度和证据入口。下方“迁移前”之后的记录均为 2026-10-25—28 历史快照，保留原材料版本和命令，仅供追溯；当前执行方式见 [README](../README.md)。完整 M0 尚未验收，未部署。
 
+## 正式 P3 已有普通会话 HTTPS 适配（2026-11-01）
+
+新增只读身份、显式活动和确认退出的独立 HTTPS Handler；固定来源/direct TLS/Host、严格唯一 Cookie、方法和来源前置拒绝、统一 no-store，以及未知结果优先 503。成功退出才发送同 scope 的 Cookie 清理；Read/Touch 不发凭据、不隐式续期，具体合同见[会话设计](architecture/session-design.md#710-已有普通会话的-https-适配)。
+
+HTTP 八项/49 子例 race 和静态通过；完整真实 Redis7.2.17/PostgreSQL/race **44 个 PASS 条目（含父条目，10.518 秒）**及双 TLS 入口通过，完整后端格式/vet/静态/race/四入口构建和仓库策略通过。实证轮询不变、显式续期、跨入口退出、实际撤销后模拟丢回执无 Cookie、空闲过期/恢复/禁用拒绝；误分类与原到期断言竞态的复现/修正归[交付日志](delivery-log.md)。默认 Gin/Compose/公开 OpenAPI 尚未挂载，无登录发放/跨请求 Attempt、SCS 完整适配、真实浏览器/反代、邮箱与训练权限、恢复编排或容量验收。仍为 schema 5，无新依赖/SQL/迁移，完整 AC01/23/24/25/M0 未通过，未部署。
+
 ## 正式 P3 普通 Redis 会话协议（2026-10-31）
 
 新增正式 `internal/session/redisstore`：同一 Authority 的真实个人凭据验证和 PG 双层门禁内执行三名额/固定 Attempt/结果确认/墓碑协议。普通空闲 2h、绝对 12h，Read 不续期，Touch 不越原期限，Rehash 不撤销现有会话；Retry 不覆盖 Touch 后的记录。冻结后所有失败仍保留原尝试，独立 Check 才返回 Credential；缺记录不证明未写入。完整合同、客户端预算、Redis 运行前提与回退归[会话设计](architecture/session-design.md#79-普通-redis-会话协议)。无 HTTP、Cookie/CSRF、跨请求尝试持久化、权限或自动恢复，schema 5 不变。
