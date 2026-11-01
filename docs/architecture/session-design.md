@@ -2,7 +2,7 @@
 
 2026-11-01：正式身份核心、[普通 Redis 存储协议](#79-普通-redis-会话协议)、[已有会话 HTTPS](#710-已有普通会话的-https-适配)及[两步登录恢复](#711-跨请求登录尝试与-cookie-发放)已有分项实现；[独立会话子实验](../../tests/sessionexperiment/README.md)保留旧 RDB、逻辑回档、轮换及保持登录等历史证据。默认 API 尚未接入账号入口，封装候选不等于服务端 pending 注册表、自动恢复、资源权限或生产准入；下文产品规则保持不变。
 
-日期：2026-11-01。版本：0.20。状态：Session＋Redis、分场景期限、比赛账号、Argon2id、日常邮箱验证注册/找回及可替换 SMTP 接口已确认；SCS＋go-redis、go-mail 及 PostgreSQL 持久化发信任务＋独立受限发送执行器优先验证，Gin sessions 备选。River 开源核心优先验证，专用任务表备选；短期 AES-GCM 载荷、River 仅存业务 ID、独立密钥文件、不考虑付费方案及第 12 节令牌/重发/重试规则已确认；PostgreSQL 会话只作对比，不替换 Redis 基线。身份核心、普通 Redis 协议、两步 HTTPS 登录及显式配置的 TLS API 已有分项实现；默认 Compose/公开 OpenAPI 未启用，生产参数、邮件/资源权限和完整会话仍待交付，未部署。关联 [总体架构](system-design.md)、[ADR-001](001-go-gin.md)、[需求](../requirements.md)。
+日期：2026-11-01。版本：0.21。状态：Session＋Redis、分场景期限、比赛账号、Argon2id、日常邮箱验证注册/找回及可替换 SMTP 接口已确认；SCS＋go-redis、go-mail 及 PostgreSQL 持久化发信任务＋独立受限发送执行器优先验证，Gin sessions 备选。River 开源核心优先验证，专用任务表备选；短期 AES-GCM 载荷、River 仅存业务 ID、独立密钥文件、不考虑付费方案及第 12 节令牌/重发/重试规则已确认；PostgreSQL 会话只作对比，不替换 Redis 基线。身份核心、普通 Redis 协议、两步 HTTPS、显式 TLS API 与可选已登录改密已有分项实现；改密有独立 OpenAPI，默认 Compose/浏览器未启用，生产参数、邮件/资源权限和完整会话仍待交付，未部署。关联 [总体架构](system-design.md)、[ADR-001](001-go-gin.md)、[需求](../requirements.md)。
 
 保持登录的后续子实验已覆盖默认关闭、主动选择 24 小时/7 天、Cookie 持久化、跨副本共享三名额，以及缩短期限下的续期/过期/迟到保存。SCS `RememberMe` 只控制持久化，期限由请求独立配置和服务端载荷选择；保存、结果核验、放弃共用策略上界，原绝对期限不变。普通 Cookie 改为非持久化，带 Cookie 再登录拒绝，活动参数不能改变登录时选择。仅测试夹具和同进程 TLS API，参赛期限、正式权限提升轮换、浏览器关闭/重开及完整 Gin/CSRF 仍待验证；细节见实验 README。
 
@@ -385,7 +385,7 @@ Close 在同一 mutex 下停止入口和登记活动请求，503/no-store/无 Co
 
 ### 7.17 显式会话 API 入口
 
-`cmd/api` 在非空 `OJ_SESSION_CONFIG_FILE` 下调用 `apiapp.Run`，一个进程只拥有一个 Runtime 和一个 HTTPS listener。必须同时显式配置 `OJ_API_ADDR`（数字端口，可用 0 供隔离测试），与实验 token 模式互斥；这些检查先于配置、秘密和网络访问。未启用时保留 bootstrap/实验模式。启动参数和密码环境合同、镜像入口见 [README](../../README.md#显式启用普通会话-api)。本入口只开放已有六个会话路径及健康检查，不开放注册、邮件或训练资源。
+`cmd/api` 在非空 `OJ_SESSION_CONFIG_FILE` 下调用 `apiapp.Run`，一个进程只拥有一个 Runtime 和一个 HTTPS listener。必须同时显式配置 `OJ_API_ADDR`（数字端口，可用 0 供隔离测试），与实验 token 模式互斥；这些检查先于配置、秘密和网络访问。未启用时保留 bootstrap/实验模式。启动参数和密码环境合同、镜像入口见 [README](../../README.md#显式启用普通会话-api)。基础能力开放六个会话路径及健康检查，可选改密能力见第 7.18 节；不开放注册、邮件或训练资源。
 
 `apiconfig.Parse` 是无 I/O 的版本 1 JSON 解析器，不接受 DSN、内联密码/key、任意环境名或回调。文件至多 64 KiB、一个根对象；拒绝未知字段、重复解码字段名（包括转义别名）、非小写 snake_case 名、null、错误 Unicode、整数溢出、尾随内容、深度超过 12、单数组超过 16 项或总字段超过 256。时间必须是显式 Go duration 字符串，数字零不替代遗漏预算。下表列出完整配置层次；空数组仍须显式给定，`tls` 对象不能省略。
 
@@ -414,6 +414,28 @@ SIGTERM/interrupt 后 listener 停止接收，网络 Shutdown 与 Runtime.Close 
 超时退出也不证明远端查询即时结束、事务已回滚或副作用不存在。PG14 默认不在查询执行中轮询客户端连接，[连接检测](https://www.postgresql.org/docs/14/runtime-config-connection.html#GUC-CLIENT-CONNECTION-CHECK-INTERVAL)与[statement_timeout](https://www.postgresql.org/docs/14/runtime-config-client.html#GUC-STATEMENT-TIMEOUT)约束不同；进程直接退出会终止 driver 的异步取消机会。专项保持 blocker 不释放，超时场景按已配置 DB 查询预算加固定观察余量核验精确 backend 消失；正常排空与启动取消仍按原严格连接释放断言。应用退出预算与服务端查询期限须分别配置和监控，不自动增加连接轮询参数或提供强制回滚承诺。
 
 真实命令测试与原协议专项共用隔离 PG/Redis，构建并启动 API 子进程；结果见[交付记录](../delivery-log.md)。默认 Compose/Nginx 和公开 OpenAPI 未启用此模式，真实存储 TLS、生产参数/证书与代理、浏览器、账号权限/恢复及完整 M0 仍待验，未部署。无依赖、SQL、迁移变化；回退停服务后移除显式配置环境，不自动撤销会话或清理存储。
+
+### 7.18 已登录用户修改密码
+
+显式的 `POST /api/v1/account/password` 接受且仅接受非空字符串 `current_password`、`new_password`，最多 4096 请求体字节；拒绝未知/重复解码字段名、null、坏 Unicode 和尾随内容。仅从真实普通会话选择主体，不接受 ID、版本或恢复代次输入；复用原 direct/pinned proxy TLS、精确 Host、正向同源证据、严格 Cookie 和总 HTTP 期限。接口及错误/Cookie 合同见[独立账号 OpenAPI](../../api/account.openapi.yaml)。未配置改密能力时为 404，默认 Compose 未启用。
+
+`identity.PasswordChanger` 使用首次真实 session Read 的 `SessionVersion`：固定 SubjectID/AuthGeneration/RecoveryID，初始恢复读不得换成新的 epoch，验密 snapshot 必须仍 enabled 且匹配原认证代次。共享 BoundedHasher 在数据库锁外校验当前密码并创建新 Current 记录；Legacy 不先 RehashCAS，失败改密不附带旧参数升级。最终 `ReplacePasswordForSession` 在同一事务按恢复 `FOR SHARE` → 带 enabled/两代次/溢出条件的 UPDATE → commit 执行；不先持有账号共享锁再升级写锁。只调用一次最终替换，不根据失败回执重新读取版本或补偿。成功同时推进 credential_version/auth_generation；旧会话和未完成登录候选被原权威门禁拒绝，无须依赖 Redis 删除或跨存储事务。新登录使用新代次的独立名额集合。
+
+会话有效性的时点为请求首次成功 Read。之后 logout 或自然过期不会撤回已受理的改密；当前密码及最终账号/恢复 CAS 仍必需。账号与恢复代次始终以首次 session fence 为准；验密 snapshot 读取后、最终条件 UPDATE 前发生的凭据 revision 变化会冲突，不采用最新 revision 自动重试。仅改变 CredentialVersion 的重哈希若在 snapshot 读取前已完成，本次可读取新 CV 后合法继续；提交后的并发变化也不能撤回已完成的改密。任一修订为 int64 上限则拒绝；失败返回零结果，提交或回执错误保持可能已写入的分类，不能盲目重试。
+
+Store 保留原共享 work；`redisstore.NewPasswordChange` 仅从同一 Login/store 的 authority/work 组装 Read、独立限流、规则与 native Changer。HTTP 构造器的可选 capability 须绑定同一个 `*Login`，原构造器不隐式新增能力。Runtime 追踪整个同步调用及 KDF，沿用第 7.15/7.17 节的实际排空和共享总退出预算。
+
+新密码强度由独立不可变 `password.Acceptance` 处理，不改变既有密码的原始字节校验。网络工程初始下限为 **15 个 Unicode code point**，显式最低长度可提高至 64；字节上限沿同一个 Hasher，至少容纳最低字符数的四倍字节。此初值参考 [NIST 单因素密码建议](https://pages.nist.gov/800-63-4/sp800-63b.html)，不是本轮用户另行确认的完整产品规范，也不声称 NIST 整体合规。允许空格和 Unicode，不要求字符组合、不 trim/归一化/截断；字节完全相同的新旧密码在当前密码验证成功后拒绝。Unicode NFC 没有引入，既有记录和输入语义保持。
+
+`password_change` 可选配置全部显式：`minimum_characters`、绝对规范 `blocklist_file`、三个 `{count,window}` 对象 `global`/`source`/`subject`。规则文件仅有词法整数 `version: 1` 和非空 `sha256` 数组；每项为完整原始 UTF-8 密码的 64 字符小写十六进制 SHA-256，拒绝零摘要、重复、未知/null/坏 Unicode/尾随内容。文件 ≤1 MiB，纯机制最多 16,384 摘要，文件字节预算可能先达到；不保存用户密码，摘要表是已知弱密码的精确整串比较，不是密码存储/KDF、子串匹配或在线泄漏查询。读取使用第 7.17 节 public 文件检查；不热重载、不自动下载字典。正式字典的来源、许可、覆盖充分性与更新/运维仍须生产验收，测试仅用合成词条。
+
+独立 `PasswordChangeLimits` 在认证会话得到可信主体后、任何 KDF 前原子扣取全局/实际来源/主体三维固定窗口额度。复用原有有界 Lua，但采用独立 HMAC purpose、`oj-password-change-limit:` 前缀和持久 marker；不共用邮箱桶或修改旧 login marker。marker 同时绑定完整 Acceptance 指纹（版本域、最低长度、字节预算、排序后的固定长度摘要集合），顺序变化无影响；指纹仅进入 metadata，不进入计数 key，防止改规则获得新额度。拒绝不写任何维度或 TTL；部分/未知效果不退款、不重试。
+
+显式初始化只适用于隔离下已知初始 namespace；Runtime 只读核验。规则/词典、额度或 key 不匹配/丢失时启动或请求失败关闭，不自动重建预算。变更规则须隔离旧副本并受控维护 marker、保留应有计数；本阶段不提供热更新或通用迁移平台，也不以换 namespace 绕过全局额度。
+
+成功提交后仅返回 204、空体，删除 `__Host-oj_session` 和 `__Host-oj_login` 两个原 scope Cookie，不发放新会话。失败不改 Cookie；429 不披露维度/余量/Retry-After，400 区分新密码规则、当前/新输入长度及未改变，401 拒绝凭据，409 要求重新登录后操作。存储/恢复/取消/未知写入优先 503，结果可能已提交，应重新登录核验；Cookie 清除不能代替持久化改密，进程/网络退出也不保证远端即时回滚。
+
+原 schema 5、密码格式、会话协议和旧配置均兼容，无依赖/迁移变化；SQL 仅新增专用条件 UPDATE。回退先停用并移除可选配置，重启/回退旧二进制，成功密码变更不撤回。真实双客户端竞态/锁序/取消/丢回执、主键 EXPLAIN，以及双 API 进程/代理的拒绝、撤销、Cookie 和重新登录证据见[交付记录](../delivery-log.md)。浏览器、生产字典/预算/证书与存储 TLS、邮箱找回/注册、完整权限恢复及 AC01/23/24/25/M0 继续待验，未部署。
 
 ## 8. 注册、找回与账号发放
 

@@ -53,7 +53,33 @@ func (w document) config() (Config, error) {
 		w.Password.apply(r) != nil || w.LoginLimits.apply(r) != nil || w.Server.apply(&c) != nil {
 		return Config{}, ErrConfig
 	}
+	if w.PasswordChange != nil && w.PasswordChange.apply(&c) != nil {
+		return Config{}, ErrConfig
+	}
 	return c, nil
+}
+
+func (w passwordChangeWire) apply(c *Config) error {
+	if w.MinimumCharacters < redisstore.MinimumNewPasswordCharacters || w.MinimumCharacters > 64 || uint64(c.Runtime.PasswordLimits.MaxPasswordBytes) < 4*uint64(w.MinimumCharacters) || w.BlocklistFile == "" || !validPath(w.BlocklistFile, false) {
+		return ErrConfig
+	}
+	change := &sessionruntime.PasswordChangeConfig{}
+	items := []struct {
+		wire *bucketWire
+		out  *redisstore.LoginBucket
+	}{{w.Global, &change.Limits.Global}, {w.Source, &change.Limits.Source}, {w.Subject, &change.Limits.Subject}}
+	for _, item := range items {
+		if item.wire == nil || !durations([]durationField{{item.wire.Window, &item.out.Window}}) {
+			return ErrConfig
+		}
+		item.out.Count = item.wire.Count
+	}
+	if change.Limits.Validate() != nil {
+		return ErrConfig
+	}
+	c.Runtime.PasswordChange = change
+	c.PasswordBlocklistFile, c.MinimumPasswordCharacters = w.BlocklistFile, w.MinimumCharacters
+	return nil
 }
 
 type durationField struct {

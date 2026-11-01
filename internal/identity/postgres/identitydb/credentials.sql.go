@@ -294,3 +294,67 @@ func (q *Queries) ReplacePasswordCAS(ctx context.Context, arg ReplacePasswordCAS
 	)
 	return i, err
 }
+
+const replacePasswordForSession = `-- name: ReplacePasswordForSession :one
+UPDATE identity_credentials
+SET credential_version = credential_version + 1, auth_generation = auth_generation + 1,
+    format_version = $1, algorithm = $2, argon_version = $3,
+    memory_kib = $4, iterations = $5, parallelism = $6,
+    salt_bytes = $7, digest_bytes = $8, salt = $9, digest = $10
+WHERE id = $11 AND enabled
+  AND credential_version = $12 AND auth_generation = $13
+  AND credential_version < 9223372036854775807 AND auth_generation < 9223372036854775807
+RETURNING id, enabled, credential_version, auth_generation, format_version, algorithm, argon_version, memory_kib, iterations, parallelism, salt_bytes, digest_bytes, salt, digest
+`
+
+type ReplacePasswordForSessionParams struct {
+	FormatVersion             int32
+	Algorithm                 string
+	ArgonVersion              int32
+	MemoryKib                 int64
+	Iterations                int64
+	Parallelism               int16
+	SaltBytes                 int32
+	DigestBytes               int32
+	Salt                      []byte
+	Digest                    []byte
+	ID                        string
+	ExpectedCredentialVersion int64
+	ExpectedAuthGeneration    int64
+}
+
+func (q *Queries) ReplacePasswordForSession(ctx context.Context, arg ReplacePasswordForSessionParams) (IdentityCredential, error) {
+	row := q.db.QueryRow(ctx, replacePasswordForSession,
+		arg.FormatVersion,
+		arg.Algorithm,
+		arg.ArgonVersion,
+		arg.MemoryKib,
+		arg.Iterations,
+		arg.Parallelism,
+		arg.SaltBytes,
+		arg.DigestBytes,
+		arg.Salt,
+		arg.Digest,
+		arg.ID,
+		arg.ExpectedCredentialVersion,
+		arg.ExpectedAuthGeneration,
+	)
+	var i IdentityCredential
+	err := row.Scan(
+		&i.ID,
+		&i.Enabled,
+		&i.CredentialVersion,
+		&i.AuthGeneration,
+		&i.FormatVersion,
+		&i.Algorithm,
+		&i.ArgonVersion,
+		&i.MemoryKib,
+		&i.Iterations,
+		&i.Parallelism,
+		&i.SaltBytes,
+		&i.DigestBytes,
+		&i.Salt,
+		&i.Digest,
+	)
+	return i, err
+}

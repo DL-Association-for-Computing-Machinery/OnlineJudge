@@ -100,33 +100,12 @@ func (a *loginAdmission) admit(ctx context.Context, source netip.Addr, email str
 }
 
 func (a *loginAdmission) run(ctx context.Context, script string, keys []string, args []any) error {
-	if ctx == nil {
-		return ErrInvalid
-	}
-	call, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	if err := call.Err(); err != nil {
+	allowed, err := runAdmission(ctx, a.store, script, keys, args)
+	if err != nil {
 		return err
 	}
-	// One EVAL, with the Store's no-retry client. Do not use an EVALSHA helper
-	// that retries on NOSCRIPT; runtime failures may already have charged quotas.
-	value, err := a.store.client.Eval(call, script, keys, args...).Result()
-	if err != nil {
-		return storageError{err}
-	}
-	if err = call.Err(); err != nil {
-		return storageError{err}
-	}
-	code, ok := value.(int64)
-	if !ok {
-		return storageError{ErrConflict}
-	}
-	switch code {
-	case 1:
-		return nil
-	case 0:
+	if !allowed {
 		return ErrLoginRate
-	default:
-		return storageError{ErrConflict}
 	}
+	return nil
 }

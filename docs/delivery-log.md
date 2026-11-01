@@ -1,5 +1,23 @@
 # 工程交付记录
 
+## 2026-11-01：已登录用户的原子改密与旧会话失效
+
+前置 PR #76 已 squash 为 `5b9f541` 并完成工作区/知识回读；成功 fetch 后从该主线建立独立 `codex/authenticated-password-change` worktree。唯一目标为可选已登录改密的完整命令/API 路径，不涉及 SMTP/注册、管理权限或部署。新增身份用例/专用 SQL 与 sqlc 生成、独立 Redis 三维额度/规则指纹、同 owner/KDF capability、严格 HTTP 输入及可选配置；原 schema 5、密码格式、会话协议、旧配置和 login marker 保持，无新依赖/索引/迁移。接口和边界归[会话设计第 7.18 节](architecture/session-design.md#718-已登录用户修改密码)及[账号 OpenAPI](../api/account.openapi.yaml)。
+
+Astra 设计复核要求不复用带 Legacy 预升级的验证用例、不把原 session fence 换成新状态、不升级账号共享锁为写锁、专用 UPDATE 额外要求 enabled、独立 quota/marker 及规则指纹不进 bucket key，均已落实。最低强度经异步询问尚无用户答复；采用已告知的 NIST 15 字符工程初值并要求显式配置，可提高，不记为用户确认/整体 NIST 合规。规则机制仅做原始 UTF-8 code point/字节预算与整串摘要精确查表，未下载字典，生产覆盖/许可/配置另验。
+
+首轮身份/密码/PG unit race 通过，Redis 编译因共享 EVAL 提取漏 time import 失败；补回后各包 race 通过，静态指出字面 nil context 的测试写法，沿用已有表驱动上下文负例而未跳过检查。真实专项先发现故障 hook 签名和测试分支 QF1003，按既有 hook/显式 switch 修正；核心真实事务/额度专项 PASS（`protocol-core-verified.log`，27.403 秒）。随后完整接线首轮格式遗漏了新 owner 文件，已按 Git 完整新增/修改列表定向 gofmt；静态还指出新进程测试分支表达。接线编译暴露 apiapp 既有函数 password 与新包导入同名，改为显式 alias；原失败与二进制未构建结果保留（`backend.log`、`backend-fixed.log`、`protocol-http*.log`）。未关闭 lint、race、hooks 或放宽断言。
+
+完整离线 Docker Desktop/Linux arm64 backend 最终通过格式/vet、检测器正负夹具、三范围实际静态 0、全部 race 和四命令构建（`backend-verified.log`；apiapp 1.052s、apiconfig 1.091s、HTTP 1.034s、redisstore 1.021s、runtime 1.031s）。Astra 发现当前密码超限被指认为新密码错误，改为 INVALID_PASSWORD_INPUT，并经“current 129 bytes/new 合法”的真实 HTTP 和 unit 回归核对。敏感对象合法格式/JSON 增量 unit/race 1.022s、包静态 0 及最终全树格式通过（`final-unit.log`）。
+
+完整真实 Redis7.2.17/临时 PostgreSQL/race 首次接线后 **187 PASS（改密相关 34，HTTP 8，32.556s）**；补规则最大字节变化和运行中 marker 错配回归后最终再次 **187 PASS（含父条目，32.383s）**、集成静态 0、退出/OOM/自有清理通过（`protocol-http-verified.log`、`protocol-final.log`）。实证：Legacy 单次最终替换、双副本同 snapshot 仅一成功、原 AuthGeneration 不重标、disabled 当前匹配 revision 仍拒绝、验密 snapshot 后仅 CV 重哈希/恢复/禁用冲突；真实恢复共享锁与账号 UPDATE 串行、取消后精确 backend 退出、实际提交后注入丢回执恰一次、两修订溢出、实际 owning UPDATE 主键 EXPLAIN（不执行/不打印记录）。
+
+真实 API 子进程证明双副本改密/清两 Cookie、旧会话和 pending 候选拒绝、旧密码拒绝/新密码重新登录；旧 Redis token 记录仍在，不依赖清理宣称撤销。弱/短/相同/错误/超长输入、CSRF/方法/缺 Cookie/自选主体拒绝不改凭据；缺失/错配规则或 marker 不监听且释放资源。实际 TLS→mTLS 代理的同来源跨副本限流、恶意转发/Connection 头覆盖、另一实际来源独立与成功改密通过。规则 min/max/词典差异构造及显式初始化失败关闭，已构造入口也逐请求检查 marker，不重建计数/刷新拒绝 TTL。
+
+交付前再补有效 limited Login 前提下的 nil/零 capability、重复能力和跨 owner 拒绝，保持正确绑定的阳性构造；最终候选完整真实专项 **187 PASS，32.431s**、静态 0/退出/清理通过（`protocol-delivery.log`），不依靠无效 Login 使负例空泛通过。产品代码未变。
+
+新增 OpenAPI 用已锁定 MIT YAML 库在隔离 Docker 严格解析，核对唯一路径/请求对象/Cookie/11 响应/全部本地引用（`openapi.log`）；不是完整 OpenAPI 语义或真实浏览器验收。389 文件 repository、Markdown 链接、空白/完整差异检查通过；Astra 最终产品/测试/文档复核无代码阻断，收窄了 rehash 在 snapshot 前后与提交后竞态的表述，AI 不代替人工审批。日志前缀 `/private/tmp/oj-password-change-`。生产字典/预算/证书/存储 TLS、浏览器、邮箱找回/注册、完整权限恢复及 AC01/23/24/25/M0 未完成，未部署；远端交付和知识回写依最终 PR 回读核验。
+
 ## 2026-11-01：显式配置的普通会话 API 进程入口
 
 成功 fetch PR #75 主线 `847abe7` 后建立独立 `codex/session-api-entry` worktree。唯一目标是可运行的 opt-in 会话 API：严格版本化非秘密 JSON、固定密码环境、显式地址/模式互斥、TLS/mTLS 材料、同一 Runtime 的六路径及有界启动/退出。原登录密钥 fd 读取提取为 checkedfile，共用目录/所有者/单链接/快照检查；public 只放宽只读位，secret 仍仅 0400/0600。无依赖/SQL/迁移、自动初始化或默认 Compose 变化。合同、配置字段、回退和剩余边界归[会话设计第 7.17 节](architecture/session-design.md#717-显式会话-api-入口)及 README。

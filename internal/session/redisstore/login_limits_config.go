@@ -38,11 +38,15 @@ func (c LoginLimits) buckets(recovery bool) []LoginBucket {
 
 func (c LoginLimits) valid() bool {
 	for _, b := range append(c.buckets(false), c.buckets(true)...) {
-		if b.Count < 1 || b.Count > 1000000 || b.Window < time.Millisecond || b.Window > 24*time.Hour || b.Window%time.Millisecond != 0 {
+		if !b.valid() {
 			return false
 		}
 	}
 	return true
+}
+
+func (b LoginBucket) valid() bool {
+	return b.Count >= 1 && b.Count <= 1000000 && b.Window >= time.Millisecond && b.Window <= 24*time.Hour && b.Window%time.Millisecond == 0
 }
 
 type loginAdmission struct {

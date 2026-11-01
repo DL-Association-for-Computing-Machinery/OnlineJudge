@@ -172,6 +172,9 @@ func TestOrdinaryProtocol(t *testing.T) {
 	t.Run("distributed login admission", func(t *testing.T) { testLoginLimits(t, f); testLoginLimitFailures(t, f); testLimitedLoginHTTP(t, f) })
 	t.Run("authenticated single hop proxy", func(t *testing.T) { testProxy(t, f) })
 	t.Run("assembled session runtime", func(t *testing.T) { testRuntime(t, f) })
+	t.Run("authenticated password change core", func(t *testing.T) { testPasswordChangeCore(t, f) })
+	t.Run("password change admission", func(t *testing.T) { testPasswordChangeLimits(t, f) })
+	t.Run("password change owner association", func(t *testing.T) { testPasswordChangeOwner(t, f) })
 	t.Run("real API process entry", func(t *testing.T) { testEntry(t, f) })
 	for _, c := range f.clients {
 		if c.PoolStats().TotalConns > 8 {

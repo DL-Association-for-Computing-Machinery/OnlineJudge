@@ -2,6 +2,12 @@
 
 本页集中维护当前 M0 进度和证据入口。下方“迁移前”之后的记录均为 2026-10-25—28 历史快照，保留原材料版本和命令，仅供追溯；当前执行方式见 [README](../README.md)。完整 M0 尚未验收，未部署。
 
+## 正式 P3 已登录用户修改密码（2026-11-01）
+
+新增可选 `POST /api/v1/account/password`：首次真实会话的主体/认证/恢复 fence、当前密码校验、锁外新 Current 派生和恢复→条件 UPDATE 的单事务换代；成功推进两代次并清两个 Cookie，旧会话/候选拒绝，新密码重新登录。独立三维额度绑定完整弱密码规则指纹；同一 Login/authority/共享 KDF 装配，默认配置不启用，缺失/不匹配 marker 或规则失败关闭。工程初始 15 code point 下限不冒称用户确认或 NIST 整体合规；完整合同与限制见[会话设计](architecture/session-design.md#718-已登录用户修改密码)和[账号 OpenAPI](../api/account.openapi.yaml)。
+
+Docker 完整 backend 格式/vet/实际静态/race/四命令构建通过；最终真实 Redis7.2.17/临时 PG/race **187 个 PASS（含父条目，改密相关 34、改密 HTTP 8，32.431 秒）**、集成静态/退出/自有清理通过。已覆盖双客户端竞争、仅 CV 改变/禁用/恢复竞态、真实锁等待/取消/未知回执、溢出与主键 EXPLAIN，以及双 API/真实 mTLS 代理的旧凭证撤销、拒绝无写入和来源防伪。最终增量敏感格式 unit/race 与静态、OpenAPI 严格 YAML/结构/本地引用、389 文件策略通过。无依赖/迁移/索引变化，schema 5 保持；生产字典/预算、浏览器、邮箱找回/注册、完整权限恢复及 AC01/23/24/25/M0 继续待验，未部署。失败及修正证据归[交付日志](delivery-log.md)。
+
 ## 正式 P3 显式会话 API 命令入口（2026-11-01）
 
 `OJ_SESSION_CONFIG_FILE` 显式启用严格非秘密 JSON 配置、固定密码环境及 TLS/mTLS listener，必须同时指定地址且不能混用实验模式。六路径原样进入同一 Runtime；启动只读门禁、信号取消、监听失败清理和共享总退出预算见[会话设计](architecture/session-design.md#717-显式会话-api-入口)。登录密钥读取提取为共享 checkedfile，原私有文件合同不变；默认 Compose 未启用，无依赖/SQL/迁移变化。

@@ -1,0 +1,158 @@
+openapi: 3.1.0
+info:
+  title: OnlineJudge Authenticated Password Change
+  version: 0.1.0
+  description: >-
+    仅在显式会话 HTTPS 模式另行配置 password_change 后启用；默认 Compose 未启用。
+    登录取得 __Host-oj_session 后，凭当前密码修改自身密码，不接受主体或代次选择器。
+    public HTTPS Origin/Host 固定配置；代理模式须实际验证并 pin 后端 mTLS 叶证书，
+    由受信单跳代理删除覆写转发头。Cookie 认证不授予训练或管理权限。
+    缺少或不可信的客户端证书会在 TLS 握手失败，可无 HTTP 响应；403 仅指已到达 Handler 的拒绝。
+    请求首次读取会话后固定其账号/恢复代次；稍后的 logout/自然过期不撤回已受理工作，
+    最终提交仍检查 enabled、凭据/认证两代次及原恢复代次。任何写请求都不自动重试。
+security:
+  - ordinarySession: []
+paths:
+  /api/v1/account/password:
+    post:
+      operationId: changeOwnPassword
+      description: >-
+        至少提供一个正向同源字段 Origin 或 Sec-Fetch-Site；任一字段出现时都须正确，
+        重复/错误字段不能由另一个正确字段抵消。当前密码按原始 UTF-8 字节校验，
+        新密码按配置的 Unicode code point 最低长度、字节上限及整串摘要弱密码表检查，
+        不 trim、归一化或截断，不强制字符种类。网络最低长度初值为 15，可配置更高值；
+        实际最大字节数和弱密码表由部署配置显式提供。本接口不声称完整 NIST 合规。
+        先验证会话，再原子扣取独立的全局/来源/主体额度，任何失败不退款或盲目重试。
+        成功原子替换密码并推进两代次，所有旧会话及登录候选失效；成功不依赖 Redis 清理。
+      parameters:
+        - name: Origin
+          in: header
+          required: false
+          description: 必须精确等于部署配置的可信 HTTPS Origin。
+          schema:
+            type: string
+        - name: Sec-Fetch-Site
+          in: header
+          required: false
+          description: 与 Origin 至少有一个；出现时只能为 same-origin。
+          schema:
+            type: string
+            const: same-origin
+      requestBody:
+        required: true
+        description: 最多 4096 个请求体字节；拒绝未知、重复、null、坏 Unicode 和尾随数据。
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [current_password, new_password]
+              properties:
+                current_password:
+                  type: string
+                  format: password
+                  minLength: 1
+                  writeOnly: true
+                  description: 当前密码；完整字节长度也须在该实例显式 KDF 输入预算内。
+                new_password:
+                  type: string
+                  format: password
+                  minLength: 15
+                  writeOnly: true
+                  description: 还须满足配置的更高最低长度、字节预算和弱密码表，且与当前密码不同。
+      responses:
+        '204':
+          description: 已确认提交；无响应体、无新会话，只清除会话和登录候选两个 Cookie。
+          headers:
+            Cache-Control:
+              schema:
+                const: no-store
+            Set-Cookie:
+              description: 两个独立 Set-Cookie，删除 __Host-oj_session 和 __Host-oj_login；不得逗号合并。保留 Secure、HttpOnly、SameSite=Lax、Path=/，无 Domain。
+              schema:
+                type: array
+                items:
+                  type: string
+        '400':
+          description: 请求或密码输入无效、弱密码、新旧密码相同；无 Cookie，无凭据修改。
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: 会话或当前密码无效；无 Cookie。
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: HTTPS/Host/代理身份或正向同源证据不满足。
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: 未显式启用改密能力。
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '405':
+          description: 路径只接受 POST；方法错误不触发账号或密码计算。
+          headers:
+            Allow:
+              schema:
+                const: POST
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: 账号、凭据或恢复代次已变化；不得采用新代次自动重试。
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '413':
+          description: 请求体超过 4096 字节。
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '415':
+          description: Content-Type 必须为 application/json，可带合法媒体参数。
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: 独立改密额度不足；不泄露维度、余量或 Retry-After，不改 Cookie/凭据/计数/TTL。
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: 存储/恢复/计算不可用、取消或提交结果不确定；无 Cookie；可能已提交，须重新登录核验，不能重复发送改密请求。
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+components:
+  securitySchemes:
+    ordinarySession:
+      type: apiKey
+      in: cookie
+      name: __Host-oj_session
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type:
+          const: about:blank
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
