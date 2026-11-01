@@ -45,13 +45,22 @@ type handler struct {
 // GET /api/v1/session, POST /api/v1/session/activity and POST /api/v1/session/logout.
 // Forwarding headers have no authority in this direct constructor.
 func New(store Store, config Config) (http.Handler, error) {
-	u, err := url.Parse(config.Origin)
-	if store == nil || err != nil || u.Scheme != "https" || u.Host == "" || u.Hostname() == "" ||
-		u.User != nil || u.Path != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" ||
-		u.Opaque != "" || config.Origin != "https://"+u.Host || config.Timeout <= 0 || config.Timeout > 5*time.Second {
+	if store == nil || config.Validate() != nil {
 		return nil, errors.New("invalid session HTTP configuration")
 	}
+	u, _ := url.Parse(config.Origin)
 	return &handler{store: store, config: config, host: u.Host}, nil
+}
+
+// Validate checks HTTP configuration without a store, key material or I/O.
+func (config Config) Validate() error {
+	u, err := url.Parse(config.Origin)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.Hostname() == "" ||
+		u.User != nil || u.Path != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" ||
+		u.Opaque != "" || config.Origin != "https://"+u.Host || config.Timeout <= 0 || config.Timeout > 5*time.Second {
+		return errors.New("invalid session HTTP configuration")
+	}
+	return nil
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
