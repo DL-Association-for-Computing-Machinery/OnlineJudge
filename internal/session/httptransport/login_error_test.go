@@ -13,7 +13,7 @@ import (
 
 func TestLoginUnknownErrorsWinBeforeCookiePublication(t *testing.T) {
 	for _, unknown := range []error{identity.ErrStore, redisstore.ErrStore, identity.ErrRecovering, redisstore.ErrUnknown, context.Canceled, context.DeadlineExceeded} {
-		for _, refused := range []error{redisstore.ErrStale, redisstore.ErrLimit, redisstore.ErrConflict, redisstore.ErrInvalid, password.ErrPassword, identity.ErrCredentials} {
+		for _, refused := range []error{redisstore.ErrStale, redisstore.ErrLimit, redisstore.ErrConflict, redisstore.ErrInvalid, redisstore.ErrLoginRate, password.ErrPassword, identity.ErrCredentials} {
 			w := httptest.NewRecorder()
 			loginError(w, errors.Join(unknown, identity.ErrGuardedOperation, refused))
 			if w.Code != 503 || len(w.Header().Values("Set-Cookie")) != 0 {

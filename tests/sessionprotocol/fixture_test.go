@@ -218,10 +218,15 @@ func (h *hook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 
 func (f *fixture) faultStore(t *testing.T, ns string, h *hook, timeout time.Duration) *protocol.Store {
 	t.Helper()
+	return f.faultStoreAuthority(t, ns, h, timeout, f.identities[0])
+}
+
+func (f *fixture) faultStoreAuthority(t *testing.T, ns string, h *hook, timeout time.Duration, authority protocol.Authority) *protocol.Store {
+	t.Helper()
 	c, err := protocol.NewClient(protocol.ClientConfig{Addr: os.Getenv("OJ_PROTOCOL_REDIS_ADDR"), Connections: 4, Timeout: timeout})
 	must(t, err)
 	t.Cleanup(func() { must(t, c.Close()) })
-	s, err := protocol.New(f.ctx, c, f.identities[0], f.budget, ns, protocol.OrdinaryPolicy())
+	s, err := protocol.New(f.ctx, c, authority, f.budget, ns, protocol.OrdinaryPolicy())
 	must(t, err)
 	c.AddHook(h)
 	return s

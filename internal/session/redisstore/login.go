@@ -24,15 +24,16 @@ func (c LoginConfig) GoString() string { return c.String() }
 // Login owns a single session store and immutable authenticated-encryption setup.
 // It has no pending-attempt map, password persistence or separate session backend.
 type Login struct {
-	store   *Store
-	origin  string
-	window  time.Duration
-	current string
-	keys    map[string]cipher.AEAD
+	store     *Store
+	origin    string
+	window    time.Duration
+	current   string
+	keys      map[string]cipher.AEAD
+	admission *loginAdmission
 }
 
-func (l *Login) String() string   { return "[redacted login manager]" }
-func (l *Login) GoString() string { return l.String() }
+func (l Login) String() string   { return "[redacted login manager]" }
+func (l Login) GoString() string { return l.String() }
 
 // Continuation contains an encrypted frozen candidate, never an authenticated
 // session. Value is only for the HttpOnly attempt cookie; never log it.

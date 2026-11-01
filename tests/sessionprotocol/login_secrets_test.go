@@ -15,6 +15,14 @@ import (
 
 func loadedLoginManager(t *testing.T, s *protocol.Store, window time.Duration, key, limiting [32]byte) *protocol.Login {
 	t.Helper()
+	secrets := loadedLoginSecrets(t, key, limiting)
+	l, err := protocol.NewLoginFromSecrets(s, loginOrigin, window, secrets)
+	must(t, err)
+	return l
+}
+
+func loadedLoginSecrets(t *testing.T, key, limiting [32]byte) *protocol.LoginSecrets {
+	t.Helper()
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	must(t, err)
 	path := filepath.Join(dir, "synthetic-login.json")
@@ -23,7 +31,5 @@ func loadedLoginManager(t *testing.T, s *protocol.Store, window time.Duration, k
 	must(t, os.WriteFile(path, body, 0600))
 	secrets, err := protocol.LoadLoginSecrets(path)
 	must(t, err)
-	l, err := protocol.NewLoginFromSecrets(s, loginOrigin, window, secrets)
-	must(t, err)
-	return l
+	return secrets
 }

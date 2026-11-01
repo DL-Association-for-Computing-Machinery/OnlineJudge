@@ -51,6 +51,11 @@ func loginServerBudget(t *testing.T, l *protocol.Login, budget time.Duration) *l
 	t.Helper()
 	h, err := transport.NewLogin(l, transport.Config{Origin: loginOrigin, Timeout: budget})
 	must(t, err)
+	return loginHandlerServer(t, h)
+}
+
+func loginHandlerServer(t *testing.T, h http.Handler) *loginEndpoint {
+	t.Helper()
 	s := httptest.NewTLSServer(h)
 	t.Cleanup(s.Close)
 	client := s.Client()
