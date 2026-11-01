@@ -10,6 +10,8 @@
 
 最终真实 Redis7.2.17/临时 PostgreSQL/race 专项 **153 个 PASS 条目（含父条目，真实进程 11，27.281 秒）**、集成静态 0、退出/OOM/自有清理通过（`protocol-final.log`）。真实子进程验证默认 bootstrap/session404、双 direct TLS 的 Cookie/Legacy/活动/退出/禁用撤销、无 marker 不修复和 bind 失败资源释放、启动 PG 锁等待 SIGTERM 不监听及精确 backend 清理、正常活动请求排空期间 PG/Redis 保持存活、异常退出 code1/无 graceful。异常退出后确实观测 `active/Lock`，远端约 **5.001 秒**消失，符合服务端预算；进程退出不冒充远端即时回滚。mTLS 真实进程拒绝无证书/错误 CA 握手、同 CA 未 pin 或无规范转发头的请求；经 TLS ReverseProxy 完成登录/读/退出并覆写伪转发头。child race 默认保留，任何非 JSON/race 诊断都使测试失败，预期失败只接受 code1。
 
+PR #76 首个 head `fe8026a` 的 CI `41309906824` 因治理测试仍预期旧源码复制白名单而失败，后续应用检查按门禁跳过，未将 skip 视为通过。将脚本额外复制范围收窄至构建必需的 `cmd/api`，同步精确白名单并保留其余安全断言。本机受限沙箱禁止 doctor 测试的临时端口绑定，原两项失败记录于 `governance.log`；按工具权限运行未修改的完整 **64 项治理测试（9.928 秒）**通过（`governance-verified.log`）。收窄复制后完整真实专项再次 **153 PASS（进程 11，27.634 秒）**、静态 0/退出/自有清理通过（`protocol-harness.log`），产品代码不变。
+
 日志统一前缀 `/private/tmp/oj-session-entry-`。主代理完整差异/新增文件核对、367 文件 repository、链接与空白检查通过；Astra 产品、测试/文档及超时观察增量复核，AI 不代替人工审批。公开 OpenAPI/页面、真实存储 TLS/生产证书及代理、生产 KDF/限流/多 API 总预算、完整账号权限/恢复与 AC01/23/24/25/M0 仍待验，未部署。知识写回与远端最终状态在 PR 交付回读后按维护流程核验。
 
 ## 2026-11-01：会话敏感值的合法格式与配置 JSON 脱敏
