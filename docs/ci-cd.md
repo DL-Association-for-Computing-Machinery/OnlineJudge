@@ -10,6 +10,8 @@
 
 可选已登录改密沿用同一专项：真实 PG 条件替换/双副本竞争、恢复→账号锁序/取消/未知回执及主键查询计划；独立三维 Redis 额度与完整规则指纹；双 API 进程的当前密码/弱密码/CSRF 拒绝、Cookie 清理、旧会话/候选拒绝、新密码重新登录，以及实际 TLS→mTLS 代理来源防伪。规则文件和弱词仅为合成夹具，不下载生产字典或验证浏览器/实际部署容量。
 
+浏览器账号的请求/状态机 Vitest 随 frontend-tests 执行。另有显式手动 Playwright 专项：真实 race API/PG/Redis/pinned mTLS，固定回环发布端口、已有浏览器依赖、不自动安装；验证正常 Cookie/改密和注入未知回执/跳转。`integration && browser` 测试夹具不进入普通 CI；其无认证控制端点只允许隔离测试编排，Go 正常排空与浏览器断言结果分别核验。命令归 README，细节归[浏览器账号](account-browser.md)，不把九项 CI 通过当作浏览器专项已执行。
+
 | 控制 | 状态 |
 | --- | --- |
 | 根规则、开发文档、PR 模板 | 已维护；授权归根规则，步骤归开发工作流 |
@@ -66,7 +68,7 @@ PR 的 `edited` 事件继续按完整差异执行，确保标题和目标分支�
 
 会话名额、撤销、API 重启、Redis 超时及 PostgreSQL 账号认证代次的[独立实验模块](../tests/sessionexperiment/README.md)已有本机真实存储验证，但行为套件不属于根模块 `go test ./...` 或当前 CI；CI 覆盖该模块静态分析，专项 race 测试须按该页单独执行，具体数量与结果见实验记录。下方完整会话验收目录仍待完成，不能以 PR 的 backend 绿灯代替会话实验结果。
 
-Go 标准 testing、真实 PostgreSQL、普通 Redis 协议专项与 Vitest 已配置，版本以依赖清单和 Dockerfile 为准，命令见 README。React Testing Library、Playwright、Testcontainers 与完整 Redis/HTTP 会话验收仍是待验证路线。专用可信 Linux 节点执行沙箱、故障、混合负载和断外网恢复演练，与快速 CI 分层；不可信 PR 不持有生产凭据或高权限执行节点。新增验收 AC26—35 与原 AC01—25 联合执行，不能用治理测试代替应用测试。
+Go 标准 testing、真实 PostgreSQL、普通 Redis 协议专项与 Vitest 已配置，版本以依赖清单和 Dockerfile 为准，命令见 README。Playwright 账号路径已有本机手动验证；React Testing Library、Testcontainers 及其余完整 Redis/HTTP 会话验收仍待验证。专用可信 Linux 节点执行沙箱、故障、混合负载和断外网恢复演练，与快速 CI 分层；不可信 PR 不持有生产凭据或高权限执行节点。新增验收 AC26—35 与原 AC01—25 联合执行，不能用治理测试代替应用测试。
 
 离线 Nginx/HTTPS/DNS/chrony、可观测性、pgBackRest/restic、一致性恢复集合与两阶段回收、不可变制品/短维护/兼容回滚规则见 [运维设计](architecture/operations-design.md)。当前无安装、部署或演练结果。
 

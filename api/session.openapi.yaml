@@ -1,0 +1,449 @@
+openapi: 3.1.0
+info:
+  title: OnlineJudge Ordinary Session and Login
+  version: 0.1.0
+  description: >-
+    描述显式会话 HTTPS 入口的六个现有端点；默认 bootstrap/Compose 不启用会话。
+    Cookie 身份不授予邮箱所有权、训练、角色或管理权限。所有会话 Handler 响应均为
+    Cache-Control=no-store、X-Content-Type-Options=nosniff，不开放跨源 CORS。
+    请求必须实际使用 TLS 且 Host 精确匹配配置的公开 HTTPS Origin 的 authority。
+    direct 模式忽略所有转发头；proxy 模式要求已验证且被 SHA-256 pin 的 mTLS 叶证书，
+    由可信单跳代理删除并覆写转发头：单值 X-Forwarded-Host 匹配公开 Host、
+    X-Forwarded-Proto=https、X-Forwarded-For 为单个有效 IP，不接受链、zone、未指定或组播地址，
+    并拒绝 Forwarded/X-Real-IP。证书缺失或不可信可在握手失败而无 HTTP 响应。
+    所有 POST 至少提供一个正向同源字段 Origin 或 Sec-Fetch-Site；出现的每个字段
+    都须单值且正确，任一错误/重复字段不能由另一个正确字段抵消。GET 不要求这些同源字段。
+    OPTIONS/HEAD 等不替代规定方法，不提供预检放行；精确路径之外不提供别名或重定向。
+    两种 Cookie 都是 Secure、HttpOnly、SameSite=Lax、Path=/、无 Domain 的 host-only Cookie，
+    不接受请求体、查询参数或 Authorization 中的替代凭据；重复目标 Cookie 或坏 Cookie 语法拒绝。
+    业务错误不设置或清除 Cookie。未知存储/恢复/取消/提交结果优先返回 503，即使同时包含拒绝原因，
+    也不等于事务回滚或会话不存在。所有 POST 不自动重试；已有登录候选只显式确认或放弃原候选，
+    不因超时/503 自动 begin 新尝试。确认结果不证明浏览器收到或保存了 Cookie；用后续只读会话查询核验。
+security:
+  - ordinarySession: []
+paths:
+  /api/v1/session:
+    get:
+      operationId: readOrdinarySession
+      description: >-
+        用当前 Cookie 读取新鲜的完整会话及账号/恢复权威状态；只读，不续期、不设置 Cookie。
+        返回恰好四个公开字段，不返回凭据、凭据版本或认证/恢复代次，也不是后续资源访问的可复用授权。
+        显式入口的普通策略为两小时 idle、十二小时 absolute；以返回的原始截止时间和服务端判断为准。
+      responses:
+        '200':
+          $ref: '#/components/responses/SessionView'
+        '401':
+          $ref: '#/components/responses/SessionRequired'
+        '403':
+          $ref: '#/components/responses/OriginRejected'
+        '404':
+          $ref: '#/components/responses/EntryNotEnabled'
+        '405':
+          $ref: '#/components/responses/GetOnly'
+        '503':
+          $ref: '#/components/responses/SessionUnavailable'
+  /api/v1/session/activity:
+    post:
+      operationId: renewOrdinarySessionActivity
+      description: >-
+        显式活动操作，只续期现有且有效的会话，不能创建、复活或更换会话，也不越过原 absolute deadline。
+        请求体被忽略，无媒体类型要求；不重新发送 Cookie。轮询 GET 本身不能替代此操作。
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/FetchSite'
+      responses:
+        '200':
+          $ref: '#/components/responses/SessionView'
+        '401':
+          $ref: '#/components/responses/SessionRequired'
+        '403':
+          $ref: '#/components/responses/OriginRejected'
+        '404':
+          $ref: '#/components/responses/EntryNotEnabled'
+        '405':
+          $ref: '#/components/responses/PostOnly'
+        '503':
+          $ref: '#/components/responses/SessionUnavailable'
+  /api/v1/session/logout:
+    post:
+      operationId: revokeOrdinarySession
+      description: >-
+        确认撤销当前 Cookie 对应的单个会话，随后只清除 __Host-oj_session，不清登录候选 Cookie，
+        不代表退出所有设备。请求体被忽略，无媒体类型要求。缺失/过期记录的 401 不确认之前的撤销成功；
+        503 也不能当作退出成功，不能先在客户端假定远端注销已完成。
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/FetchSite'
+      responses:
+        '204':
+          description: 已确认撤销；无响应体，只删除当前普通会话 Cookie。
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-Content-Type-Options:
+              $ref: '#/components/headers/NoSniff'
+            Set-Cookie:
+              $ref: '#/components/headers/ClearSessionCookie'
+        '401':
+          $ref: '#/components/responses/SessionRequired'
+        '403':
+          $ref: '#/components/responses/OriginRejected'
+        '404':
+          $ref: '#/components/responses/EntryNotEnabled'
+        '405':
+          $ref: '#/components/responses/PostOnly'
+        '503':
+          $ref: '#/components/responses/SessionUnavailable'
+  /api/v1/session/login/begin:
+    post:
+      operationId: beginOrdinaryLogin
+      security: []
+      description: >-
+        验证邮箱/当前密码并冻结加密候选；不写入活动会话、不占会话名额、不发普通会话 Cookie。
+        已有任意登录候选 Cookie 时返回 LOGIN_PENDING，要求先确认或放弃。
+        已有有效普通会话时返回 ALREADY_AUTHENTICATED，须先退出；无效格式的会话 Cookie 为 400，
+        格式正确但已失效的会话 Cookie 不阻止新登录。密码按完整原始 UTF-8 字节验证，不 trim、归一化或截断；
+        不将新密码最低长度规则应用于旧密码。可发生同密码 Legacy 参数升级，202 或后续错误都不能等同无数据库写入。
+        已配置的限流在密码计算前原子扣取全局/来源/规范邮箱额度，凭据验证失败不退款；数值无公共默认值。
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/FetchSite'
+      requestBody:
+        required: true
+        description: >-
+          最多 4096 个请求体字节，恰好两个非空字符串；拒绝未知、重复（包括转义别名）、null、
+          非法 UTF-8/未配对 UTF-16 surrogate 及尾随数据。Content-Type 必须为 application/json，可带合法媒体参数。
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  minLength: 1
+                  maxLength: 254
+                  description: >-
+                    仅 ASCII 裸地址、未加引号 local part 和 DNS 风格域标签；不接受空白、注释、地址字面量或国际化邮箱。
+                    整个地址按不区分大小写匹配，保留点和 plus tag；不做 DNS 查询，不证明邮箱所有权。
+                password:
+                  type: string
+                  format: password
+                  minLength: 1
+                  writeOnly: true
+                  description: 完整字节长度还须满足该实例显式 KDF 输入上限；不回显或持久化在浏览器存储中。
+      responses:
+        '202':
+          description: 已准备候选；无响应体，恰好一个短期加密登录候选 Cookie，尚未登录。
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-Content-Type-Options:
+              $ref: '#/components/headers/NoSniff'
+            Set-Cookie:
+              $ref: '#/components/headers/PendingCookie'
+        '400':
+          $ref: '#/components/responses/LoginInvalid'
+        '401':
+          $ref: '#/components/responses/LoginRejected'
+        '403':
+          $ref: '#/components/responses/OriginRejected'
+        '404':
+          $ref: '#/components/responses/EntryNotEnabled'
+        '405':
+          $ref: '#/components/responses/PostOnly'
+        '409':
+          description: LOGIN_PENDING、ALREADY_AUTHENTICATED 或 LOGIN_ATTEMPT_CONFLICT；无 Cookie，不自动创建替代候选。
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-Content-Type-Options:
+              $ref: '#/components/headers/NoSniff'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/LoginBodyTooLarge'
+        '415':
+          $ref: '#/components/responses/LoginMediaRequired'
+        '429':
+          $ref: '#/components/responses/LoginRateLimited'
+        '503':
+          $ref: '#/components/responses/LoginUnavailable'
+  /api/v1/session/login/complete:
+    post:
+      operationId: completeOrdinaryLogin
+      security:
+        - loginAttempt: []
+      description: >-
+        仅使用 __Host-oj_login 中原封冻结候选重放，并另行检查完整回执及当前权威；不重新接收邮箱或密码，
+        不采用新代次替换旧候选。请求体被忽略，不读取/校验 JSON、媒体类型或 4096 字节请求体限制；客户端应发送空体。
+        与 abandon 共享独立于 begin 的全局/来源恢复额度；不退款、不自动重试。
+        已有有效普通会话返回 ALREADY_AUTHENTICATED；其 Cookie 格式错误为 400，已失效但格式正确可继续确认。
+        确认始终受原登录窗口约束；首次写入还要求同 namespace/账号/认证及恢复代次的普通会话名额少于三个。
+        窗口内、原回执未变化且没有有效普通会话阻挡时，同候选并发或显式重复确认可取得相同凭据及原截止时间。
+        已活动续期后重放初始候选会冲突，不能回退 idle；不能保证 HTTP 恰好送达一次。
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/FetchSite'
+      responses:
+        '204':
+          description: >-
+            已确认原候选；无响应体。两个独立 Set-Cookie：设置普通会话 Cookie 并删除登录候选 Cookie。
+            必须分别处理，不能逗号合并；服务端确认不证明浏览器已经收到或接受 Cookie。
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-Content-Type-Options:
+              $ref: '#/components/headers/NoSniff'
+            Set-Cookie:
+              $ref: '#/components/headers/CompletedCookies'
+        '400':
+          $ref: '#/components/responses/LoginInvalid'
+        '401':
+          $ref: '#/components/responses/LoginRejected'
+        '403':
+          $ref: '#/components/responses/OriginRejected'
+        '404':
+          $ref: '#/components/responses/EntryNotEnabled'
+        '405':
+          $ref: '#/components/responses/PostOnly'
+        '409':
+          $ref: '#/components/responses/LoginConflict'
+        '429':
+          $ref: '#/components/responses/LoginRateLimited'
+        '503':
+          $ref: '#/components/responses/LoginUnavailable'
+  /api/v1/session/login/abandon:
+    post:
+      operationId: abandonOrdinaryLogin
+      security:
+        - loginAttempt: []
+      description: >-
+        只放弃并 tombstone 该加密候选，包括原登录窗口结束后的候选；原 absolute deadline 和两层权威检查仍适用。
+        只清登录候选 Cookie，不清普通会话 Cookie，不撤销无关会话，也不证明之前的写入已回滚。
+        如果该候选已经由并发或丢回执的 complete 发放，放弃可使其对应的普通会话失效；
+        204 不等于确认当前普通会话退出或仍有效，客户端须另行只读检查。
+        已在途的成功确认响应仍可能稍后到达，须只读核验。
+        请求体被忽略，不读取/校验 JSON、媒体类型或 4096 字节请求体限制；客户端应发送空体。
+        与 complete 共享全局/来源恢复额度。无需有效普通会话，且不校验其 Cookie 值的凭据格式，
+        但整体 Cookie 语法错误或重复目标 Cookie 仍拒绝。缺失/无法接受的候选 Cookie 不以本地删除冒充已放弃。
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/FetchSite'
+      responses:
+        '204':
+          description: 已确认放弃；无响应体，只删除 __Host-oj_login，保留普通会话 Cookie。
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-Content-Type-Options:
+              $ref: '#/components/headers/NoSniff'
+            Set-Cookie:
+              $ref: '#/components/headers/ClearPendingCookie'
+        '400':
+          $ref: '#/components/responses/LoginInvalid'
+        '401':
+          $ref: '#/components/responses/LoginRejected'
+        '403':
+          $ref: '#/components/responses/OriginRejected'
+        '404':
+          $ref: '#/components/responses/EntryNotEnabled'
+        '405':
+          $ref: '#/components/responses/PostOnly'
+        '409':
+          $ref: '#/components/responses/LoginConflict'
+        '429':
+          $ref: '#/components/responses/LoginRateLimited'
+        '503':
+          $ref: '#/components/responses/LoginUnavailable'
+components:
+  securitySchemes:
+    ordinarySession:
+      type: apiKey
+      in: cookie
+      name: __Host-oj_session
+      description: 规范的 256-bit base64url 不透明凭据；须每次重新检查服务端会话与权威。
+    loginAttempt:
+      type: apiKey
+      in: cookie
+      name: __Host-oj_login
+      description: 有界的加密冻结候选，不是已认证会话；仅用于确认/放弃，不写入 URL、日志或 JS 存储。
+  parameters:
+    Origin:
+      name: Origin
+      in: header
+      required: false
+      description: 与 Sec-Fetch-Site 至少有一个；出现时须单值且精确等于部署配置的公开 HTTPS Origin。
+      schema: {type: string}
+    FetchSite:
+      name: Sec-Fetch-Site
+      in: header
+      required: false
+      description: 与 Origin 至少有一个；出现时须单值且只能为 same-origin。
+      schema: {type: string, const: same-origin}
+  headers:
+    NoStore:
+      schema: {const: no-store}
+    NoSniff:
+      schema: {const: nosniff}
+    PendingCookie:
+      description: >-
+        单个 __Host-oj_login；Secure、HttpOnly、SameSite=Lax、Path=/、无 Domain。
+        Expires 为候选原截止时间，Max-Age 为剩余窗口向上取整的秒数；不重新给完整窗口，服务端原期限仍为准。
+      schema: {type: string}
+    CompletedCookies:
+      description: >-
+        两个独立 Set-Cookie，不得逗号合并。__Host-oj_session 设置不透明凭据，Secure、HttpOnly、
+        SameSite=Lax、Path=/、无 Domain、无 Expires/Max-Age；__Host-oj_login 以同一属性和
+        Max-Age=0、过去的 Expires 删除。普通 Cookie 非持久配置不保证浏览器关闭立即撤销服务端会话。
+      schema:
+        type: array
+        minItems: 2
+        maxItems: 2
+        items: {type: string}
+    ClearSessionCookie:
+      description: 单个 __Host-oj_session 删除头，值为空；Secure、HttpOnly、SameSite=Lax、Path=/、无 Domain、Max-Age=0、过去的 Expires。
+      schema: {type: string}
+    ClearPendingCookie:
+      description: 单个 __Host-oj_login 删除头，值为空；Secure、HttpOnly、SameSite=Lax、Path=/、无 Domain、Max-Age=0、过去的 Expires。
+      schema: {type: string}
+  schemas:
+    OrdinarySession:
+      type: object
+      additionalProperties: false
+      required: [subject_id, created_at, idle_expires_at, absolute_deadline]
+      properties:
+        subject_id:
+          type: string
+          pattern: '^[a-f0-9]{32}$'
+          description: 不透明主体 ID，不是邮箱或权限声明。
+        created_at: {type: string, format: date-time}
+        idle_expires_at: {type: string, format: date-time}
+        absolute_deadline: {type: string, format: date-time}
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, code]
+      properties:
+        type: {const: 'about:blank'}
+        title: {type: string}
+        status: {type: integer}
+        code: {type: string}
+  responses:
+    SessionView:
+      description: 恰好四个公开会话字段；不设置 Cookie。
+      headers:
+        Cache-Control: {$ref: '#/components/headers/NoStore'}
+        X-Content-Type-Options: {$ref: '#/components/headers/NoSniff'}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/OrdinarySession'}
+    SessionRequired:
+      description: SESSION_REQUIRED；Cookie 缺失/格式错误/重复或会话已过期、撤销、账号权威拒绝；无 Cookie，不确认 logout 已成功。
+      headers:
+        Cache-Control: {$ref: '#/components/headers/NoStore'}
+        X-Content-Type-Options: {$ref: '#/components/headers/NoSniff'}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    SessionUnavailable:
+      description: SESSION_UNAVAILABLE；存储/恢复/未知结果/取消优先于拒绝分类；无 Cookie。可能已有副作用，不自动重试写请求。
+      headers:
+        Cache-Control: {$ref: '#/components/headers/NoStore'}
+        X-Content-Type-Options: {$ref: '#/components/headers/NoSniff'}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    OriginRejected:
+      description: ORIGIN_REJECTED；已到达 Handler 的 TLS、Host、代理身份/转发头或 POST 正向同源证据不满足；无 Cookie。
+      headers:
+        Cache-Control: {$ref: '#/components/headers/NoStore'}
+        X-Content-Type-Options: {$ref: '#/components/headers/NoSniff'}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    GetOnly:
+      description: METHOD_NOT_ALLOWED；精确路径仅接受 GET，错误方法不执行存储调用。
+      headers:
+        Allow: {schema: {const: GET}}
+        Cache-Control: {$ref: '#/components/headers/NoStore'}
+        X-Content-Type-Options: {$ref: '#/components/headers/NoSniff'}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    PostOnly:
+      description: METHOD_NOT_ALLOWED；精确路径仅接受 POST，错误方法不执行存储调用。
+      headers:
+        Allow: {schema: {const: POST}}
+        Cache-Control: {$ref: '#/components/headers/NoStore'}
+        X-Content-Type-Options: {$ref: '#/components/headers/NoSniff'}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    LoginInvalid:
+      description: INVALID_LOGIN 或 LOGIN_ATTEMPT_INVALID；begin JSON/邮箱/密码字节长度错误，或 Cookie 语法/重复/缺失/候选格式及认证封套无效；无 Cookie。
+      headers:
+        Cache-Control: {$ref: '#/components/headers/NoStore'}
+        X-Content-Type-Options: {$ref: '#/components/headers/NoSniff'}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    LoginRejected:
+      description: LOGIN_REJECTED；账号/密码不接受、原候选已失效/撤销或原账号/恢复权威拒绝；无 Cookie。
+      headers:
+        Cache-Control: {$ref: '#/components/headers/NoStore'}
+        X-Content-Type-Options: {$ref: '#/components/headers/NoSniff'}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    LoginConflict:
+      description: SESSION_LIMIT（仅 complete）、ALREADY_AUTHENTICATED（仅 complete）或 LOGIN_ATTEMPT_CONFLICT；无 Cookie，不重新创建候选规避冲突。
+      headers:
+        Cache-Control: {$ref: '#/components/headers/NoStore'}
+        X-Content-Type-Options: {$ref: '#/components/headers/NoSniff'}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    LoginRateLimited:
+      description: LOGIN_RATE_LIMITED；已配置的共享登录额度不足；无 Cookie，无 Retry-After/额度维度或余量。拒绝不写计数/TTL，不退款或重试未知扣额。
+      headers:
+        Cache-Control: {$ref: '#/components/headers/NoStore'}
+        X-Content-Type-Options: {$ref: '#/components/headers/NoSniff'}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    LoginUnavailable:
+      description: LOGIN_UNAVAILABLE（外层失败关闭也可为 SESSION_UNAVAILABLE）；计算/存储/恢复不可用、取消或结果不确定优先于拒绝；无 Cookie，保留原候选，禁止自动 begin 新尝试。
+      headers:
+        Cache-Control: {$ref: '#/components/headers/NoStore'}
+        X-Content-Type-Options: {$ref: '#/components/headers/NoSniff'}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    EntryNotEnabled:
+      description: NOT_FOUND；默认 bootstrap 未启用会话路径，或会话 Handler 未配置该登录能力；不执行会话/登录操作。仅会话 Handler 的响应保证 nosniff。
+      headers:
+        Cache-Control: {$ref: '#/components/headers/NoStore'}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    LoginBodyTooLarge:
+      description: BODY_TOO_LARGE；仅 begin 的请求体超过 4096 字节；无 Cookie。
+      headers:
+        Cache-Control: {$ref: '#/components/headers/NoStore'}
+        X-Content-Type-Options: {$ref: '#/components/headers/NoSniff'}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    LoginMediaRequired:
+      description: UNSUPPORTED_MEDIA_TYPE；仅 begin 要求 application/json（允许合法媒体参数）；无 Cookie。
+      headers:
+        Cache-Control: {$ref: '#/components/headers/NoStore'}
+        X-Content-Type-Options: {$ref: '#/components/headers/NoSniff'}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}

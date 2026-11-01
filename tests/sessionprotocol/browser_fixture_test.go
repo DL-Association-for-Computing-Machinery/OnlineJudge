@@ -1,0 +1,246 @@
+//go:build integration && browser
+
+package sessionprotocol_test
+
+import (
+	"context"
+	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	protocol "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/redisstore"
+	sessionruntime "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/runtime"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/testpki"
+)
+
+// TestBrowserFixture is a manually selected fixture, not a regular integration
+// gate. Run only this test against the disposable stores required by setup.
+func TestBrowserFixture(t *testing.T) {
+	origin := browserOrigin(t)
+	assets := browserAssets(t)
+	f := setup(t)
+	c := runtimeConfig(t, f, namespace(t), false)
+	c.HTTP.Origin = origin.String()
+	bucket := protocol.LoginBucket{Count: 200, Window: time.Hour}
+	c.LoginLimits = protocol.LoginLimits{BeginGlobal: bucket, BeginSource: bucket, BeginEmail: bucket, RecoveryGlobal: bucket, RecoverySource: bucket}
+	secrets, err := protocol.LoadLoginSecrets(c.SecretsFile)
+	must(t, err)
+	must(t, protocol.InitializeLoginLimits(f.ctx, f.store(t, c.Namespace, 0, protocol.OrdinaryPolicy()), secrets, c.LoginLimits))
+	rules := enableEntryPasswordChange(t, f, &c, protocol.PasswordChangeLimits{Global: bucket, Source: bucket, Subject: bucket}, true)
+	subject := f.subject(t, false)
+	ca := testpki.New(t)
+	proxyCert, _, _ := ca.Issue(t, "spiffe://onlinejudge/proxy/browser-fixture", x509.ExtKeyUsageClientAuth, time.Now().Add(time.Hour))
+	c.Mode = sessionruntime.ProxyMTLS
+	c.Proxy.CertificateSHA256 = [][32]byte{sha256.Sum256(proxyCert.Certificate[0])}
+	connections := redisConnections(t, f)
+	process := entryStart(t, entryBinary(t), entryConfig(t, c, ca, 3*time.Second, rules), "127.0.0.1:0")
+	started := process.waitEvent(t, "API starting")
+	if started.Scope != "ordinary-session-http" {
+		t.Fatal("browser fixture started the wrong API scope")
+	}
+	target, err := url.Parse("https://" + started.Address)
+	must(t, err)
+	transport := &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: ca.Roots, Certificates: []tls.Certificate{proxyCert}}}
+	t.Cleanup(transport.CloseIdleConnections)
+	proxy := &httputil.ReverseProxy{
+		Transport: transport,
+		ErrorLog:  log.New(io.Discard, "", 0),
+		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, _ error) {
+			http.Error(w, "fixture upstream unavailable", http.StatusServiceUnavailable)
+		},
+		Rewrite: func(p *httputil.ProxyRequest) {
+			p.SetURL(target)
+			p.Out.Host = origin.Host
+			p.Out.Header.Del("X-Real-IP")
+			p.SetXForwarded()
+		},
+	}
+	done := make(chan struct{})
+	var stop sync.Once
+	stats := &browserStats{api: make(map[string]uint64)}
+	static := browserStatic(assets)
+	edgeHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		if r.TLS == nil || r.Host != origin.Host {
+			http.Error(w, "fixture origin rejected", http.StatusForbidden)
+			return
+		}
+		switch r.URL.Path {
+		case "/__fixture/stats":
+			if r.Method != http.MethodGet {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			stats.write(w)
+		case "/__fixture/redirect_sink":
+			stats.sink()
+			w.WriteHeader(http.StatusNoContent)
+		case "/__fixture/stop":
+			if r.Method != http.MethodPost {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+			stop.Do(func() { close(done) })
+		default:
+			if r.URL.Path == "/api" || strings.HasPrefix(r.URL.Path, "/api/") {
+				stats.request(r.Method, r.URL.Path)
+				proxy.ServeHTTP(w, r)
+				return
+			}
+			static.ServeHTTP(w, r)
+		}
+	})
+	edge := browserServer(t, "0.0.0.0:9443", edgeHandler)
+	edgeCert, _, _ := ca.Issue(t, "", x509.ExtKeyUsageServerAuth, time.Now().Add(time.Hour))
+	edge.TLS = &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{edgeCert}}
+	edge.StartTLS()
+	plain := browserServer(t, "0.0.0.0:9444", static)
+	plain.Start()
+	ready, err := json.Marshal(map[string]string{"url": origin.String(), "email": subject.Email.Original(), "subject_id": subject.ID})
+	must(t, err)
+	_, err = fmt.Printf("BROWSER_READY %s\n", ready)
+	must(t, err)
+	timer := time.NewTimer(15 * time.Minute)
+	defer timer.Stop()
+	expired := false
+	select {
+	case <-done:
+	case <-timer.C:
+		expired = true
+	case <-t.Context().Done():
+		expired = true
+	}
+	for _, server := range []*httptest.Server{edge, plain} {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		err := server.Config.Shutdown(ctx)
+		cancel()
+		if err != nil {
+			_ = server.Config.Close()
+			t.Error("browser fixture HTTP server did not drain")
+		}
+		server.Close()
+	}
+	transport.CloseIdleConnections()
+	process.signal(t)
+	process.wait(t, true)
+	if _, ok := process.event("API stopped gracefully"); !ok {
+		t.Error("browser fixture API did not confirm resource drain")
+	}
+	noRuntimeConnections(t, f, c.Database.ApplicationName)
+	sameRedisConnections(t, f, connections)
+	if expired {
+		t.Fatal("browser fixture stopped without explicit completion")
+	}
+}
+
+func browserOrigin(t *testing.T) *url.URL {
+	t.Helper()
+	raw := os.Getenv("OJ_BROWSER_ORIGIN")
+	origin, err := url.Parse(raw)
+	if err != nil || origin.Scheme != "https" || origin.Hostname() != "127.0.0.1" || origin.User != nil ||
+		origin.Path != "" || origin.RawQuery != "" || origin.ForceQuery || origin.Fragment != "" || origin.Opaque != "" {
+		t.Fatal("browser fixture requires an explicit loopback HTTPS origin")
+	}
+	port, err := strconv.ParseUint(origin.Port(), 10, 16)
+	if err != nil || port == 0 || raw != "https://127.0.0.1:"+strconv.FormatUint(port, 10) {
+		t.Fatal("browser fixture requires a canonical published loopback port")
+	}
+	return origin
+}
+
+func browserAssets(t *testing.T) string {
+	t.Helper()
+	path := os.Getenv("OJ_BROWSER_UI_DIR")
+	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
+		t.Fatal("browser fixture requires an explicit built assets directory")
+	}
+	directory, err := os.Stat(path)
+	if err != nil || !directory.IsDir() {
+		t.Fatal("browser fixture assets directory unavailable")
+	}
+	index, err := os.Lstat(filepath.Join(path, "index.html"))
+	if err != nil || !index.Mode().IsRegular() || index.Size() == 0 {
+		t.Fatal("browser fixture requires a regular built index.html")
+	}
+	return path
+}
+
+func browserStatic(directory string) http.Handler {
+	files := http.FileServer(http.Dir(directory))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		if r.URL.Path == "/api" || strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/__fixture/") {
+			http.NotFound(w, r)
+			return
+		}
+		files.ServeHTTP(w, r)
+	})
+}
+
+func browserServer(t *testing.T, address string, handler http.Handler) *httptest.Server {
+	t.Helper()
+	server := httptest.NewUnstartedServer(handler)
+	t.Cleanup(server.Close)
+	must(t, server.Listener.Close())
+	listener, err := net.Listen("tcp", address)
+	must(t, err)
+	server.Listener = listener
+	server.Config.ReadHeaderTimeout = 2 * time.Second
+	server.Config.ReadTimeout = 5 * time.Second
+	server.Config.WriteTimeout = 5 * time.Second
+	server.Config.IdleTimeout = time.Minute
+	server.Config.ErrorLog = log.New(io.Discard, "", 0)
+	return server
+}
+
+type browserStats struct {
+	mu           sync.Mutex
+	api          map[string]uint64
+	redirectSink uint64
+}
+
+func (s *browserStats) request(method, path string) {
+	// Only fixed product paths become keys, so a malformed URL cannot put a
+	// credential in diagnostics. Query strings, headers and bodies are not read.
+	switch path {
+	case "/api/v1/session", "/api/v1/session/activity", "/api/v1/session/logout", "/api/v1/session/login/begin", "/api/v1/session/login/complete", "/api/v1/session/login/abandon", "/api/v1/account/password":
+	default:
+		path = "/api/*"
+	}
+	if method != "GET" && method != "POST" && method != "HEAD" && method != "OPTIONS" {
+		method = "OTHER"
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.api[method+" "+path]++
+}
+
+func (s *browserStats) sink() { s.mu.Lock(); defer s.mu.Unlock(); s.redirectSink++ }
+
+func (s *browserStats) write(w http.ResponseWriter) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_ = json.NewEncoder(w).Encode(map[string]any{"api_requests": s.api, "redirect_sink": s.redirectSink})
+}

@@ -2,7 +2,7 @@
 
 2026-11-01：正式身份核心、[普通 Redis 存储协议](#79-普通-redis-会话协议)、[已有会话 HTTPS](#710-已有普通会话的-https-适配)及[两步登录恢复](#711-跨请求登录尝试与-cookie-发放)已有分项实现；[独立会话子实验](../../tests/sessionexperiment/README.md)保留旧 RDB、逻辑回档、轮换及保持登录等历史证据。默认 API 尚未接入账号入口，封装候选不等于服务端 pending 注册表、自动恢复、资源权限或生产准入；下文产品规则保持不变。
 
-日期：2026-11-01。版本：0.21。状态：Session＋Redis、分场景期限、比赛账号、Argon2id、日常邮箱验证注册/找回及可替换 SMTP 接口已确认；SCS＋go-redis、go-mail 及 PostgreSQL 持久化发信任务＋独立受限发送执行器优先验证，Gin sessions 备选。River 开源核心优先验证，专用任务表备选；短期 AES-GCM 载荷、River 仅存业务 ID、独立密钥文件、不考虑付费方案及第 12 节令牌/重发/重试规则已确认；PostgreSQL 会话只作对比，不替换 Redis 基线。身份核心、普通 Redis 协议、两步 HTTPS、显式 TLS API 与可选已登录改密已有分项实现；改密有独立 OpenAPI，默认 Compose/浏览器未启用，生产参数、邮件/资源权限和完整会话仍待交付，未部署。关联 [总体架构](system-design.md)、[ADR-001](001-go-gin.md)、[需求](../requirements.md)。
+日期：2026-11-01。版本：0.22。状态：Session＋Redis、分场景期限、比赛账号、Argon2id、日常邮箱验证注册/找回及可替换 SMTP 接口已确认；SCS＋go-redis、go-mail 及 PostgreSQL 持久化发信任务＋独立受限发送执行器优先验证，Gin sessions 备选。River 开源核心优先验证，专用任务表备选；短期 AES-GCM 载荷、River 仅存业务 ID、独立密钥文件、不考虑付费方案及第 12 节令牌/重发/重试规则已确认；PostgreSQL 会话只作对比，不替换 Redis 基线。身份核心、普通 Redis 协议、两步 HTTPS、显式 TLS API、改密与浏览器账号面板已有分项实现；六会话/改密 OpenAPI 已补齐，默认 Compose 未启用会话，生产参数、邮件/资源权限和完整会话仍待交付，未部署。关联 [总体架构](system-design.md)、[ADR-001](001-go-gin.md)、[需求](../requirements.md)。
 
 保持登录的后续子实验已覆盖默认关闭、主动选择 24 小时/7 天、Cookie 持久化、跨副本共享三名额，以及缩短期限下的续期/过期/迟到保存。SCS `RememberMe` 只控制持久化，期限由请求独立配置和服务端载荷选择；保存、结果核验、放弃共用策略上界，原绝对期限不变。普通 Cookie 改为非持久化，带 Cookie 再登录拒绝，活动参数不能改变登录时选择。仅测试夹具和同进程 TLS API，参赛期限、正式权限提升轮换、浏览器关闭/重开及完整 Gin/CSRF 仍待验证；细节见实验 README。
 
@@ -425,7 +425,7 @@ SIGTERM/interrupt 后 listener 停止接收，网络 Shutdown 与 Runtime.Close 
 
 Store 保留原共享 work；`redisstore.NewPasswordChange` 仅从同一 Login/store 的 authority/work 组装 Read、独立限流、规则与 native Changer。HTTP 构造器的可选 capability 须绑定同一个 `*Login`，原构造器不隐式新增能力。Runtime 追踪整个同步调用及 KDF，沿用第 7.15/7.17 节的实际排空和共享总退出预算。
 
-新密码强度由独立不可变 `password.Acceptance` 处理，不改变既有密码的原始字节校验。网络工程初始下限为 **15 个 Unicode code point**，显式最低长度可提高至 64；字节上限沿同一个 Hasher，至少容纳最低字符数的四倍字节。此初值参考 [NIST 单因素密码建议](https://pages.nist.gov/800-63-4/sp800-63b.html)，不是本轮用户另行确认的完整产品规范，也不声称 NIST 整体合规。允许空格和 Unicode，不要求字符组合、不 trim/归一化/截断；字节完全相同的新旧密码在当前密码验证成功后拒绝。Unicode NFC 没有引入，既有记录和输入语义保持。
+新密码强度由独立不可变 `password.Acceptance` 处理，不改变既有密码的原始字节校验。用户于 2026-11-01 明确接受首期规则：至少 **15 个 Unicode code point**、允许空格、不强制字符组合，并拒绝常见弱密码；按原始字节处理，不 trim/归一化/截断。显式最低长度可提高至 64；字节上限沿同一个 Hasher，至少容纳最低字符数的四倍字节。规则参考 [NIST 单因素密码建议](https://pages.nist.gov/800-63-4/sp800-63b.html)，用户确认不等于 NIST 整体合规或生产字典已通过验收。字节完全相同的新旧密码在当前密码验证成功后拒绝；Unicode NFC 没有引入，既有记录和输入语义保持。
 
 `password_change` 可选配置全部显式：`minimum_characters`、绝对规范 `blocklist_file`、三个 `{count,window}` 对象 `global`/`source`/`subject`。规则文件仅有词法整数 `version: 1` 和非空 `sha256` 数组；每项为完整原始 UTF-8 密码的 64 字符小写十六进制 SHA-256，拒绝零摘要、重复、未知/null/坏 Unicode/尾随内容。文件 ≤1 MiB，纯机制最多 16,384 摘要，文件字节预算可能先达到；不保存用户密码，摘要表是已知弱密码的精确整串比较，不是密码存储/KDF、子串匹配或在线泄漏查询。读取使用第 7.17 节 public 文件检查；不热重载、不自动下载字典。正式字典的来源、许可、覆盖充分性与更新/运维仍须生产验收，测试仅用合成词条。
 
@@ -435,7 +435,7 @@ Store 保留原共享 work；`redisstore.NewPasswordChange` 仅从同一 Login/s
 
 成功提交后仅返回 204、空体，删除 `__Host-oj_session` 和 `__Host-oj_login` 两个原 scope Cookie，不发放新会话。失败不改 Cookie；429 不披露维度/余量/Retry-After，400 区分新密码规则、当前/新输入长度及未改变，401 拒绝凭据，409 要求重新登录后操作。存储/恢复/取消/未知写入优先 503，结果可能已提交，应重新登录核验；Cookie 清除不能代替持久化改密，进程/网络退出也不保证远端即时回滚。
 
-原 schema 5、密码格式、会话协议和旧配置均兼容，无依赖/迁移变化；SQL 仅新增专用条件 UPDATE。回退先停用并移除可选配置，重启/回退旧二进制，成功密码变更不撤回。真实双客户端竞态/锁序/取消/丢回执、主键 EXPLAIN，以及双 API 进程/代理的拒绝、撤销、Cookie 和重新登录证据见[交付记录](../delivery-log.md)。浏览器、生产字典/预算/证书与存储 TLS、邮箱找回/注册、完整权限恢复及 AC01/23/24/25/M0 继续待验，未部署。
+原 schema 5、密码格式、会话协议和旧配置均兼容，无依赖/迁移变化；SQL 仅新增专用条件 UPDATE。回退先停用并移除可选配置，重启/回退旧二进制，成功密码变更不撤回。真实双客户端竞态/锁序/取消/丢回执、主键 EXPLAIN，以及双 API 进程/代理的拒绝、撤销、Cookie 和重新登录证据见[交付记录](../delivery-log.md)。[浏览器账号](../account-browser.md)已有本机分项验证；其余浏览器、生产字典/预算/证书与存储 TLS、邮箱找回/注册、完整权限恢复及 AC01/23/24/25/M0 继续待验，未部署。
 
 ## 8. 注册、找回与账号发放
 

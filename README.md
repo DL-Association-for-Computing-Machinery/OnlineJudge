@@ -1,13 +1,13 @@
 # OnlineJudge
 
-面向东华理工大学计算机协会的训练与校赛平台。当前处于 M0 技术实验：已有提交持久化、幂等回执、任务租约及固定材料的 Worker 实验链路；当前使用 Docker Desktop 专用容器验证 GNU++17 沙箱。正式登录、训练产品及 M0 整体验收尚未交付。
+面向东华理工大学计算机协会的训练与校赛平台。当前已有持久化/租约/固定材料 Worker 实验，以及显式 HTTPS 下普通账号的登录、会话、改密与浏览器面板；Docker Desktop 专用容器验证 GNU++17 沙箱。完整注册、权限、训练产品及 M0 整体验收仍待交付，未部署。
 
 ## 当前交付与下一步
 
 - [开发与交付计划](docs/phase-1-development-plan.md)：发布范围、组件引入时机、P0—P7 与里程碑。
 - [M0 记录](docs/m0-experiment.md)：Worker、数据库与会话实验的证据及剩余缺口，是当前进度入口。
 - [会话实验](tests/sessionexperiment/README.md)：独立测试模块的复现与限制，尚未接入正式登录。
-- [密码记录核心](docs/architecture/session-design.md#71-同步密码记录核心)与[主体凭据](docs/architecture/session-design.md#72-主体凭据持久化与条件更新)：显式策略的 Argon2id、PostgreSQL 状态与条件更新，未开放账号 HTTP 或正式登录。
+- [密码记录核心](docs/architecture/session-design.md#71-同步密码记录核心)与[主体凭据](docs/architecture/session-design.md#72-主体凭据持久化与条件更新)：显式策略的 Argon2id、PostgreSQL 状态与条件更新，HTTP 接线见下述入口。
 - [密码计算准入](docs/architecture/session-design.md#73-密码计算准入)：创建/验证共享实例额度、有限排队及取消后保留实际计算名额；多 API 总预算与生产容量仍待验证。
 - [密码验证用例](docs/architecture/session-design.md#74-密码验证与条件升级用例)：同密码升级、双版本条件更新与末次状态复核；结果只描述时点，不发放会话或资源权限。
 - [主体状态协调](docs/architecture/session-design.md#75-会话存储操作的主体状态协调)：共享行锁协调受信会话存储操作与账号变更；回调失败仍可能有外部效果，恢复编排待接入。
@@ -18,11 +18,12 @@
 - [已有会话 HTTPS 适配](docs/architecture/session-design.md#710-已有普通会话的-https-适配)：只读身份、显式活动与确认退出，固定 HTTPS 来源和严格 Cookie；尚未挂载默认 API，也不发放登录 Cookie。
 - [跨请求登录与 Cookie 发放](docs/architecture/session-design.md#711-跨请求登录尝试与-cookie-发放)：无会话写入的准备、密文候选恢复、实际执行点截止和确认后发放；[独立密钥文件加载](docs/architecture/session-design.md#712-登录密钥文件加载)，独立 HTTPS Handler，默认 API 未挂载。
 - [共享登录限流](docs/architecture/session-design.md#713-共享登录限流)：跨副本全局/来源/邮箱联合额度、独立恢复额度与失败关闭；严格 Handler 构造入口供后续默认 API 使用，生产阈值待验。
-- [单跳受信反代](docs/architecture/session-design.md#714-单跳受信反向代理)：显式 mTLS 证书指纹、固定公开来源与严格覆写头，独立代理入口要求登录限流；默认 API/生产代理配置与浏览器仍待验。
+- [单跳受信反代](docs/architecture/session-design.md#714-单跳受信反向代理)：显式 mTLS 证书指纹、固定公开来源与严格覆写头，独立代理入口要求登录限流；默认 Compose、生产代理配置和其余浏览器兼容仍待验。
 - [会话运行时装配](docs/architecture/session-design.md#715-显式配置与运行时装配)：显式预算、单一身份权威、启动只读检查及关闭排空；typed owner 由下述显式 API 入口接线。
 - [敏感对象输出保护](docs/architecture/session-design.md#716-会话敏感对象的输出保护)：六种会话敏感类型的直接值/指针合法格式保护，登录配置 JSON 隐藏密钥；不替代禁止秘密进入日志的规则。
 - [显式会话 API 入口](docs/architecture/session-design.md#717-显式会话-api-入口)：`OJ_SESSION_CONFIG_FILE` 启用严格配置的 TLS/mTLS 命令入口，必须同时指定 `OJ_API_ADDR`；默认 Compose 未启用。
 - [已登录改密](docs/architecture/session-design.md#718-已登录用户修改密码)：显式能力、独立三维额度和弱密码规则，核验当前密码后原子换代并撤销旧会话；[接口契约](api/account.openapi.yaml)。
+- [浏览器账号面板](docs/account-browser.md)：已有账号登录、原尝试恢复、检查/主动续期/退出和改密；[六路径契约](api/session.openapi.yaml)。默认 HTTP 预览阻止密码操作，不代表注册、训练或完整权限已开放。
 
 ## 运行环境
 
@@ -63,7 +64,7 @@ API 镜像的 `/usr/local/bin/oj-api` 在非空 `OJ_SESSION_CONFIG_FILE` 下切�
 
 direct 模式要求客户端直接 TLS；proxy 模式要求同一监听器的已验证客户端证书和允许的叶证书指纹，健康检查也须经 mTLS。现有 Compose/Nginx 的明文 backend 和浏览器页面尚未配置该入口；部署、生产阈值、真实证书/存储 TLS 和完整账号权限另行验收。回退先停服务并移除显式配置环境，不把旧明文路径接到会话 Handler。
 
-可选的 `password_change` 对象另行启用 `POST /api/v1/account/password`，省略时保持 404。必须显式给定 `minimum_characters`、`blocklist_file` 及 `global`/`source`/`subject` 三个 `{count, window}` 额度；最低字符数的工程初始下限为 15，可配置更高值，且 KDF 最大密码字节预算至少为最低字符数的四倍。规则文件是至多 1 MiB 的版本 1 JSON 整串 SHA-256 弱密码摘要表，采用与公开证书相同的受控文件读取约束；格式及边界见上述设计。不能将合成测试字典当作生产覆盖证明。
+可选的 `password_change` 对象另行启用 `POST /api/v1/account/password`，省略时保持 404。必须显式给定 `minimum_characters`、`blocklist_file` 及 `global`/`source`/`subject` 三个 `{count, window}` 额度；用户已确认至少 15 个 Unicode code point、允许空格、不强制字符组合、拒绝常见弱密码，保留原始字节且不 trim/归一化/截断。最低字符数可配置更高值，KDF 最大密码字节预算至少为最低字符数的四倍。规则文件是至多 1 MiB 的版本 1 JSON 整串 SHA-256 弱密码摘要表，采用与公开证书相同的受控文件读取约束；格式及边界见上述设计。生产字典仍须验证来源、许可与覆盖，不能将合成测试词条当作生产覆盖证明。
 
 所有副本须预先显式初始化匹配额度和完整规则指纹的独立 marker；启动和请求均只核对，不修复丢失状态。规则/词典变化需要隔离旧副本并执行受控维护，不通过换 namespace 或重建计数绕过额度。改密成功推进持久化认证代次，清除两个浏览器 Cookie 后重新登录；503 可能已提交，不能自动重发。关闭该能力时移除 `password_change` 配置并重启；回退旧二进制也先移除该对象，已完成的密码更新仍保留，无 schema 迁移。
 
@@ -96,6 +97,24 @@ python3 -B scripts/test-session-protocol.py --toolchain-image oj-session-protoco
 ```
 
 脚本只使用已有本地镜像，检查 Linux/架构，创建带唯一 owner 标签的私有 internal 网络、Redis 和工具链容器；无宿主发布端口或 Docker socket。临时 PostgreSQL 只开放容器内 Unix socket，复制源码白名单并运行真实存储/race 专项。结束检查退出码/OOM 并仅清理自有容器和网络，保留缓存卷。可用 `--redis-image` 指定已核验本地镜像、`--module-cache` 挂载既有只读模块缓存；合并缓存后执行 `go mod verify`，测试使用 `-mod=readonly`。Linux CI 使用 `--context default`；此专项不是完整 AC23、容量或部署验收。
+
+### 浏览器账号专项
+
+账号页面与 API 必须由同一 HTTPS Origin 提供；当前默认 Compose/Vite HTTP 入口会阻止账号请求。不要通过关闭 Secure Cookie/来源检查或启用跨源代理来让密码表单工作。实际流程及限制见[浏览器账号](docs/account-browser.md)。
+
+专用驱动要求本机已有 Node、Playwright 模块和匹配浏览器（仅用于自动化），应用构建仍使用 Docker；不自动安装或下载。先按权限准备当前锁文件对应的前端工具镜像及上面的 Go/Redis 镜像，再选择仓库外的全新产物目录：
+
+```sh
+docker --context desktop-linux build --target frontend-source --tag oj-browser-frontend-source .
+python3 scripts/test-browser-account.py \
+  --frontend-image oj-browser-frontend-source \
+  --playwright-module /absolute/path/to/installed/playwright \
+  --output-dir /absolute/new/path/browser-account
+```
+
+可选 `--chromium-executable /absolute/path/to/existing/chromium` 指定已有浏览器；`--toolchain-image`、`--module-cache`、`--build-cache-volume` 和 `--context` 的约束沿用现有专项。驱动只发布随机回环 HTTPS/HTTP 对照端口，建立隔离的合成账号/存储；真实 race API 使用固定 pin 的 mTLS，外层临时证书只在新测试 context 忽略。控制端点仅供本夹具，不能对外开放或接入真实数据。
+
+产物包含日志、浏览器断言 JSON 与桌面/390px 截图；驱动分别检查浏览器和夹具结果，结束只清理本轮带 owner 标签的资源。`integration && browser` 夹具只运行 `TestBrowserFixture`，普通 PR CI 不自动执行此手动浏览器专项。生产证书、浏览器兼容矩阵及完整业务验收仍须另做。
 
 真实 Worker 专项（当前固定 macOS arm64、Docker Desktop LinuxKit 7.0.14）：
 
