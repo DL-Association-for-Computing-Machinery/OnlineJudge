@@ -1,0 +1,121 @@
+package runtime
+
+import (
+	"context"
+	"net/http"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/db"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
+	identitypg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/postgres"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/httptransport"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/redisstore"
+)
+
+// Open owns one bounded pool, Redis client, identity authority and shared KDF
+// admission. It only checks existing schema/recovery/limit metadata; it never
+// migrates, provisions limits, rotates/opens recovery, starts a server or retries.
+// On failure all created clients are closed. Error text contains no driver cause,
+// credential, path or key; production parameters and TLS listener remain caller-owned.
+func Open(ctx context.Context, c Config) (*Runtime, error) {
+	if ctx == nil {
+		return nil, ErrConfig
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if c.StartupTimeout <= 0 || c.StartupTimeout > time.Minute {
+		return nil, ErrConfig
+	}
+	startup, cancel := context.WithTimeout(ctx, c.StartupTimeout)
+	defer cancel()
+	hasher, work, err := c.validate()
+	if err != nil {
+		return nil, err
+	}
+	pgConfig, err := databaseConfig(c.Database)
+	if err != nil {
+		return nil, err
+	}
+	rc := c.Redis
+	rc.TLS, err = cloneTLS(c.RedisSecurity, rc.TLS)
+	if err != nil {
+		return nil, err
+	}
+	client, err := redisstore.NewClient(rc)
+	if err != nil {
+		return nil, ErrConfig
+	}
+	keep := false
+	defer func() {
+		if !keep {
+			_ = client.Close()
+		}
+	}()
+	secrets, err := redisstore.LoadLoginSecrets(c.SecretsFile)
+	if err != nil {
+		return nil, ErrSecrets
+	}
+	if err := startup.Err(); err != nil {
+		return nil, err
+	}
+	pool, err := pgxpool.NewWithConfig(startup, pgConfig)
+	if err != nil {
+		return nil, ErrStartup
+	}
+	defer func() {
+		if !keep {
+			pool.Close()
+		}
+	}()
+	if pool.Ping(startup) != nil || db.CheckSchema(startup, pool) != nil {
+		return nil, startupFailure(startup)
+	}
+	authority, err := identitypg.New(pool, hasher)
+	if err != nil {
+		return nil, ErrConfig
+	}
+	state, err := authority.RecoveryState(startup)
+	if err != nil || !state.Enabled || !identity.ValidRecoveryID(state.Generation) {
+		return nil, startupFailure(startup)
+	}
+	store, err := redisstore.New(startup, client, authority, work, c.Namespace, redisstore.OrdinaryPolicy())
+	if err != nil {
+		return nil, startupFailure(startup)
+	}
+	login, err := redisstore.NewLimitedLogin(startup, store, c.HTTP.Origin, c.LoginWindow, secrets, c.LoginLimits)
+	if err != nil {
+		return nil, startupFailure(startup)
+	}
+	var handler http.Handler
+	if c.Mode == DirectTLS {
+		handler, err = httptransport.NewLimitedLogin(login, c.HTTP)
+	} else {
+		handler, err = httptransport.NewProxiedLimitedLogin(login, c.HTTP, c.Proxy)
+	}
+	if err != nil {
+		return nil, ErrConfig
+	}
+	if err := startup.Err(); err != nil {
+		return nil, err
+	}
+	result := newRuntime(handler, func() error {
+		err := client.Close()
+		pool.Close()
+		if err != nil {
+			return ErrClose
+		}
+		return nil
+	})
+	keep = true
+	return result, nil
+}
+
+func startupFailure(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return ErrStartup
+}

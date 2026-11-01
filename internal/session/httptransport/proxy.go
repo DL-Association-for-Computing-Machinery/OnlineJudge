@@ -25,17 +25,11 @@ type proxyTrust struct {
 // falls back to direct mode. Pins are copied; rotation requires a new handler.
 // This authenticates the proxy's assertions, not its public TLS configuration.
 func NewProxiedLimitedLogin(login *redisstore.Login, config Config, proxy ProxyConfig) (http.Handler, error) {
-	if len(proxy.CertificateSHA256) == 0 || len(proxy.CertificateSHA256) > 16 {
-		return nil, redisstore.ErrInvalid
+	if err := proxy.Validate(); err != nil {
+		return nil, err
 	}
 	pins := make(map[[32]byte]struct{}, len(proxy.CertificateSHA256))
 	for _, pin := range proxy.CertificateSHA256 {
-		if pin == ([32]byte{}) {
-			return nil, redisstore.ErrInvalid
-		}
-		if _, exists := pins[pin]; exists {
-			return nil, redisstore.ErrInvalid
-		}
 		pins[pin] = struct{}{}
 	}
 	base, err := NewLimitedLogin(login, config)
@@ -45,6 +39,24 @@ func NewProxiedLimitedLogin(login *redisstore.Login, config Config, proxy ProxyC
 	h := base.(*handler)
 	h.proxy = &proxyTrust{certificates: pins}
 	return h, nil
+}
+
+// Validate checks the explicit proxy fingerprint set without a manager or I/O.
+func (proxy ProxyConfig) Validate() error {
+	if len(proxy.CertificateSHA256) == 0 || len(proxy.CertificateSHA256) > 16 {
+		return redisstore.ErrInvalid
+	}
+	pins := make(map[[32]byte]struct{}, len(proxy.CertificateSHA256))
+	for _, pin := range proxy.CertificateSHA256 {
+		if pin == ([32]byte{}) {
+			return redisstore.ErrInvalid
+		}
+		if _, exists := pins[pin]; exists {
+			return redisstore.ErrInvalid
+		}
+		pins[pin] = struct{}{}
+	}
+	return nil
 }
 
 func (h *handler) requestSource(r *http.Request) (netip.Addr, bool) {

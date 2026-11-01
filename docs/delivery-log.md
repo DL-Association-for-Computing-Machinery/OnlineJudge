@@ -1,5 +1,21 @@
 # 工程交付记录
 
+## 2026-11-01：显式会话配置与资源生命周期装配
+
+前置单跳代理 PR #73 的 final head `b23f0d2` 经 CI `41303412108` 九项成功后 squash 为 `08c48a8`；完成最终 head/合并树一致及祖先核验、主线快进和定向 worktree/分支清理，知识事务 `oj-session-proxy-delivered-20261101` 五页回读一致/lint 0。重新成功 fetch 该主线后建立独立 `codex/session-runtime`，唯一目标为 typed 配置的 Open/ServeHTTP/Close，不扩大到默认 API/文件解析/监听器。
+
+装配一个 PG 身份权威/有界 pool、一个 Redis client、一个共享 KDF/准入及严格限流的 direct/proxy Handler；复用 owner 纯校验，固定普通期限，无裸客户端/Handler 导出。显式连接/执行预算、无任意 DSN/PG hooks，拒锁定 driver 读取的 ambient 配置并用官方常量模板后成组赋值/清 Fallbacks，防隐含凭据和明文降级；私网/VerifiedTLS 显式选择。启动只读 schema/open recovery/Redis条件/已有marker，不初始化/修复或迁移，失败释放自有资源；全程合作期限包含本地准备。关闭以同锁登记与停入口，实际 Handler/KDF 返回后恰一次清理，超时不提前关闭或重开。合同、配置、错误/格式化脱敏和回退归[会话设计](architecture/session-design.md#715-显式配置与运行时装配)。
+
+首轮 Docker 测试暴露 PG 前缀拒绝过宽，容器仅回读名字确认 PGDATA/PG_MAJOR/PG_VERSION 是镜像元数据；未输出值。对照锁定 pgx v5.11.0 `pgconn.parseEnvSettings` 改为实际消费的 24 个连接键，增加元数据允许和恶意连接环境拒绝/保留原值的回归，未修改进程环境。首轮 unit/protocol 失败保留在 `/private/tmp/oj-session-runtime-backend.log`、`protocol.log`，未放宽断言或跳过检查。Astra 提醒整个 StartupTimeout 不能在文件读取后重置，已移至 Open 起点并在本地准备后/发布前复核 context；同步文件操作仍不提供硬中断。
+
+完整离线 Docker Desktop/Linux arm64 backend：checksum 校验、格式/vet、检测器正负夹具、三实际静态范围各 0、全部 race（runtime 1.034 秒）与四入口构建通过（`backend-final.log`）。最终增加 PG VerifiedTLS 赋值/身份/RootCAs 克隆和无 fallback 直接断言后，仅重验全树格式、session 静态 0 和最终 runtime race **1.035 秒**通过（`unit-final.log`）。确定性阻塞 Handler 在请求取消后仍占活动名额，Close 超时/新请求 503/解除后 16 个等待者及恰一次 cleanup、64 请求与 8 Close 竞争、panic 后排空和零值拒绝均验证；未用随机长 KDF 模拟完成。
+
+真实 Redis7.2.17/临时 PG/race 完整专项 **142 个 PASS 条目（含父条目，装配 11，14.933 秒）**及集成静态 0、退出/OOM/自有资源清理通过（`protocol-final.log`）。新增双 Runtime/共享 Cookie jar/Legacy 升级/活动/退出/关闭后拒绝、真实 TLS→mTLS 代理；缺失/不匹配 marker 快照不变、closed recovery 代次/状态不变、错 schema/Redis失败均拒绝并释放PG；Redis CLIENT LIST 前后计数相同，不关闭其他 owner。ACCESS EXCLUSIVE 表锁实际阻塞新恢复读取，观察唯一 waiter 后取消或等待 startup deadline，确认精确 backend 消失后再释放 blocker，且无 marker 变化。短日志名均以前缀 `/private/tmp/oj-session-runtime-` 定位。
+
+PR #74 初始 head `86a2f1e` 等待 CI 期间，补充 `%d/%f` 负向探针实证 Stringer 被非常见动词绕过，输出断言失败但日志不输出合成凭据（`format-probe.log`）。为新 Config/DatabaseConfig 增加值接收者 Formatter，并对值/指针、16 种合法动词/flags 逐字断言固定脱敏文本；修复以正常追加提交交付，不沿用旧 head 绿灯。Astra 按锁定 fmt 源码指出非法 `%w` 诊断先于 Formatter 且可能反射原值，独立合成探针确实未保持固定脱敏（`format-invalid-probe.log`），故明确只保证合法受支持格式，禁止原配置日志/反射；该非法探针不充作支持保证。冻结修复后的完整 backend/全部静态/race/四入口重验通过（`backend-verified.log`，独立 runtime 1.032 秒、全后端 runtime 1.030 秒）；完整真实专项再次 **142 个 PASS 条目（装配 11，14.767 秒）**、静态 0/退出/自有清理通过（`protocol-verified.log`）。
+
+主代理完整差异/新增文件与日志核对、345 文件策略/本地链接/空白检查通过；Astra 设计、核心、测试与文档复核按最终差异执行，AI 不替代人工审批。无依赖/SQL/迁移变化；默认命令/JSON配置/监听器、真实存储 TLS 握手、浏览器/生产代理、生产KDF/限流/多API总预算、账号权限/恢复与完整AC01/23/24/25/M0仍待验，未部署。
+
 ## 2026-11-01：单跳代理的会话信任与来源额度
 
 成功 fetch 主线 `b51119f` 后建立独立 `codex/session-proxy` worktree，无开放 PR/未知改动。唯一目标为显式固定单跳代理入口，默认 API/生产配置另验。`NewProxiedLimitedLogin` 要求已有共享限流、复制的 1—16 个唯一非零叶证书 DER SHA-256；全部路由先核对真实 backend TLS、同叶 VerifiedChains、固定 public Host 和严格唯一 XFF/XFH/XFP，拒绝其他转发方言或多跳。来源局部显式传递，不修改 RemoteAddr/TLS 或 handler 共享状态。原直连入口行为保持，无依赖/SQL/迁移。合同与回退归[会话设计](architecture/session-design.md#714-单跳受信反向代理)。

@@ -23,13 +23,19 @@ func loadedLoginManager(t *testing.T, s *protocol.Store, window time.Duration, k
 
 func loadedLoginSecrets(t *testing.T, key, limiting [32]byte) *protocol.LoginSecrets {
 	t.Helper()
+	path := loginSecretsFile(t, key, limiting)
+	secrets, err := protocol.LoadLoginSecrets(path)
+	must(t, err)
+	return secrets
+}
+
+func loginSecretsFile(t *testing.T, key, limiting [32]byte) string {
+	t.Helper()
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	must(t, err)
 	path := filepath.Join(dir, "synthetic-login.json")
 	body, err := json.Marshal(map[string]any{"version": 1, "current": "fixture", "sealing": map[string]string{"fixture": base64.RawURLEncoding.EncodeToString(key[:])}, "limiting": base64.RawURLEncoding.EncodeToString(limiting[:])})
 	must(t, err)
 	must(t, os.WriteFile(path, body, 0600))
-	secrets, err := protocol.LoadLoginSecrets(path)
-	must(t, err)
-	return secrets
+	return path
 }

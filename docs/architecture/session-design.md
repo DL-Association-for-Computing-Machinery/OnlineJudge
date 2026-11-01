@@ -359,6 +359,22 @@ JSON 必须恰有 `version`（整数词法 `1`）、`current`（key ID）、`sea
 
 真实 Redis/PostgreSQL 专项含两个独立 Store、公开 TLS→mTLS backend、两个实际 Linux loopback 客户端来源、同源跨副本限流/异源隔离、恶意转发及 Connection 头、共享 Go Cookie jar 登录/读取/活动/退出，以及同 CA 未授权证书和无证书拒绝。合成 TLS 状态的单元边界与真实握手明确区分；Cookie jar 仍不代表浏览器验收。命令沿用 README 专项，实际结果归[交付记录](../delivery-log.md)。无依赖/SQL/迁移或默认 API 接线；回退先停用代理登录入口，不以接回未限流路径替代。未部署，生产阈值、浏览器/完整账号权限与恢复和完整 M0 仍待验。
 
+### 7.15 显式配置与运行时装配
+
+`internal/session/runtime.Open(ctx, Config)` 接受受信的 Go typed 配置，拥有一个身份 PG pool、一个 Redis client、一个 Hasher/共享 BoundedHasher 和严格限流 Handler。外部只得到 `ServeHTTP`/`Close`，无裸 Store、client、pool 或绕过排空的 Handler。每个 API 进程应只构造一个 Runtime，后续账号工作也须共享计算准入；多个 Runtime/进程的预算不会自动合并。它不解析 JSON/环境配置文件、不启动监听器或挂载默认 Gin/Compose/OpenAPI；上述接线在后续独立阶段交付。
+
+Config 显式给定 KDF 当前/旧完整 tuple、执行上限、准入人数/队列期限、五个登录额度、namespace、私有密钥文件、固定 public HTTPS Origin、HTTP/整个启动预算、direct TLS 或 pinned mTLS 模式。普通会话固定 2h/12h；零/未知模式、direct 携带代理 pins、缺预算和 owner 配置不合法均拒绝。HTTP Config/ProxyConfig 与 Redis setup 的纯校验复用原构造器规则；KDF/channel 的 1024 在途/65536 等待是实现上界而非生产推荐。StartupTimeout 为大于零、至多 1 分钟的合作预算，从本地准备前开始，准备后及发布前重新检查；同步文件/driver 准备不能由 context 强制打断，取消不证明底层已撤销。
+
+DatabaseConfig 不接受任意 DSN/callback/备用端点：显式 Host/Port/Database/Username/Password/ApplicationName、连接数 1—1024、整毫秒 1ms—5s 调用期限、最大寿命/空闲时间/健康检查周期。用锁定 pgx v5.11.0 官方 parser 的无秘密常量模板建立合法配置，禁止它消费的 24 个非空 PG 环境设置（完整列表随源码维护），不修改进程环境；PGDATA/PG_MAJOR/PG_VERSION 等非连接镜像元数据不受此限制。模板显式禁用 TLS 文件/指定空 passfile，随后成组替换端点/身份/TLS 并清空 Fallbacks，防止残留明文降级；parser 仍可能 stat 默认路径，不加载其中隐含凭据/证书。受控 RuntimeParams 固定 public search_path、应用标签及显式 statement/lock/idle-in-transaction 期限；pool 最小/最小空闲连接为零，所有数量与时间上限冻结在配置。Redis 使用原显式预算/无重试 ClientConfig，不读取其他隐含设置。
+
+PG/Redis 分别显式选择 PrivateTransport 或 VerifiedTLS。前者要求无 TLS config，仅适用于已验证的受信私网/本地连接，本组件不自动证明网络私密；后者要求 MinVersion 至少 TLS1.2、明确 ServerName、非 InsecureSkipVerify，克隆 TLS 和 RootCAs，无明文 fallback。调用方仍须管理并保持 TLS backing material 不变。Config/DatabaseConfig 的值和指针支持已测试的 16 种合法值格式（含数值动词）及 JSON 固定脱敏；非法 `%w` 等 Go 诊断、反射和主动字段访问不在此保证内，原始 Config 禁止进入日志或无关编码器。公开启动错误为固定配置/密钥/不可用分类或 context 取消/期限，不暴露路径、凭据或 driver cause。
+
+Open 只读检查 schema 5、有效 open 恢复状态、原 Redis 7.2 standalone/primary/noeviction 条件及已存在且匹配的限流 marker；失败释放自有资源，不迁移、不初始化 marker、不 Begin/FinishRecovery、不轮换 key。成功描述启动时的观察，不证明持续可用、备份连续、生产参数或外部恢复隔离；每个请求仍执行原权威/限流门禁。
+
+Close 在同一 mutex 下停止入口和登记活动请求，503/no-store/无 Cookie 拒绝后续请求，等待**实际 ServeHTTP 返回**后再恰一次关闭资源。运行中 KDF 超过请求期限仍被计入；每个 Close 调用仅用各自 context 等待同一完成信号，超时不提前关资源、不重新开放、不遗弃后台排空。先停止 listener，再等待服务器请求结束并 Close；单独 server.Close 不证明业务/KDF 已退出。零值 Runtime 失败关闭，Handler panic 仍注销活动计数，由服务器/上层既有恢复层处理 panic。
+
+真实 PG/Redis 专项验证双 Runtime/两步 Cookie 生命周期、Legacy 升级、TLS→mTLS 代理、缺失/不匹配 marker、闭门恢复、错 schema/Redis 失败、真实表锁等待后的启动取消/期限、精确 backend 消失及 PG/Redis 连接释放；确定性阻塞 Handler/取消、并发关闭和 panic 以 unit race 验证。数据库 TLS 最终配置有断言，真实存储 TLS 握手、浏览器/生产代理、命令入口/文件解析、生产参数/多 API 总预算、完整权限/恢复和 M0 另验，未部署。命令沿用 README backend/会话专项，实际结果归[交付记录](../delivery-log.md)；回退停用装配调用方，无 SQL/迁移/依赖变化。
+
 ## 8. 注册、找回与账号发放
 
 用户确认采用“日常邮箱验证注册＋密码登录＋邮箱自助找回，正式比赛采用校内发号和人工核验重置”。这确认产品流程，不代表邮件供应商、发信组件或运行效果已验证。

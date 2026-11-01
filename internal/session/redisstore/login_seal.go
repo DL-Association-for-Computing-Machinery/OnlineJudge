@@ -21,11 +21,9 @@ var keyIDPattern = regexp.MustCompile(`^[a-z0-9_-]{1,16}$`)
 // Old keys may decrypt during rotation; only CurrentKey seals new candidates.
 // This does not provision/read keys, pick production budgets or register routes.
 func NewLogin(store *Store, c LoginConfig) (*Login, error) {
-	u, err := url.Parse(c.Origin)
 	if store == nil || store.client == nil || store.authority == nil || store.gate == nil ||
-		!namespacePattern.MatchString(store.namespace) || !store.policy.valid() || err != nil || u.Scheme != "https" || u.Hostname() == "" ||
-		c.Origin != "https://"+u.Host || u.User != nil || c.Window < time.Millisecond || c.Window > 5*time.Minute ||
-		c.Window > store.policy.Idle || c.Window%time.Millisecond != 0 || !validSealingKeys(c.CurrentKey, c.Keys) {
+		!namespacePattern.MatchString(store.namespace) || !store.policy.valid() ||
+		!validLoginSettings(c.Origin, c.Window, store.policy) || !validSealingKeys(c.CurrentKey, c.Keys) {
 		return nil, ErrInvalid
 	}
 	keys := make(map[string]cipher.AEAD, len(c.Keys))
@@ -41,6 +39,21 @@ func NewLogin(store *Store, c LoginConfig) (*Login, error) {
 		keys[id] = aead
 	}
 	return &Login{store: store, origin: c.Origin, window: c.Window, current: c.CurrentKey, keys: keys}, nil
+}
+
+func validLoginSettings(origin string, window time.Duration, policy Policy) bool {
+	u, err := url.Parse(origin)
+	return err == nil && u.Scheme == "https" && u.Hostname() != "" && origin == "https://"+u.Host &&
+		u.User == nil && window >= time.Millisecond && window <= 5*time.Minute && window <= policy.Idle && window%time.Millisecond == 0
+}
+
+// ValidateSetup checks pure session/login settings using the same rules as the
+// owning constructors. It performs no I/O, key loading or admission initialization.
+func ValidateSetup(namespace string, policy Policy, origin string, window time.Duration, limits LoginLimits) error {
+	if !namespacePattern.MatchString(namespace) || !policy.valid() || !validLoginSettings(origin, window, policy) || !limits.valid() {
+		return ErrInvalid
+	}
+	return nil
 }
 
 func validSealingKeys(current string, keys map[string][32]byte) bool {

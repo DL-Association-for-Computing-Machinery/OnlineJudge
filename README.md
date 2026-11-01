@@ -19,6 +19,7 @@
 - [跨请求登录与 Cookie 发放](docs/architecture/session-design.md#711-跨请求登录尝试与-cookie-发放)：无会话写入的准备、密文候选恢复、实际执行点截止和确认后发放；[独立密钥文件加载](docs/architecture/session-design.md#712-登录密钥文件加载)，独立 HTTPS Handler，默认 API 未挂载。
 - [共享登录限流](docs/architecture/session-design.md#713-共享登录限流)：跨副本全局/来源/邮箱联合额度、独立恢复额度与失败关闭；严格 Handler 构造入口供后续默认 API 使用，生产阈值待验。
 - [单跳受信反代](docs/architecture/session-design.md#714-单跳受信反向代理)：显式 mTLS 证书指纹、固定公开来源与严格覆写头，独立代理入口要求登录限流；默认 API/生产代理配置与浏览器仍待验。
+- [会话运行时装配](docs/architecture/session-design.md#715-显式配置与运行时装配)：显式预算、单一身份权威、启动只读检查及关闭排空；typed 配置入口不启动监听器，默认 API/配置文件接线仍待完成。
 
 ## 运行环境
 
