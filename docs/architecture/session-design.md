@@ -301,7 +301,7 @@ POST 在触库前调用标准库 [CrossOriginProtection.Check](https://pkg.go.de
 
 候选用锁定 Go 1.26.10 标准库 `crypto/aes` 与 [`cipher.NewGCMWithRandomNonce`](https://pkg.go.dev/crypto/cipher#NewGCMWithRandomNonce) 做 AES-256-GCM，随机 96-bit nonce 随密文保存。明文仅含私有 Attempt tuple、原凭据及冻结截止，不含密码；Redis 继续只保存 token 摘要。封装认证绑定用途/格式版本、外层 key ID、namespace、精确 HTTPS origin、idle/absolute 策略与 Window。只接受规范 base64url、受限 key ID、至多 1536 字节封装；解析浏览器语法不证明密文有效或身份授权。没有公开可填充的 Attempt snapshot，也不是 JWT 或第二份权威 Session。
 
-密钥通过受信构造器显式提供，必须是跨副本/进程共享的 32-byte 材料，不在启动时自动生成或回退。仅当前 key 用于封装，最多四个 key 可解封，构造器复制 key map/材料并拒绝全零材料；不提供密钥文件/环境变量读取、部署、分发或自动轮换。操作者负责每个 key 的跨副本累计封装次数不超过标准库规定的 `2^32`，以及安全配置。保留旧解密 key 才能恢复/放弃旧候选；如需保留原期限内协议允许的清理能力，应覆盖该候选期限保留旧 key。提前丢钥不等于撤销，会使候选失败关闭；已经写入但未收到 Cookie 的会话仍按原 idle/absolute 自然失效，不能承诺立即释放名额。
+密钥必须是跨副本/进程共享的 32-byte 材料，不在启动时自动生成或回退。仅当前 key 用于封装，最多四个 key 可解封，构造器复制 key map/材料并拒绝全零材料；文件加载见下节，不提供环境变量回退、分发或自动轮换。操作者负责每个 key 的跨副本累计封装次数不超过标准库规定的 `2^32`，以及安全配置。保留旧解密 key 才能恢复/放弃旧候选；如需保留原期限内协议允许的清理能力，应覆盖该候选期限保留旧 key。提前丢钥不等于撤销，会使候选失败关闭；已经写入但未收到 Cookie 的会话仍按原 idle/absolute 自然失效，不能承诺立即释放名额。
 
 Window 必须显式给定，粒度毫秒，大于零且同时不超过五分钟和普通 Idle。`loginUntil = 原 Redis created + Window` 不随封装、重试、确认或副本重建延长；Retry/Check 的实际 Lua 执行在所有成功分支之前检查它。新可选协议参数只接受规范正整数或既有裸 Attempt 明确传入的 `0`，非法/缺失值不降级为不限期。截止仅由 AEAD 保护并作为受信参数传入，不增加 Redis 记录字段或改变原 binding，因此已准入会话的 Read/Touch 不需要密文。原绝对期限和初始 idle 保持不变；登录窗口到期仍可用保留密文请求 Abandon，但须遵守原全局/主体门禁及初始 idle/absolute 校验。不存在的记录在初始 idle 已过后拒绝建立墓碑；已有匹配记录的墓碑保留到原 absolute。过期密文不能续用来登录。
 
@@ -320,6 +320,16 @@ Begin 已见尝试 Cookie 时拒绝再准备；Begin/Complete 已见有效普通
 跨 API/进程重建要求同一 PostgreSQL owner、Redis namespace/连续性、key ring、Origin、策略及 Window；密文不可任意搬到另一配置。平台回档/旧快照/账号事实恢复继续遵守原全局恢复隔离，不凭密文绕过。共享时间配置异常可能使 HTTP 端提前拒发；以 Redis 的冻结窗口和普通期限为最终准入边界。回退先停止新登录调用方，已有普通记录格式及 schema 5 不变，无 SQL/迁移/依赖变更；未完成候选停止恢复，不用数据回退“修复”。
 
 验证命令沿用 README 普通会话专项；两独立 Store/连接池/TLS 入口、真实 Cookie jar、进程内状态丢弃后的 manager 重建、未知回执、执行点截止、墓碑/发放交错、改密/禁用/恢复和输入边界归[交付记录](../delivery-log.md)。Cookie jar 不是浏览器 UI/关闭重开或真实反代验收；默认入口、SCS/Gin 完整生命周期、邮件/资源权限、生产限流/预算/容量和完整 AC01/23/24/25/M0 继续待验，未部署。
+
+### 7.12 登录密钥文件加载
+
+`LoadLoginSecrets` 接受显式绝对规范路径，`NewLoginFromSecrets` 只把不透明快照交给原构造器，仍要求显式 Origin/Window；不挂载默认 API。Linux/Darwin 使用已锁定的 `golang.org/x/sys/unix` v0.49.0（BSD-3-Clause），逐级 openat/O_NOFOLLOW 打开并 fstat；其他平台明确拒绝。所有目录须 root/当前 euid 所有且不可被组/其他用户写，唯一例外是 root 所有的 sticky 公共祖先，每个子组件仍独立检查。拒绝路径中的符号链接，包括 Darwin 的 `/tmp`、`/var` 别名；调用方须配置真实规范路径。
+
+叶文件须 root/当前 euid 所有、单硬链接、普通文件且仅 0400/0600，大小 1—4096 bytes。非阻塞打开避免 FIFO 挂起；有界读取前后核对 fd 的设备/inode/权限/所有者/链接/大小/mtime/ctime，错误统一为不含路径或底层错误的 `ErrLoginSecrets`。这些检查依赖受信本地文件系统和正确 ACL，不证明 NFS/ACL 或持钥特权进程安全，也不能证明恶意可信写入者下的原子快照。以新文件原子替换并显式重建 manager，禁止运行中原地改写；已加载 manager 不自动重读。
+
+JSON 必须恰有 `version`（整数词法 `1`）、`current`（key ID）、`sealing`（1—4 个 ID 到 key 的对象）、`limiting`（独立稳定 key）。每个 key 为 32 bytes 的规范无 padding base64url；拒绝零值、重复材料/用途复用、未知/重复/缺失/null 字段、坏 Unicode、尾随数据及超限内容。示意仅用占位符，不是可用配置：`{"version":1,"current":"active","sealing":{"active":"<32-byte raw base64url>"},"limiting":"<distinct 32-byte raw base64url>"}`。快照值/指针格式化脱敏，JSON 无私有字段；内存清理属尽力而为，Go 分配器/GC 不提供密钥完全擦除保证。
+
+封装轮换保留旧 key 并更新 current；限流 HMAC 材料须独立且跨副本/封装轮换稳定，本阶段只加载校验，不执行限流。缺文件/坏权限/坏配置失败关闭，无自动生成、chmod、环境回退或秘密日志。未读取/创建真实生产密钥；生产路径、分发、备份、轮换操作和阈值仍待实际部署准备。无 SQL/迁移/会话记录变化；停用加载调用方即可回退。测试与验证证据见[交付记录](../delivery-log.md)。
 
 ## 8. 注册、找回与账号发放
 

@@ -1,5 +1,15 @@
 # 工程交付记录
 
+## 2026-11-01：登录生产密钥加载准备
+
+成功 fetch `d989a56` 后建立独立 `codex/login-key-loading` worktree。新增私有文件加载与 `NewLoginFromSecrets`，复用原封装 key 校验及 Login owner；无默认 API 挂载或真实秘密生成/读取。Linux/Darwin 逐级 openat/O_NOFOLLOW/fstat、可信目录、0400/0600 单链接普通文件、4 KiB 上限与读前后元数据；严格 JSON/用途独立/固定脱敏，合同及部署限制归[会话设计](architecture/session-design.md#712-登录密钥文件加载)。仅把已锁定 `golang.org/x/sys` v0.49.0 提升为直接依赖，Go/其他版本/go.sum/SQL/schema 5 不变；核对固定版本官方 unix API 和 BSD-3-Clause 许可证。
+
+改动前 Docker 禁网 race 基线通过（1.268 秒，`/private/tmp/oj-login-key-baseline.log`）；新增严格解析、文件边界、快照替换、轮换和脱敏测试，并让原双 TLS Cookie jar 联调用例分别通过合成文件加载共享 key。初轮单元 race 1.123 秒及会话静态 0 问题（`/private/tmp/oj-login-key-unit.log`）。Astra 发现指针专用 Stringer 会使解引用值格式化泄漏字段，改为值接收者并对值/指针逐字断言固定脱敏文本；nil 和 JSON 也覆盖。完整代码/测试/文档增量审查无剩余阻断，实际执行结果另核验，AI 不代替人工审批。
+
+最终 Docker 完整 backend 通过格式/vet、检测器正负夹具、三个实际静态范围各 0、全部 race（redisstore 1.112 秒）与四入口构建（`/private/tmp/oj-login-key-backend.log`）；Darwin arm64 仅交叉编译通过，无 Darwin 运行声明。真实 Redis7.2.17/临时 PostgreSQL/race 专项 **84 个 PASS 条目（含父条目，17.600 秒）**、集成静态 0、退出/OOM/自有资源清理均通过（`/private/tmp/oj-login-key-protocol.log`）。323 文件仓库策略及完整差异/新增文件审查通过；没有改动 SQL/治理，不重复其本地独立套件，远端必需 CI 保持。
+
+生产路径、真实密钥分发/备份/轮换、登录限流、默认 Gin/Compose/公开入口、浏览器/反代和完整 AC01/23/24/25/M0 仍待验，未部署。本轮只为后续限流装载独立稳定 HMAC 材料，不消耗额度或选择生产阈值；不把模式位检查当成 ACL/恶意可信写入者下的安全证明。
+
 ## 2026-11-01：跨请求登录候选与确认 Cookie 发放
 
 成功 fetch 主线 `d2947fa` 后建立独立 `codex/cross-request-login` worktree。本轮单一目标是让普通邮箱密码认证产生的冻结候选跨 HTTP 请求恢复并在确认后发 Cookie；不开放默认 API、注册/邮件或资源权限。保留一个权威 Store：Prepare 在既有全局→主体门禁成功后封装候选但不写会话/名额；Complete 只恢复原 tuple，Retry 后独立 Check，失败不生成替代 Create/不清 Cookie；Abandon 仅作用于候选。窗口固定为 Redis created+显式 Window，实际 Lua 成功分支前检查；原 Create 显式传零，无记录/SQL/schema/依赖变更。协议、AAD/key 管理、限额及恢复/迟到效果边界归[会话设计](architecture/session-design.md#711-跨请求登录尝试与-cookie-发放)。

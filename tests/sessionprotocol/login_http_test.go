@@ -21,10 +21,11 @@ func testLogin(t *testing.T, f *fixture) {
 		ns := namespace(t)
 		p := f.subject(t, false)
 		key := loginKey(t)
+		limiting := loginKey(t)
 		a := f.store(t, ns, 0, protocol.OrdinaryPolicy())
 		b := f.store(t, ns, 1, protocol.OrdinaryPolicy())
-		x := loginServer(t, loginManager(t, a, time.Minute, key))
-		y := loginServer(t, loginManager(t, b, time.Minute, key))
+		x := loginServer(t, loadedLoginManager(t, a, time.Minute, key, limiting))
+		y := loginServer(t, loadedLoginManager(t, b, time.Minute, key, limiting))
 		jar, err := cookiejar.New(nil)
 		must(t, err)
 		x.client.Jar = jar
