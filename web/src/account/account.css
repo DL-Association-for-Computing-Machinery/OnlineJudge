@@ -1,0 +1,40 @@
+.account-panel { margin-top: 32px; padding: 32px; border: 1px solid var(--line); border-radius: 4px; background: #fff; }
+.account-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.account-heading .eyebrow { margin-bottom: 10px; }
+.account-badge { flex-shrink: 0; padding: 6px 10px; border: 1px solid var(--line); border-radius: 20px; color: var(--muted); font-size: 12px; }
+.account-badge.authenticated { color: var(--accent); background: #edf5ee; }
+.account-intro, .account-panel details p, .session-summary > p, .password-form p { color: var(--muted); font-size: 14px; line-height: 1.8; }
+.account-notice { padding: 14px 16px; border-left: 3px solid var(--line); background: #f6f8f5; line-height: 1.8; font-size: 14px; overflow-wrap: anywhere; }
+.account-notice.success { border-color: var(--accent); }
+.account-notice.error { border-color: #a32a27; background: #fff3f1; color: #85221e; }
+.account-notice.uncertain { border-color: #9a6a18; background: #fff9e9; color: #745014; }
+.account-form { max-width: 480px; margin: 24px 0; }
+.account-form fieldset { padding: 0; margin: 0; border: 0; min-width: 0; }
+.account-form legend, .session-summary h3 { padding: 0; margin: 0 0 18px; font-size: 17px; font-weight: 600; }
+.account-form label { display: block; margin: 16px 0 8px; font-size: 14px; }
+.account-form input { display: block; width: 100%; min-height: 46px; padding: 10px 12px; border: 1px solid #9cafa4; border-radius: 4px; background: white; color: inherit; font: inherit; }
+.account-form input:focus-visible, .account-panel summary:focus-visible { outline: 3px solid #498dbe; outline-offset: 3px; }
+.account-form button { margin-top: 20px; }
+.account-form fieldset:disabled input { background: #f4f5f1; }
+.account-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.account-panel .secondary { background: white; color: var(--accent); border: 1px solid #9cafa4; }
+.account-panel .secondary:hover { background: #edf5ee; }
+.account-panel .secondary:disabled { cursor: default; }
+.account-recovery { padding-top: 24px; border-top: 1px solid var(--line); display: flex; gap: 12px; flex-wrap: wrap; }
+.account-recovery details { flex-basis: 100%; margin-top: 14px; }
+.account-recovery summary { width: fit-content; cursor: pointer; color: var(--accent); font-size: 14px; line-height: 1.8; }
+.session-summary { padding: 14px 0 0; }
+.session-summary dl { margin: 0 0 18px; }
+.session-summary dl > div { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 12px; margin: 12px 0; font-size: 14px; line-height: 1.8; }
+.session-summary dt { color: var(--muted); }
+.session-summary dd { margin: 0; }
+.subject-id { font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
+.password-form { border-top: 1px solid var(--line); padding-top: 24px; margin-top: 30px; }
+@media (max-width: 640px) {
+  .account-panel { padding: 24px; }
+  .account-heading { align-items: flex-start; }
+  .account-actions { flex-direction: column; align-items: stretch; }
+  .account-recovery > button { width: 100%; }
+  .session-summary dl > div { grid-template-columns: 1fr; gap: 2px; }
+  .account-badge { max-width: 116px; white-space: normal; text-align: center; }
+}

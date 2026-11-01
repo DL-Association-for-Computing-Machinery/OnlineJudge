@@ -1,5 +1,23 @@
 # 工程交付记录
 
+## 2026-11-01：浏览器账号登录、恢复与会话管理
+
+前置 PR #77 最终 head `1de02f6` 经 CI `41314309363` 九项成功后 squash 为 `76ec453`；精确 head/合并树与祖先核验、主线快进及定向清理完成，知识事务 `oj-password-change-delivered-20261101` 五页字节回读一致/lint 0。重新成功 fetch 后从该主线建立独立 `codex/browser-account-lifecycle` worktree，唯一目标为已有账号的浏览器生命周期，不涉及注册/邮件、角色/资源权限、训练或部署。
+
+沿用 React/fetch/CSS，不引入依赖或多页面框架。账号面板提供登录、原候选恢复、只读检查、显式续期、退出及可选改密；单飞覆盖 Begin→Complete→Read，本地代次隔离卸载/StrictMode 后的成功/错误/finally，密码不进入 React 状态或浏览器存储。请求在 HTTP 下先于序列化关闭，固定同源 URL/Cookie/no-store/无 referrer/禁止重定向，有限读取/严格操作响应/固定本地错误文案；不自动重试 POST。会话观察与操作回执分开，初访未登录为正常提示；完整合同归[浏览器账号](account-browser.md)，六会话路径补齐[OpenAPI](../api/session.openapi.yaml)。默认 Compose/Nginx/Vite 不启用会话 HTTPS，无依赖/SQL/迁移/生产参数变化，回退静态构建即可，已有账号和会话持久状态不撤销。
+
+Astra 设计/代码复核要求 redirect:error 防止 307/308 重发密码、改密 401/404 不推导普通会话退出、Complete204/后续 Read 分别表述、单飞在首个 await 前占位，均已落实。复核发现 Abandon 可撤销原候选已发放的会话，已修正成功与未知 Abandon 的状态/文案并补回归；首次 Read403/405 不再停留“检查中”。改密未知标记只在当前 controller 实例保留，文档明确不能跨刷新/标签防止重提，表单始终提示先重新登录核验；未宣称控制浏览器密码管理器。
+
+本机已有固定前端镜像中，首选旧质量镜像与当前安全修复锁文件不同，复制后触发 pnpm registry 重试但 network none 阻止联网；终止本轮自有容器，改用 package/lock 字节完全一致的已有镜像及原依赖路径，未下载或修改依赖。原基线 lint/类型/6 项测试/构建通过（`frontend-baseline-verified.log`）。首轮新增测试触发 mock any 的严格 lint，补真实 fetch 类型，不放宽规则。最终完整 Docker 前端 lint（含原检测器回归）/类型/**49 项 Vitest**/构建通过（`frontend-ready.log`），涵盖有限响应、无重试/跳转、操作状态、单飞与 cleanup/迟到回执。浏览器截图发现连接检查挤占主操作，已将账号面板提前并加页内入口，桌面/窄屏重新实测。
+
+专用 `scripts/test-browser-account.py` 复用现有 owner 标签/镜像架构/容器状态检查，只用已有模块、浏览器及镜像，不 pull/install；构建 Docker 禁网，Node 只作宿主浏览器驱动。原 internal bridge 实测没有分配 published HostPort，改为独立带标签 bridge 并实际 inspect 只绑定 127.0.0.1 的随机两端口。临时 PG Unix socket、Redis 与真实 race API/pinned mTLS 保持隔离；双标签 Go 夹具只由精确 TestBrowserFixture 启动，不混入普通 CI。控制端点无认证，安全依赖该临时隔离，不能作为生产或通用代理。
+
+最终已有 Playwright **1.64.1** / Chromium **151.0.7922.34**，**1280×960 / 390×844 十组浏览器断言**全过（`/private/tmp/oj-browser-account-final-qa`）：真实安全 Cookie/原候选刷新恢复/放弃、手动检查/活动/退出、改密拒绝与换代重登、确认密码仅本地、重复提交单飞、307 sink 零请求及无后续 POST、畸形202零确认、发放204后 Read503不重发 Complete、真实改密204后替换503且原始 Unicode/空格重新登录、HTTP零账号请求、本机快进3小时到期提醒零后台请求。无未捕获应用异常，14 个 HTTP 拒绝/注入网络诊断为预期；截图回读无横向溢出。最终 fixture race **9.723 秒**，browser/fixture/container/Redis/cleanup 各自为真、fixture_exit0，正常排空及资源清理通过，不把 mock 错误替代正常存储路径。
+
+Astra 指出 route 异步回调异常不一定由外层捕获，已统一 safeRoute 固定失败标记/安全 abort，避免原 Playwright 网络诊断回显 Cookie。独立仓库外副本在 route.fetch 前抛带合成敏感哨兵的异常，实际 runner 非零、browser_ok=false/routeFailures1，所有日志无哨兵，同时 fixture_exit0、连接/容器/Redis/owner 清理成功（`route-negative-evidence`）；不把预期负例记为浏览器通过。缺失模块、既有输出目录和仓库内产物三类预检均在资源创建前拒绝。初始临时 driver 导入产生的唯一自有 bytecode 已删除，新驱动导入前禁止写 bytecode；初次治理另见受限回环 socket PermissionError，按工具权限重跑原 **64 项，10.047 秒全过**。未关闭 hooks、规则或断言。
+
+两个 OpenAPI 用既有缓存 MIT YAML 库严格解析并核对路径/方法/响应形状/Cookie 与 **108＋10** 个本地引用（`openapi-verified.log`），不是完整 OpenAPI 语义验证；首次缓存合并因 root 丢弃能力后不能写 postgres 所有路径失败，改用镜像原非 root 用户，未放宽容器能力。403 文件策略/Markdown链接/空白和完整差异交付前核对；上述短日志均以前缀 `/private/tmp/oj-browser-account-` 定位。Astra 设计、产品与测试驱动针对性复核，AI 不代替人工审批。其它浏览器/关闭重开/多标签完整竞态、设备管理/保持登录、生产参数/证书/存储TLS/字典、注册/找回/权限/训练和完整 M0 仍待验，未部署；最终远端与知识回写依 PR 回读记录。
+
 ## 2026-11-01：已登录用户的原子改密与旧会话失效
 
 前置 PR #76 已 squash 为 `5b9f541` 并完成工作区/知识回读；成功 fetch 后从该主线建立独立 `codex/authenticated-password-change` worktree。唯一目标为可选已登录改密的完整命令/API 路径，不涉及 SMTP/注册、管理权限或部署。新增身份用例/专用 SQL 与 sqlc 生成、独立 Redis 三维额度/规则指纹、同 owner/KDF capability、严格 HTTP 输入及可选配置；原 schema 5、密码格式、会话协议、旧配置和 login marker 保持，无新依赖/索引/迁移。接口和边界归[会话设计第 7.18 节](architecture/session-design.md#718-已登录用户修改密码)及[账号 OpenAPI](../api/account.openapi.yaml)。
