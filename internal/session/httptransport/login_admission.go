@@ -9,16 +9,19 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/redisstore"
 )
 
-func (h *handler) admitLogin(w http.ResponseWriter, r *http.Request, ctx context.Context, email identity.Email, recovery bool) bool {
+func (h *handler) admitLogin(w http.ResponseWriter, r *http.Request, ctx context.Context, email identity.Email, recovery bool, source netip.Addr) bool {
 	if !h.login.RateLimited() {
 		return true
 	}
-	// Direct TLS is already required. Only the actual socket peer is trusted;
-	// Forwarded/X-Forwarded-For/X-Real-IP never select a bucket.
-	source, err := loginSource(r.RemoteAddr)
-	if err != nil {
-		loginError(w, err)
-		return false
+	// A proxy source exists only after per-request mTLS and header validation.
+	// Direct mode continues to ignore all forwarding headers.
+	var err error
+	if !source.IsValid() {
+		source, err = loginSource(r.RemoteAddr)
+		if err != nil {
+			loginError(w, err)
+			return false
+		}
 	}
 	if recovery {
 		err = h.login.AdmitRecovery(ctx, source)

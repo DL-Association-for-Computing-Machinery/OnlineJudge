@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/netip"
 	"time"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
@@ -41,7 +42,7 @@ func NewLimitedLogin(login *redisstore.Login, config Config) (http.Handler, erro
 	return NewLogin(login, config)
 }
 
-func (h *handler) serveLogin(w http.ResponseWriter, r *http.Request) {
+func (h *handler) serveLogin(w http.ResponseWriter, r *http.Request, source netip.Addr) {
 	ctx, cancel := context.WithTimeout(r.Context(), h.config.Timeout)
 	defer cancel()
 	if err := ctx.Err(); err != nil {
@@ -69,7 +70,7 @@ func (h *handler) serveLogin(w http.ResponseWriter, r *http.Request) {
 			problem(w, 409, "LOGIN_PENDING", "请先确认或放弃当前登录尝试")
 			return
 		}
-		h.beginLogin(w, r, ctx)
+		h.beginLogin(w, r, ctx, source)
 		return
 	}
 	if !present {
@@ -81,7 +82,7 @@ func (h *handler) serveLogin(w http.ResponseWriter, r *http.Request) {
 		loginError(w, err)
 		return
 	}
-	if !h.admitLogin(w, r, ctx, identity.Email{}, true) {
+	if !h.admitLogin(w, r, ctx, identity.Email{}, true, source) {
 		return
 	}
 	if r.URL.Path == "/api/v1/session/login/abandon" {
@@ -140,13 +141,13 @@ func (h *handler) canLogin(w http.ResponseWriter, r *http.Request, ctx context.C
 	return false
 }
 
-func (h *handler) beginLogin(w http.ResponseWriter, r *http.Request, ctx context.Context) {
+func (h *handler) beginLogin(w http.ResponseWriter, r *http.Request, ctx context.Context, source netip.Addr) {
 	email, secret, err := loginBody(w, r)
 	if err != nil {
 		return
 	}
 	defer clear(secret)
-	if !h.admitLogin(w, r, ctx, email, false) {
+	if !h.admitLogin(w, r, ctx, email, false, source) {
 		return
 	}
 	if !h.canLogin(w, r, ctx) {

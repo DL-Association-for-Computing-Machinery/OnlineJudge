@@ -1,5 +1,5 @@
-// Package httptransport adapts existing ordinary sessions to HTTPS. It neither
-// admits sessions nor grants email, role, training, or resource permissions.
+// Package httptransport adapts ordinary sessions and two-step login to HTTPS.
+// It grants no email, role, training, or resource permissions.
 package httptransport
 
 import (
@@ -26,7 +26,7 @@ type Store interface {
 }
 
 // Config freezes the trusted public HTTPS origin and a cooperative call budget.
-// The adapter requires direct TLS; forwarded headers cannot establish trust.
+// TLS is always required; forwarding trust needs the explicit proxy constructor.
 type Config struct {
 	Origin  string
 	Timeout time.Duration
@@ -38,11 +38,12 @@ type handler struct {
 	host       string
 	protection http.CrossOriginProtection
 	login      *redisstore.Login
+	proxy      *proxyTrust
 }
 
 // New builds three explicit endpoints without registering any application route:
 // GET /api/v1/session, POST /api/v1/session/activity and POST /api/v1/session/logout.
-// A future proxy integration must separately establish its TLS/host trust model.
+// Forwarding headers have no authority in this direct constructor.
 func New(store Store, config Config) (http.Handler, error) {
 	u, err := url.Parse(config.Origin)
 	if store == nil || err != nil || u.Scheme != "https" || u.Host == "" || u.Hostname() == "" ||
@@ -56,7 +57,8 @@ func New(store Store, config Config) (http.Handler, error) {
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	if r.TLS == nil || r.Host != h.host {
+	source, trusted := h.requestSource(r)
+	if !trusted {
 		problem(w, http.StatusForbidden, "ORIGIN_REJECTED", "请求来源不允许")
 		return
 	}
@@ -86,7 +88,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.login != nil && (r.URL.Path == "/api/v1/session/login/begin" || r.URL.Path == "/api/v1/session/login/complete" || r.URL.Path == "/api/v1/session/login/abandon") {
-		h.serveLogin(w, r)
+		h.serveLogin(w, r, source)
 		return
 	}
 	credential, err := requestCredential(r)

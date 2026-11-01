@@ -285,7 +285,7 @@ Redis 只存令牌 SHA-256 摘要。七个 Lua 文件组成六个脚本入口，
 
 `internal/session/httptransport.New(store, Config{Origin, Timeout})` 只适配同一 `redisstore.Store` 的已有普通会话。独立 Handler 提供 `GET /api/v1/session`（Read）、`POST /api/v1/session/activity`（Touch）及 `POST /api/v1/session/logout`（Revoke）。默认 Gin/API、Compose 和公开 OpenAPI **未挂载**这些路径；本组测试先经受信 Create/Check 取得凭据，本构造器不发放登录 Cookie。跨请求候选恢复与登录发放见第 7.11 节的单独构造器，错误后不可盲目新建 Create。不引入 SCS 自动 LoadAndSave、第二份会话状态或隐式保活，后续 SCS/Gin 完整生命周期验证路线保持待验。
 
-构造器冻结无路径的可信 HTTPS origin 和大于零、至多五秒的合作调用期限；每个请求必须直接 TLS 且 Host 精确等于配置 authority。忽略 `Forwarded`/`X-Forwarded-*`，当前反代终止 TLS 的默认 Nginx 不兼容此约束；反代信任须单独设计验证，不得伪造 `r.TLS` 绕过。所有结果（含 401/403/404/405/503）为 `Cache-Control: no-store`，无 CORS 许可。安全方法只允许明确的 GET，HEAD/OPTIONS/写接口的 GET 不触库。
+构造器冻结无路径的可信 HTTPS origin 和大于零、至多五秒的合作调用期限；每个请求必须直接 TLS 且 Host 精确等于配置 authority。直连模式忽略 `Forwarded`/`X-Forwarded-*`，当前反代终止 TLS 的默认 Nginx 不兼容此约束；可选单跳 mTLS 入口见第 7.14 节，不得伪造 `r.TLS` 绕过。所有结果（含 401/403/404/405/503）为 `Cache-Control: no-store`，无 CORS 许可。安全方法只允许明确的 GET，HEAD/OPTIONS/写接口的 GET 不触库。
 
 POST 在触库前调用标准库 [CrossOriginProtection.Check](https://pkg.go.dev/net/http@go1.26.10#CrossOriginProtection.Check)，并额外要求至少一个正向来源证据：唯一、非空、精确匹配配置的 `Origin`，或唯一 `Sec-Fetch-Site: same-origin`。任一出现的头都须合法，拒绝跨站、same-site、none、null、空值、多值及相互矛盾的组合；两头皆无也拒绝。非浏览器客户端须显式提供来源，头本身不证明身份。该防护仅覆盖本 Handler 两个 POST，不代表全站 CSRF 或真实浏览器验收通过。
 
@@ -335,7 +335,7 @@ JSON 必须恰有 `version`（整数词法 `1`）、`current`（key ID）、`sea
 
 `redisstore.NewLimitedLogin` 将原 Login、Store/连接池/namespace 与文件快照的独立 HMAC key 绑定；`httptransport.NewLimitedLogin` 要求该配置存在。旧 HTTP `NewLogin` 接收已配置 manager 时同样自动执行准入，不能经旧入口跳过；未配置旧构造器仅保留参考/测试兼容。核心 Prepare/Complete/Abandon 不推测网络来源，直接调用者必须先准入；后续默认 API 必须选择严格构造路径。本轮不挂载 Gin/Compose/公开 OpenAPI，不选择生产阈值。
 
-五个 `LoginBucket` 必须显式配置 Count/Window：Begin 全局、来源、规范邮箱；Complete/Abandon 共用另一组全局、来源。窗口为整数毫秒 1ms—24h，额度 1—1,000,000，均是实现上界而非生产建议。HTTP 在 TLS/Origin/Host/方法、Cookie 格式、Begin 严格 JSON/邮箱之后，在已有会话 Read/密码计算/候选恢复之前准入。Begin/Complete 的旧 session token 廉价格式检查也先完成；Abandon 不读取或授权另一个 session。来源只接受实际 RemoteAddr 的 IP:port，拒绝 zone/无效地址/零端口，IPv4-mapped IPv6 归一为 IPv4；代理头不能选桶，未来反代必须单独建立信任模型。
+五个 `LoginBucket` 必须显式配置 Count/Window：Begin 全局、来源、规范邮箱；Complete/Abandon 共用另一组全局、来源。窗口为整数毫秒 1ms—24h，额度 1—1,000,000，均是实现上界而非生产建议。HTTP 在 TLS/Origin/Host/方法、Cookie 格式、Begin 严格 JSON/邮箱之后，在已有会话 Read/密码计算/候选恢复之前准入。Begin/Complete 的旧 session token 廉价格式检查也先完成；Abandon 不读取或授权另一个 session。直连来源只接受实际 RemoteAddr 的 IP:port，拒绝 zone/无效地址/零端口，IPv4-mapped IPv6 归一为 IPv4；直连入口忽略代理头，显式代理模式见第 7.14 节。
 
 沿用已锁定 go-redis 和无重试、显式连接/超时配置，无新依赖。评估 [go-redis/redis_rate v10](https://github.com/go-redis/redis_rate/blob/v10/rate.go) 的单 key GCRA 后，因三维联合拒绝须全无写入而采用短小受限 Lua 业务事务；执行 flags/错误边界核对 [Redis Lua 文档](https://redis.io/docs/latest/develop/programmability/lua-api/)，非自写网络/加密协议。标准库 HMAC-SHA256 以独立材料和用途/namespace/操作/维度绑定 Redis key；邮箱仅用既有 Email.Key，Redis 不保存原始邮箱、IP 或密码。Begin 与恢复预算分离，封装密钥轮换不重置预算；不按登录成功、错密码、账号存在性分桶或退款。
 
@@ -346,6 +346,18 @@ JSON 必须恰有 `version`（整数词法 `1`）、`current`（key ID）、`sea
 全局额度限制成功准入造成的来源/邮箱 key 基数，拒绝不创建或续 TTL，过期自然回收；除单个 config 外无永久记录。不同窗口时，保留量仍须按较长 TTL 内可接受的全局窗口数核算，不把单窗额度当总内存上界。固定窗口边界允许约两倍短时突发；请求额度不替代 BoundedHasher 的单进程计算/排队上限、多 API 总 CPU/内存/连接预算或入口抗 DDoS。校园共享出口、分布式来源、针对目标邮箱耗尽导致的可用性和公平性仍需生产参数/压测；不声称完整防枚举或响应耗时保密。
 
 配置/HMAC 改变会使不一致副本失败关闭，不能用在线 Initialize 重置额度。变更、Redis 丢数据/旧快照/时钟异常或回退须先隔离全部入口并执行明确恢复/重配流程；限流标记不能替代已有持久化账号恢复代次，不能证明旧快照连续。HMAC 更换/namespace 更换及计数清理不自动实施，可能影响既有候选和会话，部署时另验。无 SQL/迁移/会话记录改动；回退须停用新登录，不能以接回未限流入口维持公开登录。合成故障/真实存储、HTTP 证据归[交付记录](../delivery-log.md)。
+
+### 7.14 单跳受信反向代理
+
+`httptransport.NewProxiedLimitedLogin` 为独立可选入口，要求同一已配置限流的 Login、固定 HTTPS Origin/调用预算及 `ProxyConfig.CertificateSHA256`：1—16 个互不重复的非零客户端叶证书 DER 的 SHA-256。构造时复制指纹，轮换以显式重建 Handler 生效；可先重建为新旧并存，切换代理后再移除旧指纹，不自动加载、分发或续签证书。原 `New`/`NewLogin`/`NewLimitedLogin` 仍保持 direct TLS/socket 来源，不会因请求带转发头进入代理模式。
+
+代理模式在全部会话与登录路由、方法/CSRF/业务调用之前检查：真实 backend TLS、固定 `Request.Host`、首个 PeerCertificate 指纹命中且与某条非空 VerifiedChains 的首证书一致。后端服务器必须配置正确的客户端 CA 及 `tls.RequireAndVerifyClientCert`；仅有 PeerCertificates、任意 verified chain、有效但未列入指纹的客户端或明文均不足。代理模式不回退直连；进入 Handler 后的信任拒绝统一 403/no-store、无 Cookie/准入/存储操作。无证书/不受信证书等在 TLS 握手阶段失败，不产生 HTTP 403。证书身份用于确认受信代理，不把 Worker 证书或同 CA 任意客户端自动授权为代理。
+
+认证代理必须删除客户端传入的转发头，从实际客户端连接覆写：恰一个 `X-Forwarded-For` 裸 IP（无端口/zone/列表/空白，拒绝 unspecified/multicast）、恰一个 `X-Forwarded-Proto: https`、恰一个与固定 public host 完全相等的 `X-Forwarded-Host`；同时保留经校验的原公开 Host。拒绝任何 `Forwarded`/`X-Real-IP` 字段，不支持多跳追加链或头优先级猜测。IP 归一 IPv4-mapped 地址后仅以请求局部值传入共享限流，不修改 RemoteAddr/TLS 或存入共享 handler 状态。固定 Origin、Sec-Fetch-Site、Cookie scope、两步候选和恢复期限继续按原合同执行。
+
+应用无法独立证明受信代理面向客户端真的使用 HTTPS，持有有效代理私钥者可伪造来源；公开端 HTTPS/Host 校验、后端隔离、CA/证书分发与访问边界须在真实部署另验。测试复用标准库 `httputil.ReverseProxy.Rewrite/SetXForwarded`，在 hop-by-hop 清理之后重建可信头，未复制入站 XFF；`SetURL` 后显式恢复已验证 Host，并删除 X-Real-IP。不提供通用代理协议解析器、CIDR 信任、动态 Origin、明文 backend 或生产 Nginx 配置。
+
+真实 Redis/PostgreSQL 专项含两个独立 Store、公开 TLS→mTLS backend、两个实际 Linux loopback 客户端来源、同源跨副本限流/异源隔离、恶意转发及 Connection 头、共享 Go Cookie jar 登录/读取/活动/退出，以及同 CA 未授权证书和无证书拒绝。合成 TLS 状态的单元边界与真实握手明确区分；Cookie jar 仍不代表浏览器验收。命令沿用 README 专项，实际结果归[交付记录](../delivery-log.md)。无依赖/SQL/迁移或默认 API 接线；回退先停用代理登录入口，不以接回未限流路径替代。未部署，生产阈值、浏览器/完整账号权限与恢复和完整 M0 仍待验。
 
 ## 8. 注册、找回与账号发放
 

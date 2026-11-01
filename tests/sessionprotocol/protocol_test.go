@@ -170,6 +170,7 @@ func TestOrdinaryProtocol(t *testing.T) {
 	t.Run("existing session HTTPS lifecycle", func(t *testing.T) { testHTTP(t, f) })
 	t.Run("cross request login", func(t *testing.T) { testLogin(t, f) })
 	t.Run("distributed login admission", func(t *testing.T) { testLoginLimits(t, f); testLoginLimitFailures(t, f); testLimitedLoginHTTP(t, f) })
+	t.Run("authenticated single hop proxy", func(t *testing.T) { testProxy(t, f) })
 	for _, c := range f.clients {
 		if c.PoolStats().TotalConns > 8 {
 			t.Fatal("Redis client exceeded explicit connection ceiling")
