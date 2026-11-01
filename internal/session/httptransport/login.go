@@ -31,6 +31,16 @@ func NewLogin(login *redisstore.Login, config Config) (http.Handler, error) {
 	return h, nil
 }
 
+// NewLimitedLogin requires an admission-configured manager. NewLogin also
+// automatically enforces admission whenever its manager is configured; callers
+// cannot accidentally bypass that configuration by using the older constructor.
+func NewLimitedLogin(login *redisstore.Login, config Config) (http.Handler, error) {
+	if !login.RateLimited() {
+		return nil, redisstore.ErrInvalid
+	}
+	return NewLogin(login, config)
+}
+
 func (h *handler) serveLogin(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), h.config.Timeout)
 	defer cancel()
@@ -43,9 +53,16 @@ func (h *handler) serveLogin(w http.ResponseWriter, r *http.Request) {
 		loginError(w, redisstore.ErrInvalid)
 		return
 	}
-	if _, _, err = cookieValue(r, CookieName); err != nil {
+	session, hasSession, err := cookieValue(r, CookieName)
+	if err != nil {
 		loginError(w, err)
 		return
+	}
+	if hasSession && r.URL.Path != "/api/v1/session/login/abandon" {
+		if _, err := redisstore.ParseCredential(session); err != nil {
+			loginError(w, err)
+			return
+		}
 	}
 	if r.URL.Path == "/api/v1/session/login/begin" {
 		if present {
@@ -62,6 +79,9 @@ func (h *handler) serveLogin(w http.ResponseWriter, r *http.Request) {
 	c, err := redisstore.ParseContinuation(raw)
 	if err != nil {
 		loginError(w, err)
+		return
+	}
+	if !h.admitLogin(w, r, ctx, identity.Email{}, true) {
 		return
 	}
 	if r.URL.Path == "/api/v1/session/login/abandon" {
@@ -126,6 +146,9 @@ func (h *handler) beginLogin(w http.ResponseWriter, r *http.Request, ctx context
 		return
 	}
 	defer clear(secret)
+	if !h.admitLogin(w, r, ctx, email, false) {
+		return
+	}
 	if !h.canLogin(w, r, ctx) {
 		return
 	}
@@ -167,6 +190,8 @@ func loginError(w http.ResponseWriter, err error) {
 			status, code, title = 400, "LOGIN_ATTEMPT_INVALID", "登录尝试无效"
 		case errors.Is(err, redisstore.ErrLimit):
 			status, code, title = 409, "SESSION_LIMIT", "会话数量已达上限"
+		case errors.Is(err, redisstore.ErrLoginRate):
+			status, code, title = 429, "LOGIN_RATE_LIMITED", "登录请求过于频繁，请稍后重试"
 		case errors.Is(err, redisstore.ErrConflict):
 			status, code, title = 409, "LOGIN_ATTEMPT_CONFLICT", "登录尝试已改变，请勿重新创建重试"
 		case errors.Is(err, identity.ErrCredentials) || sessionDenied(err):

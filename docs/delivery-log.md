@@ -1,5 +1,19 @@
 # 工程交付记录
 
+## 2026-11-01：共享登录请求额度与严格 HTTP 构造入口
+
+前置私有密钥加载 PR #71（head `f8e2520`，CI `41277855976` 九项成功）已 squash 为 `135bf4e`，完成树内容一致/祖先核验、主工作区快进、对应 worktree/分支及四个自有构建产物清理，保留主克隆忽略资料。成功重新 fetch 后从该主线建立独立 `codex/login-rate-admission`。本轮同一 Login/Store 上提供显式五维预算、元数据初始化/只读构造和单次 Lua 联合准入，HTTP 严格入口要求配置存在，旧入口也自动执行已配置限流；默认 API 未挂载。合同、Redis key/TTL、配置不一致/恢复和边界归[会话设计](architecture/session-design.md#713-共享登录限流)。无新依赖/SQL/迁移，schema 5 与原会话记录不变。
+
+复用锁定 go-redis/标准库 HMAC-SHA256，评估 redis_rate v10 单 key API 后用受限短 Lua 满足联合拒绝无写入；核对 Redis 官方 Lua flags/错误语义，不声称脚本错误回滚。显式 Initialize 不判断 namespace 空白或修复灾难，构造器只读且每次请求核验持久 marker，HMAC/配置不一致不可开新前缀避开全局桶。先全维校验再 429 或按全局优先 SET+PXAT，拒绝不建 key/续 TTL；恢复额度独立于 Begin 且 Complete/Abandon 共享。来源只用实际 socket IP，隐私 key 目的隔离，失败无 Cookie、退款或自动重试。
+
+Astra 设计与核心复核要求处理 Redis 到期相等的物理存留，已以完整验证后的逻辑空桶实现；指出旧 session Cookie 需先廉价解析，已修复并补无 Redis 调用/计数不变的真实回归。初轮 internal race 通过（httptransport 1.078、redisstore 1.178 秒），静态曾报测试直接传 nil Context 的 SA1012，保持 nil/取消断言并改为表驱动，无屏蔽检查。第一轮真实专项 **119 个 PASS 条目（含父条目，限流 35，21.776 秒）**、集成静态 0 与退出/OOM/自有清理通过；日志 `/private/tmp/oj-login-rate-protocol.log`。后续补异构 Window、独立 recovery-source 额度与认证入口探针，再核验最终快照。
+
+测试故障区分：双副本最后一额度、实际 TTL 过期、真实 Redis OOM 和 CLIENT PAUSE WRITE 使用真实服务；精确 `now==deadline`、首个 SET 后 runtime error、已准入回执丢失与 HTTP 预算后到期通过受控脚本/客户端 wrapper 注入，不声称自然网络或时钟故障。429/503 后认证 RecoveryState 入口计数不增，结合既有门禁调用顺序证实未进入密码流程；legacy credential_version 不变及零会话仅作补充结果证据。不同窗口全维拒绝、规范化邮箱/mapped IP、代理头忽略、HMAC 稳定封装轮换、损坏 metadata/counter 优先 503 均纳入最终回归。
+
+最终验证：完整 Docker backend exit 0，格式/vet、检测器正负夹具、三实际静态范围各 0、全部 race（httptransport 1.196、redisstore 1.151 秒）与四入口构建通过（`/private/tmp/oj-login-rate-backend.log`）。补充异构窗口/认证入口探针后的专项121个PASS条目、16.750秒（`protocol-final.log`）通过；Astra随后发现异构夹具靠近秒/小时边界的时序风险，改为用真实Redis时间留足余量并严格确认初始三桶/不同截止，未改Lua或放松断言。冻结最终代码后完整专项 **121个PASS条目（含父条目，限流37，16.971秒）**、integration静态0、退出/OOM/自有清理再通过（`/private/tmp/oj-login-rate-protocol-verified.log`）。上述短日志均以 `/private/tmp/oj-login-rate-` 定位；333文件仓库策略、全部新文件/完整目标分支diff和Astra最后复核无剩余阻断。无SQL/治理变化，不重复它们的本地独立套件，远端必需检查保持。
+
+固定窗口边界突发、校园 NAT/目标邮箱耗尽可用性、多 API 总 KDF/内存/连接预算与容量仍需实际参数/压测；不宣称防 DDoS、公平或完整防枚举。真实密钥分发/轮换、默认 Gin/Compose/公开 OpenAPI 接线、反代/浏览器及完整 AC01/23/24/25/M0 未验收，未部署。下个独立阶段再接入默认 API，不用挂载成功替代业务验收。
+
 ## 2026-11-01：登录生产密钥加载准备
 
 成功 fetch `d989a56` 后建立独立 `codex/login-key-loading` worktree。新增私有文件加载与 `NewLoginFromSecrets`，复用原封装 key 校验及 Login owner；无默认 API 挂载或真实秘密生成/读取。Linux/Darwin 逐级 openat/O_NOFOLLOW/fstat、可信目录、0400/0600 单链接普通文件、4 KiB 上限与读前后元数据；严格 JSON/用途独立/固定脱敏，合同及部署限制归[会话设计](architecture/session-design.md#712-登录密钥文件加载)。仅把已锁定 `golang.org/x/sys` v0.49.0 提升为直接依赖，Go/其他版本/go.sum/SQL/schema 5 不变；核对固定版本官方 unix API 和 BSD-3-Clause 许可证。
