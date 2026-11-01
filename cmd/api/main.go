@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,6 +17,7 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/db"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/httpapi"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/apiapp"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
 )
 
@@ -28,7 +30,21 @@ func main() {
 }
 
 func run(logger *slog.Logger) error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	addr := os.Getenv("OJ_API_ADDR")
+	if path := os.Getenv("OJ_SESSION_CONFIG_FILE"); path != "" {
+		if addr == "" || os.Getenv("OJ_EXPERIMENT_TOKEN_FILE") != "" {
+			return apiapp.ErrConfiguration
+		}
+		gin.SetMode(gin.ReleaseMode)
+		err := apiapp.Run(ctx, logger, addr, path, os.LookupEnv)
+		if errors.Is(err, context.Canceled) && ctx.Err() != nil {
+			logger.Info("API startup canceled")
+			return nil
+		}
+		return err
+	}
 	if addr == "" {
 		addr = "127.0.0.1:8080"
 	}
@@ -71,11 +87,13 @@ func run(logger *slog.Logger) error {
 		ReadTimeout:       10 * time.Second, WriteTimeout: 15 * time.Second,
 		IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20,
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	result := make(chan error, 1)
-	go func() { result <- server.ListenAndServe() }()
-	logger.Info("API starting", "address", addr, "scope", scope)
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
+	go func() { result <- server.Serve(listener) }()
+	logger.Info("API starting", "address", listener.Addr().String(), "scope", scope)
 	select {
 	case err := <-result:
 		return err

@@ -2,6 +2,12 @@
 
 本页集中维护当前 M0 进度和证据入口。下方“迁移前”之后的记录均为 2026-10-25—28 历史快照，保留原材料版本和命令，仅供追溯；当前执行方式见 [README](../README.md)。完整 M0 尚未验收，未部署。
 
+## 正式 P3 显式会话 API 命令入口（2026-11-01）
+
+`OJ_SESSION_CONFIG_FILE` 显式启用严格非秘密 JSON 配置、固定密码环境及 TLS/mTLS listener，必须同时指定地址且不能混用实验模式。六路径原样进入同一 Runtime；启动只读门禁、信号取消、监听失败清理和共享总退出预算见[会话设计](architecture/session-design.md#717-显式会话-api-入口)。登录密钥读取提取为共享 checkedfile，原私有文件合同不变；默认 Compose 未启用，无依赖/SQL/迁移变化。
+
+完整离线 Docker backend 格式/vet/静态/race/四命令构建、Darwin arm64 交叉编译和最终真实 Redis7.2.17/临时 PG/race 专项 **153 个 PASS 条目（含父条目，真实进程 11，27.281 秒）**通过。真实进程覆盖默认入口关闭、双 API Cookie/Legacy/撤销、marker 不修复、bind 失败、PG 等待期间启动取消、正常/超时退出及 mTLS 认证代理。超时进程退出不等于远端即时取消：观测到 active/Lock backend 在显式 5 秒查询期限约 5.001 秒后消失；正常排空/启动取消仍保留原严格连接释放检查。失败与审查证据归[交付日志](delivery-log.md)。公开 OpenAPI/页面、真实存储 TLS/证书/生产代理、生产预算、账号权限/恢复和完整 AC01/23/24/25/M0 待验，未部署。
+
 ## 正式 P3 敏感对象输出保护（2026-11-01）
 
 修复六种会话敏感类型直接值/指针的合法数值格式泄漏，并将构造用 LoginConfig 的 JSON 固定脱敏；私有密钥文件、密文载荷、显式 Value/Parse 和存储协议不变。值/指针16组格式、typed nil、标准JSON容器与实际密封恢复/key不变有行为回归；非法格式/反射/主动访问等边界见[会话设计](architecture/session-design.md#716-会话敏感对象的输出保护)。

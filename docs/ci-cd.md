@@ -6,7 +6,7 @@
 
 `integration-tests` 在既有 sqlc/真实 PostgreSQL 检查后，构建同一 Docker 工具链并下载固定摘要 Redis 7.2.17，执行 `scripts/test-session-protocol.py --context default`。专项使用私有网络、临时 PG、双客户端/双连接池及 TLS 入口验证正式普通 Redis 协议、文件加载的合成密钥、两步登录与共享准入/限流故障，以及固定单跳 TLS→mTLS 反代的证书、来源和 Cookie 路径，失败传递到原 integration 必需门禁；不开放宿主端口，不持有生产凭据或运行选手代码。命令归 README，隔离和结果归 M0/交付记录；不代表公开 HTTP/SCS、真实浏览器/生产代理、生产阈值或完整恢复验收。
 
-同一专项还验证 typed 配置装配的双 Runtime、启动只读门禁、真实 PG 等待取消及资源释放；排空/并发 Close 的确定性测试归普通 backend race。无默认命令/配置文件挂载，不把镜像的 PGDATA/PG_MAJOR/PG_VERSION 当成 pgx 连接环境，具体禁止项随锁定 driver 消费列表维护。
+同一专项还构建真实 API 子进程，验证显式文件配置的 TLS/mTLS 入口、双副本 Cookie、启动只读门禁、PG 等待时信号取消、监听失败资源释放及活动请求的正常/超时退出。排空/并发 Close 的确定性测试归普通 backend race。默认 Compose 未启用会话模式，不把镜像的 PGDATA/PG_MAJOR/PG_VERSION 当成 pgx 连接环境，具体禁止项随锁定 driver 消费列表维护。子进程仅继承显式测试环境，使用合成材料与私有容器网络，不连接宿主或真实业务服务。
 
 | 控制 | 状态 |
 | --- | --- |

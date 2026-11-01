@@ -19,8 +19,9 @@
 - [跨请求登录与 Cookie 发放](docs/architecture/session-design.md#711-跨请求登录尝试与-cookie-发放)：无会话写入的准备、密文候选恢复、实际执行点截止和确认后发放；[独立密钥文件加载](docs/architecture/session-design.md#712-登录密钥文件加载)，独立 HTTPS Handler，默认 API 未挂载。
 - [共享登录限流](docs/architecture/session-design.md#713-共享登录限流)：跨副本全局/来源/邮箱联合额度、独立恢复额度与失败关闭；严格 Handler 构造入口供后续默认 API 使用，生产阈值待验。
 - [单跳受信反代](docs/architecture/session-design.md#714-单跳受信反向代理)：显式 mTLS 证书指纹、固定公开来源与严格覆写头，独立代理入口要求登录限流；默认 API/生产代理配置与浏览器仍待验。
-- [会话运行时装配](docs/architecture/session-design.md#715-显式配置与运行时装配)：显式预算、单一身份权威、启动只读检查及关闭排空；typed 配置入口不启动监听器，默认 API/配置文件接线仍待完成。
+- [会话运行时装配](docs/architecture/session-design.md#715-显式配置与运行时装配)：显式预算、单一身份权威、启动只读检查及关闭排空；typed owner 由下述显式 API 入口接线。
 - [敏感对象输出保护](docs/architecture/session-design.md#716-会话敏感对象的输出保护)：六种会话敏感类型的直接值/指针合法格式保护，登录配置 JSON 隐藏密钥；不替代禁止秘密进入日志的规则。
+- [显式会话 API 入口](docs/architecture/session-design.md#717-显式会话-api-入口)：`OJ_SESSION_CONFIG_FILE` 启用严格配置的 TLS/mTLS 命令入口，必须同时指定 `OJ_API_ADDR`；默认 Compose 未启用。
 
 ## 运行环境
 
@@ -50,6 +51,16 @@ docker --context desktop-linux compose down             # 停止本项目容器�
 当前只启动前端与基础 API，健康检查只证明进程/代理连通；不启动数据库、Worker、控制端或判题沙箱，不代表完整 OJ 可用。应用容器使用非 root、只读根文件系统；Nginx 临时文件只写入内存目录。当前默认服务没有持久化业务数据或 volume；后续增加数据库必须同步配置持久化与迁移步骤，不使用 `down -v` 清理数据。HTTPS、正式部署与离线制品交付尚未配置。
 
 Dockerfile 的 Go、Node、pnpm 与现有配置保持一致，基础镜像固定多架构索引摘要；依赖仍使用 `go.sum` 和 `pnpm-lock.yaml`。`.dockerignore` 限定构建上下文，排除本地 Git、缓存、环境文件和常见凭据文件。更换工具链时需同步 Dockerfile 和对应锁定入口，并重新验证容器检查及启动流程。
+
+## 显式启用普通会话 API
+
+API 镜像的 `/usr/local/bin/oj-api` 在非空 `OJ_SESSION_CONFIG_FILE` 下切换为独立会话 HTTPS 服务；同时必须显式设置 `OJ_API_ADDR`（例如容器内 `:8443`），不能与 `OJ_EXPERIMENT_TOKEN_FILE` 同用。配置文件为绝对规范路径，完整字段及权限见[配置合同](docs/architecture/session-design.md#717-显式会话-api-入口)。未设置配置路径时仍运行现有 bootstrap/实验模式，不尝试连接会话数据库。
+
+数据库及 Redis 的密码来源各自显式选择 `auth: "none"` 或 `"env"`。后者只读取固定的 `OJ_SESSION_DATABASE_PASSWORD` / `OJ_SESSION_REDIS_PASSWORD`，必须非空；前者拒绝对应非空残留环境。密码、登录 key、TLS 私钥均不写入配置 JSON、镜像或命令行。数据库不消费 `OJ_DATABASE_URL`，连接类 PG 环境变量须按运行时合同清理；服务不修改进程环境。
+
+启动前须由受信维护流程完成 schema 5、恢复状态开门、共享密钥分发及匹配的限流 marker 初始化；命令只检查，不自动迁移、初始化或修复。配置与公开证书可只读挂载，登录密钥及 TLS 私钥必须满足 0400/0600、root/进程 euid 所有等约束。非 root 容器须能遍历并读取这些文件。不要把完整配置或秘密对象输出到日志。
+
+direct 模式要求客户端直接 TLS；proxy 模式要求同一监听器的已验证客户端证书和允许的叶证书指纹，健康检查也须经 mTLS。现有 Compose/Nginx 的明文 backend、公开 OpenAPI 及浏览器页面尚未配置该入口；部署、生产阈值、真实证书/存储 TLS 和完整账号权限另行验收。回退先停服务并移除显式配置环境，不把旧明文路径接到会话 Handler。
 
 ## 构建与测试（Docker Desktop）
 

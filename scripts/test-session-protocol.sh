@@ -26,7 +26,7 @@ export OJ_PROTOCOL_REDIS_ADDR=redis:6379
 export OJ_PROTOCOL_FIXTURE=1
 mkdir "$oj_protocol_dir/workspace"
 cp /workspace/go.mod /workspace/go.sum "$oj_protocol_dir/workspace/"
-cp -R /workspace/db /workspace/internal /workspace/tests "$oj_protocol_dir/workspace/"
+cp -R /workspace/cmd /workspace/db /workspace/internal /workspace/tests "$oj_protocol_dir/workspace/"
 cd "$oj_protocol_dir/workspace"
 if [ -d /verified-module-cache ]; then
     # Never replace image-cached source; verify the merged temporary cache below.
