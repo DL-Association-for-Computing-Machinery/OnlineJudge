@@ -63,13 +63,14 @@ func (c Credential) GoString() string { return c.String() }
 
 // Attempt is immutable, sensitive server-owned admission data, not browser input.
 // Its presence is not proof of admission. Only successful Check yields a usable
-// Credential; errors never authorize publication. Cross-request persistence and
-// process-crash recovery are not implemented by this in-memory value.
+// Credential; errors never authorize publication. The bare in-memory value is
+// not a browser format; Login seals it for bounded cross-request recovery.
 type Attempt struct {
 	namespace                  string
 	credential                 Credential
 	state                      identity.SessionState
 	created, absolute, initial int64
+	loginUntil                 int64
 }
 
 func (a Attempt) String() string   { return "[redacted session attempt]" }

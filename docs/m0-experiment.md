@@ -2,6 +2,14 @@
 
 本页集中维护当前 M0 进度和证据入口。下方“迁移前”之后的记录均为 2026-10-25—28 历史快照，保留原材料版本和命令，仅供追溯；当前执行方式见 [README](../README.md)。完整 M0 尚未验收，未部署。
 
+## 正式 P3 跨请求登录候选与 Cookie 发放（2026-11-01）
+
+新增同一权威 Store 上的两步登录：Prepare 验证并冻结但不写会话，以共享 key 的 AES-256-GCM 密文候选交给短期 HttpOnly Cookie；跨请求/副本重建后只恢复同一 tuple，经 Retry 和独立 Check 才发普通非持久 Cookie。固定恢复 Window 同时在实际 Redis 执行点约束 Retry/Check；Abandon 墓碑保留原协议边界，不会清另一个会话 Cookie。默认 API 未挂载，合同与密钥/遗失/迟到响应限制见[会话设计](architecture/session-design.md#711-跨请求登录尝试与-cookie-发放)。
+
+完整真实 Redis7.2.17/PostgreSQL/race 专项 **84 个 PASS 条目（含父条目，新增登录 40，14.549 秒）**及静态检查通过。双 TLS/共享 Cookie jar、无写入准备、12 次并发确认同 token、quota/回执/HTTP 超时恢复同记录与绝对 TTL、真实 Redis WRITE 暂停越过截止、过期确认不发凭据、放弃/迟到 Cookie、改密/禁用/恢复与坏输入均有证据。完整后端格式/vet/三范围静态/race/四入口构建及 317 文件仓库策略通过；首次专项仅无用 import 类型检查失败，修正及验证命令归[交付日志](delivery-log.md)。
+
+无 SQL/迁移/依赖变更，schema 5、普通 2h/12h/三名额及原记录 binding 保持；Unicode 校验抽到共享 `internal/jsoninput`，原提交字节保真用例通过。密钥由调用方显式供给，未实现加载/分发或生产参数；没有服务端 pending 索引、浏览器唯一登录意图或恰好一次 Cookie 保证。manager 重建不是实际 OS 进程崩溃/跨主机或浏览器关闭重开验收；公开入口、SCS/Gin、反代/浏览器、邮件/资源权限、生产限流/总预算/容量与恢复编排仍待完成。完整 AC01/23/24/25/M0 未通过，未部署。
+
 ## 正式 P3 已有普通会话 HTTPS 适配（2026-11-01）
 
 新增只读身份、显式活动和确认退出的独立 HTTPS Handler；固定来源/direct TLS/Host、严格唯一 Cookie、方法和来源前置拒绝、统一 no-store，以及未知结果优先 503。成功退出才发送同 scope 的 Cookie 清理；Read/Touch 不发凭据、不隐式续期，具体合同见[会话设计](architecture/session-design.md#710-已有普通会话的-https-适配)。

@@ -61,3 +61,13 @@ local function expireIndex()
   local latest = redis.call('ZREVRANGE',KEYS[2],0,0,'WITHSCORES')
   if #latest == 2 then redis.call('PEXPIREAT',KEYS[2],latest[2]) end
 end
+-- The login envelope authenticates this optional bound. Keep ordinary stored
+-- records unchanged so locating/reading an admitted session needs no envelope.
+local loginUntil = 0
+if ARGV[12] ~= '0' then
+  loginUntil = stamp(ARGV[12] or '')
+  local created,initial = stamp(ARGV[6]),stamp(ARGV[8])
+  if not loginUntil or not created or not initial or loginUntil <= created
+    or loginUntil > initial or loginUntil-created > 300000 then return {3} end
+end
+local loginOpen = loginUntil == 0 or now < loginUntil

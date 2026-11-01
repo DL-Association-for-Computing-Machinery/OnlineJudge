@@ -14,8 +14,9 @@
 - [全局恢复状态](docs/architecture/session-design.md#76-正式全局恢复状态与双层协调)：schema 4 默认闭门、显式换代次与条件开门，同事务全局→主体双层检查；没有自动 Redis 清理或恢复编排。
 - [个人邮箱映射](docs/architecture/session-design.md#77-个人邮箱映射与原子初始化)：schema 5 原子初始化凭据与未验证邮箱，整址忽略大小写、保留原始显示；当前限 ASCII 裸址，无公开注册或邮件验证接口。
 - [个人凭据认证路径](docs/architecture/session-design.md#78-个人凭据到会话门禁的认证路径)：在邮箱查找与密码验证前捕获恢复代次，携带同一代次进入最终双层门禁。
-- [普通 Redis 会话协议](docs/architecture/session-design.md#79-普通-redis-会话协议)：正式核心的三名额、固定创建尝试、结果确认、续期和墓碑撤销；真实 Redis/PostgreSQL 专项接入集成 CI，尚无 HTTP 登录或 Cookie。
+- [普通 Redis 会话协议](docs/architecture/session-design.md#79-普通-redis-会话协议)：正式核心的三名额、固定创建尝试、结果确认、续期和墓碑撤销；真实 Redis/PostgreSQL 专项接入集成 CI，HTTP 发放由下述两步适配承担。
 - [已有会话 HTTPS 适配](docs/architecture/session-design.md#710-已有普通会话的-https-适配)：只读身份、显式活动与确认退出，固定 HTTPS 来源和严格 Cookie；尚未挂载默认 API，也不发放登录 Cookie。
+- [跨请求登录与 Cookie 发放](docs/architecture/session-design.md#711-跨请求登录尝试与-cookie-发放)：无会话写入的准备、密文候选恢复、实际执行点截止和确认后发放；显式共享密钥，独立 HTTPS Handler，默认 API 未挂载。
 
 ## 运行环境
 

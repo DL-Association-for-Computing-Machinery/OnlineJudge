@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-`integration-tests` 在既有 sqlc/真实 PostgreSQL 检查后，构建同一 Docker 工具链并下载固定摘要 Redis 7.2.17，执行 `scripts/test-session-protocol.py --context default`。专项使用私有网络、临时 PG 与双客户端/双连接池验证正式普通 Redis 协议，失败传递到原 integration 必需门禁；不开放宿主端口，不持有生产凭据或运行选手代码。命令归 README，隔离和结果归 M0/交付记录；不代表 HTTP/SCS、Cookie/CSRF 或完整恢复验收。
+`integration-tests` 在既有 sqlc/真实 PostgreSQL 检查后，构建同一 Docker 工具链并下载固定摘要 Redis 7.2.17，执行 `scripts/test-session-protocol.py --context default`。专项使用私有网络、临时 PG、双客户端/双连接池及 TLS 入口验证正式普通 Redis 协议和密文候选两步登录，失败传递到原 integration 必需门禁；不开放宿主端口，不持有生产凭据或运行选手代码。命令归 README，隔离和结果归 M0/交付记录；不代表公开 HTTP/SCS、浏览器/反代 Cookie/CSRF 或完整恢复验收。
 
 | 控制 | 状态 |
 | --- | --- |

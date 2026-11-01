@@ -1,5 +1,23 @@
 # 工程交付记录
 
+## 2026-11-01：跨请求登录候选与确认 Cookie 发放
+
+成功 fetch 主线 `d2947fa` 后建立独立 `codex/cross-request-login` worktree。本轮单一目标是让普通邮箱密码认证产生的冻结候选跨 HTTP 请求恢复并在确认后发 Cookie；不开放默认 API、注册/邮件或资源权限。保留一个权威 Store：Prepare 在既有全局→主体门禁成功后封装候选但不写会话/名额；Complete 只恢复原 tuple，Retry 后独立 Check，失败不生成替代 Create/不清 Cookie；Abandon 仅作用于候选。窗口固定为 Redis created+显式 Window，实际 Lua 成功分支前检查；原 Create 显式传零，无记录/SQL/schema/依赖变更。协议、AAD/key 管理、限额及恢复/迟到效果边界归[会话设计](architecture/session-design.md#711-跨请求登录尝试与-cookie-发放)。
+
+复用锁定 Go1.26.10 标准库 AES-256-GCM/随机 nonce API，核对本地 `go doc crypto/cipher.NewGCMWithRandomNonce` 的 nonce 前置/28-byte overhead/每 key 至多 `2^32` 次要求；聚合封装预算、共享 key 与轮换由调用方负责，本轮无真实 key 读取或生产配置。封装及 key 配置/manager 格式化脱敏，Redis 无 token 明文，密文无密码。HTTP 固定 direct TLS/Origin/Host、严格来源和唯一 Cookie；有效旧会话拒绝覆盖，确定失效允许重新认证，未知读取拒绝。登录 body 限 4096-byte、恰两个字符串字段、无重复/尾随/坏 Unicode；原 Unicode 检查无逻辑变化地移到 `internal/jsoninput` 供两个入口共用，避免私有跨模块访问或两份实现。
+
+本地使用已有 Docker 质量镜像、Linux arm64/Go1.26.10、禁网 2 CPU/2 GiB 与 checksum 校验缓存。改动前会话包 race 基线通过（`/private/tmp/oj-cross-login-baseline.log`）；初版相关现有会话/HTTP 测试和静态通过（`first.log`）。新增密文往返、随机性、轮换/map 拷贝、配置隔离、畸形/篡改与固定窗口三项/16 子例、登录 JSON 一项/13 子例及原 HTTP 用例 race 通过，静态 0 问题（`unit.log`，redisstore 1.100 秒、httptransport 1.072 秒、httpapi 1.030 秒）。以上短文件名均以前缀 `/private/tmp/oj-cross-login-` 定位，输入在检查期间冻结。
+
+首次真实专项在运行行为前被新增测试无用 import 的 typecheck 阻断（`protocol.log`），删除该 import，未放宽检查或断言。Astra 指出旧 HTTP 取消测试不覆盖新发放分支，补上 Retry/Check 实际成功后 HTTP 预算到期两用例，以及 6×6 组合错误优先 503/零 Cookie 的回归。最终 `python3 -B scripts/test-session-protocol.py --redis-image redis@sha256:0312984fbfeb2ff1d4382ecef45b50e7d65478a6a58cf12ce28d6de7a4142e45 --module-cache /private/tmp/oj-session-mod` 完整 **84 个 PASS 条目（含父条目，新增登录 40，14.549 秒）**、集成静态 0 问题及退出/OOM/自有资源清理核验通过（`protocol2.log`）。
+
+真实证据：两个独立 Store/池/TLS 入口通过共享 Go Cookie jar，在另一重建 manager 恢复并发 Cookie；丢 Prepare 响应和无 Cookie 并发 Begin 均无会话写入。12 个并发 Complete 只出现一个 token/记录；重复恢复不改元数据与 deadline。真实 Retry/Check 后 wrapper 丢回执、实际操作后 HTTP 150ms 到期均 503/零 Cookie，另一 manager 恢复同 token/整记录/PEXPIRETIME；丢回执不是网络故障。三名额满后同候选等待原槽释放再准入，不刷新 created。旧 Cookie 确定 idle 失效后可重新认证，准备不提前清旧 Cookie；有效旧 Cookie 409。
+
+`CLIENT PAUSE 650 WRITE` 使重试在 300ms 窗口后才执行，拒绝且无记录；Check 前屏障跨同一截止，保留已写 live 记录但不发凭据。五种畸形截止不降级为不限期。Abandon 在延迟 Retry 前建立 dead 阻复活；Check 成功后再 Abandon 的旧响应可携带迟到 Cookie，但后续 Read 必拒绝，未声称响应原子撤回。放弃不清另一个主体 Cookie；Rehash 后 Complete 拒绝但 Abandon 可清理，改密/禁用/换恢复代次旧候选拒绝。Prepare 的实际 PG backend 在 TIME 后被精确终止，整体门禁失败不发布封装且无 Redis 写入，复用既有唯一性和消失确认 helper。
+
+完整离线 `go mod verify && sh scripts/toolchain.sh backend` 通过格式/vet、检测器正负夹具、三实际静态范围各 0 问题、全模块 race（httptransport 1.081 秒、redisstore 1.071 秒、原 httpapi 1.131 秒）及四命令构建（`backend.log`）；组合错误 36 个断言随此执行。317 文件仓库策略、全部新文件和完整目标分支差异审查通过；Astra 设计/产品/测试增量及完整复核无剩余代码阻断，并按其意见收紧清理边界和同步历史残留文案。未改 SQL 生成/迁移/治理脚本，不重复无改动的本地独立 DB 全套或 Worker 专项；CI 仍须交付回读。
+
+默认 Gin/Compose/公开 OpenAPI 未挂载。无 OS 进程强杀、真实浏览器/关闭重开/反代、平台恢复、邮件/训练权限、生产限流/多 API 总预算/容量验收。保留 key/密文与权威状态连续才可恢复；候选遗失、窗口到期或提前丢钥可能失去恢复能力，未知已写记录按原 idle/absolute 占位；没有浏览器唯一 pending、最新意图顺序或恰好一次 Cookie 保证。完整 AC01/23/24/25/M0 未通过，未部署。最终 PR/head/CI/合并与知识回写按交付回读记录，AI 不替代人工审批。
+
 ## 2026-11-01：已有普通会话的 HTTPS 生命周期
 
 成功 fetch 主线 `ad27b2a` 后建立独立 `codex/session-http-lifecycle` worktree。新增只适配已有普通会话的 HTTPS Handler：只读身份 GET、显式活动 POST、退出 POST 分别调用 Read/Touch/Revoke。固定可信 HTTPS origin、直接 TLS 和精确 Host，不读取转发头建立信任；POST 标准来源防护后要求唯一精确 Origin 或 same-origin Fetch Metadata 正证，任一出现头都须有效。标准库逐行严格解析 Cookie、跨行要求恰一个规范凭据；所有结果 no-store。Read/Touch 不发 Cookie，只有明确撤销成功且 context 有效才以安全 host scope 清 Cookie。公共响应不含凭据或认证/恢复代次，身份观察不提供资源权限。合同、SCS/反代边界与回退归[会话设计](architecture/session-design.md#710-已有普通会话的-https-适配)。

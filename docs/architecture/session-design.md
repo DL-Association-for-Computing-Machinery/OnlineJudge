@@ -1,8 +1,8 @@
 # 登录会话与 Redis 设计
 
-2026-10-31：正式身份核心与[普通 Redis 存储协议](#79-普通-redis-会话协议)已有分项实现；[独立会话子实验](../../tests/sessionexperiment/README.md)继续保留旧 RDB、逻辑回档、轮换及保持登录等历史证据。正式协议不等于 HTTP 登录、跨请求尝试持久化、自动恢复、权限或生产准入；下文产品规则保持不变。
+2026-11-01：正式身份核心、[普通 Redis 存储协议](#79-普通-redis-会话协议)、[已有会话 HTTPS](#710-已有普通会话的-https-适配)及[两步登录恢复](#711-跨请求登录尝试与-cookie-发放)已有分项实现；[独立会话子实验](../../tests/sessionexperiment/README.md)保留旧 RDB、逻辑回档、轮换及保持登录等历史证据。默认 API 尚未接入账号入口，封装候选不等于服务端 pending 注册表、自动恢复、资源权限或生产准入；下文产品规则保持不变。
 
-日期：2026-10-31。版本：0.18。状态：Session＋Redis、分场景期限、比赛账号、Argon2id、日常邮箱验证注册/找回及可替换 SMTP 接口已确认；SCS＋go-redis、go-mail 及 PostgreSQL 持久化发信任务＋独立受限发送执行器优先验证，Gin sessions 备选。River 开源核心优先验证，专用任务表备选；短期 AES-GCM 载荷、River 仅存业务 ID、独立密钥文件、不考虑付费方案及第 12 节令牌/重发/重试规则已确认；PostgreSQL 会话只作对比，不替换 Redis 基线。身份核心、认证编排及普通 Redis 协议已有分项实现与测试；生产参数、邮件和 HTTP 登录/完整会话仍待交付，未部署。关联 [总体架构](system-design.md)、[ADR-001](001-go-gin.md)、[需求](../requirements.md)。
+日期：2026-11-01。版本：0.19。状态：Session＋Redis、分场景期限、比赛账号、Argon2id、日常邮箱验证注册/找回及可替换 SMTP 接口已确认；SCS＋go-redis、go-mail 及 PostgreSQL 持久化发信任务＋独立受限发送执行器优先验证，Gin sessions 备选。River 开源核心优先验证，专用任务表备选；短期 AES-GCM 载荷、River 仅存业务 ID、独立密钥文件、不考虑付费方案及第 12 节令牌/重发/重试规则已确认；PostgreSQL 会话只作对比，不替换 Redis 基线。身份核心、普通 Redis 协议及独立两步 HTTPS 登录已有分项实现；默认公开 API 未挂载，生产参数、邮件/资源权限和完整会话仍待交付，未部署。关联 [总体架构](system-design.md)、[ADR-001](001-go-gin.md)、[需求](../requirements.md)。
 
 保持登录的后续子实验已覆盖默认关闭、主动选择 24 小时/7 天、Cookie 持久化、跨副本共享三名额，以及缩短期限下的续期/过期/迟到保存。SCS `RememberMe` 只控制持久化，期限由请求独立配置和服务端载荷选择；保存、结果核验、放弃共用策略上界，原绝对期限不变。普通 Cookie 改为非持久化，带 Cookie 再登录拒绝，活动参数不能改变登录时选择。仅测试夹具和同进程 TLS API，参赛期限、正式权限提升轮换、浏览器关闭/重开及完整 Gin/CSRF 仍待验证；细节见实验 README。
 
@@ -263,7 +263,7 @@ Begin/Finish 是维护原语，**不执行或证明**旧 API 隔离、Redis 清�
 
 closed/missing 恢复状态在邮箱查找与 KDF 前失败，格式错误恢复状态及坏映射失败关闭；邮箱不存在、密码不匹配或当前主体禁用均不运行回调。密码字节策略继续由共享 BoundedHasher 检查，无防枚举耗时保证。调用方提供整条路径的期限并在返回前保持 secret 不变；底层每次数据库操作的五秒合作预算不等于整个用例五秒硬上限。回调不得运行 KDF、重入、启动逃逸任务或发布 HTTP/Cookie，沿用第 7.5/7.6 节合作取消、锁丢失及未知外部效果限制。除不存在邮箱/主体等明确归一为 ErrCredentials 的情形外，保留原有错误分类，特别是 ErrStore 与 ErrGuardedOperation 不被 ctx.Err 覆盖；失败不证明升级或回调未生效。
 
-EmailVerified 与 Enabled/密码认证仍分离；本入口供第 7.9 节会话存储受信接入，不决定未验证用户的完整会话产品策略，也不授予训练权限。公开登录、Cookie/CSRF、邮件验证或角色/资源权限尚未实现，不能据此宣称 AC01/23/24/25 完整通过。
+EmailVerified 与 Enabled/密码认证仍分离；本入口供第 7.9 节会话存储受信接入，不决定未验证用户的完整会话产品策略，也不授予训练权限。本层不发布 Cookie；第 7.10/7.11 节的独立 HTTPS 生命周期和两步登录已有分项实现，默认公开 API 尚未挂载。邮件验证或角色/资源权限仍未实现，不能据此宣称 AC01/23/24/25 完整通过。
 
 本次无 SQL、迁移、索引或模块依赖变化，仍精确要求 schema 5；回退需停用依赖此入口的调用方，移除用例即可，数据库无需回退。真实双池验证恢复发生在查找后/验证用例中的 KDF 完成后且末次 State 前/最终门禁前时旧请求均拒绝；应用屏障不冒充数据库锁等待。未知升级用例在真实提交后由 wrapper 注入回执错误，不是真实网络故障。升级/改密/禁用、回调持有全局锁及取消的证据归[交付日志](../delivery-log.md)。未部署，完整登录/恢复与生产容量仍待验收。
 
@@ -271,7 +271,7 @@ EmailVerified 与 Enabled/密码认证仍分离；本入口供第 7.9 节会话�
 
 `internal/session/redisstore` 提供普通会话核心，复用同一个 Authority 的 PersonalCredentialGate、WithSessionCredentials 与 WithSession。单个权威 PostgreSQL owner、相同 Redis 命名空间/策略是受信实现约束。生产普通策略空闲 2 小时、绝对 12 小时，每个主体＋auth_generation＋随机 recovery ID 最多三个活动名额；credential_version 不分裂名额，同密码 Rehash 不撤销现有会话。允许显式缩短期限用于实验，拒绝放宽普通上界；保持登录、管理和比赛策略尚未接入。
 
-Create 在数据库锁外生成 32 字节随机凭据，完成密码认证并进入双层门禁后读取 Redis TIME，冻结私有、不可修改的 Attempt，再执行首次写入。冻结前失败返回 nil；冻结后所有错误（包括未知 Redis 结果、PG Commit 失败）保留同一 Attempt。不能以新 Create 代替失败重试。只有另一次成功 Check 才得到可发布的 Credential；缺记录为 ErrUnknown，不能断言未写入。Retry 只重放原始元数据/原期限；Touch 改变初始回执后 Retry/Check 冲突而不覆盖，当前 Read 可以继续有效。Attempt 只供进程内受信代码使用，无跨请求持久化、崩溃后恢复或公开输入协议。
+Create 在数据库锁外生成 32 字节随机凭据，完成密码认证并进入双层门禁后读取 Redis TIME，冻结私有、不可修改的 Attempt，再执行首次写入。冻结前失败返回 nil；冻结后所有错误（包括未知 Redis 结果、PG Commit 失败）保留同一 Attempt。不能以新 Create 代替失败重试。只有另一次成功 Check 才得到可发布的 Credential；缺记录为 ErrUnknown，不能断言未写入。Retry 只重放原始元数据/原期限；Touch 改变初始回执后 Retry/Check 冲突而不覆盖，当前 Read 可以继续有效。裸 Attempt 只供受信进程内使用；跨请求的受认证密文格式由第 7.11 节 Login 提供，不能接收浏览器自行填写的 tuple。
 
 Read 不续期；Touch 仅更新仍有效的记录及名额空闲到期，不超过原绝对期限。两者先定位后进入 PG 门禁，并在门禁内重新验证完整 Redis 记录，定位数据不授权。Abandon 可在尚未观察到保存时建立墓碑，Rehash 后仍可清理原尝试，匹配的已 Touch 记录也可撤销；Revoke 针对当前凭据。墓碑与令牌记录保留到原绝对期限，阻挡迟到原写；缺记录的 Revoke 返回 ErrNotFound，不能确认未知期限的撤销。PG/Redis 错误不意味着外部写入回滚，PG 锁丢失后的迟到效果仍需恢复隔离处理。
 
@@ -283,7 +283,7 @@ Redis 只存令牌 SHA-256 摘要。七个 Lua 文件组成六个脚本入口，
 
 ### 7.10 已有普通会话的 HTTPS 适配
 
-`internal/session/httptransport.New(store, Config{Origin, Timeout})` 只适配同一 `redisstore.Store` 的已有普通会话。独立 Handler 提供 `GET /api/v1/session`（Read）、`POST /api/v1/session/activity`（Touch）及 `POST /api/v1/session/logout`（Revoke）。默认 Gin/API、Compose 和公开 OpenAPI **未挂载**这些路径；合成测试先经受信 Create/Check 取得凭据，没有 HTTP 登录、Cookie 发放或跨请求 Attempt。后续正式登录须先解决固定尝试管理/恢复及准入，不允许错误后盲目新建 Create。本阶段不引入 SCS 自动 LoadAndSave、第二份会话状态或隐式保活，后续 SCS/Gin 完整生命周期验证路线保持待验。
+`internal/session/httptransport.New(store, Config{Origin, Timeout})` 只适配同一 `redisstore.Store` 的已有普通会话。独立 Handler 提供 `GET /api/v1/session`（Read）、`POST /api/v1/session/activity`（Touch）及 `POST /api/v1/session/logout`（Revoke）。默认 Gin/API、Compose 和公开 OpenAPI **未挂载**这些路径；本组测试先经受信 Create/Check 取得凭据，本构造器不发放登录 Cookie。跨请求候选恢复与登录发放见第 7.11 节的单独构造器，错误后不可盲目新建 Create。不引入 SCS 自动 LoadAndSave、第二份会话状态或隐式保活，后续 SCS/Gin 完整生命周期验证路线保持待验。
 
 构造器冻结无路径的可信 HTTPS origin 和大于零、至多五秒的合作调用期限；每个请求必须直接 TLS 且 Host 精确等于配置 authority。忽略 `Forwarded`/`X-Forwarded-*`，当前反代终止 TLS 的默认 Nginx 不兼容此约束；反代信任须单独设计验证，不得伪造 `r.TLS` 绕过。所有结果（含 401/403/404/405/503）为 `Cache-Control: no-store`，无 CORS 许可。安全方法只允许明确的 GET，HEAD/OPTIONS/写接口的 GET 不触库。
 
@@ -294,6 +294,32 @@ POST 在触库前调用标准库 [CrossOriginProtection.Check](https://pkg.go.de
 只有 Revoke 返回成功且调用 context 仍有效才返回 204，并以相同名称、`Path=/`、无 Domain、Secure、HttpOnly、SameSite=Lax、Max-Age=0/过去 Expires 清理 Cookie。缺记录不代表确认撤销；任何失败不清 Cookie。两种 ErrStore、恢复闭门、明确未知结果、取消/超时优先 503。排除上述错误后，明确 Redis 失效/缺记录即使带 `ErrGuardedOperation` 也返回 401；401 只表示会话未被接受，不是退出确认或外部效果回滚证明。其他受保护错误保持 503，未受保护的账号失效返回 401；其余未知错误为 503。不自动重试、补偿或泄漏内部错误。合作期限不是强制终止或撤回外部效果。
 
 真实专项复用原私有 Redis/PostgreSQL 夹具和两个 TLS 测试服务器；合成 Cookie 由测试注入，没有浏览器 Cookie jar、跨浏览器关闭/重开、正式反代或公开账号流程验收。HTTP 单元测试覆盖来源/Cookie/方法前置拒绝及错误优先级；真实状态核对轮询不变、显式续期、跨入口退出、实际撤销后适配器丢回执与恢复拒绝。运行命令沿用 README 普通会话专项，证据归[交付记录](../delivery-log.md)。无依赖、SQL、迁移或 schema 变化；回退停用调用方并移除适配，不回滚数据库。未部署，完整 AC01/23/24/25/M0、生产容量与恢复编排继续待验收。
+
+### 7.11 跨请求登录尝试与 Cookie 发放
+
+`redisstore.NewLogin(store, LoginConfig)` 在同一权威 Store 上增加两步恢复。`Prepare` 完成既有邮箱密码认证、捕获原恢复代次和完整凭据版本、Redis TIME 冻结原 tuple，**不写会话或名额**；只有最终 PostgreSQL 门禁成功且 context 有效才封装返回。首次响应丢失可以重新准备，因为没有会话写入；已提交同密码升级仍可能保留。`Complete` 解封原候选后只执行原样 Retry，再独立 Check；仅两次成功且 context 有效后发放普通 Cookie。错误不新建 token、不重贴恢复代次、不补偿或重试一个新的 Create。相同候选并发确认可重复返回同一 token；HTTP 无法保证响应或 Cookie 恰好发送一次。
+
+候选用锁定 Go 1.26.10 标准库 `crypto/aes` 与 [`cipher.NewGCMWithRandomNonce`](https://pkg.go.dev/crypto/cipher#NewGCMWithRandomNonce) 做 AES-256-GCM，随机 96-bit nonce 随密文保存。明文仅含私有 Attempt tuple、原凭据及冻结截止，不含密码；Redis 继续只保存 token 摘要。封装认证绑定用途/格式版本、外层 key ID、namespace、精确 HTTPS origin、idle/absolute 策略与 Window。只接受规范 base64url、受限 key ID、至多 1536 字节封装；解析浏览器语法不证明密文有效或身份授权。没有公开可填充的 Attempt snapshot，也不是 JWT 或第二份权威 Session。
+
+密钥通过受信构造器显式提供，必须是跨副本/进程共享的 32-byte 材料，不在启动时自动生成或回退。仅当前 key 用于封装，最多四个 key 可解封，构造器复制 key map/材料并拒绝全零材料；不提供密钥文件/环境变量读取、部署、分发或自动轮换。操作者负责每个 key 的跨副本累计封装次数不超过标准库规定的 `2^32`，以及安全配置。保留旧解密 key 才能恢复/放弃旧候选；如需保留原期限内协议允许的清理能力，应覆盖该候选期限保留旧 key。提前丢钥不等于撤销，会使候选失败关闭；已经写入但未收到 Cookie 的会话仍按原 idle/absolute 自然失效，不能承诺立即释放名额。
+
+Window 必须显式给定，粒度毫秒，大于零且同时不超过五分钟和普通 Idle。`loginUntil = 原 Redis created + Window` 不随封装、重试、确认或副本重建延长；Retry/Check 的实际 Lua 执行在所有成功分支之前检查它。新可选协议参数只接受规范正整数或既有裸 Attempt 明确传入的 `0`，非法/缺失值不降级为不限期。截止仅由 AEAD 保护并作为受信参数传入，不增加 Redis 记录字段或改变原 binding，因此已准入会话的 Read/Touch 不需要密文。原绝对期限和初始 idle 保持不变；登录窗口到期仍可用保留密文请求 Abandon，但须遵守原全局/主体门禁及初始 idle/absolute 校验。不存在的记录在初始 idle 已过后拒绝建立墓碑；已有匹配记录的墓碑保留到原 absolute。过期密文不能续用来登录。
+
+`httptransport.NewLogin(manager, Config)` 复用第 7.10 节的 direct TLS、固定 Origin/Host、正向同源证据及 no-store。同一 manager 转发已有会话的 Read/Touch/Revoke，避免误拼不同 owner。它增加以下 POST，默认 Gin/API、Compose 和公开 OpenAPI 仍**未挂载**：
+
+| 路径 | 合同 |
+| --- | --- |
+| `/api/v1/session/login/begin` | 至多 4096-byte JSON，恰含字符串 email/password；拒绝重复/未知字段、尾随数据、无效 UTF-8 或未配对 Unicode surrogate。复用既有 Unicode 校验的单一实现 `internal/jsoninput`，密码按字节送共享计算预算，不修剪/规范化。成功仅 202 与 `__Host-oj_login`，不发会话凭据 |
+| `/api/v1/session/login/complete` | 从唯一尝试 Cookie 恢复原候选；成功 204，发 `__Host-oj_session` 并清尝试 Cookie。普通 Cookie 为 Secure/HttpOnly/SameSite=Lax、Path=/、无 Domain、无持久 MaxAge/Expires；token 不进正文 |
+| `/api/v1/session/login/abandon` | 只撤销密文指定候选；成功 204 且仅清尝试 Cookie，不清或覆盖另一个会话 Cookie。失败不能宣称已放弃 |
+
+尝试 Cookie 为同样的安全 host scope，MaxAge/Expires 按原截止剩余时间给定，不按新 Window 重置；HTTP 发送前已到期则拒发，实际截止继续由 Redis 校验，浏览器秒级期限不构成额外授权。合法持有的密文是短期敏感恢复能力，不能写入日志、查询参数、local/sessionStorage 或业务草稿。所有失败都不发/清 Cookie：确定输入错误为 400，类型/体积为 415/413，凭据/旧候选失效为 401，名额/候选冲突或有效旧会话为 409，存储/恢复/取消/超时/未知结果优先 503。共享 KDF 名额、有限排队和底层调用期限保持原合同；密码超长不伪装服务故障，没有防枚举或集中登录容量准入结论。
+
+Begin 已见尝试 Cookie 时拒绝再准备；Begin/Complete 已见有效普通会话时拒绝覆盖，确定失效的旧会话可重新认证，未知读取结果仍失败关闭。准备/确认失败不清旧 Cookie；直到确认成功才替换它。没有 Cookie 的并发 Begin 可产生不同、尚未写入的候选，不提供浏览器级唯一 pending、最新用户意图排序、遗失所有候选清理或服务端 pending 索引。尝试 Cookie 到期/丢失可能丢失恢复能力；未知已写会话最多按原 idle/absolute 占位。Abandon 后已通过 Check 的旧响应仍可能迟到并设置已撤销 Cookie，后续 Read 拒绝；没有撤回 HTTP 响应或跨存储原子发布保证。现有 Touch 改变回执后原 Complete 冲突，不能生成新候选掩盖结果。
+
+跨 API/进程重建要求同一 PostgreSQL owner、Redis namespace/连续性、key ring、Origin、策略及 Window；密文不可任意搬到另一配置。平台回档/旧快照/账号事实恢复继续遵守原全局恢复隔离，不凭密文绕过。共享时间配置异常可能使 HTTP 端提前拒发；以 Redis 的冻结窗口和普通期限为最终准入边界。回退先停止新登录调用方，已有普通记录格式及 schema 5 不变，无 SQL/迁移/依赖变更；未完成候选停止恢复，不用数据回退“修复”。
+
+验证命令沿用 README 普通会话专项；两独立 Store/连接池/TLS 入口、真实 Cookie jar、进程内状态丢弃后的 manager 重建、未知回执、执行点截止、墓碑/发放交错、改密/禁用/恢复和输入边界归[交付记录](../delivery-log.md)。Cookie jar 不是浏览器 UI/关闭重开或真实反代验收；默认入口、SCS/Gin 完整生命周期、邮件/资源权限、生产限流/预算/容量和完整 AC01/23/24/25/M0 继续待验，未部署。
 
 ## 8. 注册、找回与账号发放
 
@@ -307,7 +333,7 @@ POST 在触库前调用标准库 [CrossOriginProtection.Check](https://pkg.go.de
 | 正式比赛 | 校内受控发号，授权工作人员依据参赛名单及现场身份核验后重置；不以外部邮箱/短信为前置条件，沿用第 4 节比赛身份和期限 |
 | 断外网或邮件故障 | 注册激活与邮箱找回可暂停并明确提示暂不可用；不能静默跳过验证。既有账号密码登录、提交、判题、榜单和赛务须继续运行 |
 
-2026-10-31 用户确认日常个人账号仅邮箱登录、昵称可重复，整址忽略大小写、保留原始显示且不合并点号/加号别名；比赛专用账号的校内发号方案不变。内部解析/映射支持范围见第 7.7 节，公开重复注册/重发、邮箱变更及其余注册字段合同仍待设计，不将昵称作为账号唯一键。尚无正式注册或登录实现。
+2026-10-31 用户确认日常个人账号仅邮箱登录、昵称可重复，整址忽略大小写、保留原始显示且不合并点号/加号别名；比赛专用账号的校内发号方案不变。内部解析/映射支持范围见第 7.7 节，公开重复注册/重发、邮箱变更及其余注册字段合同仍待设计，不将昵称作为账号唯一键。第 7.11 节已有独立两步登录 Handler，默认公开 API 尚未挂载；正式注册、邮件激活及资源权限仍未实现。
 
 相比纯用户名注册与人工找回，邮箱能减少日常恢复的人工负担，但新增域名、投递、滥发控制及外部可用性依赖；校园统一认证和短信未选定。正式比赛保留人工核验成本，以满足校内独立运行。
 

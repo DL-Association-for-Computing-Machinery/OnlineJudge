@@ -56,7 +56,7 @@ func (s *Store) keys(a *Attempt) []string {
 func (s *Store) args(a *Attempt) []any {
 	return []any{digest(a.credential.token), a.state.ID, strconv.FormatInt(a.state.CredentialVersion, 10),
 		strconv.FormatInt(a.state.AuthGeneration, 10), a.state.RecoveryID, strconv.FormatInt(a.created, 10),
-		strconv.FormatInt(a.absolute, 10), strconv.FormatInt(a.initial, 10), s.policy.Idle.Milliseconds(), s.policy.Absolute.Milliseconds(), binding(a)}
+		strconv.FormatInt(a.absolute, 10), strconv.FormatInt(a.initial, 10), s.policy.Idle.Milliseconds(), s.policy.Absolute.Milliseconds(), binding(a), strconv.FormatInt(a.loginUntil, 10)}
 }
 
 // binding detects field drift, not malicious Redis writes or rollback. Fixed
@@ -115,7 +115,7 @@ func (s *Store) locate(ctx context.Context, c Credential) (located, error) {
 		return located{}, err
 	}
 	key := "oj-session:" + s.namespace + ":token:" + digest(c.token)
-	args := []any{digest(c.token), "", "", "", "", "", "", "", s.policy.Idle.Milliseconds(), s.policy.Absolute.Milliseconds(), ""}
+	args := []any{digest(c.token), "", "", "", "", "", "", "", s.policy.Idle.Milliseconds(), s.policy.Absolute.Milliseconds(), "", "0"}
 	values, err := s.eval(ctx, "locate", []string{key}, args)
 	if err != nil {
 		return located{}, err

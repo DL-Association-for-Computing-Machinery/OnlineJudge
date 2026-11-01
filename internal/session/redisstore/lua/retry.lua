@@ -1,3 +1,4 @@
+if not loginOpen then return {2} end
 local code,c = load()
 if code == 1 then
   if not matches(c) then return {3} end

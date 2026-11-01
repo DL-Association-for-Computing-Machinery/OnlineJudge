@@ -1,3 +1,4 @@
+if not loginOpen then return {2} end
 local code,c = load()
 if code == 0 and (tonumber(ARGV[7]) <= now or tonumber(ARGV[8]) <= now) then return {2} end
 if code ~= 1 then return {code} end

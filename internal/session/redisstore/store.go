@@ -92,6 +92,10 @@ func (s *Store) check(ctx context.Context) error {
 // can be published until a separate successful Check. Never blindly call Create
 // again on an error; Retry/Check/Abandon operate on the original frozen attempt.
 func (s *Store) Create(ctx context.Context, email identity.Email, secret []byte) (*Attempt, error) {
+	return s.prepare(ctx, email, secret, 0, true)
+}
+
+func (s *Store) prepare(ctx context.Context, email identity.Email, secret []byte, window time.Duration, write bool) (*Attempt, error) {
 	if err := s.check(ctx); err != nil {
 		return nil, err
 	}
@@ -112,10 +116,16 @@ func (s *Store) Create(ctx context.Context, email identity.Email, secret []byte)
 		created := now.UnixMilli()
 		candidate := &Attempt{namespace: s.namespace, credential: credential, state: state, created: created,
 			absolute: created + s.policy.Absolute.Milliseconds(), initial: created + s.policy.Idle.Milliseconds()}
+		if window > 0 {
+			candidate.loginUntil = created + window.Milliseconds()
+		}
 		if !candidate.valid(s.namespace, s.policy) {
 			return ErrConflict
 		}
 		attempt = candidate
+		if !write {
+			return nil
+		}
 		// Already inside the identity gate: never acquire it again here.
 		return s.runAttempt(call, "retry", attempt)
 	})
