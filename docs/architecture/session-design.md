@@ -2,7 +2,7 @@
 
 2026-11-01：正式身份核心、[普通 Redis 存储协议](#79-普通-redis-会话协议)、[已有会话 HTTPS](#710-已有普通会话的-https-适配)及[两步登录恢复](#711-跨请求登录尝试与-cookie-发放)已有分项实现；[独立会话子实验](../../tests/sessionexperiment/README.md)保留旧 RDB、逻辑回档、轮换及保持登录等历史证据。默认 API 尚未接入账号入口，封装候选不等于服务端 pending 注册表、自动恢复、资源权限或生产准入；下文产品规则保持不变。
 
-日期：2026-11-01。版本：0.19。状态：Session＋Redis、分场景期限、比赛账号、Argon2id、日常邮箱验证注册/找回及可替换 SMTP 接口已确认；SCS＋go-redis、go-mail 及 PostgreSQL 持久化发信任务＋独立受限发送执行器优先验证，Gin sessions 备选。River 开源核心优先验证，专用任务表备选；短期 AES-GCM 载荷、River 仅存业务 ID、独立密钥文件、不考虑付费方案及第 12 节令牌/重发/重试规则已确认；PostgreSQL 会话只作对比，不替换 Redis 基线。身份核心、普通 Redis 协议及独立两步 HTTPS 登录已有分项实现；默认公开 API 未挂载，生产参数、邮件/资源权限和完整会话仍待交付，未部署。关联 [总体架构](system-design.md)、[ADR-001](001-go-gin.md)、[需求](../requirements.md)。
+日期：2026-11-01。版本：0.20。状态：Session＋Redis、分场景期限、比赛账号、Argon2id、日常邮箱验证注册/找回及可替换 SMTP 接口已确认；SCS＋go-redis、go-mail 及 PostgreSQL 持久化发信任务＋独立受限发送执行器优先验证，Gin sessions 备选。River 开源核心优先验证，专用任务表备选；短期 AES-GCM 载荷、River 仅存业务 ID、独立密钥文件、不考虑付费方案及第 12 节令牌/重发/重试规则已确认；PostgreSQL 会话只作对比，不替换 Redis 基线。身份核心、普通 Redis 协议、两步 HTTPS 登录及显式配置的 TLS API 已有分项实现；默认 Compose/公开 OpenAPI 未启用，生产参数、邮件/资源权限和完整会话仍待交付，未部署。关联 [总体架构](system-design.md)、[ADR-001](001-go-gin.md)、[需求](../requirements.md)。
 
 保持登录的后续子实验已覆盖默认关闭、主动选择 24 小时/7 天、Cookie 持久化、跨副本共享三名额，以及缩短期限下的续期/过期/迟到保存。SCS `RememberMe` 只控制持久化，期限由请求独立配置和服务端载荷选择；保存、结果核验、放弃共用策略上界，原绝对期限不变。普通 Cookie 改为非持久化，带 Cookie 再登录拒绝，活动参数不能改变登录时选择。仅测试夹具和同进程 TLS API，参赛期限、正式权限提升轮换、浏览器关闭/重开及完整 Gin/CSRF 仍待验证；细节见实验 README。
 
@@ -361,7 +361,7 @@ JSON 必须恰有 `version`（整数词法 `1`）、`current`（key ID）、`sea
 
 ### 7.15 显式配置与运行时装配
 
-`internal/session/runtime.Open(ctx, Config)` 接受受信的 Go typed 配置，拥有一个身份 PG pool、一个 Redis client、一个 Hasher/共享 BoundedHasher 和严格限流 Handler。外部只得到 `ServeHTTP`/`Close`，无裸 Store、client、pool 或绕过排空的 Handler。每个 API 进程应只构造一个 Runtime，后续账号工作也须共享计算准入；多个 Runtime/进程的预算不会自动合并。它不解析 JSON/环境配置文件、不启动监听器或挂载默认 Gin/Compose/OpenAPI；上述接线在后续独立阶段交付。
+`internal/session/runtime.Open(ctx, Config)` 接受受信的 Go typed 配置，拥有一个身份 PG pool、一个 Redis client、一个 Hasher/共享 BoundedHasher 和严格限流 Handler。外部只得到 `ServeHTTP`/`Close`，无裸 Store、client、pool 或绕过排空的 Handler。每个 API 进程应只构造一个 Runtime，后续账号工作也须共享计算准入；多个 Runtime/进程的预算不会自动合并。它不解析 JSON/环境配置文件或启动监听器；显式命令接线由第 7.17 节提供，默认 Compose/OpenAPI 未启用。
 
 Config 显式给定 KDF 当前/旧完整 tuple、执行上限、准入人数/队列期限、五个登录额度、namespace、私有密钥文件、固定 public HTTPS Origin、HTTP/整个启动预算、direct TLS 或 pinned mTLS 模式。普通会话固定 2h/12h；零/未知模式、direct 携带代理 pins、缺预算和 owner 配置不合法均拒绝。HTTP Config/ProxyConfig 与 Redis setup 的纯校验复用原构造器规则；KDF/channel 的 1024 在途/65536 等待是实现上界而非生产推荐。StartupTimeout 为大于零、至多 1 分钟的合作预算，从本地准备前开始，准备后及发布前重新检查；同步文件/driver 准备不能由 context 强制打断，取消不证明底层已撤销。
 
@@ -373,7 +373,7 @@ Open 只读检查 schema 5、有效 open 恢复状态、原 Redis 7.2 standalone
 
 Close 在同一 mutex 下停止入口和登记活动请求，503/no-store/无 Cookie 拒绝后续请求，等待**实际 ServeHTTP 返回**后再恰一次关闭资源。运行中 KDF 超过请求期限仍被计入；每个 Close 调用仅用各自 context 等待同一完成信号，超时不提前关资源、不重新开放、不遗弃后台排空。先停止 listener，再等待服务器请求结束并 Close；单独 server.Close 不证明业务/KDF 已退出。零值 Runtime 失败关闭，Handler panic 仍注销活动计数，由服务器/上层既有恢复层处理 panic。
 
-真实 PG/Redis 专项验证双 Runtime/两步 Cookie 生命周期、Legacy 升级、TLS→mTLS 代理、缺失/不匹配 marker、闭门恢复、错 schema/Redis 失败、真实表锁等待后的启动取消/期限、精确 backend 消失及 PG/Redis 连接释放；确定性阻塞 Handler/取消、并发关闭和 panic 以 unit race 验证。数据库 TLS 最终配置有断言，真实存储 TLS 握手、浏览器/生产代理、命令入口/文件解析、生产参数/多 API 总预算、完整权限/恢复和 M0 另验，未部署。命令沿用 README backend/会话专项，实际结果归[交付记录](../delivery-log.md)；回退停用装配调用方，无 SQL/迁移/依赖变化。
+真实 PG/Redis 专项验证双 Runtime/两步 Cookie 生命周期、Legacy 升级、TLS→mTLS 代理、缺失/不匹配 marker、闭门恢复、错 schema/Redis 失败、真实表锁等待后的启动取消/期限、精确 backend 消失及 PG/Redis 连接释放；确定性阻塞 Handler/取消、并发关闭和 panic 以 unit race 验证。数据库 TLS 最终配置有断言，显式命令/文件解析见第 7.17 节；真实存储 TLS 握手、浏览器/生产代理、生产参数/多 API 总预算、完整权限/恢复和 M0 另验，未部署。命令沿用 README backend/会话专项，实际结果归[交付记录](../delivery-log.md)；回退停用装配调用方，无 SQL/迁移/依赖变化。
 
 ### 7.16 会话敏感对象的输出保护
 
@@ -382,6 +382,38 @@ Close 在同一 mutex 下停止入口和登记活动请求，503/no-store/无 Co
 `LoginConfig` 是受信 Go 构造输入，不是备份/导出或密钥文件格式。其值/指针标准 JSON 输出改为固定字符串 `"[redacted login sealing configuration]"`，标准 slice/map/导出结构字段编码同样不暴露 key map；typed nil 保持 `null`。其余五种 opaque 类型保留 `{}`/typed nil `null`。当前仓库没有业务消费 LoginConfig 的 JSON；第 7.12 节私有密钥文件与密封 payload 使用独立结构，格式均不变，无数据迁移或回滚步骤。回退代码会重新暴露旧输出风险，不能据此恢复秘密日志/配置 dump。
 
 范围仅限声明的直接值/指针合法格式和上述 JSON 行为。非法 `%w` 等 Go 诊断、反射、绕过类型方法的重新包装和主动字段/`Value()` 访问不在保证内；任何秘密对象仍禁止进入日志、错误或无关编码器。本保护降低意外输出风险，不提供日志安全隔离或完全内存擦除。回归使用真实 AEAD/admission 的合成对象，逐字检查固定输出及 nil/JSON 容器，并核对原凭证/密文 roundtrip 与 key 未变化；故障信息只含类型/动词，不输出敏感表示。实际 backend/race 与真实协议专项结果见[交付记录](../delivery-log.md)，默认 API、浏览器/生产部署与完整 M0 仍待验。
+
+### 7.17 显式会话 API 入口
+
+`cmd/api` 在非空 `OJ_SESSION_CONFIG_FILE` 下调用 `apiapp.Run`，一个进程只拥有一个 Runtime 和一个 HTTPS listener。必须同时显式配置 `OJ_API_ADDR`（数字端口，可用 0 供隔离测试），与实验 token 模式互斥；这些检查先于配置、秘密和网络访问。未启用时保留 bootstrap/实验模式。启动参数和密码环境合同、镜像入口见 [README](../../README.md#显式启用普通会话-api)。本入口只开放已有六个会话路径及健康检查，不开放注册、邮件或训练资源。
+
+`apiconfig.Parse` 是无 I/O 的版本 1 JSON 解析器，不接受 DSN、内联密码/key、任意环境名或回调。文件至多 64 KiB、一个根对象；拒绝未知字段、重复解码字段名（包括转义别名）、非小写 snake_case 名、null、错误 Unicode、整数溢出、尾随内容、深度超过 12、单数组超过 16 项或总字段超过 256。时间必须是显式 Go duration 字符串，数字零不替代遗漏预算。下表列出完整配置层次；空数组仍须显式给定，`tls` 对象不能省略。
+
+| 层次 | 字段及约束 |
+| --- | --- |
+| 根 | `version: 1`、`mode: "direct"/"proxy"`、`namespace`、`secrets_file`、`origin`、`login_window`、`startup_timeout`、`http_timeout`；原生 owner 校验及普通 2h/12h 不变 |
+| `database` | `host`、`port`、`database`、`username`、`application_name`、`security`、`auth`、`connections`、`timeout`、`max_lifetime`、`max_idle`、`health_check`、`tls`；端点/池及 PG 环境规则见第 7.15 节 |
+| `redis` | `address`、`username`、`security`、`auth`、`connections`、`timeout`、`tls`；沿用有限连接/无重试；`auth: "none"` 禁止非空 username |
+| `password` | `current`、`legacy: []`、`limits`、`admission`；current 与每个 legacy 含 `memory_kib`、`iterations`、`parallelism`、`salt_bytes`、`digest_bytes` |
+| `password.limits` | `max_memory_kib`、`max_iterations`、`max_parallelism`、`max_password_bytes`、`max_salt_bytes`、`max_digest_bytes`；沿用密码 owner 与固定数据库记录上限 |
+| `password.admission` | `max_in_flight`、显式 `max_waiting`、`max_queue_wait`；无等待时后两者为 0 与 `"0s"`，其他组合按 owner 校验 |
+| `login_limits` | `begin_global`、`begin_source`、`begin_email`、`recovery_global`、`recovery_source`；各含 `count`、`window`，须匹配已初始化的共享 marker |
+| 根 `tls` | `certificate_file`、`key_file`；direct 不带 CA，proxy 必须另给 `ca_file`；listener 禁止 `server_name` |
+| `proxy_fingerprints` | direct 为 `[]`；proxy 为 1—16 个唯一非零、64 字符小写十六进制叶证书 DER SHA-256 |
+| 存储 `tls` | private 模式为 `{}`；tls 模式须有 `ca_file`、`server_name`，可另给成对 `certificate_file`/`key_file`；禁止明文 fallback/跳过校验 |
+| `server` | `read_header_timeout`、`read_timeout`、`write_timeout`、`idle_timeout`、`shutdown_timeout`、`max_header_bytes`；header/read/write/shutdown 为正且至多 1m，idle 至多 10m，read ≥ header，write ≥ HTTP 期限，header 1 KiB—1 MiB |
+
+数据库/Redis 的 `security` 只能为 `"private"`/`"tls"`，`auth` 只能为 `"none"`/`"env"`。后者分别从固定的两个密码环境读取非空值；前者拒绝对应非空残留。解析结果不包含环境获取副作用，配置/解析错误只给固定类别。解析夹具使用合成参数，不能直接作为生产 KDF、限流或资源推荐。
+
+配置、公开证书/CA 与原登录密钥复用 `checkedfile` 的逐级 fd 校验。配置/公开材料允许组/其他只读，禁止执行/特殊位/组或其他写；私钥及登录密钥仅 0400/0600。所有者、目录、单硬链接、无符号链接、读取前后快照及可信本地文件系统限制不变；路径均为绝对规范路径。公开证书/私钥各至多 64 KiB、CA 至多 1 MiB；读取后尽力清理字节。TLS 使用标准库验证，最低 1.2，无自定义弱 cipher；启动核对叶证书有效期、匹配私钥及相应用途。proxy 在同一监听器 `RequireAndVerifyClientCert`，应用再核对 pin；健康检查同样要求真实 mTLS。证书不热重载，轮换须重启并协调多副本。
+
+启动先注册信号，再在同一累计启动期限内读取有界配置/材料、构造 Runtime 和绑定监听器，阶段间检查取消。同步文件读取不能强制中断；Runtime 只检查 schema/恢复/marker，不初始化或修复。bind 或启动取消失败用有限清理预算关闭已构造 Runtime，未准备完成不记录 ready 地址。会话路由对六个完整路径的所有方法直达同一 Handler，保留原 Host/TLS/RemoteAddr，不使用 Gin 前缀重定向；原方法、CSRF 和 Cookie 合同不变。panic 在响应提交前固定 503 且清 Cookie，提交后由 net/http 中止连接，不输出原异常。
+
+SIGTERM/interrupt 后 listener 停止接收，网络 Shutdown 与 Runtime.Close 共用**同一个总退出预算**；Runtime 同时拒绝新工作，并等待实际 Handler/KDF 返回才关存储。网络超时仍启动 Runtime 排空；退出预算耗尽返回非零，不记 graceful，不以强关连接冒充业务排空。只有网络与 Runtime 均确认完成才记 `API stopped gracefully`。启动取消且清理成功可正常退出，其他启动/监听/退出失败非零。日志不输出配置、文件路径、密码、原始 TLS 握手诊断或 panic。
+
+超时退出也不证明远端查询即时结束、事务已回滚或副作用不存在。PG14 默认不在查询执行中轮询客户端连接，[连接检测](https://www.postgresql.org/docs/14/runtime-config-connection.html#GUC-CLIENT-CONNECTION-CHECK-INTERVAL)与[statement_timeout](https://www.postgresql.org/docs/14/runtime-config-client.html#GUC-STATEMENT-TIMEOUT)约束不同；进程直接退出会终止 driver 的异步取消机会。专项保持 blocker 不释放，超时场景按已配置 DB 查询预算加固定观察余量核验精确 backend 消失；正常排空与启动取消仍按原严格连接释放断言。应用退出预算与服务端查询期限须分别配置和监控，不自动增加连接轮询参数或提供强制回滚承诺。
+
+真实命令测试与原协议专项共用隔离 PG/Redis，构建并启动 API 子进程；结果见[交付记录](../delivery-log.md)。默认 Compose/Nginx 和公开 OpenAPI 未启用此模式，真实存储 TLS、生产参数/证书与代理、浏览器、账号权限/恢复及完整 M0 仍待验，未部署。无依赖、SQL、迁移变化；回退停服务后移除显式配置环境，不自动撤销会话或清理存储。
 
 ## 8. 注册、找回与账号发放
 

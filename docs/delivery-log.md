@@ -1,5 +1,19 @@
 # 工程交付记录
 
+## 2026-11-01：显式配置的普通会话 API 进程入口
+
+成功 fetch PR #75 主线 `847abe7` 后建立独立 `codex/session-api-entry` worktree。唯一目标是可运行的 opt-in 会话 API：严格版本化非秘密 JSON、固定密码环境、显式地址/模式互斥、TLS/mTLS 材料、同一 Runtime 的六路径及有界启动/退出。原登录密钥 fd 读取提取为 checkedfile，共用目录/所有者/单链接/快照检查；public 只放宽只读位，secret 仍仅 0400/0600。无依赖/SQL/迁移、自动初始化或默认 Compose 变化。合同、配置字段、回退和剩余边界归[会话设计第 7.17 节](architecture/session-design.md#717-显式会话-api-入口)及 README。
+
+使用既有 Docker Desktop/Linux arm64 工具链与 checksum 缓存，全程不下载依赖、不挂载 socket/宿主端口、不访问业务数据。首轮相关 unit race 全通过，静态发现 error channel 接收未检查和测试 error 变量命名；修正后相关六包 race、静态 0（`unit-fixed.log`）。完整后端格式/vet/检测器正负夹具/三实际静态 0/全部 race/四入口构建退出 0（`backend.log`，apiapp 1.038 秒、apiconfig 1.060 秒、redisstore 1.024 秒）；Darwin arm64 共享读取/原 loader 测试及 API 交叉编译通过（`darwin.log`），不冒充 Darwin 运行实测。
+
+真实专项首轮静态发现两处新测试 deferred Close 未检查返回，修正后原有用例和新进程功能通过，仅 timeout 后 remote backend 的原 3 秒观察失败（`protocol.log`、`protocol-fixed.log`）。该用例显式设置 PG statement/lock_timeout 5 秒，API 50ms 非零退出终止 driver 取消机会，不能据 3 秒断言认定泄漏。Astra 核对 PG14 连接检测/期限文档后，仅 timeout case 改为从实际 waiter 观察起按 DB.Timeout 加固定 1 秒余量检查精确 `(pid,backend_start)`，始终持有 blocker；正常 drain/startup cancel 的原严格 gone 不变。中间一次主代理补丁误匹配作用域导致 typecheck，已修正（`protocol-verified.log`）。未改产品超时、退出码、原断言或关闭 race。
+
+最终真实 Redis7.2.17/临时 PostgreSQL/race 专项 **153 个 PASS 条目（含父条目，真实进程 11，27.281 秒）**、集成静态 0、退出/OOM/自有清理通过（`protocol-final.log`）。真实子进程验证默认 bootstrap/session404、双 direct TLS 的 Cookie/Legacy/活动/退出/禁用撤销、无 marker 不修复和 bind 失败资源释放、启动 PG 锁等待 SIGTERM 不监听及精确 backend 清理、正常活动请求排空期间 PG/Redis 保持存活、异常退出 code1/无 graceful。异常退出后确实观测 `active/Lock`，远端约 **5.001 秒**消失，符合服务端预算；进程退出不冒充远端即时回滚。mTLS 真实进程拒绝无证书/错误 CA 握手、同 CA 未 pin 或无规范转发头的请求；经 TLS ReverseProxy 完成登录/读/退出并覆写伪转发头。child race 默认保留，任何非 JSON/race 诊断都使测试失败，预期失败只接受 code1。
+
+PR #76 首个 head `fe8026a` 的 CI `41309906824` 因治理测试仍预期旧源码复制白名单而失败，后续应用检查按门禁跳过，未将 skip 视为通过。将脚本额外复制范围收窄至构建必需的 `cmd/api`，同步精确白名单并保留其余安全断言。本机受限沙箱禁止 doctor 测试的临时端口绑定，原两项失败记录于 `governance.log`；按工具权限运行未修改的完整 **64 项治理测试（9.928 秒）**通过（`governance-verified.log`）。收窄复制后完整真实专项再次 **153 PASS（进程 11，27.634 秒）**、静态 0/退出/自有清理通过（`protocol-harness.log`），产品代码不变。
+
+日志统一前缀 `/private/tmp/oj-session-entry-`。主代理完整差异/新增文件核对、367 文件 repository、链接与空白检查通过；Astra 产品、测试/文档及超时观察增量复核，AI 不代替人工审批。公开 OpenAPI/页面、真实存储 TLS/生产证书及代理、生产 KDF/限流/多 API 总预算、完整账号权限/恢复与 AC01/23/24/25/M0 仍待验，未部署。知识写回与远端最终状态在 PR 交付回读后按维护流程核验。
+
 ## 2026-11-01：会话敏感值的合法格式与配置 JSON 脱敏
 
 前置运行时 PR #74 最终 head `8ddd80a` 的 CI `41305405642` 九项成功，四必需门禁均来自最终运行，旧同 head 取消运行仅保留终态历史；完整diff/反馈/讨论及GitHub CLEAN核验后 squash 为 `369d38b`，主线快进/树一致与祖先核验、定向清理完成，知识事务 `oj-session-runtime-delivered-20261101` 五页字节回读一致/lint 0。重新成功 fetch 后从该主线建立独立 `codex/session-secret-redaction`，唯一目标为既有敏感类型输出保护，未混入默认 API 接线。
