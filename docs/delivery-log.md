@@ -1,5 +1,23 @@
 # 工程交付记录
 
+## 2026-11-03：M0 当前证据核对与联合复验
+
+成功 fetch 后从 `origin/main 2b44a50` 建立独立 `codex/m0-evidence-audit` worktree。本次唯一目标为把现行 M0 条件映射到当前 owning tests/真实复验及剩余工作；只改 M0 记录和本日志，无运行时代码、协议、SQL、迁移、依赖或预算变化，不删除原需求。Astra 按当前代码复核矩阵与边界，无阻断；AI 审查不冒充独立人工审批。
+
+`python3 scripts/test-worker.py all` 退出0，七个独立子进程均 PASS（`/private/tmp/oj-m0-audit-worker-all.log`），共74个 PASS 条目（含父条目）。基础选择先跳过6个显式开关专项，随后六项各自实际执行并通过，不把这些初始 SKIP 计作通过或未跑专项。基础包含受限执行/宿主/停止及安全解析/中继；真实回报15.18秒、双 Worker43.96秒、材料/身份故障91.11秒、槽恢复45.77秒、网络故障53.45秒、编译失权43.05秒。编译失权两模式的全部停止/PID证据为9.661712708/6.709786209秒，仍在原14秒上限内；未放宽任何预算。专项使用同机两个真实控制端和专用离线执行槽，部分 Worker 先后启动，不冒充跨主机或每项同时并发。
+
+独立会话专项使用现有 `oj-slot-recovery-offline` 镜像及本任务缓存，`python3 scripts/test-session.py --toolchain-image oj-slot-recovery-offline --module-cache /private/tmp/oj-m0-audit-module-cache` 退出0：格式、模块校验、vet、真实 Redis/临时 PostgreSQL/race **109项及279子项，71.743秒**通过（`/private/tmp/oj-m0-audit-session-final.log`）。3项顶层SKIP分别为成本准备、成本测量和子进程helper入口；独立API进程父测试实际通过，本轮没有重跑Store成本基准。真实旧RDB恢复握手完成，两个临时Redis及私有网络由唯一命名驱动清理；不是生产全库/PITR或账号安全事实恢复验收。
+
+首轮旧宿主缓存缺少SCS，未进入行为测试；镜像已有锁定模块，导出当前go.mod声明的11个模块和161个已有元数据文件后成功。首次全依赖图查询还要求未缓存的旧依赖，改按实际声明清单与既有元数据导出；没有联网下载、升级、改锁文件或禁用校验。失败日志保留为 `oj-m0-audit-session.log`、`oj-m0-audit-cache-export.log`、`oj-m0-audit-session-verified.log`，不计作通过。
+
+正式普通会话协议另以既有离线镜像执行 `python3 -B scripts/test-session-protocol.py --toolchain-image oj-slot-recovery-offline --build-cache-volume oj-slot-recovery-go-cache`：模块校验、集成静态分析、真实Redis/临时PostgreSQL/race **187个PASS条目（含父条目），33.183秒**，零SKIP；退出、数据库排空和驱动owner清理均成功（`/private/tmp/oj-m0-audit-protocol.log`）。不以测试专用SCS模块替代当前正式协议，也不以正式协议通过替代独立旧RDB恢复证据。
+
+P1 在同一离线工具镜像、`--network none`、2CPU/2GiB容器内只读挂载当前worktree，选择性复制源码到容器临时目录后执行模块校验和 `sh scripts/toolchain.sh db`，避免Linux构建覆盖仍用于宿主专项的Darwin二进制。五命令构建、真实临时PostgreSQL/race **159个PASS条目（含父条目），9.615秒**、双真实API进程/24并发仅一个提交、重启回执及v3/历史v1兼容均通过（`/private/tmp/oj-m0-audit-database.log`），零SKIP。临时数据库关闭，原有五个开发服务保持healthy，两个专用执行槽均stopped/exit137/OOM=false/restarting=false；最后失权停止使用KILL，不能把137解释成数据库或驱动失败。
+
+核对发现两个不能靠既有绿灯补写为通过的缺口：进程数与临时磁盘/inode耗尽缺少行为测试；示例页面提交禁用，现有 HTTP queued 专项与直接 Store 接收/查询的真实 Worker 专项不是同一次 HTTP→Worker→HTTP 终态/最小页面。M0 记录列明后续验收顺序。计划的额度/公平调度仍是 P1 试用子项，完整 P5、生产容量/独立备份域及部署仍按原计划节点处理；不擅自扩大或缩小 M0。用户要求先补齐 M0、题目来源未知，P4 录入入口保持未决。
+
+仓库策略449文件、23个新增Markdown文件/锚点引用、空白与完整差异复核通过；最新PR head的CI/合并/知识事务结果依交付回读。未重跑前端、Store成本基准或完整root后端检查，不将这些写作本轮通过。完整M0仍待后续缺口与最终验收，未部署。
+
 ## 2026-11-03：编译在途续租失权的真实停止证据
 
 成功 fetch 后从 `origin/main 7609202` 建立独立 `codex/compile-lease-faults` worktree。本 PR 唯一目标为 P2、AC28/29 的编译在途失权中断，包含控制链路未知与节点禁用两种既有失权输入。仅在专用合成容器内选择唯一 cc1plus，使用容器 PID 发送 STOP，并从 Docker top 独立核对唯一编译器的 VM PID/T状态。短暂停留确认 Worker/同编译器仍存活，再阻断原端到端 mTLS 字节或禁用本轮临时节点；不发送 CONT、不取消/强杀目标 Worker，不借测试清理制造停止。
