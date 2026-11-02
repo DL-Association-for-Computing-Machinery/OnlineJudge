@@ -1,5 +1,19 @@
 # 工程交付记录
 
+## 2026-11-03：沙箱资源预算的独立行为证据
+
+成功fetch后从 `origin/main 7427c94` 建立独立 `codex/sandbox-resource-bounds` worktree。本PR只补P2资源预算行为专项及其驱动/文档，新增sandbox-tag Go测试和嵌入的有界C++合成探针，扩展测试响应字段以保留cgroup峰值及执行/采集错误；无业务代码、预算、镜像配方、材料、协议、SQL、迁移或依赖变化。
+
+最终 `python3 scripts/test-worker.py resource-bounds` **1.14秒**通过（`/private/tmp/oj-resource-bounds-final.log`，6个子例/8个含父PASS条目）。进程探针最多32次父进程fork且不递归：15个阻塞孩子+父进程，cgroup峰值16，下一次errno11/EAGAIN，NPROC软限大于32；全部wait后再次fork/wait成功。inode探针4094个空文件+目录，errno28/ENOSPC、free inode零且仍有67108864可用字节，删除/重建一个文件后再次满额。
+
+总字节探针沿用Compile的10秒CPU/15秒wall/512MiB/16进程资源数值，最多80个文件、每个最多1MiB，每次64KiB无缓冲真实write；两例均写入67108864字节后ENOSPC、可用字节零、inode仍4029，内存67895296字节。分别保留满盘状态给下一次执行，以及先close再删除全部填充文件、核对容量恢复再写入4096字节。所有探针后正常执行核对目录不存在、字节/inode恢复原值，结束删除唯一缓存制品；不靠驱动收尾制造清理成功。
+
+普通Run预算不变：单文件有限1MiB+64KiB写入由既有RLIMIT_FSIZE=1048576停止，原始OLE/exit25、Error空且FileErrors零，内存1572864；分文件写入先MLE，内存33570816。首轮将总容量当单文件写入，三例在FSIZE先失败（`/private/tmp/oj-resource-bounds-first.log`），不能记作总容量或MLE通过。核对固定v1.13.3的worker/envexec源码后区分全局OutputLimit、采集器4096和copyOutMax；不通过增加copyOutMax或修改预算解决。第二轮分文件方案1.07秒通过，再补实际fileError/ProcPeak/文件计数交叉证据取得上述最终结果。
+
+这同时确认正式GoJudge适配器目前拒绝无采集错误的OLE，已知SIGXFSZ会升级为系统恢复/旧槽停用，属于下一独立修复目标；本PR不宣称此正式回报路径通过。Astra针对设计、实现与最终增量复核无阻断，未替代实际测试或独立人工审批。
+
+完整离线Docker后端格式、模块校验、vet、四检测器正负夹具、主模块/sandbox/独立会话模块静态各零、root race与五命令构建通过（`/private/tmp/oj-resource-bounds-backend-final.log`）。首个临时复制遗漏deploy配方导致环境自检失败，补齐文件后完整重跑，不改测试/断言；失败日志 `oj-resource-bounds-backend.log` 保留。既有sandbox专项前后各49个PASS条目（含父条目）通过，最终编排5.28秒、宿主1.13秒、租约停止1.90秒、基础沙箱2.45秒（`oj-resource-bounds-sandbox-regression.log`）；显式opt-in的其他专项本轮不重复运行。治理64项 **9.651秒**通过（`oj-resource-bounds-governance-final.log`），首轮默认沙箱禁止回环socket而失败，按正常测试权限重跑，未改权限逻辑或降低断言。README/CI/M0归属同步，普通CI不执行合成资源探针；完整M0、最小HTTP/结果页面及生产准入仍待验，未部署。
+
 ## 2026-11-03：M0 当前证据核对与联合复验
 
 成功 fetch 后从 `origin/main 2b44a50` 建立独立 `codex/m0-evidence-audit` worktree。本次唯一目标为把现行 M0 条件映射到当前 owning tests/真实复验及剩余工作；只改 M0 记录和本日志，无运行时代码、协议、SQL、迁移、依赖或预算变化，不删除原需求。Astra 按当前代码复核矩阵与边界，无阻断；AI 审查不冒充独立人工审批。
