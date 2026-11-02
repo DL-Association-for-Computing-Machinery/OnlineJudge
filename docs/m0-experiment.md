@@ -35,13 +35,13 @@
 | `worker-fault` / [TestWorkerFaults](../tests/sandbox/fault_test.go) | 91.71秒 | 数据库、材料与执行端故障；未知回执不发布伪结果 |
 | `slot-recovery` / [TestWorkerSlotRecovery](../tests/sandbox/dual_worker_test.go) | 46.20秒 | 异常槽隔离、受控重启、自然接管及恢复后AC |
 | `network-fault` / [TestWorkerNetworkFaults](../tests/sandbox/network_fault_test.go) | 54.03秒 | 真实TCP双向失联及已提交丢回执恢复 |
-| `compile-lease` / [TestCompileLeaseFaults](../tests/sandbox/compile_lease_test.go) | 43.60秒 | 编译在途失联/撤销；停止/PID证据分别9.856/6.856秒，均早于原wall前14秒界限 |
+| `compile-lease` / [TestCompileLeaseFaults](../tests/sandbox/compile_lease_test.go) | 43.60秒 | 编译在途失联/撤销；停止/PID证据分别9.856/6.856秒，均在Worker启动前取样t0后14秒内完成，排除原15秒编译wall耗尽 |
 | `resource-bounds` / [TestSandboxResourceBounds](../tests/sandbox/resource_bounds_test.go) | 2.28秒 | 进程16/EAGAIN、inode/64MiB字节、1MiB单文件/Run内存边界及执行恢复；含固定g++文件上限CE对照 |
 | `http-loop` / [TestHTTPJudgeLoop](../tests/sandbox/http_loop_test.go) | 3.25秒 | 两个真实提交API→mTLS控制端→Worker→HTTP终态、原键回执与归属；本专项没有独立选手PID观察 |
 
 完整日志 `/private/tmp/oj-m0-joint-worker-prepared.log` 的 SHA-256 为 `276eed015e70e19f92f82720ed328fc422757baf48db6f83e38556618f67234b`，父项索引为 `/private/tmp/oj-m0-joint-worker-evidence.json`；这是本机证据位置，不是仓库或 CI 附件，迁移环境前须另行保全。
 
-数据库/普通协议/独立会话本轮没有重新运行。已复核此前4份日志哈希与 `/private/tmp/oj-m0-audit-evidence-manifest.json` 一致，并核对从 `2b44a50` 至本轮源码的 `internal/{session,identity,submission,httpapi,worker,workerapi,workerclient,workerhost}`、`db`、`tests/{integration,sessionprotocol,sessionexperiment}`、`go.mod/go.sum` 及四个对应命令均无差异；这些历史行为证据继续按原范围使用。`internal/execution` 已有SIGXFSZ修正，由本轮真实套件覆盖，不能混入“未变化”清单。旧日志未记录的数据库小版本不能用本次镜像读数倒填；资源耗尽次数和耗时也不能外推并发容量或SLA。
+本次本机Worker联合命令未重跑数据库/普通协议/独立会话完整套件；#90 CI另执行了数据库及普通协议检查，二者范围分开。已复核此前4份日志哈希与 `/private/tmp/oj-m0-audit-evidence-manifest.json` 一致，并核对从 `2b44a50` 至本轮源码的 `internal/{session,identity,submission,httpapi,worker,workerapi,workerclient,workerhost}`、`db`、`tests/{integration,sessionprotocol,sessionexperiment}`、`go.mod/go.sum` 及四个对应命令均无差异；这些历史行为证据继续按原范围使用。`internal/execution` 已有SIGXFSZ修正，由本轮真实套件覆盖，不能混入“未变化”清单。旧日志未记录的数据库小版本不能用本次镜像读数倒填；资源耗尽次数和耗时也不能外推并发容量或SLA。
 
 ## HTTP 真实进程判题闭环（2026-11-03）
 
