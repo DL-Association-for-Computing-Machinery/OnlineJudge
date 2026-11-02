@@ -105,13 +105,13 @@ func command(p experiment.ExecutionProfile, args []string, l experiment.Limits, 
 
 func (g *GoJudge) execute(ctx context.Context, c map[string]any, p experiment.ExecutionProfile, compile bool) (Observation, error) {
 	var results []struct {
-		Status     string            `json:"status"`
-		Exit       *int              `json:"exitStatus"`
-		CPU        *int64            `json:"time"`
-		Memory     *int64            `json:"memory"`
-		Files      map[string]string `json:"files"`
-		IDs        map[string]string `json:"fileIds"`
-		Error      string            `json:"error"`
+		Status     string             `json:"status"`
+		Exit       *int               `json:"exitStatus"`
+		CPU        *int64             `json:"time"`
+		Memory     *int64             `json:"memory"`
+		Files      map[string]*string `json:"files"`
+		IDs        map[string]string  `json:"fileIds"`
+		Error      string             `json:"error"`
 		FileErrors []struct {
 			Name string `json:"name"`
 			Type string `json:"type"`
@@ -124,14 +124,21 @@ func (g *GoJudge) execute(ctx context.Context, c map[string]any, p experiment.Ex
 		return Observation{}, errors.New("invalid sandbox result count")
 	}
 	r := results[0]
-	o := Observation{Status: r.Status, Stdout: []byte(r.Files["stdout"]), Artifact: r.IDs["main"]}
+	var stdout, stderr string
+	if value := r.Files["stdout"]; value != nil {
+		stdout = *value
+	}
+	if value := r.Files["stderr"]; value != nil {
+		stderr = *value
+	}
+	o := Observation{Status: r.Status, Stdout: []byte(stdout), Artifact: r.IDs["main"]}
 	// go-judge keeps max+1 bytes on overflow. JSON can replace each invalid UTF-8
 	// byte with a three-byte U+FFFD. The fixed numeric M0 answers cannot match that
 	// replacement; this text transport is not a general byte-preserving checker.
 	if r.Exit == nil || r.CPU == nil || r.Memory == nil || r.Error != "" ||
-		len(r.Files["stdout"]) > 3*(p.OutputBytes+1) || len(r.Files["stderr"]) > 3*(p.OutputBytes+1) ||
+		len(stdout) > 3*(p.OutputBytes+1) || len(stderr) > 3*(p.OutputBytes+1) ||
 		(o.Artifact != "" && (!compile || !artifactID.MatchString(o.Artifact))) || len(r.IDs) > 1 {
-		return o, fmt.Errorf("invalid sandbox evidence (stdout=%d, stderr=%d, file_errors=%d)", len(r.Files["stdout"]), len(r.Files["stderr"]), len(r.FileErrors))
+		return o, fmt.Errorf("invalid sandbox evidence (stdout=%d, stderr=%d, file_errors=%d)", len(stdout), len(stderr), len(r.FileErrors))
 	}
 	for _, e := range r.FileErrors {
 		if r.Status != "Output Limit Exceeded" || e.Type != "CollectSizeExceeded" ||
@@ -140,7 +147,12 @@ func (g *GoJudge) execute(ctx context.Context, c map[string]any, p experiment.Ex
 		}
 	}
 	if r.Status == "Output Limit Exceeded" && len(r.FileErrors) == 0 {
-		return o, errors.New("missing output overflow evidence")
+		// The pinned Linux executor reports RLIMIT_FSIZE as SIGXFSZ (25)
+		// without a collector error. This does not mean output was truncated.
+		if compile || *r.Exit != 25 || *r.CPU < 0 || *r.Memory < 0 || r.Files["stdout"] == nil || r.Files["stderr"] == nil || len(r.IDs) != 0 ||
+			len(stdout) > 3*p.OutputBytes || len(stderr) > 3*p.OutputBytes {
+			return o, errors.New("missing output overflow evidence")
+		}
 	}
 	o.OutputTruncated = len(r.FileErrors) > 0
 	if r.Status == "Accepted" {

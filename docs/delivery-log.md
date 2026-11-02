@@ -1,5 +1,17 @@
 # 工程交付记录
 
+## 2026-11-03：普通Run的SIGXFSZ/OLE精确适配
+
+成功fetch后从 `origin/main 79dbc5e` 创建独立 `codex/sigxfsz-verdict` worktree。本PR修复PR #86实测发现的分类缺口：原正式适配器将无采集错误的已确认SIGXFSZ/OLE当系统错误，停用旧执行器。GoJudge增加无fileError OLE的精确Run/exit25例外，要求完整非负资源、stdout/stderr为非null字符串、无执行错误/任何制品ID且输出有界；保持OutputTruncated=false。局部字符串指针保留null信息，仅新例外区分空串/null，其他分支仍按原空值解码行为处理。Compile仍拒绝该无采集错误分支，原collector截断及其他状态语义保持，不按错误文字或仅信号猜结果。
+
+先新增边界回归并在旧代码真实复现三个合法正例被 `missing output overflow evidence` 拒绝（`/private/tmp/oj-sigxfsz-before.log`），再做最小实现。修复后最终执行包race **1.998秒**通过（`/private/tmp/oj-sigxfsz-unit-final.log`）：26个接受/拒绝子例（含两个显式null）、4个非OLE状态的exit25原语义、首点OLE/后点NOT_RUN、制品清理/同Runner再AC，以及未截断布尔值变化确实改变冻结摘要。UTF8替换扩张长度界限不是原始字节保真承诺；数据库只存结果和摘要哈希，不将其冒充可读取的截断字段。
+
+最终 `python3 scripts/test-worker.py report` **16.17秒**通过，新增 `file-size-lifecycle` **0.80秒**（`/private/tmp/oj-sigxfsz-report-verified.log`）。有限17×64KiB单文件写触发原1MiB FSIZE，经过真实适配/租约/回报得到OLE；直接观测Status OLE/exit25/OutputTruncated=false。OLE确认后才入队AC，同一个Worker、LeasedRunner及容器ID/StartedAt/重启/运行状态完成两题，合计5次编译/运行调用、Stop回调零次，两题各一次attempt、双代次1；两个控制端重报均一致、冲突均拒绝，最初持久载荷逐字节不变，缓存清空。Worker在第二次确认后排空，未靠取消执行、停止/恢复或重建槽取得成功。
+
+本项复用测试进程中的单个Worker对象和两个真实TLS handler，不能称为SIGXFSZ跨API进程或完整cmd/worker进程专项；同轮仍运行原有真实Worker命令、排空、AC/WA/CE/RE/TLE/MLE/stdout-OLE、过期/撤销和未知回执回归。首轮真实report也成功，加入直接Observation观测及null边界后重跑取得上述最终结果。Astra设计、完整实现及最终增量复核无阻断，未代替实际测试或独立人工审批。
+
+完整离线Docker后端格式/模块/vet、四检测器正负夹具、主模块/sandbox/独立会话模块静态各零、root race及五命令构建通过（`/private/tmp/oj-sigxfsz-backend-final.log`）；治理64项 **12.379秒**通过（`oj-sigxfsz-governance.log`）。文档同步判题归因、README和M0当前缺口；无预算、材料、依赖、协议、SQL、迁移或摘要schema变化，不改旧结果。未重跑全部Worker/resource-bounds或浏览器，不将其算本轮通过。完整M0、最小HTTP/结果页面与生产验收继续待验，未部署。
+
 ## 2026-11-03：沙箱资源预算的独立行为证据
 
 成功fetch后从 `origin/main 7427c94` 建立独立 `codex/sandbox-resource-bounds` worktree。本PR只补P2资源预算行为专项及其驱动/文档，新增sandbox-tag Go测试和嵌入的有界C++合成探针，扩展测试响应字段以保留cgroup峰值及执行/采集错误；无业务代码、预算、镜像配方、材料、协议、SQL、迁移或依赖变化。

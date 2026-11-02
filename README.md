@@ -159,7 +159,7 @@ Worker 启动完成后，向该 Worker 进程发送 `SIGUSR1`（`kill -USR1 PID`
 - 字节：现有单文件 `RLIMIT_FSIZE=1MiB` 会先阻止大文件，探针按最多80个文件、每个最多1MiB分段真实写入。只在直接沙箱探针使用既有Compile的10秒CPU/15秒wall/512MiB/16进程数值，不改变普通Run；要求64MiB实际写入、ENOSPC、可用字节零且inode仍有余量。分别验证满盘后的执行隔离，以及关闭fd/删除后容量恢复并再次写入。
 - 普通Run保持200ms CPU/2秒wall/32MiB/16进程：单文件有限写入验证1MiB后的SIGXFSZ/OLE；分文件写入验证内存先耗尽为MLE。每项后正常探针核对目录消失与容量完整恢复，最后删除唯一缓存制品。
 
-限制由固定版本的[执行参数](https://github.com/criyle/go-judge/blob/v1.13.3/worker/worker.go)、[实际执行](https://github.com/criyle/go-judge/blob/v1.13.3/envexec/run_single.go)及实测共同核对；`copyOutMax` 不决定单文件RLIMIT_FSIZE。上述OLE是执行器原始状态：当前正式适配器仍拒绝没有采集错误的OLE，SIGXFSZ的分类支持缺口单独修复，不能写作端到端选手OLE已通过。本专项不验收跨主机、长期容量、宿主文件系统耗尽或完整M0；回退新增测试/驱动入口即可，无运行时、协议、SQL、迁移或预算变更。实测归[交付记录](docs/delivery-log.md)。
+限制由固定版本的[执行参数](https://github.com/criyle/go-judge/blob/v1.13.3/worker/worker.go)、[实际执行](https://github.com/criyle/go-judge/blob/v1.13.3/envexec/run_single.go)及实测共同核对；`copyOutMax` 不决定单文件RLIMIT_FSIZE。普通Run的SIGXFSZ/OLE现已由正式适配器精确支持，接受条件与未覆盖的Compile分支见[判题设计](docs/architecture/judging-design.md#53-统一结果分类与单点异常归因)。`python3 scripts/test-worker.py report` 另验同一Worker/LeasedRunner/容器生命周期的OLE→AC、未截断观测、真实持久化及双控制端重报，不能以直接资源探针代替该回报证据。本资源专项不验收跨主机、长期容量、宿主文件系统耗尽或完整M0；资源测试与驱动可单独回退，不更改预算。实测归[交付记录](docs/delivery-log.md)。
 
 ### Worker 异常后的受控解封
 
