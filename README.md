@@ -131,7 +131,7 @@ python3 scripts/test-browser-account.py \
 
 ```sh
 python3 scripts/test-worker.py all
-# 也可选择 sandbox / report / dual-worker / worker-fault
+# 也可选择 sandbox / report / dual-worker / worker-fault / slot-recovery
 ```
 
 脚本用 Docker 编译宿主测试驱动与 `.local/bin/` 命令，构建固定 go-judge/GCC 镜像，再通过宿主 Docker CLI 操作两个禁网、无挂载、只读根文件系统的专用特权容器。独立无特权观察容器共享 Docker VM 的 PID namespace，核验停止后的进程确已消失。不会启动 Colima；Docker Desktop 的 VM 与其他项目共享，这与原专用 VM 隔离边界不同。只执行仓库合成测试，不作为生产不可信提交的部署方案。
@@ -149,6 +149,23 @@ docker --context desktop-linux build --target host-artifacts --output type=local
 `.local/bin/worker` 需要 `OJ_SANDBOX_EXPERIMENT=1`、`OJ_WORKER_CONTROLLER_URL`、`OJ_WORKER_CA_FILE`、`OJ_WORKER_CERT_FILE`、`OJ_WORKER_KEY_FILE`；控制端 `.local/bin/worker-api` 需要 `OJ_WORKER_API_ADDR`、证书文件和 `OJ_DATABASE_URL`，材料目录为 `OJ_MATERIAL_ROOT`。缺失配置拒绝启动，测试脚本自动生成私有临时配置。详见 [M0 契约与历史证据](docs/m0-experiment.md)。
 
 Worker 启动完成后，向该 Worker 进程发送 `SIGUSR1`（`kill -USR1 PID`，将 PID 替换为对应进程号）请求排空式下线：每轮领取前检查排空，已通过检查的至多一个在途领取继续完成下载、执行及回报；确认后不再领取。空队列等待可被唤醒；未知回报仍按原令牌/结果最多发送三次，失败保留原错误。`SIGINT`/`SIGTERM` 仍取消当前操作并等待停止确认。排空返回后同样停止沙箱、确认 PID 消失，成功才清正常占用标记；停止不确定继续隔离，不自动重启或解封。排空耗时受现有任务/网络预算影响，不承诺固定下线 SLA；需要中止时仍可发送取消信号。旧版本回退后不再使用新增信号，无数据库迁移。`python3 scripts/test-worker.py report` 包含执行中排空、保留后续排队任务及显式重启复用的真实验证。
+
+### Worker 异常后的受控解封
+
+Worker 被 `SIGKILL` 等强制结束后，原槽的持久隔离标记会阻止普通启动。操作者须独占该槽及可信 Docker 控制面，**先确认旧 Worker 的全部宿主 CLI 和在途 Docker 控制操作已结束，不会迟到派发**，再使用**崩溃前已记录或可信历史记录确认的原容器完整 ID**执行：
+
+```sh
+OJ_SANDBOX_EXPERIMENT=1 OJ_WORKER_M0_SLOT=primary \
+  .local/bin/worker recover <original-full-container-id>
+```
+
+将占位值替换为原容器的 64 位小写十六进制 ID；槽只接受 `primary`/`secondary`，未指定为 primary。不要把恢复时按名称查询到的当前 ID 当作历史身份依据；旧 ID 未知、容器已被替换或 Docker 控制面不再独占时，先人工调查。标记只记录活动状态，不自动证明历史容器身份。
+
+命令不需要控制端地址、证书、数据库或邮件凭据。它持有与 Worker 相同的规范文件锁，先持久隔离，再核对固定槽名与原 ID、固定镜像和隔离配置；后续按 ID/启动时间绑定。运行容器沿用原停止/PID 消失检查，已停止容器依可信 Docker 的停止状态双次回读，不声称重建崩溃前 PID 清单。20 秒操作预算内确认停止后才清标记；错误、取消及停止未知均不报告成功。清空后的 Sync 失败会尽力重建隔离标记，文件系统同时拒绝恢复写入时不保证隔离持久性，须保持停用并调查。
+
+成功只确认当前沙箱已停止并清空槽标记，不领取任务、不重启 Worker。新进程无法排空旧 Worker 的宿主控制请求，Worker 的进程内 25 秒计时器也会随 SIGKILL 消失；仅等待 25 秒、Worker 退出或当前容器停止不能替代控制操作排空的确认。无法确认时保持隔离，不运行解封或重启；命令不提供跨进程派发隔离机制。
+
+在上述前提成立后，显式重启及重新核验固定环境才能运行新 Worker；旧任务仍由控制端自然租约到期及有限恢复处理，不编辑租约/结果。回退只需恢复旧 Worker 二进制并停用此子命令，无数据库迁移。真实专项 `python3 scripts/test-worker.py slot-recovery` 在冻结合成 Worker 后记录宿主子进程，并确认它们退出再解封，覆盖互斥/错误 ID 拒绝、自然接管及原槽重启复用；未覆盖人为延迟的孤儿 CLI 或任意 SIGKILL 后自动安全复用。普通 PR CI 不运行特权沙箱。
 
 `GET /api/v1/healthz` 仅代表进程存活；普通 Compose 入口不启动完整 Worker 产品。真实编译/运行、回报、双 Worker 接管与撤销/材料故障分别由专项验证，普通 CI 不运行特权实验。
 

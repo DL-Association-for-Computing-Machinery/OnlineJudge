@@ -1,5 +1,19 @@
 # 工程交付记录
 
+## 2026-11-03：Worker 异常槽受控解封
+
+成功 fetch 后从 `origin/main 16deb73` 建立独立 `codex/worker-slot-recovery` worktree，唯一目标为 P2、AC28/29 的显式恢复子项。新增 `worker recover <original-full-container-id>`：不加载节点/控制端凭据，共用规范锁，先持久隔离；固定槽名匹配可信历史原 ID 后绑定 ID/启动时间及固定隔离配置。运行容器复用原严格停止/PID 消失检查，已停止容器单独双次回读；成功才清标记，不领取、不回报、不重启。普通启动/Stop 规则保持，清空后的 Sync 失败尽力重建隔离并始终报告失败。无依赖、协议、SQL、迁移或材料版本变化；操作及回退见 [README](../README.md#worker-异常后的受控解封)。
+
+Docker Go 1.26.10 / golangci-lint 2.15.0 完整后端格式、模块校验、vet、四检测器正负夹具、主模块/sandbox 静态/嵌套会话模块静态各零问题、全部 root race 及五命令构建通过，日志 `/private/tmp/oj-slot-recovery-backend-final.log`。恢复覆盖参数/配置/ID/生命周期、互斥、inspect/top/kill/PID/取消、标记写入/清空错误及真实锁文件清空后 Sync 注入失败的隔离重建。64 项治理通过（11.158 秒），仓库策略/空白/链接及完整差异核对通过；最终文件数按交付前回读。
+
+真实 `python3 scripts/test-worker.py slot-recovery` 通过（46.79 秒，`/private/tmp/oj-slot-recovery-sandbox.log`）：两控制端/两 Worker 与临时 PostgreSQL、固定离线 GNU++17 沙箱。运行选手时强杀 Worker，普通启动保留隔离；活跃 owner/错误 ID 拒绝，无控制端凭据解封确认停止，已停重复恢复保持停止。控制端自然回收原租约，另一 Worker 第 2 次尝试 AC；旧令牌迟报拒绝且结果字节不变，原槽显式重启并复验后再次 AC。顺序重跑 `report` 全部 11 子例通过（15.34 秒，`oj-slot-recovery-report-final.log`），包含真实 AC/WA/CE/RE/TLE/MLE/OLE、丢回执、普通启停/排空；既有 `dual-worker` SIGTERM 接管通过（44.22 秒，`oj-slot-recovery-dual.log`）。两个固定槽回读停止/无 PID/未重启，临时测试数据库无残留；日志均在 `/private/tmp`。
+
+环境诊断：首次完整工具镜像构建因 proxy.golang.org 连接拒绝失败；旧质量镜像缺当前 cpuid 缓存，改为组合已成功构建且校验的当前依赖层与原固定质量工具，离线完整验证，未升级/关闭检查。首次真实沙箱启动在旧停止容器遇到 cgroup.subtree_control busy，未进入恢复用例；按精确 ID/owner/停止/无挂载条件仅重建两个专用临时槽，同配置复验成功。并行完整 backend 构建共写 `.local/bin` 导致初次 report 的 worker-drain 子例 exec format error，前十项通过仍不算整套成功；重新导出 macOS 产物后改顺序复验。治理初次受沙箱回环端口/只读 Docker 限制，使用允许条件重跑原 64 项通过，未放宽断言。
+
+最终边界复核发现旧 Worker 的宿主 Docker CLI 不会随 SIGKILL 自动排空，旧 Go 进程计时器不再取消它们，新的 Host.active 也没有旧请求，docker exec 不携带生命周期 fence。因此恢复只确认当前停止，调用前操作者必须独立确认旧宿主 CLI/在途控制操作已排空；无法确认保持隔离，不以等待25秒或当前停止代替该前提。API 注释、成功提示及规范已同步。真实专项增加 SIGSTOP 后按精确 PID 回读 T 屏障、非空后代记录与逐一退出确认，最终 **46.41 秒**通过（`/private/tmp/oj-slot-recovery-sandbox-final.log`，实际观察 1 个宿主后代退出）；不是人为延迟孤儿 CLI 或普遍跨进程派发隔离的验收。补充后完整 backend 再次通过（`oj-slot-recovery-backend-drained.log`），最终 sandbox 静态零问题（`oj-slot-recovery-sandbox-static.log`）。
+
+Astra 针对性设计、完整代码、Sync 与宿主子进程边界增量/文档复核无阻断；这是 AI 复核，不冒充人工批准。该命令依赖操作者独占且已排空的可信 Docker 控制面、已知历史原 ID；标记不记录原 ID，不重建历史 PID，不保证磁盘拒绝重写后的持久隔离。自动重启/解封、持久结果队列、网络分区/跨主机/断电和完整 M0 仍待验，未部署。PR/CI/合并与知识事务状态依最终回读。
+
 ## 2026-11-03：Testlib SPJ 纳入完整训练必交付范围
 
 用户依据[洛谷 Special Judge 文档](https://help.luogu.com.cn/manual/luogu/problem/special-judge)要求支持 SPJ 库。成功 fetch 后从 `origin/main 8c6f612` 建立独立 `codex/testlib-spj-plan` worktree；本轮只修改计划及相关规范，不实施检查器。Testlib 从“优先验证”明确为 1B/M2 必交付，P7 拆为库/构建准入、三文件调用与结果适配、版本/受限执行、端到端验收四项；P2 文本闭环与 M1 顺序保持。
