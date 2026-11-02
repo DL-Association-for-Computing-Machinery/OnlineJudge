@@ -42,6 +42,8 @@
 
 `resource_bounds_test.go` 及其嵌入的有界 C++ 探针只由显式 `resource-bounds` 专项执行；普通后端检查只编译/静态分析，不创建子进程或填充文件系统。分别验证进程、inode、字节、单文件和内存边界及新执行恢复，保持固定预算；直接沙箱的Compile资源探针不冒充正式Run/Worker结果分类，具体限制见[README](../README.md#沙箱资源预算专项)。
 
+该专项中的 `compile_file_size_test.go` 另走正式GoJudge/Runner，真实固定g++对照AC→文件上限CE→同Runner AC；透明观察器不重发或改写响应，超限例不转发Run。普通CI只编译/静态分析，不执行该合成编译程序；编译器诊断不作为生产分类规则。
+
 SIGXFSZ/OLE的纯响应、分类和冻结摘要回归随普通root后端race执行；真实单文件写入、同一Worker/LeasedRunner及容器生命周期继续AC、持久结果和双控制端回放由显式 `report` 专项执行，普通CI不运行该沙箱程序。准确Run-only支持边界见[判题设计](architecture/judging-design.md#53-统一结果分类与单点异常归因)。
 
 ### 当前治理流水线

@@ -142,6 +142,7 @@ func TestSandboxResourceBounds(t *testing.T) {
 			fresh(t)
 		})
 	})
+	t.Run("fixed compiler file size", testCompileFileSize)
 	var cache map[string]string
 	if err := json.Unmarshal(api(t, "GET", "/file", nil), &cache); err != nil || len(cache) != 0 {
 		t.Fatalf("probe artifact cleanup: entries=%d error=%v", len(cache), err)

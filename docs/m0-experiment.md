@@ -13,7 +13,7 @@
 | 至少双 API/双 Worker，认领、租约、身份、重复及迟到回报 | [租约数据库实验](../tests/integration/leases_test.go)、[真实双 Worker](../tests/sandbox/dual_worker_test.go)、[网络故障](../tests/sandbox/network_fault_test.go)、[编译失权](../tests/sandbox/compile_lease_test.go) | 数据库用例含人工过期，真实专项另验证自然到期；部分专项先后启动 Worker，不冒充每项均双 Worker 同时运行或跨主机高可用 |
 | 会话跨 API 撤销、名额和故障恢复 | [独立会话实验](../tests/sessionexperiment/README.md)、[正式普通协议](../tests/sessionprotocol/protocol_test.go)；前者含独立 API 进程、真实 Redis 旧 RDB 及 PostgreSQL 专用 schema 恢复 | 独立模块不由根 `go test ./...` 或普通 CI 执行行为套件；旧备份恢复标识废止会话，不恢复备份后的账号封禁/改密事实，不能据此许可生产复服 |
 | 材料缺失/损坏、数据库失败和节点失联 | [接收事务](../tests/integration/submissions_test.go)、[材料授权](../tests/integration/worker_acquisition_test.go)、[Worker 故障](../tests/sandbox/fault_test.go)、网络/槽恢复专项 | 区分真实文件/节点/网络故障和模拟未知回执；异常槽仍需人工排空旧宿主操作并显式恢复，不是自动重启/解封或持久结果队列 |
-| 受限执行与资源预算 | [TestSandbox](../tests/sandbox/sandbox_test.go)、固定[执行环境](../internal/experiment/environment.go)、真实停止/PID及[资源耗尽专项](../tests/sandbox/resource_bounds_test.go)；CPU/内存/输出/进程、inode/字节/单文件边界、隔离及每次执行恢复已有分项实测 | 总字节容量使用现有Compile资源预算的直接探针；普通Run内存先耗尽为MLE，单文件先受1MiB FSIZE约束。[SIGXFSZ/OLE正式Run适配及同槽继续AC](../tests/sandbox/file_size_report_test.go)已补证，Compile对应分支仍保守拒绝，不能扩写全部P2/生产准入通过 |
+| 受限执行与资源预算 | [TestSandbox](../tests/sandbox/sandbox_test.go)、固定[执行环境](../internal/experiment/environment.go)、真实停止/PID及[资源耗尽专项](../tests/sandbox/resource_bounds_test.go)；CPU/内存/输出/进程、inode/字节/单文件边界、隔离及每次执行恢复已有分项实测 | 总字节容量使用现有Compile资源预算的直接探针；普通Run内存先耗尽为MLE，单文件先受1MiB FSIZE约束。[SIGXFSZ/OLE正式Run适配及同槽继续AC](../tests/sandbox/file_size_report_test.go)与[固定g++文件上限CE](../tests/sandbox/compile_file_size_test.go)已补证；后者实际非零退出4，未触发无采集错误Compile OLE，该未知分支仍保守拒绝，不能扩写全部P2/生产准入通过 |
 | 组件准入、资源测量和失败恢复记录 | 固定环境每次运行前核验；下方[组件准入](#组件准入与下一步)、[Store 成本采样](#普通会话-store-有限成本采样2026-10-31)及[交付日志](delivery-log.md)保留范围和原始证据 | 当前只是隔离实验准入；完整 OS/工具链许可与安全清单、目标硬件/负载及生产容量未验收。实验资源观测不等于首批100人容量或生产 SLA |
 | M0 推进顺序中的真实请求与最小结果页面 | [HTTP 真实进程闭环](../tests/sandbox/http_loop_test.go)覆盖双提交 API→mTLS 控制端→Worker→HTTP AC/WA；当前[示例做题页](../web/src/preview/ProblemPage.tsx)、[提交空态](../web/src/pages/StatusPages.tsx)及已交付账号浏览器路径 | **页面仍未完成**：HTTP 已在同一专项确认 queued、跨实例原键回执/冲突与终态，SQL仅作不可变源码/attempt旁证；示例提交仍禁用，尚无浏览器真实提交/回执核验/结果观察闭环。P5 完整训练页面归 M1，不据此删除计划中明确要求的 M0 最小页面 |
 
@@ -36,6 +36,12 @@ P2受限执行子项新增 `resource-bounds` 专项：固定上限且不递归�
 原单文件1MiB FSIZE先于总容量生效；总字节探针使用既有Compile资源数值并逐文件限1MiB，普通Run仍分别得到单文件SIGXFSZ/OLE、分文件MLE。固定版本源码/命令与准确边界归[README](../README.md#沙箱资源预算专项)，实测与失败诊断归[交付日志](delivery-log.md)。无业务代码、配置、依赖、协议、SQL、迁移、材料版本或预算变化，普通CI不执行合成选手程序。
 
 PR #86初测同时暴露[正式适配器](../internal/execution/gojudge.go)的分类支持缺口：执行器SIGXFSZ返回OLE/exit25、无fileError，当时适配器对所有OLE要求采集超限证据，故返回错误并停用旧执行器，由系统恢复接管。该Run缺口现由下节独立子项补齐；资源探针通过本身仍不等于正式回报或完整M0通过。
+
+## 固定GNU++17编译文件上限对照（2026-11-03）
+
+`resource-bounds` 增加正式GoJudge/Runner的有限对照：同一源码形式的256KiB非零只读数据控制例AC；要求1MiB+128KiB数据的示例仅编译，固定g++报告汇编器文件大小受限，实际结构化 `Nonzero Exit Status` / exit4、零fileError/制品，经原规则判CE、两点均NOT_RUN且无运行统计。透明transport只读取/恢复原响应，不重新发送；意外到达Run时拒绝转发，避免执行超限例。CE成功后同一Runner再普通AC，总3Compile/4Run，每阶段制品缓存为空。
+
+编译命令、LANG=C、材料、1MiB文件上限及所有预算不变。诊断仅作辅助观测，没有内核级子进程因果追踪，不按文字修改生产分类；若实际是SE/适配错误则测试立即结束，保留原Runner停用行为。该固定路径已由现有CE规则支持，不能据此宣布Compile无采集错误OLE或全部编译异常已覆盖；实测/失败断言修正归[交付日志](delivery-log.md)。无业务、协议、SQL、依赖或预算变化，可单独回退测试及调用。
 
 ## 普通Run的SIGXFSZ/OLE分类（2026-11-03）
 
