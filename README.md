@@ -131,7 +131,7 @@ python3 scripts/test-browser-account.py \
 
 ```sh
 python3 scripts/test-worker.py all
-# 也可选择 sandbox / report / dual-worker / worker-fault / slot-recovery / network-fault
+# 也可选择 sandbox / report / dual-worker / worker-fault / slot-recovery / network-fault / compile-lease
 ```
 
 脚本用 Docker 编译宿主测试驱动与 `.local/bin/` 命令，构建固定 go-judge/GCC 镜像，再通过宿主 Docker CLI 操作两个禁网、无挂载、只读根文件系统的专用特权容器。独立无特权观察容器共享 Docker VM 的 PID namespace，核验停止后的进程确已消失。不会启动 Colima；Docker Desktop 的 VM 与其他项目共享，这与原专用 VM 隔离边界不同。只执行仓库合成测试，不作为生产不可信提交的部署方案。
@@ -175,6 +175,16 @@ OJ_SANDBOX_EXPERIMENT=1 OJ_WORKER_M0_SLOT=primary \
 - 下行确认丢失：短测试事务锁住尚未提交的目标尝试，启用下行阻断后立即回滚释放锁。真实控制端此后提交 AC，原 Worker 收不到确认而失败停止、不领下一题；显式恢复连接/沙箱和新 Worker 后继续排队任务。全过程目标只有一次尝试、首个载荷/摘要不变；两个控制端确认相同重报并拒绝冲突重报。
 
 行锁仅用于给故障注入排序，不更改任务、租约、结果或业务参数；测试驱动不手调 Recover。字节阻断计数不用于识别 HTTP 请求或证明报告调用次数。该专项是本机 TCP 故障注入，不验收跨主机/路由器分区、长编译期间续租或执行端自动恢复。中继的纯回环字节、方向、恢复与并发关闭 race 测试不含 sandbox 标签，普通后端检查执行；真实 Worker 专项保留 sandbox 标签及显式开关，普通 CI 不执行特权代码。实际结果见[交付记录](docs/delivery-log.md)。
+
+### 编译在途续租失权专项
+
+`python3 scripts/test-worker.py compile-lease` 在专用合成沙箱内识别唯一 `cc1plus`，使用容器内 PID 发送 SIGSTOP，另从 `docker top` 核对唯一编译器的 VM PID 和 T 状态；两类 PID 不混用。短暂观察 Worker、容器和同一暂停编译器仍存活后，分别阻断真实控制链路或禁用临时节点。编译器保持暂停且不发送 SIGCONT，原有 15 秒编译 wall、5 秒续租周期及请求/停止预算保持。
+
+测试在启动目标 Worker **之前**记录宿主单调时间 t0，要求 Worker 自行失败退出、容器停止及独立 VM PID 消失证据全部在 `t0+14s` 前取得。编译不可能早于 t0 开始，因此这个保守界限可排除原 15 秒编译 wall、20 秒 curl 等待上限；机器过慢判证据不足，不放宽界限，也不把失败清理引起的停止算作通过。这是编译在途的受控故障验证，不是编译性能测试或生产下线 SLA。
+
+两种故障都检查当前尝试无结果、预先排队的下一题零尝试；随后另一节点经第二控制端完成第2次尝试 AC，判题/恢复代次保持1，旧身份/租约回报被两个控制端拒绝且新载荷不变。网络场景等待自然30秒租约到期，禁用场景可由撤销提前触发回收，不能描述为同一自然到期路径。测试未手调 Recover 或编辑租约时间。真实字节受阻、编译器T状态与提前停止结合既有续租代码支持失权中断判断，不表示解析加密请求或取得逐请求 renew 审计。
+
+只有进程表解析边界测试进入普通 root race；实际暂停/信号、控制端、数据库与选手编译保持 sandbox 标签及 `OJ_SANDBOX_COMPILE_LEASE=1`，由上述驱动提供。不得把此流程用于普通宿主、共享容器或生产不可信提交。回退新增测试与驱动入口即可，无业务代码、协议、依赖、迁移、生产 SQL、材料版本或预算变化；完整 M0、跨主机/断电及执行端自动恢复仍待验，实际证据归[交付记录](docs/delivery-log.md)。
 
 `GET /api/v1/healthz` 仅代表进程存活；普通 Compose 入口不启动完整 Worker 产品。真实编译/运行、回报、双 Worker 接管与撤销/材料故障分别由专项验证，普通 CI 不运行特权实验。
 
