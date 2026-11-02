@@ -9,8 +9,10 @@ import (
 )
 
 // RecoverM0Slot confirms termination of a quarantined slot. The caller must hold
-// its canonical lock, exclusively own the trusted Docker control plane, and
-// supply the original container ID from a trusted pre-crash record. The marker
+// its canonical lock, exclusively own the trusted Docker control plane, confirm
+// all old worker host CLI processes and in-flight control operations have drained,
+// and supply the original container ID from a trusted pre-crash record. This
+// operation cannot establish that cross-process dispatch fence itself. The marker
 // itself does not record identity. Unknown or replaced containers require manual
 // investigation. This operation never starts a container or claims work.
 func RecoverM0Slot(ctx context.Context, slot M0Slot, expectedID string) error {

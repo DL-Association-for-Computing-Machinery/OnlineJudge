@@ -35,7 +35,7 @@ func dispatch(ctx context.Context, args []string, logger *slog.Logger, drain <-c
 	}); err != nil {
 		return err
 	}
-	logger.Info("Worker 槽隔离已解除，沙箱保持停止；重启前须重新核验环境")
+	logger.Info("当前沙箱停止已确认，槽隔离标记已清；仅在旧控制操作已排空时重启并重新核验环境")
 	return nil
 }
 

@@ -35,7 +35,7 @@ M0 已验证子集：[Worker 契约](../../api/worker.openapi.yaml)提供独立 
 
 M0 执行端增加 `workerclient.Renewer` 和 `execution.LeasedRunner`：前者负责有界 mTLS 续租，不依赖数据库；后者通过续租/停止小接口监督独占执行槽，不耦合 HTTP 或 Docker。执行前续租、每 5 秒刷新，从请求前的单调时间计算 25 秒本地预算（控制端固定 30 秒契约），失败或状态未知取消。独立停止确认后仍永久停用旧执行器，禁止把取消 HTTP 当作远程终止。`internal/workerhost` 实现专用 M0 宿主检查、传输及整容器停止/PID 核验，依赖 `experiment` 固定配置，不反向依赖 Worker 编排；调用方通过现有小接口注入。`cmd/worker` 负责同账号固定槽文件锁、持久隔离标记、预检和信号处理；停止结果只计算一次，失败保留隔离。`SIGUSR1` 请求完成当前许可题后排空退出，`SIGINT`/`SIGTERM` 仍取消当前题；退出均停止整容器，不自动恢复。详见[命令入口](../m0-experiment.md#执行端命令入口)和[宿主适配器](../m0-experiment.md#可信宿主适配器)。
 
-`worker recover <original-full-container-id>` 是显式操作员解封入口，只有 experiment 开关及固定槽配置，不装配领取/回报/身份客户端。与普通启动共用规范锁，恢复允许读取非空标记但先重新持久隔离；`workerhost.RecoverM0Slot` 仅确认原容器终止，不返回可执行任务的 Host。固定名称初查须匹配操作者从可信历史记录提供的原 ID，此后绑定 ID/启动时间及固定隔离配置。运行状态复用严格 Stop，已停状态单独双次回读；确认前不清标记。普通启动/Stop 合同不放宽，不提供自动恢复、历史身份取证或持久结果队列。操作、故障及可信控制面边界见 [README](../../README.md#worker-异常后的受控解封)。
+`worker recover <original-full-container-id>` 是显式操作员解封入口，只有 experiment 开关及固定槽配置，不装配领取/回报/身份客户端。与普通启动共用规范锁，恢复允许读取非空标记但先重新持久隔离；`workerhost.RecoverM0Slot` 仅确认当前原容器终止，不返回可执行任务的 Host。调用前操作者须确认旧 Worker 的宿主 CLI 及在途控制操作全部排空；新 Host 的 active 集合不包含旧进程请求，不能用 Worker 退出、等待原计时器期限或当前容器停止代替该前提。固定名称初查须匹配操作者从可信历史记录提供的原 ID，此后绑定 ID/启动时间及固定隔离配置。运行状态复用严格 Stop，已停状态单独双次回读；确认前不清标记。普通启动/Stop 合同不放宽，不提供跨进程派发隔离、自动恢复、历史身份取证或持久结果队列。操作、故障及可信控制面边界见 [README](../../README.md#worker-异常后的受控解封)。
 
 真实结果通过 `LeasedRunner.JudgeReport` 在执行/清理成功后形成绑定尝试及材料的 `submission.Result` 摘要值；`workerclient.Reporter` 只负责有界 mTLS 发送与确认分类，不依赖数据库或沙箱。原契约与存储指纹不变；只有 204 确认成功，状态未知保留原租约/原结果供显式重报，不自动重跑选手代码。执行错误不产生回报，详细证据归档及待回报持久化尚未实现。摘要语义、真实数据库/沙箱联合证据和测试夹具边界见[真实结果回报](../m0-experiment.md#真实结果回报)。
 

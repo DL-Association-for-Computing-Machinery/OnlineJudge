@@ -10,7 +10,9 @@ Docker Go 1.26.10 / golangci-lint 2.15.0 完整后端格式、模块校验、vet
 
 环境诊断：首次完整工具镜像构建因 proxy.golang.org 连接拒绝失败；旧质量镜像缺当前 cpuid 缓存，改为组合已成功构建且校验的当前依赖层与原固定质量工具，离线完整验证，未升级/关闭检查。首次真实沙箱启动在旧停止容器遇到 cgroup.subtree_control busy，未进入恢复用例；按精确 ID/owner/停止/无挂载条件仅重建两个专用临时槽，同配置复验成功。并行完整 backend 构建共写 `.local/bin` 导致初次 report 的 worker-drain 子例 exec format error，前十项通过仍不算整套成功；重新导出 macOS 产物后改顺序复验。治理初次受沙箱回环端口/只读 Docker 限制，使用允许条件重跑原 64 项通过，未放宽断言。
 
-Astra 针对性设计、完整代码和 Sync 增量/文档复核无阻断；这是 AI 复核，不冒充人工批准。该命令依赖操作者独占可信 Docker、已知历史原 ID；标记不记录原 ID，不重建历史 PID，不保证磁盘拒绝重写后的持久隔离。自动重启/解封、持久结果队列、网络分区/跨主机/断电和完整 M0 仍待验，未部署。PR/CI/合并与知识事务状态依最终回读。
+最终边界复核发现旧 Worker 的宿主 Docker CLI 不会随 SIGKILL 自动排空，旧 Go 进程计时器不再取消它们，新的 Host.active 也没有旧请求，docker exec 不携带生命周期 fence。因此恢复只确认当前停止，调用前操作者必须独立确认旧宿主 CLI/在途控制操作已排空；无法确认保持隔离，不以等待25秒或当前停止代替该前提。API 注释、成功提示及规范已同步。真实专项增加 SIGSTOP 后按精确 PID 回读 T 屏障、非空后代记录与逐一退出确认，最终 **46.41 秒**通过（`/private/tmp/oj-slot-recovery-sandbox-final.log`，实际观察 1 个宿主后代退出）；不是人为延迟孤儿 CLI 或普遍跨进程派发隔离的验收。补充后完整 backend 再次通过（`oj-slot-recovery-backend-drained.log`），最终 sandbox 静态零问题（`oj-slot-recovery-sandbox-static.log`）。
+
+Astra 针对性设计、完整代码、Sync 与宿主子进程边界增量/文档复核无阻断；这是 AI 复核，不冒充人工批准。该命令依赖操作者独占且已排空的可信 Docker 控制面、已知历史原 ID；标记不记录原 ID，不重建历史 PID，不保证磁盘拒绝重写后的持久隔离。自动重启/解封、持久结果队列、网络分区/跨主机/断电和完整 M0 仍待验，未部署。PR/CI/合并与知识事务状态依最终回读。
 
 ## 2026-11-03：Testlib SPJ 纳入完整训练必交付范围
 
