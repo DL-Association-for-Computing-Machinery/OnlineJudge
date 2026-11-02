@@ -1,5 +1,13 @@
 # 工程交付记录
 
+## 2026-11-03：Testlib SPJ 纳入完整训练必交付范围
+
+用户依据[洛谷 Special Judge 文档](https://help.luogu.com.cn/manual/luogu/problem/special-judge)要求支持 SPJ 库。成功 fetch 后从 `origin/main 8c6f612` 建立独立 `codex/testlib-spj-plan` worktree；本轮只修改计划及相关规范，不实施检查器。Testlib 从“优先验证”明确为 1B/M2 必交付，P7 拆为库/构建准入、三文件调用与结果适配、版本/受限执行、端到端验收四项；P2 文本闭环与 M1 顺序保持。
+
+只读核对洛谷文档及其引用的官方固定头文件，首个待验证基线为 Testlib 0.9.45、提交 `2d20123984e9479b8a56ebe0d6a51e23ad7c35b3`。保留 GNU++17 与 ICPC 外部边界，明确 `checker input output answer`、`inf`/`ouf`/`ans`、正常结果与异常映射及部分分拒绝；版本/哈希/宏配置、隔离预算、材料保密、发布阻断、重判/多节点/断外网及真实提交验收随实现交付。需求、总体架构、判题、题包、工具链说明、ADR 与 CI 验收目录同步，不承诺完整洛谷题包导入或交互/Hack。
+
+实际验证：`python3 scripts/repo_policy.py repository` 439 文件通过，`git diff --check` 通过，已核对完整目标分支差异和本地 Markdown 链接。Astra 针对性协议/故障/拆分复核无阻断，采纳正式准入版本措辞与宏退出码防碰撞要求；AI 复核不冒充人工审批。纯文档未运行应用测试、安装依赖、编译或执行 checker，不代表 SPJ、完整 M0 或部署完成；PR/CI/合并及知识事务结果依最终回读。
+
 ## 2026-11-02：本地 HTTPS、持久账号与一键测试入口
 
 成功 fetch 后从 `origin/main 051f575` 建立独立 `codex/local-login` worktree。用户要求本地实际登录与一键启动，并明确选择“仅本地环境显示的一键进入测试账号”，继续使用真实会话。新增独立 `compose.dev.yaml`、`cmd/localdev`/`internal/localdev` 及 `scripts/dev-up.py`；固定 `https://localhost:8443/login`、回环发布，数据库和 Redis 仅私网，应用非 root、状态卷私有。生产 API 不导入 localdev，默认 HTTP Compose 保持；裸 Docker build 仍以原静态 web 为默认目标。没有新增依赖或迁移，初始化使用已有 schema 5 和身份/恢复/限流原语；合同归[本地开发指南](local-development.md)。
