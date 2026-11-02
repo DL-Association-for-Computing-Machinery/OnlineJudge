@@ -26,6 +26,32 @@ beforeEach(() => vi.stubGlobal('location', { protocol: 'https:' }))
 afterEach(() => vi.unstubAllGlobals())
 
 describe('browser account lifecycle', () => {
+  it('local shortcut uses the normal dependent chain without a browser password', async () => {
+    const { controller, fetch } = await ready(problem(401, 'SESSION_REQUIRED'))
+    fetch.mockResolvedValueOnce(empty(202)).mockResolvedValueOnce(empty()).mockResolvedValueOnce(Response.json(view))
+    await controller.run('local-login')
+    expect(fetch.mock.calls.map(call => call[0])).toEqual(['/api/v1/session', '/__local/login', '/api/v1/session/login/complete', '/api/v1/session'])
+    expect(fetch.mock.calls[1][1]).not.toHaveProperty('body')
+    expect(controller.getSnapshot().status).toBe('authenticated')
+  })
+
+  it('uncertain local begin never retries or skips to Complete', async () => {
+    const { controller, fetch } = await ready(problem(401, 'SESSION_REQUIRED'))
+    fetch.mockResolvedValueOnce(problem(503, 'LOGIN_UNAVAILABLE'))
+    await controller.run('local-login')
+    expect(fetch.mock.calls).toHaveLength(2)
+    expect(controller.getSnapshot()).toMatchObject({ status: 'unknown', notice: { tone: 'uncertain' } })
+  })
+
+  it('pending local login continues the original attempt instead of beginning again', async () => {
+    const { controller, fetch } = await ready(problem(401, 'SESSION_REQUIRED'))
+    fetch.mockResolvedValueOnce(problem(409, 'LOGIN_PENDING'))
+    await controller.run('local-login')
+    fetch.mockResolvedValueOnce(empty()).mockResolvedValueOnce(Response.json(view))
+    await controller.run('complete')
+    expect(fetch.mock.calls.filter(call => call[0] === '/__local/login')).toHaveLength(1)
+    expect(controller.getSnapshot().status).toBe('authenticated')
+  })
   it('loads with a read only; an anonymous browser can still recover a pending HttpOnly attempt', async () => {
     const { controller, fetch } = await ready(problem(401, 'SESSION_REQUIRED'))
     expect(controller.getSnapshot().status).toBe('anonymous')

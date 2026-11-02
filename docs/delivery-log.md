@@ -1,5 +1,19 @@
 # 工程交付记录
 
+## 2026-11-02：本地 HTTPS、持久账号与一键测试入口
+
+成功 fetch 后从 `origin/main 051f575` 建立独立 `codex/local-login` worktree。用户要求本地实际登录与一键启动，并明确选择“仅本地环境显示的一键进入测试账号”，继续使用真实会话。新增独立 `compose.dev.yaml`、`cmd/localdev`/`internal/localdev` 及 `scripts/dev-up.py`；固定 `https://localhost:8443/login`、回环发布，数据库和 Redis 仅私网，应用非 root、状态卷私有。生产 API 不导入 localdev，默认 HTTP Compose 保持；裸 Docker build 仍以原静态 web 为默认目标。没有新增依赖或迁移，初始化使用已有 schema 5 和身份/恢复/限流原语；合同归[本地开发指南](local-development.md)。
+
+fresh 初始化只在三方均空时生成随机账号/密钥/本地 CA，迁移、账号初始化、首次恢复开门和 marker 完成并通过真实 runtime 检查后，fsync/rename 就绪记录。已有状态仅检查，不恢复丢失 marker、不重设密码或轮换密钥。证书私钥、登录 key 和账号为 0600 私有卷文件，CA 只导出公开副本，不修改宿主系统信任。快捷入口只克隆实际 TLS 请求并替换为标准 Begin 及私有 seed，保留 Host/来源/Cookie；浏览器复用原 Complete→Read 单飞和未知结果恢复，不裸发会话或延长期限。改密后旧 seed 正常拒绝；正常密码登录保持。
+
+完整 Docker 后端格式/vet、四检测器正负夹具、三范围静态各 0、全部 root race 和五命令构建通过（`/private/tmp/oj-local-dev-backend-delivery.log`）；新增 localdev **8 项**真实 TLS/材料权限/拒绝/关闭测试，包 race **1.084 秒**。前端 lint（7配置自测）/类型/**56 项 Vitest**/生产构建通过（`oj-local-dev-frontend.log`），增加快捷链、未知不重试、原 pending 恢复断言。治理 **64 项，17.308 秒**和仓库策略/链接/空白通过；具体最终文件数按交付前 policy 回读，不把检查器的预期负例输出当作产品失败。
+
+已有 Playwright1.64.1/Chromium151.0.7922.34 对本次真实持久开发环境的**六组**检查全部通过（`/private/tmp/oj-local-browser-evidence/result.json`、`/private/tmp/oj-local-browser-final.log`）：一键实际发放 Secure/HttpOnly Cookie、无 JS 存储；普通密码登录及确认退出；重复完整 dev-up 保持材料哈希和真实浏览器会话；Complete503 注入后刷新、快捷入口 pending409、原 Complete 恢复；错误来源/Host/方法/客户端输入拒绝且无凭据返回；真实改密后旧 seed 拒绝、新密码表单登录、显式改回后快捷入口恢复。改密测试已把随机初始化凭据恢复，未把固定合成新密码留作用户凭据。浏览器仅测试 context 忽略自签证书；用户系统信任未改变。
+
+独立 UUID 容器专项 `python3 scripts/test-local-development.py` 通过 fresh/repeated 材料一致、仅自有测试 Redis FLUSHDB 后初始化非零/DBSIZE仍0/文件哈希不变及归属核验清理（`/private/tmp/oj-local-dev-isolation-final.log`）；不启动网关、不占8443、不触碰持久用户项目，已接入 CI containers，原门禁保留且 job 超时30分钟。宿主脚本另用公开 CA 严格验证入口，无 skip-verify 后才报告成功。Astra 设计、代码、关闭修复及网络/最终完整差异复核无剩余阻断；AI不冒充人工批准，CI/PR/合并状态依实际远端回读。
+
+实际修正与边界：第一次启动被用户中断在镜像拉取前，未创建状态；恢复原命令后 fresh init 成功。本机 Docker Desktop 的 internal-only 网关实测未获 HostPort，增加独立入口 bridge，数据服务仍私网，并补精确回环端口和宿主 HTTPS 检查；不声称完全断网。Python严格TLS暴露初版证书缺 AKI，改用已编码再解析的 CA 作为签发者并补回归；自有初始证书已先备份再更新，账号/login-key哈希不变、PG/Redis未改，记录 `oj-local-cert-repair-2.log`。初次只读挂载质量扫描加载失败，改隔离可写白名单源码副本后完整原检查通过，未关闭规则。专项把一次性卷准备与长服务 --wait 分开后通过。服务关闭改为同一10秒预算并行 HTTP/runtime 排空，错误不能记成功；停止宽限15秒。证书期限、私网无认证/本地KDF与小型测试字典仅为开发配置，生产证书/阈值/恢复连续性/字典覆盖、注册/邮件、训练/判题和完整M0仍待验，未部署。
+
 ## 2026-11-01：简洁桌面首页、登录与做题预览替换
 
 用户确认以专业刷题工具为方向、桌面 Web 优先，依次接受简洁题库、独立登录与左右分栏做题稿后明确要求替换。成功 fetch 的 `origin/main 11fe7ef` 为独立 `codex/homepage-redesign` worktree 起点。唯一目标是替换这组界面和必要导航；没有增加生产题库、判题/提交、注册、持久草稿、迁移或部署。当前行为归 [Web 界面](frontend-design.md)，颜色/控件/动效归根 [设计约定](../DESIGN.md)。参考 shadcn/ui 与 Radix，沿用原生 CSS，不引入组件/动画库；新增已选 Router 与路由懒加载 CodeMirror，精确 MIT 版本见锁文件，Docker Node 24.19.0 满足 Router 22.22 下限。

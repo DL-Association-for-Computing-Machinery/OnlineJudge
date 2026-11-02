@@ -86,6 +86,25 @@ COPY web/ ./
 FROM frontend-source AS frontend-build
 RUN pnpm build
 
+# The local account environment is a separate opt-in image. Production API and
+# frontend images do not contain this launcher or its development-only UI.
+FROM backend-source AS localdev-build
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 go build -trimpath -o /out/localdev ./cmd/localdev
+
+FROM frontend-source AS local-frontend-build
+RUN VITE_OJ_LOCAL_DEV=1 pnpm build
+
+FROM alpine:3.23@sha256:ff7f0c727dd796aa36787bfcd9a64bf35a6ce72a73451b3359fde849b6703d63 AS localdev
+COPY --from=localdev-build /out/localdev /usr/local/bin/oj-localdev
+COPY --from=local-frontend-build /src/web/dist/ /site/
+USER 65532:65532
+ENV OJ_LOCAL_STATE_DIR=/state
+EXPOSE 8443
+ENTRYPOINT ["/usr/local/bin/oj-localdev"]
+CMD ["serve"]
+
+# Keep the existing static frontend as the default for a bare docker build.
 FROM nginx:stable-alpine@sha256:47928bf67eb62a1863cb08d9ecb52d3e704304ba614eaee17884204677702951 AS web
 COPY deploy/docker/nginx.conf /etc/nginx/nginx.conf
 COPY --from=frontend-build /src/web/dist/ /usr/share/nginx/html/

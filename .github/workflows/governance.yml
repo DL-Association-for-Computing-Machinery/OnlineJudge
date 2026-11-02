@@ -90,13 +90,15 @@ jobs:
     needs: governance
     if: needs.governance.outputs.backend == 'true' || needs.governance.outputs.frontend == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
       - name: Build and verify the Compose application
         run: python3 scripts/test-compose.py
+      - name: Verify persistent local account initialization and recovery refusal
+        run: python3 scripts/test-local-development.py
 
   security:
     needs: governance

@@ -18,6 +18,7 @@ export function LoginPage() {
           <AccountRecovery compact />
         </>
       )}
+      {import.meta.env.VITE_OJ_LOCAL_DEV === '1' && globalThis.location.origin === 'https://localhost:8443' && !authenticated ? <section className="local-login" aria-label="本地开发测试入口"><p>本地开发环境 · 使用独立测试账号</p><button type="button" className="button-neutral" disabled={disabled} onClick={() => void controller.run('local-login')}>一键进入测试账号</button><p>复用真实登录与退出流程，无需输入测试密码。</p></section> : null}
     </section>
   )
 }

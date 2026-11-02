@@ -6,6 +6,8 @@
 
 `integration-tests` 在既有 sqlc/真实 PostgreSQL 检查后，构建同一 Docker 工具链并下载固定摘要 Redis 7.2.17，执行 `scripts/test-session-protocol.py --context default`。专项使用私有网络、临时 PG、双客户端/双连接池及 TLS 入口验证正式普通 Redis 协议、文件加载的合成密钥、两步登录与共享准入/限流故障，以及固定单跳 TLS→mTLS 反代的证书、来源和 Cookie 路径，失败传递到原 integration 必需门禁；不开放宿主端口，不持有生产凭据或运行选手代码。命令归 README，隔离和结果归 M0/交付记录；不代表公开 HTTP/SCS、真实浏览器/生产代理、生产阈值或完整恢复验收。
 
+`containers` 在原 Compose 冒烟后执行 `scripts/test-local-development.py`：全新 UUID 项目验证本地账号首次初始化、重复初始化不改材料、Redis marker 丢失后拒绝启动且不修复，再核验并清理该轮自有资源。此专项不启动 HTTPS 网关或占用 8443，不触及用户的持久 `oj-local-dev`。加入第二套真实容器检查后，该 job 超时为 30 分钟，原必需门禁保持。
+
 同一专项还构建真实 API 子进程，验证显式文件配置的 TLS/mTLS 入口、双副本 Cookie、启动只读门禁、PG 等待时信号取消、监听失败资源释放及活动请求的正常/超时退出。排空/并发 Close 的确定性测试归普通 backend race。默认 Compose 未启用会话模式，不把镜像的 PGDATA/PG_MAJOR/PG_VERSION 当成 pgx 连接环境，具体禁止项随锁定 driver 消费列表维护。子进程仅继承显式测试环境，使用合成材料与私有容器网络，不连接宿主或真实业务服务。
 
 可选已登录改密沿用同一专项：真实 PG 条件替换/双副本竞争、恢复→账号锁序/取消/未知回执及主键查询计划；独立三维 Redis 额度与完整规则指纹；双 API 进程的当前密码/弱密码/CSRF 拒绝、Cookie 清理、旧会话/候选拒绝、新密码重新登录，以及实际 TLS→mTLS 代理来源防伪。规则文件和弱词仅为合成夹具，不下载生产字典或验证浏览器/实际部署容量。

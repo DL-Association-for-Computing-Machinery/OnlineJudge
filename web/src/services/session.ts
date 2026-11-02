@@ -5,7 +5,7 @@ export interface SessionView {
   absolute_deadline: string
 }
 
-export type AccountOperation = 'read' | 'activity' | 'logout' | 'begin' | 'complete' | 'abandon' | 'password'
+export type AccountOperation = 'read' | 'activity' | 'logout' | 'begin' | 'local-begin' | 'complete' | 'abandon' | 'password'
 export type AccountInput = { email: string; password: string } | { current_password: string; new_password: string }
 
 const endpoints: Record<AccountOperation, { path: string; method: 'GET' | 'POST'; status: number }> = {
@@ -13,6 +13,7 @@ const endpoints: Record<AccountOperation, { path: string; method: 'GET' | 'POST'
   activity: { path: '/api/v1/session/activity', method: 'POST', status: 200 },
   logout: { path: '/api/v1/session/logout', method: 'POST', status: 204 },
   begin: { path: '/api/v1/session/login/begin', method: 'POST', status: 202 },
+  'local-begin': { path: '/__local/login', method: 'POST', status: 202 },
   complete: { path: '/api/v1/session/login/complete', method: 'POST', status: 204 },
   abandon: { path: '/api/v1/session/login/abandon', method: 'POST', status: 204 },
   password: { path: '/api/v1/account/password', method: 'POST', status: 204 },
@@ -48,6 +49,7 @@ const refusals: Record<string, [number, string]> = {
 const codes: Record<AccountOperation, readonly string[]> = {
   read: ['SESSION_REQUIRED'], activity: ['SESSION_REQUIRED'], logout: ['SESSION_REQUIRED'],
   begin: ['INVALID_LOGIN', 'LOGIN_ATTEMPT_INVALID', 'LOGIN_PENDING', 'ALREADY_AUTHENTICATED', 'LOGIN_REJECTED', 'LOGIN_RATE_LIMITED', 'BODY_TOO_LARGE', 'UNSUPPORTED_MEDIA_TYPE'],
+  'local-begin': ['INVALID_LOGIN', 'LOGIN_ATTEMPT_INVALID', 'LOGIN_PENDING', 'ALREADY_AUTHENTICATED', 'LOGIN_REJECTED', 'LOGIN_RATE_LIMITED', 'BODY_TOO_LARGE', 'UNSUPPORTED_MEDIA_TYPE'],
   complete: ['LOGIN_ATTEMPT_INVALID', 'ALREADY_AUTHENTICATED', 'SESSION_LIMIT', 'LOGIN_ATTEMPT_CONFLICT', 'LOGIN_REJECTED', 'LOGIN_RATE_LIMITED'],
   abandon: ['LOGIN_ATTEMPT_INVALID', 'LOGIN_ATTEMPT_CONFLICT', 'LOGIN_REJECTED', 'LOGIN_RATE_LIMITED'],
   password: ['WEAK_PASSWORD', 'INVALID_NEW_PASSWORD', 'INVALID_PASSWORD_INPUT', 'PASSWORD_UNCHANGED', 'INVALID_PASSWORD_CHANGE', 'PASSWORD_CHANGE_CONFLICT', 'PASSWORD_CHANGE_REJECTED', 'PASSWORD_CHANGE_RATE_LIMITED', 'BODY_TOO_LARGE', 'UNSUPPORTED_MEDIA_TYPE'],

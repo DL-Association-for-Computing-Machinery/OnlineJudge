@@ -32,6 +32,16 @@ Docker 工具链使用 Go 1.26.10、pnpm 11.25.0、Node 24.19.0，与 `go.mod`�
 
 构建工具链由 Dockerfile 固定，应用依赖以 go.sum 和 pnpm-lock.yaml 为准。Docker Desktop 迁移的验证结果见交付日志；历史 Colima 证据不能替代本次验证。
 
+## 本地 HTTPS 账号环境（一键）
+
+需要在页面上实际登录时，在仓库根目录运行：
+
+```sh
+python3 scripts/dev-up.py
+```
+
+打开 [本地 HTTPS 登录页](https://localhost:8443/login)，点击“一键进入测试账号”，或使用私有初始化凭据走普通表单登录。首次访问需确认本地证书，或自行信任脚本导出的公开 `.local/dev-auth/ca.crt`；脚本不更改系统信任。账号、密钥、PostgreSQL 和 Redis 数据持久保留，重复运行不重设密码。完整边界、停止方式与验证见[本地开发指南](docs/local-development.md)。此独立项目不替代生产部署，也不影响下面的 HTTP 骨架预览。
+
 ## Docker 构建与一键启动（默认）
 
 默认使用 Docker 构建和 Compose 启动。macOS 使用 Docker Desktop 的 `desktop-linux` context；Linux CI 使用 Docker Engine 与 Compose v2+，省略下面命令中的 `--context desktop-linux`。首次构建需联网获取 Dockerfile 中固定摘要的基础镜像和锁定依赖。

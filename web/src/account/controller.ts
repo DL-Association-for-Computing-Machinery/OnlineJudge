@@ -1,7 +1,7 @@
 import { AccountError, accountRequest } from '../services/session'
 import type { AccountInput, SessionView } from '../services/session'
 
-export type AccountAction = 'check' | 'login' | 'complete' | 'abandon' | 'activity' | 'logout' | 'password'
+export type AccountAction = 'check' | 'login' | 'local-login' | 'complete' | 'abandon' | 'activity' | 'logout' | 'password'
 type SessionStatus = 'checking' | 'authenticated' | 'anonymous' | 'unknown' | 'unavailable' | 'insecure'
 export interface AccountState {
   status: SessionStatus
@@ -72,7 +72,8 @@ export class AccountController {
     try {
       switch (action) {
         case 'login':
-          await accountRequest('begin', abort.signal, input)
+        case 'local-login':
+          await accountRequest(action === 'login' ? 'begin' : 'local-begin', abort.signal, action === 'login' ? input : undefined)
           if (!current()) return
           await accountRequest('complete', abort.signal)
           issued = true
@@ -122,7 +123,7 @@ export class AccountController {
       else if (unknown && action === 'password') text = '改密结果无法确认，密码可能已经修改。请退出并重新登录核验，勿重复提交改密。'
       else if (unknown && action === 'logout') text = '退出结果无法确认。请检查当前会话，暂不能视为已退出。'
       else if (action === 'logout' && error.code === 'SESSION_REQUIRED') text = '当前没有可用会话，但这不确认之前的退出操作。可检查后重新登录。'
-      else if (unknown && (action === 'login' || action === 'complete')) text = '登录结果无法确认。请检查当前会话，或继续确认原尝试；勿重新提交密码。'
+      else if (unknown && (action === 'login' || action === 'local-login' || action === 'complete')) text = '登录结果无法确认。请检查当前会话，或继续确认原尝试；勿重新提交密码。'
       else if (action === 'abandon' && error.code === 'LOGIN_ATTEMPT_INVALID') text = '原尝试未能确认清理，可能已过期或不存在。浏览器中的受保护凭据不能由页面代为删除。'
       else if (anonymousObservation) text = '尚未登录。请使用已有账号，或继续确认原尝试。'
       this.publish({ status, session, notice: { tone: unknown ? 'uncertain' : anonymousObservation ? 'neutral' : 'error', text },

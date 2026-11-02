@@ -94,6 +94,9 @@ p { line-height: 1.8; }
 .login-page .account-form label:first-of-type { margin-top: 0; }
 .login-page .account-recovery { margin-top: 26px; }
 .login-destinations { display: grid; gap: 12px; }
+.local-login { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--line); }
+.local-login p { color: var(--muted); font-size: 13px; }
+.local-login button { width: 100%; }
 .empty-state { padding: 48px 16px; text-align: center; color: var(--muted); }
 .empty-state h2 { margin: 0 0 8px; color: var(--text); font-size: 20px; }
 .empty-state p { font-size: 14px; margin: 8px 0 24px; }
