@@ -15,9 +15,11 @@ func main() {
 	defer cancel()
 	drain, stopDrain := signal.NotifyContext(context.Background(), syscall.SIGUSR1)
 	defer stopDrain()
-	if err := run(ctx, logger, drain.Done()); err != nil {
+	if err := dispatch(ctx, os.Args[1:], logger, drain.Done()); err != nil {
 		logger.Error("Worker 已停止", "error", err.Error())
 		os.Exit(1)
 	}
-	logger.Info("Worker 已停止，沙箱停止已确认")
+	if len(os.Args) == 1 {
+		logger.Info("Worker 已停止，沙箱停止已确认")
+	}
 }

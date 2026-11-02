@@ -30,6 +30,19 @@ func TestDualWorkerRecovery(t *testing.T) {
 	if os.Getenv("OJ_SANDBOX_DUAL") != "1" {
 		t.Skip("run python3 scripts/test-worker.py dual-worker with both dedicated slots")
 	}
+	testDualWorkerRecovery(t, false)
+}
+
+// TestWorkerSlotRecovery kills the actual worker without running its defers,
+// then exercises operator recovery and subsequent reuse of its original slot.
+func TestWorkerSlotRecovery(t *testing.T) {
+	if os.Getenv("OJ_SANDBOX_RECOVERY") != "1" {
+		t.Skip("run python3 scripts/test-worker.py slot-recovery")
+	}
+	testDualWorkerRecovery(t, true)
+}
+
+func testDualWorkerRecovery(t *testing.T, crash bool) {
 	if os.Getenv("OJ_SANDBOX_EXPERIMENT") != "1" {
 		t.Fatal("explicit sandbox opt-in required")
 	}
@@ -191,7 +204,11 @@ func TestDualWorkerRecovery(t *testing.T) {
 		failed = 1
 	}
 	survivor := 1 - failed
-	workers[failed].stop(t)
+	if crash {
+		recoverWorkerSlot(t, ctx, workers[failed], slots[failed], ids[failed], ids[survivor])
+	} else {
+		workers[failed].stop(t)
+	}
 	dualStopped(t, ids[failed], pid)
 	if dualDocker(t, "inspect", "--format", "{{.State.Running}}", ids[survivor]) != "true" {
 		t.Fatal("stopping one worker stopped its peer")
@@ -233,5 +250,16 @@ func TestDualWorkerRecovery(t *testing.T) {
 	waitResult(accept("dual-peer-continues", ac), "AC")
 	workers[survivor].stop(t)
 	dualStopped(t, ids[survivor], "")
+	if crash {
+		// Restart is an explicit test-driver action after confirmed recovery;
+		// the command itself must leave the container stopped.
+		restartDrainedSandbox(t, ids[failed])
+		workers[failed] = dualWorker(t, ca, certFiles[failed], keys[failed], endpoints[failed], slots[failed])
+		waitResult(accept("dual-recovered-slot-reused", ac), "AC")
+		workers[failed].stop(t)
+		dualStopped(t, ids[failed], "")
+		t.Log("SIGKILL left quarantine; live owner/wrong ID rejected; credential-free recovery stopped original container; stopped recovery repeated safely; peer naturally recovered attempt 2; explicit restart reused original slot for AC")
+		return
+	}
 	t.Log("two controller and worker processes: eight exclusive real AC results, live SIGTERM/PID stop, natural lease expiry and peer AC on attempt 2, late report rejected, peer continued; both sandboxes stopped")
 }

@@ -12,11 +12,22 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/workerhost"
 )
 
-type slotLock struct{ file *os.File }
+type markerFile interface {
+	WriteAt([]byte, int64) (int, error)
+	Sync() error
+	Truncate(int64) error
+	Close() error
+}
+
+type slotLock struct{ file markerFile }
 
 // Resolve the account home, not HOME/TMPDIR or a caller-selected path: different
 // checkouts and launch environments must contend for the same dedicated slot.
 func lockM0(slot workerhost.M0Slot) (*slotLock, error) {
+	return lockM0Mode(slot, false)
+}
+
+func lockM0Mode(slot workerhost.M0Slot, recovery bool) (*slotLock, error) {
 	u, err := user.Current()
 	if err != nil || !filepath.IsAbs(u.HomeDir) {
 		return nil, errors.New("cannot resolve M0 owner home")
@@ -33,10 +44,14 @@ func lockM0(slot workerhost.M0Slot) (*slotLock, error) {
 	if !ok || stat.Uid != uint32(os.Geteuid()) {
 		return nil, errors.New("M0 ownership directory has wrong owner")
 	}
-	return acquireLock(filepath.Join(dir, slot.LockName()))
+	return acquireLockMode(filepath.Join(dir, slot.LockName()), recovery)
 }
 
 func acquireLock(path string) (*slotLock, error) {
+	return acquireLockMode(path, false)
+}
+
+func acquireLockMode(path string, recovery bool) (*slotLock, error) {
 	fd, err := syscall.Open(path, syscall.O_RDWR|syscall.O_CREAT|syscall.O_NOFOLLOW|syscall.O_CLOEXEC|syscall.O_NONBLOCK, 0600)
 	if err != nil {
 		return nil, errors.New("cannot open M0 slot lock")
@@ -55,7 +70,7 @@ func acquireLock(path string) (*slotLock, error) {
 		return fail("M0 slot already owned or locking unavailable")
 	}
 	info, err := f.Stat()
-	if err != nil || info.Size() != 0 {
+	if err != nil || (!recovery && info.Size() != 0) {
 		return fail("M0 slot quarantined; operator must confirm sandbox termination before recovery")
 	}
 	return &slotLock{file: f}, nil
@@ -76,7 +91,9 @@ func (l *slotLock) clean() error {
 		return errors.New("cannot clear M0 quarantine marker")
 	}
 	if err := l.file.Sync(); err != nil {
-		return errors.New("cannot sync M0 quarantine marker")
+		// Truncate may already be visible. Restore the fence when possible; if
+		// storage also rejects this write, durable quarantine remains uncertain.
+		return errors.Join(errors.New("cannot sync M0 quarantine marker"), l.dirty())
 	}
 	return nil
 }

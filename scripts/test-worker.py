@@ -38,7 +38,7 @@ def ready(name):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("suite", choices=["all", "sandbox", "report", "dual-worker", "worker-fault"])
+    parser.add_argument("suite", choices=["all", "sandbox", "report", "dual-worker", "worker-fault", "slot-recovery"])
     args = parser.parse_args()
     if platform.system() != "Darwin" or platform.machine() != "arm64":
         raise RuntimeError("Pinned Desktop experiment requires macOS arm64; other profiles need validation")
@@ -75,7 +75,7 @@ def main():
         else:
             raise RuntimeError("PostgreSQL readiness timeout")
         port = docker("port", db, "5432", capture=True).strip().split(":")[-1]
-        suites = ["sandbox", "report", "dual-worker", "worker-fault"] if args.suite == "all" else [args.suite]
+        suites = ["sandbox", "report", "dual-worker", "worker-fault", "slot-recovery"] if args.suite == "all" else [args.suite]
         for i, suite in enumerate(suites):
             for slot in owned:
                 ready(slot)
@@ -86,7 +86,8 @@ def main():
                        OJ_TEST_DATABASE_URL=f"host=127.0.0.1 port={port} user=oj_test dbname={database} sslmode=disable")
             selection = {"report": ("OJ_SANDBOX_REPORT", "TestExecutionReport"),
                          "dual-worker": ("OJ_SANDBOX_DUAL", "TestDualWorkerRecovery"),
-                         "worker-fault": ("OJ_SANDBOX_FAULT", "TestWorkerFaults")}
+                         "worker-fault": ("OJ_SANDBOX_FAULT", "TestWorkerFaults"),
+                         "slot-recovery": ("OJ_SANDBOX_RECOVERY", "TestWorkerSlotRecovery")}
             command = [str(ROOT / ".local/bin/sandbox.test"), "-test.v", "-test.count=1", "-test.timeout=10m"]
             if suite in selection:
                 flag, test = selection[suite]

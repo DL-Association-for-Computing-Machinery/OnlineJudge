@@ -150,8 +150,14 @@ func (h *Host) inspect(ctx context.Context, id string) (state, error) {
 }
 
 func (h *Host) validate(s state, p experiment.ExecutionProfile) error {
-	if s.ID != h.id || s.Started != h.started || !s.Running || s.PID <= 1 || s.Restarting || s.Paused ||
-		s.Image != p.ImageID || s.Network != "none" || !s.Readonly || s.Mounts != 0 || !s.Privileged ||
+	if s.ID != h.id || s.Started != h.started || !s.Running || s.PID <= 1 || s.Restarting || s.Paused {
+		return errors.New("sandbox identity, lifetime or isolation mismatch")
+	}
+	return validateIsolation(s, p)
+}
+
+func validateIsolation(s state, p experiment.ExecutionProfile) error {
+	if s.Image != p.ImageID || s.Network != "none" || !s.Readonly || s.Mounts != 0 || !s.Privileged ||
 		s.Memory != 1<<30 || s.CPUs != 1e9 || s.Pids != 128 || s.Shm != 128<<20 ||
 		s.Restart != "no" || s.PIDMode != "" || s.IPCMode != "private" || len(s.Cmd) != 0 ||
 		!reflect.DeepEqual(s.Entrypoint, p.SandboxArgs) || !reflect.DeepEqual(s.Tmpfs, map[string]string{"/tmp": "rw,nosuid,size=128m"}) {
