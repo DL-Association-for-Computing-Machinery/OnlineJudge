@@ -4,7 +4,7 @@
 
 ## M0 验收核对与下一步（2026-11-03）
 
-依据[开发计划的 M0 条件及推进顺序](phase-1-development-plan.md)，逐项核对 `2b44a50` 的代码与专项。表中的覆盖只适用于专用 Docker Desktop LinuxKit 7.0.14 arm64、固定 GNU++17/go-judge 配置和合成数据；协议测试、真实沙箱、独立进程及浏览器证据分别使用，不能相互替代。当前结论仍为**进行中**，不因单项通过宣布 P1/P2 或完整 M0 通过。
+依据[开发计划的 M0 条件及推进顺序](phase-1-development-plan.md)，以 `2b44a50` 的核对为基线，资源子项按下文新增专项补证。表中的覆盖只适用于专用 Docker Desktop LinuxKit 7.0.14 arm64、固定 GNU++17/go-judge 配置和合成数据；协议测试、真实沙箱、独立进程及浏览器证据分别使用，不能相互替代。当前结论仍为**进行中**，不因单项通过宣布 P1/P2 或完整 M0 通过。
 
 | 验收项 | 当前证据入口 | 尚需完成或明确的边界 |
 | --- | --- | --- |
@@ -13,15 +13,23 @@
 | 至少双 API/双 Worker，认领、租约、身份、重复及迟到回报 | [租约数据库实验](../tests/integration/leases_test.go)、[真实双 Worker](../tests/sandbox/dual_worker_test.go)、[网络故障](../tests/sandbox/network_fault_test.go)、[编译失权](../tests/sandbox/compile_lease_test.go) | 数据库用例含人工过期，真实专项另验证自然到期；部分专项先后启动 Worker，不冒充每项均双 Worker 同时运行或跨主机高可用 |
 | 会话跨 API 撤销、名额和故障恢复 | [独立会话实验](../tests/sessionexperiment/README.md)、[正式普通协议](../tests/sessionprotocol/protocol_test.go)；前者含独立 API 进程、真实 Redis 旧 RDB 及 PostgreSQL 专用 schema 恢复 | 独立模块不由根 `go test ./...` 或普通 CI 执行行为套件；旧备份恢复标识废止会话，不恢复备份后的账号封禁/改密事实，不能据此许可生产复服 |
 | 材料缺失/损坏、数据库失败和节点失联 | [接收事务](../tests/integration/submissions_test.go)、[材料授权](../tests/integration/worker_acquisition_test.go)、[Worker 故障](../tests/sandbox/fault_test.go)、网络/槽恢复专项 | 区分真实文件/节点/网络故障和模拟未知回执；异常槽仍需人工排空旧宿主操作并显式恢复，不是自动重启/解封或持久结果队列 |
-| 受限执行与资源预算 | [TestSandbox](../tests/sandbox/sandbox_test.go)、固定[执行环境](../internal/experiment/environment.go)、真实停止/PID 证据；已有 CPU/内存/输出、文件与网络隔离、每点清理 | **进程数及临时磁盘/inode 耗尽尚无行为证据**；配置有 Processes=16、tmpfs=64MiB/nr_inodes=4k 不等于验证拒绝。Run 内存32MiB可能早于64MiB tmpfs字节上限耗尽，不能把 MLE 误当磁盘配额证据 |
+| 受限执行与资源预算 | [TestSandbox](../tests/sandbox/sandbox_test.go)、固定[执行环境](../internal/experiment/environment.go)、真实停止/PID及[资源耗尽专项](../tests/sandbox/resource_bounds_test.go)；CPU/内存/输出/进程、inode/字节/单文件边界、隔离及每次执行恢复已有分项实测 | 总字节容量使用现有Compile资源预算的直接探针；普通Run内存先耗尽为MLE，单文件先受1MiB FSIZE约束。**SIGXFSZ/OLE正式适配尚缺**：实际响应无fileError，当前适配器拒绝并触发系统恢复，不能把原始状态当端到端OLE通过 |
 | 组件准入、资源测量和失败恢复记录 | 固定环境每次运行前核验；下方[组件准入](#组件准入与下一步)、[Store 成本采样](#普通会话-store-有限成本采样2026-10-31)及[交付日志](delivery-log.md)保留范围和原始证据 | 当前只是隔离实验准入；完整 OS/工具链许可与安全清单、目标硬件/负载及生产容量未验收。实验资源观测不等于首批100人容量或生产 SLA |
 | M0 推进顺序中的真实请求与最小结果页面 | 当前[示例做题页](../web/src/preview/ProblemPage.tsx)、[提交空态](../web/src/pages/StatusPages.tsx)及已交付账号浏览器路径 | **未完成**：示例提交仍禁用，尚无浏览器真实提交/回执核验/结果观察闭环。真实 Worker 专项直接调用 Store 接收/查询，HTTP 进程专项验证提交/queued，不能拼接为同一次 HTTP→Worker→HTTP 终态验收。P5 完整训练页面归 M1，不据此删除计划中明确要求的 M0 最小页面 |
 
-下一步先补专用合成沙箱的进程和临时存储预算行为证据，再补受控实验题的最小请求/结果页面及其失败路径，最后按上述要求汇总组件准入与联合验收。进程实验须固定最多创建数量并回收子进程，区分 seccomp 拒绝与配额耗尽；磁盘实验须区分字节、inode 和内存预算，不能更改正式运行预算来制造通过。上述是待实施约束，不是已通过结果。
+资源边界实测后，下一步先补固定执行器SIGXFSZ/OLE的正式适配与真实回报/槽复用证据，再补受控实验题的最小请求/结果页面及其失败路径，最后按上述要求汇总组件准入与联合验收。资源专项不修改正式运行预算，不代表全部P2或生产准入通过。
 
 用户已明确“题目来源尚未确定，先继续补齐 M0”；P4 首个录入入口保持未决。最小实验闭环可使用既有受控合成材料，但不能冒充正式题库、邮箱验证后的训练授权或 M1 交付。跨主机、真实独立备份域、生产证书/容量和部署分别按计划的使用节点验收，既不扩成无止境的 M0 前置，也不从后续计划中删除。
 
 计划中 P1 的额度/公平调度明确以“试用开放前”为完成节点；这里保留为 P1 后续子项，不将其新增为 M0 技术实验前置。M0 的 P1 状态须按本阶段子项报告，不能把技术实验通过扩写为全部 P1 或试用准入通过。
+
+## 沙箱资源预算行为（2026-11-03）
+
+P2受限执行子项新增 `resource-bounds` 专项：固定上限且不递归创建子进程，验证15个阻塞子进程加父进程、cgroup峰值16、EAGAIN、全部wait回收及复用；空文件耗尽inode时剩余字节仍完整；分文件真实写满64MiB时inode仍有余量。满盘/inode状态由下一次新执行证明隔离恢复，另验证同执行中关闭/删除后的容量复用及最终缓存清空，不靠测试收尾清理取得成功。
+
+原单文件1MiB FSIZE先于总容量生效；总字节探针使用既有Compile资源数值并逐文件限1MiB，普通Run仍分别得到单文件SIGXFSZ/OLE、分文件MLE。固定版本源码/命令与准确边界归[README](../README.md#沙箱资源预算专项)，实测与失败诊断归[交付日志](delivery-log.md)。无业务代码、配置、依赖、协议、SQL、迁移、材料版本或预算变化，普通CI不执行合成选手程序。
+
+新证据同时暴露[正式适配器](../internal/execution/gojudge.go)的分类支持缺口：执行器SIGXFSZ返回OLE/exit25、无fileError；现有适配器对所有OLE要求采集超限证据，故返回错误并停用旧执行器，由系统恢复接管。本PR保留该未完成项，后续单独精确支持结构化SIGXFSZ证据且不伪造OutputTruncated；其余未知/矛盾响应仍需失败关闭。资源探针通过不等于本路径已修复或完整M0已通过。
 
 ## 编译在途续租失权（2026-11-03）
 

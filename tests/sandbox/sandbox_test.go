@@ -19,12 +19,18 @@ import (
 const container = "oj-m0-sandbox"
 
 type outcome struct {
-	Status string            `json:"status"`
-	Exit   int               `json:"exitStatus"`
-	Time   int64             `json:"time"`
-	Memory int64             `json:"memory"`
-	Files  map[string]string `json:"files"`
-	IDs    map[string]string `json:"fileIds"`
+	Status     string            `json:"status"`
+	Exit       int               `json:"exitStatus"`
+	Time       int64             `json:"time"`
+	Memory     int64             `json:"memory"`
+	ProcPeak   int               `json:"procPeak"`
+	Error      string            `json:"error"`
+	Files      map[string]string `json:"files"`
+	IDs        map[string]string `json:"fileIds"`
+	FileErrors []struct {
+		Name string `json:"name"`
+		Type string `json:"type"`
+	} `json:"fileError"`
 }
 
 func api(t *testing.T, method, path string, value any) []byte {

@@ -131,7 +131,7 @@ python3 scripts/test-browser-account.py \
 
 ```sh
 python3 scripts/test-worker.py all
-# 也可选择 sandbox / report / dual-worker / worker-fault / slot-recovery / network-fault / compile-lease
+# 也可选择 sandbox / report / dual-worker / worker-fault / slot-recovery / network-fault / compile-lease / resource-bounds
 ```
 
 脚本用 Docker 编译宿主测试驱动与 `.local/bin/` 命令，构建固定 go-judge/GCC 镜像，再通过宿主 Docker CLI 操作两个禁网、无挂载、只读根文件系统的专用特权容器。独立无特权观察容器共享 Docker VM 的 PID namespace，核验停止后的进程确已消失。不会启动 Colima；Docker Desktop 的 VM 与其他项目共享，这与原专用 VM 隔离边界不同。只执行仓库合成测试，不作为生产不可信提交的部署方案。
@@ -149,6 +149,17 @@ docker --context desktop-linux build --target host-artifacts --output type=local
 `.local/bin/worker` 需要 `OJ_SANDBOX_EXPERIMENT=1`、`OJ_WORKER_CONTROLLER_URL`、`OJ_WORKER_CA_FILE`、`OJ_WORKER_CERT_FILE`、`OJ_WORKER_KEY_FILE`；控制端 `.local/bin/worker-api` 需要 `OJ_WORKER_API_ADDR`、证书文件和 `OJ_DATABASE_URL`，材料目录为 `OJ_MATERIAL_ROOT`。缺失配置拒绝启动，测试脚本自动生成私有临时配置。详见 [M0 契约与历史证据](docs/m0-experiment.md)。
 
 Worker 启动完成后，向该 Worker 进程发送 `SIGUSR1`（`kill -USR1 PID`，将 PID 替换为对应进程号）请求排空式下线：每轮领取前检查排空，已通过检查的至多一个在途领取继续完成下载、执行及回报；确认后不再领取。空队列等待可被唤醒；未知回报仍按原令牌/结果最多发送三次，失败保留原错误。`SIGINT`/`SIGTERM` 仍取消当前操作并等待停止确认。排空返回后同样停止沙箱、确认 PID 消失，成功才清正常占用标记；停止不确定继续隔离，不自动重启或解封。排空耗时受现有任务/网络预算影响，不承诺固定下线 SLA；需要中止时仍可发送取消信号。旧版本回退后不再使用新增信号，无数据库迁移。`python3 scripts/test-worker.py report` 包含执行中排空、保留后续排队任务及显式重启复用的真实验证。
+
+### 沙箱资源预算专项
+
+`python3 scripts/test-worker.py resource-bounds` 只在上述固定专用环境内编译/执行有界合成探针，保持现有材料、容器、运行和编译预算。普通 CI 仅编译和静态检查带 sandbox 标签的源码，不执行这些程序；驱动显式设置 `OJ_SANDBOX_RESOURCES=1`，`all` 也包含该专项。
+
+- 进程：父进程最多尝试32次fork，子进程不递归创建、关闭管道写端后等待；核对15个存活子进程加父进程、cgroup `procPeak=16`、下一次EAGAIN，以及逐一wait后再次成功fork/wait。其他errno、首个fork即被seccomp拒绝或不能回收均失败。
+- inode：最多8192个空文件，要求4094个文件加目录耗尽剩余inode、ENOSPC且字节仍有余量；删除/重建一个文件验证复用，保留满inode状态给下一次执行核对新目录/完整容量恢复。
+- 字节：现有单文件 `RLIMIT_FSIZE=1MiB` 会先阻止大文件，探针按最多80个文件、每个最多1MiB分段真实写入。只在直接沙箱探针使用既有Compile的10秒CPU/15秒wall/512MiB/16进程数值，不改变普通Run；要求64MiB实际写入、ENOSPC、可用字节零且inode仍有余量。分别验证满盘后的执行隔离，以及关闭fd/删除后容量恢复并再次写入。
+- 普通Run保持200ms CPU/2秒wall/32MiB/16进程：单文件有限写入验证1MiB后的SIGXFSZ/OLE；分文件写入验证内存先耗尽为MLE。每项后正常探针核对目录消失与容量完整恢复，最后删除唯一缓存制品。
+
+限制由固定版本的[执行参数](https://github.com/criyle/go-judge/blob/v1.13.3/worker/worker.go)、[实际执行](https://github.com/criyle/go-judge/blob/v1.13.3/envexec/run_single.go)及实测共同核对；`copyOutMax` 不决定单文件RLIMIT_FSIZE。上述OLE是执行器原始状态：当前正式适配器仍拒绝没有采集错误的OLE，SIGXFSZ的分类支持缺口单独修复，不能写作端到端选手OLE已通过。本专项不验收跨主机、长期容量、宿主文件系统耗尽或完整M0；回退新增测试/驱动入口即可，无运行时、协议、SQL、迁移或预算变更。实测归[交付记录](docs/delivery-log.md)。
 
 ### Worker 异常后的受控解封
 
