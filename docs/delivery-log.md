@@ -1,5 +1,17 @@
 # 工程交付记录
 
+## 2026-11-03：编译在途续租失权的真实停止证据
+
+成功 fetch 后从 `origin/main 7609202` 建立独立 `codex/compile-lease-faults` worktree。本 PR 唯一目标为 P2、AC28/29 的编译在途失权中断，包含控制链路未知与节点禁用两种既有失权输入。仅在专用合成容器内选择唯一 cc1plus，使用容器 PID 发送 STOP，并从 Docker top 独立核对唯一编译器的 VM PID/T状态。短暂停留确认 Worker/同编译器仍存活，再阻断原端到端 mTLS 字节或禁用本轮临时节点；不发送 CONT、不取消/强杀目标 Worker，不借测试清理制造停止。
+
+宿主单调 t0 在目标 Worker 启动之前，固定要求自发非零退出、容器停止和独立 VM PID 消失证据均在 t0+14秒之前完成。编译只能晚于 t0 开始，因此排除原15秒 compile wall、20秒curl等自然上限；原5秒续租、3秒请求、停止/材料预算全部保持。该界限是证据条件，机器太慢应失败，不能放宽作通过或当生产 SLA。真实字节受阻后还观察同编译器 T；结合既有续租实现支持失权主动停止判断，没有解密请求或新增逐请求renew审计。
+
+最终 `python3 scripts/test-worker.py compile-lease` **44.26 秒**通过（`/private/tmp/oj-compile-lease-sandbox-verified.log`）：network **34.01秒**，全部停止/PID证据在 **10.231530459秒**取得；disabled **9.98秒**，停止证据在 **6.804760875秒**取得，均早于14秒。原尝试无结果，预先排队的下一题零attempt；另一节点经第二真实控制端完成第2次尝试 AC，两代次仍1、旧attempt expired，两个控制端拒绝旧令牌/禁用身份且新载荷不变。network由自然租约到期回收，disabled可由撤销提前回收，未编辑时间戳或手调Recover。两个专用槽最终回读停止/无PID/未重启，临时数据库无残留。
+
+完整离线Docker backend格式、模块校验、vet、四检测器正负夹具、主模块/sandbox/独立会话模块静态各零、全部root race及五命令构建通过（`/private/tmp/oj-compile-lease-backend.log`）。治理 **64项，12.705秒**和449文件策略/链接/空白通过。Astra指出 sh -ec 的选定后失败可能错误返回1而被当无候选重试，Docker CLI本身也可返回1；最终零候选正常exit0并返回固定no-compiler标记，只有成功命令+明确标记可轮询，所有非零退出直接失败。再次读取/名称校验/kill/printf失败显式exit2。新增16个进程表/暂停回执解析子例覆盖CLI失败即使附带标记/PID也不可轮询，不调用Docker/发信号；最终安全包race **1.091秒**、默认及sandbox静态各零（`oj-compile-lease-boundary-final.log`）及上述真实双模式通过。先前44.20/44.07秒的正向运行仍保留日志，不替代最终分类候选。
+
+README、CI隔离说明及M0记录同步；无业务代码、协议、依赖、迁移、生产 SQL、材料版本或预算变化，回退新增测试/驱动入口即可。Astra设计、完整差异、PID/时序/失败分类复核不冒充人工审批，最终PR/CI/合并及知识事务依回读。这是受控暂停编译验证，不是长源码性能基准；跨主机/断电、生产容量、自动执行端恢复与完整M0仍待验，未部署。
+
 ## 2026-11-03：Worker 真实控制链路网络故障验收
 
 成功 fetch 后从 `origin/main d8a7d6c` 建立独立 `codex/worker-network-faults` worktree，唯一目标为 P2、AC28/29 的网络故障证据。增加透明回环 TCP 中继，只转发原始字节、不持有 TLS 密钥、不解析/替换 HTTP；按方向阻断并记录有界缓冲中的字节，恢复前关闭旧连接。模式检查和有界写入共用屏障锁，生命周期锁独立，取消/关闭等待 Accept、Dial 及双向复制结束。无业务代码、依赖、协议、迁移、生产 SQL、材料版本或预算变化。操作与回退范围见 [README](../README.md#worker-控制链路网络故障专项)；撤回新增测试及驱动选项即可，无数据回退。
