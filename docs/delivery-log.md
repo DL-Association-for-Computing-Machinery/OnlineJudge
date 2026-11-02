@@ -1,5 +1,17 @@
 # 工程交付记录
 
+## 2026-11-03：HTTP 到真实 Worker 终态联合验收
+
+成功fetch后从 `origin/main 44b1417` 建立独立 `codex/http-judge-loop` worktree。新增 `http-loop` 专项（也加入all），仅测试/驱动和文档，无业务路由、授权、数据库、材料、依赖或预算变化。正式迁移/固定夹具命令初始化空的临时PG；两个真实提交API共享私有实验凭据，通过HTTP提交仓库固定AC/WA源码并确认queued，然后才启动实际mTLS控制端及Worker命令，最终经HTTP观察finished/正确判定，不以SQL代替请求或终态。
+
+验证跨API原键重试/原键核验/ID查询、异源409冲突、缺失/错误Bearer与Origin拒绝、客户端subject拒绝且零提交/任务/attempt副作用；回执严格六字段、no-store、无Cookie/CORS，Location必须为自身相对路径。SQL只作原始源码/请求摘要、固定实验归属及两题各一次completed attempt/双代次1的旁证。Worker经SIGUSR1正常exit0，槽停止须显式断言；未观察选手PID，不扩写为本专项独立PID证据。
+
+提交API用127.0.0.1:0，从自身私有有界完整JSON日志取得实际地址；请求禁代理和重定向，不跟随任意Location，不打印私有日志/凭据/响应正文。控制端复用原临时端口流程，不宣称所有监听均消除预留窗口。20项启动解析边界的Docker race **1.020秒**通过；原HTTP/experiment race基线分别1.024/1.026秒。首次真实专项 **3.83秒**通过，收尾检查细化后重跑 **3.67秒**通过（`/private/tmp/oj-http-loop-first.log`、`oj-http-loop-final.log`）。
+
+最终源码真实专项 **3.40秒**通过（`/private/tmp/oj-http-loop-verified.log`）。完整离线Docker后端格式/模块/vet、四检测器正负夹具、主模块/sandbox/独立会话模块静态各零、root race及五命令构建通过（`oj-http-loop-backend-verified.log`）；治理64项 **12.343秒**通过（`oj-http-loop-governance.log`）。后端检查先发现超时收尾遗漏错误检查，显式空赋值又被staticcheck拒绝；最终分支将退出错误状态纳入明确失败报告，不忽略门禁或降低断言。456文件仓库策略及差异检查通过。Astra审查完整新增文件及驱动差异无阻断，不替代实际测试或独立人工审批。
+
+本项仅受控合成HTTP链路，不包含接收回执丢失注入、浏览器页面、普通账号训练授权、全部Worker专项或生产容量复验。最小页面及其失败路径仍待实现；完整M0未验收，未部署。可单独回退专项/选择器，无数据库回退。
+
 ## 2026-11-03：普通Run的SIGXFSZ/OLE精确适配
 
 成功fetch后从 `origin/main 79dbc5e` 创建独立 `codex/sigxfsz-verdict` worktree。本PR修复PR #86实测发现的分类缺口：原正式适配器将无采集错误的已确认SIGXFSZ/OLE当系统错误，停用旧执行器。GoJudge增加无fileError OLE的精确Run/exit25例外，要求完整非负资源、stdout/stderr为非null字符串、无执行错误/任何制品ID且输出有界；保持OutputTruncated=false。局部字符串指针保留null信息，仅新例外区分空串/null，其他分支仍按原空值解码行为处理。Compile仍拒绝该无采集错误分支，原collector截断及其他状态语义保持，不按错误文字或仅信号猜结果。
