@@ -2,6 +2,27 @@
 
 本页集中维护当前 M0 进度和证据入口。下方“迁移前”之后的记录均为 2026-10-25—28 历史快照，保留原材料版本和命令，仅供追溯；当前执行方式见 [README](../README.md)。完整 M0 尚未验收，未部署。
 
+## M0 验收核对与下一步（2026-11-03）
+
+依据[开发计划的 M0 条件及推进顺序](phase-1-development-plan.md)，逐项核对 `2b44a50` 的代码与专项。表中的覆盖只适用于专用 Docker Desktop LinuxKit 7.0.14 arm64、固定 GNU++17/go-judge 配置和合成数据；协议测试、真实沙箱、独立进程及浏览器证据分别使用，不能相互替代。当前结论仍为**进行中**，不因单项通过宣布 P1/P2 或完整 M0 通过。
+
+| 验收项 | 当前证据入口 | 尚需完成或明确的边界 |
+| --- | --- | --- |
+| P1 同事务接收、跨 API 幂等、迁移与查询计划 | [TestAcceptance](../tests/integration/submissions_test.go)、[双 API 进程](../tests/integration/api_processes.py)；包含写后异常整事务回滚、原键核验、并发迁移/锁等待和含数据回退拒绝 | 合成主体、实验接口；未知回执不等于回滚。用户/全局额度及公平调度仍未实现，计划明确要求在试用开放前完成，不能宣称整个 P1 已完成 |
+| P2 GNU++17 文本提交到结果 | [TestBoundedExecution](../tests/sandbox/execution_test.go)、[TestExecutionReport](../tests/sandbox/report_test.go)、[文本规则](../internal/judging/text_test.go)；AC/WA/CE/RE/TLE/MLE/OLE、编译一次、固定顺序及首次失败停止 | SE 分类与失败不发布结果由[执行规则](../internal/execution/execution_test.go)及故障专项补充，不把正常退出当 AC；仅固定合成题、单文件和文本检查 |
+| 至少双 API/双 Worker，认领、租约、身份、重复及迟到回报 | [租约数据库实验](../tests/integration/leases_test.go)、[真实双 Worker](../tests/sandbox/dual_worker_test.go)、[网络故障](../tests/sandbox/network_fault_test.go)、[编译失权](../tests/sandbox/compile_lease_test.go) | 数据库用例含人工过期，真实专项另验证自然到期；部分专项先后启动 Worker，不冒充每项均双 Worker 同时运行或跨主机高可用 |
+| 会话跨 API 撤销、名额和故障恢复 | [独立会话实验](../tests/sessionexperiment/README.md)、[正式普通协议](../tests/sessionprotocol/protocol_test.go)；前者含独立 API 进程、真实 Redis 旧 RDB 及 PostgreSQL 专用 schema 恢复 | 独立模块不由根 `go test ./...` 或普通 CI 执行行为套件；旧备份恢复标识废止会话，不恢复备份后的账号封禁/改密事实，不能据此许可生产复服 |
+| 材料缺失/损坏、数据库失败和节点失联 | [接收事务](../tests/integration/submissions_test.go)、[材料授权](../tests/integration/worker_acquisition_test.go)、[Worker 故障](../tests/sandbox/fault_test.go)、网络/槽恢复专项 | 区分真实文件/节点/网络故障和模拟未知回执；异常槽仍需人工排空旧宿主操作并显式恢复，不是自动重启/解封或持久结果队列 |
+| 受限执行与资源预算 | [TestSandbox](../tests/sandbox/sandbox_test.go)、固定[执行环境](../internal/experiment/environment.go)、真实停止/PID 证据；已有 CPU/内存/输出、文件与网络隔离、每点清理 | **进程数及临时磁盘/inode 耗尽尚无行为证据**；配置有 Processes=16、tmpfs=64MiB/nr_inodes=4k 不等于验证拒绝。Run 内存32MiB可能早于64MiB tmpfs字节上限耗尽，不能把 MLE 误当磁盘配额证据 |
+| 组件准入、资源测量和失败恢复记录 | 固定环境每次运行前核验；下方[组件准入](#组件准入与下一步)、[Store 成本采样](#普通会话-store-有限成本采样2026-10-31)及[交付日志](delivery-log.md)保留范围和原始证据 | 当前只是隔离实验准入；完整 OS/工具链许可与安全清单、目标硬件/负载及生产容量未验收。实验资源观测不等于首批100人容量或生产 SLA |
+| M0 推进顺序中的真实请求与最小结果页面 | 当前[示例做题页](../web/src/preview/ProblemPage.tsx)、[提交空态](../web/src/pages/StatusPages.tsx)及已交付账号浏览器路径 | **未完成**：示例提交仍禁用，尚无浏览器真实提交/回执核验/结果观察闭环。真实 Worker 专项直接调用 Store 接收/查询，HTTP 进程专项验证提交/queued，不能拼接为同一次 HTTP→Worker→HTTP 终态验收。P5 完整训练页面归 M1，不据此删除计划中明确要求的 M0 最小页面 |
+
+下一步先补专用合成沙箱的进程和临时存储预算行为证据，再补受控实验题的最小请求/结果页面及其失败路径，最后按上述要求汇总组件准入与联合验收。进程实验须固定最多创建数量并回收子进程，区分 seccomp 拒绝与配额耗尽；磁盘实验须区分字节、inode 和内存预算，不能更改正式运行预算来制造通过。上述是待实施约束，不是已通过结果。
+
+用户已明确“题目来源尚未确定，先继续补齐 M0”；P4 首个录入入口保持未决。最小实验闭环可使用既有受控合成材料，但不能冒充正式题库、邮箱验证后的训练授权或 M1 交付。跨主机、真实独立备份域、生产证书/容量和部署分别按计划的使用节点验收，既不扩成无止境的 M0 前置，也不从后续计划中删除。
+
+计划中 P1 的额度/公平调度明确以“试用开放前”为完成节点；这里保留为 P1 后续子项，不将其新增为 M0 技术实验前置。M0 的 P1 状态须按本阶段子项报告，不能把技术实验通过扩写为全部 P1 或试用准入通过。
+
 ## 编译在途续租失权（2026-11-03）
 
 P2、AC28/29 的执行中断子项：专用合成容器内暂停唯一 `cc1plus`，回读对应 VM PID/T 状态并观察无故障存活，随后注入真实控制链路阻断或临时节点禁用。在目标 Worker 启动之前记录 t0，要求自行失败退出、容器停止和独立 VM PID 消失均早于 t0+14秒，排除原15秒编译 wall/20秒 curl 上限导致的自然结束。两类 PID 不混用，未知身份/信号结果立即失败，不发送 SIGCONT，不以测试清理代替成功证据。
