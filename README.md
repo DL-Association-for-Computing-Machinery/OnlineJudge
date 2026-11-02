@@ -167,6 +167,8 @@ Worker 启动完成后，向该 Worker 进程发送 `SIGUSR1`（`kill -USR1 PID`
 
 限制由固定版本的[执行参数](https://github.com/criyle/go-judge/blob/v1.13.3/worker/worker.go)、[实际执行](https://github.com/criyle/go-judge/blob/v1.13.3/envexec/run_single.go)及实测共同核对；`copyOutMax` 不决定单文件RLIMIT_FSIZE。普通Run的SIGXFSZ/OLE现已由正式适配器精确支持，接受条件与未覆盖的Compile分支见[判题设计](docs/architecture/judging-design.md#53-统一结果分类与单点异常归因)。`python3 scripts/test-worker.py report` 另验同一Worker/LeasedRunner/容器生命周期的OLE→AC、未截断观测、真实持久化及双控制端重报，不能以直接资源探针代替该回报证据。本资源专项不验收跨主机、长期容量、宿主文件系统耗尽或完整M0；资源测试与驱动可单独回退，不更改预算。实测归[交付记录](docs/delivery-log.md)。
 
+同一 `resource-bounds` 另含[固定g++编译文件上限对照](tests/sandbox/compile_file_size_test.go)：256KiB有限只读数据控制例AC，1MiB+128KiB示例只准编译，观察到结构化非零退出4、正式CE/零Run，再以同一Runner完成普通AC。固定编译器报告汇编器文件大小受限，诊断仅作辅助观测，不按错误文字判结果；未改Compile命令、LANG、预算或适配器，不代表未知Compile OLE分支已支持。
+
 ### Worker 异常后的受控解封
 
 Worker 被 `SIGKILL` 等强制结束后，原槽的持久隔离标记会阻止普通启动。操作者须独占该槽及可信 Docker 控制面，**先确认旧 Worker 的全部宿主 CLI 和在途 Docker 控制操作已结束，不会迟到派发**，再使用**崩溃前已记录或可信历史记录确认的原容器完整 ID**执行：

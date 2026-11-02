@@ -1,5 +1,17 @@
 # 工程交付记录
 
+## 2026-11-03：固定g++编译文件上限的真实分类证据
+
+成功fetch后从 `origin/main ff94039` 创建独立 `codex/compile-file-size-evidence` worktree。本项不依赖未合并的浏览器功能，只核对P2剩余疑点：固定g++遭遇文件大小限制时是否实际进入未支持的Compile OLE分支。新增有限合成对照及现有resource-bounds调用，无业务、适配器、协议、材料、SQL/schema、依赖、预算或命令变化，LANG=C沿用原profile。
+
+既有资源专项基线 **1.17秒**通过（`/private/tmp/oj-compile-size-baseline.log`）。最终专项 **2.62秒**、新增编译子项 **1.45秒**通过（`oj-compile-size-final.log`）：256KiB非零只读数据的A+B控制例AC；1MiB+128KiB示例仅编译，原始Nonzero Exit Status/exit4、CPU17350000ns、内存9953280B，零fileError/执行错误/制品，无输出截断。固定编译器报告汇编器受文件大小限制终止；诊断sha256为 `c895d39351950702898165eb6a70f7ef517b380b4c8ee1b4e79073577a0a101e`，文本仅作辅助定位，不作为CE分类依据。
+
+正式Runner按既有非零退出规则得到CE，超限例一次Compile、零Run、两点NOT_RUN/无Usage或Max；随后同一Runner普通AC，合计3Compile/4Run。透明观察器只保存有界原响应，不重发或改写；超限例意外到达Run会直接错误而不执行，SE/适配错误早退保留停用合同。控制、CE及复用后缓存均为空。此固定路径没有落入无采集错误Compile OLE，不能外推该未知分支或所有编译异常已支持；未独立追踪汇编器PID/内核信号。
+
+首轮及补诊断轮因测试先猜exit1与File too large文字而失败（`oj-compile-size-first.log`、`oj-compile-size-diagnostic.log`）；实际两轮均是exit4/正式CE/无适配错误。依据原始记录修正为固定工具的真实强断言，未放宽生产规则或忽略失败。完整离线Docker格式/模块/vet、四检测器正负夹具、主模块/sandbox/独立会话模块静态各零、root race及五命令构建通过（`oj-compile-size-backend.log`）；Astra设计及完整差异复核无阻断，不替代实际测试或独立人工审批。
+
+README/CI/判题归因/M0同步；本轮未重跑其他Worker、会话或浏览器专项，不据此宣称完整P2/M0、生产准入或部署通过。回退仅移除测试及调用，无迁移。
+
 ## 2026-11-03：HTTP 到真实 Worker 终态联合验收
 
 成功fetch后从 `origin/main 44b1417` 建立独立 `codex/http-judge-loop` worktree。新增 `http-loop` 专项（也加入all），仅测试/驱动和文档，无业务路由、授权、数据库、材料、依赖或预算变化。正式迁移/固定夹具命令初始化空的临时PG；两个真实提交API共享私有实验凭据，通过HTTP提交仓库固定AC/WA源码并确认queued，然后才启动实际mTLS控制端及Worker命令，最终经HTTP观察finished/正确判定，不以SQL代替请求或终态。

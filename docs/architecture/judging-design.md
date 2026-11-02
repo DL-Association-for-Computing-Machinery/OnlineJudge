@@ -154,6 +154,8 @@ Testlib 兼容目标为无需修改标准 `#include "testlib.h"`、`registerTest
 
 当前M0的固定Linux/go-judge v1.13.3普通Run另有已验证SIGXFSZ路径：必须同时是结构化 `Output Limit Exceeded` 和exit25，资源字段齐全且非负、stdout/stderr均为非null字符串（允许空串）、无执行错误/采集错误/任何制品ID，并遵守响应与输出长度边界，才作为单文件大小超限OLE。错误文字或仅退出码25不能据此判OLE；非OLE状态保持原有分类。没有采集错误就不设置 `OutputTruncated`，stdout采集超限的原有截断证据仍保留；无截断路径的JSON替换扩张上限为 `3*OutputBytes`，不使用采集超限的额外一字节余量。此例外不支持Compile的无采集错误OLE；未知/矛盾和普通文件操作错误继续为SE，运行stderr单独采集超限仍保守拒绝。真实同Worker继续AC、冻结摘要及回报证据见[M0记录](../m0-experiment.md#普通run的sigxfszole分类2026-11-03)。
 
+固定g++15.3.0的[有限文件上限编译对照](../../tests/sandbox/compile_file_size_test.go)实际返回 `Nonzero Exit Status` / exit4，零执行/采集错误及制品，经既有编译非零退出规则得到CE，并可同Runner继续AC；它没有触发上述未知Compile OLE分支。编译器文本虽报告汇编器因文件大小限制终止，仍仅作辅助定位，不按“internal compiler error”等字样另猜SE或CE。此证据不覆盖所有编译器异常，也不放宽未知结构化结果的失败关闭规则。
+
 testlib 的已支持格式错误、额外输出、意外 EOF 等选手错误经明确适配为 WA；原始部分分/未知结果不默认通过，不支持的模式阻止准入或报 SE。原生 ICPC 42/43 与 testlib 原始模式严格分开，信号/超时等异常仍优先于偶然退出码。
 
 ### 5.4 资源限制原则
