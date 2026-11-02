@@ -32,7 +32,9 @@
 
 普通 CI 包含治理、Go 静态分析/race/构建、前端、真实 PostgreSQL 集成、Compose 冒烟及安全扫描。Go 静态分析及检测器正反例由 `toolchain backend` 执行，覆盖独立会话模块和 sandbox 标签源码，范围见[代码质量检查](code-quality.md)。`containers` 在 backend 或 frontend 受影响时执行页面/代理、容器权限、重建与启停验证，结果传递到必需门禁。工具链与基础镜像由 Dockerfile/锁文件固定，宿主不需要 Go、Node 或 Make。
 
-特权判题实验不进入普通 PR CI。本机使用 `python3 scripts/test-worker.py all`（也可选择 sandbox/report/dual-worker/worker-fault），运行合成材料的隔离、回报、双 Worker 接管和故障验证；不得在普通 runner 执行生产不可信提交。原专用 VM 与当前 Docker Desktop 的边界、失败诊断和历史结果见 [M0 实验记录](m0-experiment.md)及交付日志，不以普通 CI 代替专项验收。
+特权判题实验不进入普通 PR CI。本机使用 `python3 scripts/test-worker.py all`（也可选择 sandbox/report/dual-worker/worker-fault/slot-recovery/network-fault），运行合成材料的隔离、回报、双 Worker 接管、异常槽解封及网络故障验证；不得在普通 runner 执行生产不可信提交。原专用 VM 与当前 Docker Desktop 的边界、失败诊断和历史结果见 [M0 实验记录](m0-experiment.md)及交付日志，不以普通 CI 代替专项验收。
+
+`tests/sandbox/network_relay*_test.go` 没有 sandbox 标签，只测试标准库回环 TCP 的字节透传、双向/下行阻断、关闭旧流后恢复及并发关闭，已纳入普通 root `go test -race ./...`，不使用 Docker 或执行选手程序。`network_fault_test.go` 的真实 Worker/控制端/数据库及特权沙箱仍要求 sandbox 标签和 `OJ_SANDBOX_NETWORK=1`，由专用驱动提供；两类证据分开记录。
 
 ### 当前治理流水线
 

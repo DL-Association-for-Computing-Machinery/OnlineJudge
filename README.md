@@ -131,7 +131,7 @@ python3 scripts/test-browser-account.py \
 
 ```sh
 python3 scripts/test-worker.py all
-# 也可选择 sandbox / report / dual-worker / worker-fault / slot-recovery
+# 也可选择 sandbox / report / dual-worker / worker-fault / slot-recovery / network-fault
 ```
 
 脚本用 Docker 编译宿主测试驱动与 `.local/bin/` 命令，构建固定 go-judge/GCC 镜像，再通过宿主 Docker CLI 操作两个禁网、无挂载、只读根文件系统的专用特权容器。独立无特权观察容器共享 Docker VM 的 PID namespace，核验停止后的进程确已消失。不会启动 Colima；Docker Desktop 的 VM 与其他项目共享，这与原专用 VM 隔离边界不同。只执行仓库合成测试，不作为生产不可信提交的部署方案。
@@ -166,6 +166,15 @@ OJ_SANDBOX_EXPERIMENT=1 OJ_WORKER_M0_SLOT=primary \
 成功只确认当前沙箱已停止并清空槽标记，不领取任务、不重启 Worker。新进程无法排空旧 Worker 的宿主控制请求，Worker 的进程内 25 秒计时器也会随 SIGKILL 消失；仅等待 25 秒、Worker 退出或当前容器停止不能替代控制操作排空的确认。无法确认时保持隔离，不运行解封或重启；命令不提供跨进程派发隔离机制。
 
 在上述前提成立后，显式重启及重新核验固定环境才能运行新 Worker；旧任务仍由控制端自然租约到期及有限恢复处理，不编辑租约/结果。回退只需恢复旧 Worker 二进制并停用此子命令，无数据库迁移。真实专项 `python3 scripts/test-worker.py slot-recovery` 在冻结合成 Worker 后记录宿主子进程，并确认它们退出再解封，覆盖互斥/错误 ID 拒绝、自然接管及原槽重启复用；未覆盖人为延迟的孤儿 CLI 或任意 SIGKILL 后自动安全复用。普通 PR CI 不运行特权沙箱。
+
+### Worker 控制链路网络故障专项
+
+`python3 scripts/test-worker.py network-fault` 在同一组专用离线沙箱及临时 PostgreSQL 上，使用两个真实控制端进程和透明 TCP 中继。中继只转发原始字节，Worker 与控制端仍直接验证彼此的 mTLS；不终止 TLS、不解析 HTTP、不伪造响应，不修改系统路由或其他服务网络。只阻断本轮回环连接的一个或两个方向，恢复前关闭旧连接，避免把旧 TLS 字节重放到恢复后的流。
+
+- 双向阻断：同一 Worker 先完成一次预热 AC，目标执行期间阻断流量；检查有界失败退出、沙箱/PID 停止、无结果及预先排队的下一题零尝试。另一节点经第二控制端，在自然租约到期后完成目标第 2 次尝试，代次保持，两个控制端拒绝旧令牌回报且结果不变。
+- 下行确认丢失：短测试事务锁住尚未提交的目标尝试，启用下行阻断后立即回滚释放锁。真实控制端此后提交 AC，原 Worker 收不到确认而失败停止、不领下一题；显式恢复连接/沙箱和新 Worker 后继续排队任务。全过程目标只有一次尝试、首个载荷/摘要不变；两个控制端确认相同重报并拒绝冲突重报。
+
+行锁仅用于给故障注入排序，不更改任务、租约、结果或业务参数；测试驱动不手调 Recover。字节阻断计数不用于识别 HTTP 请求或证明报告调用次数。该专项是本机 TCP 故障注入，不验收跨主机/路由器分区、长编译期间续租或执行端自动恢复。中继的纯回环字节、方向、恢复与并发关闭 race 测试不含 sandbox 标签，普通后端检查执行；真实 Worker 专项保留 sandbox 标签及显式开关，普通 CI 不执行特权代码。实际结果见[交付记录](docs/delivery-log.md)。
 
 `GET /api/v1/healthz` 仅代表进程存活；普通 Compose 入口不启动完整 Worker 产品。真实编译/运行、回报、双 Worker 接管与撤销/材料故障分别由专项验证，普通 CI 不运行特权实验。
 
