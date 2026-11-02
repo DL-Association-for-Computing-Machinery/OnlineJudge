@@ -120,7 +120,7 @@ Next.js 作为已比较的备选保留，不引入当前首期技术栈。若公
 
 AC21/23 增补：用可控计时验证停输保存与持续输入调度、仅提交事务对应版本显示已保存、乱序写入及刷新恢复；覆盖多标签同时编辑/冲突副本、容量不足/存储禁用/数据库升级受阻、账号与比赛/语言隔离、退出清理默认勾选/取消、清理与迟到保存竞态、会话过期后同账号恢复、手动导出与清理。真正断外网验证本地保存，无法从被清除的数据或另一设备恢复时提示准确；目前均未执行。
 
-依据（2026-10-25 只读核对）：[IndexedDB API](https://www.w3.org/TR/IndexedDB/)、[idb 事务与升级说明](https://github.com/jakearchibald/idb)。1 秒/5 秒及清理规则为用户确认的项目默认，不是浏览器持久性保证。后续已确认第 3.3 节 Markdown 与公式渲染组件/约定；首期题型与判定原则后续已确认，见 [判题设计](judging-design.md)；题包模型与子集导入验证路线后续已确认，见 [题包设计](problem-package-design.md)；SPJ 协议、testlib 优先验证及首批 GNU++17 后续已确认，见 [判题设计第 4.1 节](judging-design.md#41-已确认的-spj-协议与-testlib-验证路线)；浮点比较规则已确认，见判题设计第 3 节，数值实现待验证；测试顺序/提交内串行/首次失败停止已确认，见判题设计第 5.1 节，编排实现待验证；分类、资源、反馈及自测已确认，实施按总体架构和专题文档验证。
+依据（2026-10-25 只读核对）：[IndexedDB API](https://www.w3.org/TR/IndexedDB/)、[idb 事务与升级说明](https://github.com/jakearchibald/idb)。1 秒/5 秒及清理规则为用户确认的项目默认，不是浏览器持久性保证。后续已确认第 3.3 节 Markdown 与公式渲染组件/约定；首期题型与判定原则后续已确认，见 [判题设计](judging-design.md)；题包模型与子集导入验证路线后续已确认，见 [题包设计](problem-package-design.md)；SPJ 协议、必须支持 Testlib 及首批 GNU++17 已确认，见 [判题设计第 4.1 节](judging-design.md#41-已确认的-spj-协议与-testlib-验证路线)；浮点比较规则已确认，见判题设计第 3 节，数值实现待验证；测试顺序/提交内串行/首次失败停止已确认，见判题设计第 5.1 节，编排实现待验证；分类、资源、反馈及自测已确认，实施按总体架构和专题文档验证。
 
 ### 3.3 已确认的题面 Markdown 与公式渲染
 
@@ -136,7 +136,7 @@ AC21/23 增补：用可控计时验证停输保存与持续输入调度、仅提
 
 验收关联 AC06/17/18/20：同一题目版本的预览/选手视图在标题、列表、表格、代码块、行内/独立公式与图片上符合统一规则；检查样例空格/空行/尾部换行及复制文本一致。覆盖原始 HTML、危险 URL、插件/自定义组件输出、私有图片越权、错误/超长/高展开公式、错误文本转义、窄屏横向溢出、字体缺失和断外网冷缓存访问；测量渲染开销并确认有限预算。上述均未运行，不将库声明替代应用验证。
 
-依据（2026-10-25 只读核对）：[react-markdown 公式组合与边界](https://github.com/remarkjs/react-markdown)、[remark-gfm](https://github.com/remarkjs/remark-gfm)、[remark-math 与 rehype-katex](https://github.com/remarkjs/remark-math)、[KaTeX 安全配置](https://katex.org/docs/security.html)、[KaTeX 支持范围](https://katex.org/docs/supported.html)。保留具体版本准入、浏览器效果及资源预算验证；首期题型与判定原则后续已确认，见 [判题设计](judging-design.md)；题包模型与子集导入验证路线后续已确认，见 [题包设计](problem-package-design.md)；SPJ 协议、testlib 优先验证及首批 GNU++17 后续已确认，见 [判题设计第 4.1 节](judging-design.md#41-已确认的-spj-协议与-testlib-验证路线)；浮点比较规则已确认，见判题设计第 3 节，数值实现待验证；测试顺序/提交内串行/首次失败停止已确认，见判题设计第 5.1 节，编排实现待验证；分类、资源、反馈及自测已确认，实施按总体架构和专题文档验证。
+依据（2026-10-25 只读核对）：[react-markdown 公式组合与边界](https://github.com/remarkjs/react-markdown)、[remark-gfm](https://github.com/remarkjs/remark-gfm)、[remark-math 与 rehype-katex](https://github.com/remarkjs/remark-math)、[KaTeX 安全配置](https://katex.org/docs/security.html)、[KaTeX 支持范围](https://katex.org/docs/supported.html)。保留具体版本准入、浏览器效果及资源预算验证；首期题型与判定原则后续已确认，见 [判题设计](judging-design.md)；题包模型与子集导入验证路线后续已确认，见 [题包设计](problem-package-design.md)；SPJ 协议、必须支持 Testlib 及首批 GNU++17 已确认，见 [判题设计第 4.1 节](judging-design.md#41-已确认的-spj-协议与-testlib-验证路线)；浮点比较规则已确认，见判题设计第 3 节，数值实现待验证；测试顺序/提交内串行/首次失败停止已确认，见判题设计第 5.1 节，编排实现待验证；分类、资源、反馈及自测已确认，实施按总体架构和专题文档验证。
 
 节约资源还应落实到：
 
@@ -229,6 +229,6 @@ Docker 可以承担组件打包与环境分发，但不能仅凭“放进 Docker
 - **已确认**：模块化单体＋独立判题 Worker；React＋TypeScript＋Vite＋Tailwind CSS＋shadcn/ui；CodeMirror 6；首期代码草稿仅浏览器本地保存；硬件后补；优先验证 go-judge。
 - **首批工具链**：GCC 15＋C17、GNU++17 默认和 GNU++20 可选；Temurin JDK 21；CPython 3.14。PyPy 后续评估；补丁版本、命令和资源限制待验证。
 - **存储**：数据库小数据＋校内本地大文件＋Worker 缓存已确认，见 [存储设计](storage-design.md)。
-- **下一步选型**：数据库访问层优先验证 sqlc＋pgx，Goose＋SQL＋独立迁移步骤＋显式锁已确认，见 [总体架构](system-design.md#811-数据库迁移)；登录路线及规则见 [会话设计](session-design.md)，SCS＋go-redis 优先验证、Gin sessions 备选，密码已选 Argon2id＋独立随机盐＋可升级参数记录。日常邮箱验证注册/找回与正式比赛校内发号/人工核验重置已确认；可替换 SMTP 接口已确认、go-mail 优先验证，供应商待条件明确；优先验证 PostgreSQL 持久化发信任务＋独立受限发送执行器；River 开源核心优先验证、专用表备选；短期 AES-GCM 载荷、River 仅存 ID 和独立密钥文件已确认；不考虑付费方案；令牌期限/重发/发信重试已确认，见 [会话设计第 12 节](session-design.md#12-已确认的令牌有效期重发与发信重试)。React Router（声明式）＋TanStack Query＋fetch＋pnpm 及第 3.1 节约定已确认；IndexedDB＋idb 及第 3.2 节草稿规则已确认；渲染组件及第 3.3 节约定已确认；首期题型与判定原则后续已确认，见 [判题设计](judging-design.md)；题包模型与子集导入验证路线后续已确认，见 [题包设计](problem-package-design.md)；SPJ 协议、testlib 优先验证及首批 GNU++17 后续已确认，见 [判题设计第 4.1 节](judging-design.md#41-已确认的-spj-协议与-testlib-验证路线)；浮点比较规则已确认，见判题设计第 3 节，数值实现待验证；测试顺序/提交内串行/首次失败停止已确认，见判题设计第 5.1 节，编排实现待验证；分类、资源、反馈及自测已确认，实施按总体架构和专题文档验证。工具链补丁、密码参数、语言资源策略与草稿容量/升级/运行实现仍待验证和设计，候选清单不等于已批准引入。
+- **下一步选型**：数据库访问层优先验证 sqlc＋pgx，Goose＋SQL＋独立迁移步骤＋显式锁已确认，见 [总体架构](system-design.md#811-数据库迁移)；登录路线及规则见 [会话设计](session-design.md)，SCS＋go-redis 优先验证、Gin sessions 备选，密码已选 Argon2id＋独立随机盐＋可升级参数记录。日常邮箱验证注册/找回与正式比赛校内发号/人工核验重置已确认；可替换 SMTP 接口已确认、go-mail 优先验证，供应商待条件明确；优先验证 PostgreSQL 持久化发信任务＋独立受限发送执行器；River 开源核心优先验证、专用表备选；短期 AES-GCM 载荷、River 仅存 ID 和独立密钥文件已确认；不考虑付费方案；令牌期限/重发/发信重试已确认，见 [会话设计第 12 节](session-design.md#12-已确认的令牌有效期重发与发信重试)。React Router（声明式）＋TanStack Query＋fetch＋pnpm 及第 3.1 节约定已确认；IndexedDB＋idb 及第 3.2 节草稿规则已确认；渲染组件及第 3.3 节约定已确认；首期题型与判定原则后续已确认，见 [判题设计](judging-design.md)；题包模型与子集导入验证路线后续已确认，见 [题包设计](problem-package-design.md)；SPJ 协议、必须支持 Testlib 及首批 GNU++17 已确认，见 [判题设计第 4.1 节](judging-design.md#41-已确认的-spj-协议与-testlib-验证路线)；浮点比较规则已确认，见判题设计第 3 节，数值实现待验证；测试顺序/提交内串行/首次失败停止已确认，见判题设计第 5.1 节，编排实现待验证；分类、资源、反馈及自测已确认，实施按总体架构和专题文档验证。工具链补丁、密码参数、语言资源策略与草稿容量/升级/运行实现仍待验证和设计，候选清单不等于已批准引入。
 - **UI 决策边界**：采用 Tailwind CSS＋shadcn/ui，具体设计风格和基础组件配置尚待原型确定；不额外引入 Ant Design 主组件体系，也不以库名推导包体积或服务器容量。
 - **后续验证**：前端在相同页面/数据/硬件条件下测包大小、交互与请求量；沙箱在隔离 Linux 节点测权限、正确性、恢复和资源。不能以协会仓库存在或文档检查通过替代这些验证。
