@@ -4,7 +4,7 @@
 
 ## M0 验收核对与下一步（2026-11-03）
 
-依据[开发计划的 M0 条件及推进顺序](phase-1-development-plan.md)，以 `2b44a50` 的核对为基线，资源子项按下文新增专项补证。表中的覆盖只适用于专用 Docker Desktop LinuxKit 7.0.14 arm64、固定 GNU++17/go-judge 配置和合成数据；协议测试、真实沙箱、独立进程及浏览器证据分别使用，不能相互替代。当前结论仍为**进行中**，不因单项通过宣布 P1/P2 或完整 M0 通过。
+依据[开发计划的 M0 条件及推进顺序](phase-1-development-plan.md)，保留 `2b44a50` 的数据库/会话核对，Worker 按下方[当前联合复验](#worker-联合复验与证据适用范围2026-11-03)更新到 `742d77f`（已合并为 `f7f7871`）。表中的覆盖只适用于专用 Docker Desktop LinuxKit 7.0.14 arm64、固定 GNU++17/go-judge 配置和合成数据；协议测试、真实沙箱、独立进程及浏览器证据分别使用，不能相互替代。当前结论仍为**进行中**，不因单项通过宣布 P1/P2 或完整 M0 通过。
 
 | 验收项 | 当前证据入口 | 尚需完成或明确的边界 |
 | --- | --- | --- |
@@ -14,7 +14,7 @@
 | 会话跨 API 撤销、名额和故障恢复 | [独立会话实验](../tests/sessionexperiment/README.md)、[正式普通协议](../tests/sessionprotocol/protocol_test.go)；前者含独立 API 进程、真实 Redis 旧 RDB 及 PostgreSQL 专用 schema 恢复 | 独立模块不由根 `go test ./...` 或普通 CI 执行行为套件；旧备份恢复标识废止会话，不恢复备份后的账号封禁/改密事实，不能据此许可生产复服 |
 | 材料缺失/损坏、数据库失败和节点失联 | [接收事务](../tests/integration/submissions_test.go)、[材料授权](../tests/integration/worker_acquisition_test.go)、[Worker 故障](../tests/sandbox/fault_test.go)、网络/槽恢复专项 | 区分真实文件/节点/网络故障和模拟未知回执；异常槽仍需人工排空旧宿主操作并显式恢复，不是自动重启/解封或持久结果队列 |
 | 受限执行与资源预算 | [TestSandbox](../tests/sandbox/sandbox_test.go)、固定[执行环境](../internal/experiment/environment.go)、真实停止/PID及[资源耗尽专项](../tests/sandbox/resource_bounds_test.go)；CPU/内存/输出/进程、inode/字节/单文件边界、隔离及每次执行恢复已有分项实测 | 总字节容量使用现有Compile资源预算的直接探针；普通Run内存先耗尽为MLE，单文件先受1MiB FSIZE约束。[SIGXFSZ/OLE正式Run适配及同槽继续AC](../tests/sandbox/file_size_report_test.go)与[固定g++文件上限CE](../tests/sandbox/compile_file_size_test.go)已补证；后者实际非零退出4，未触发无采集错误Compile OLE，该未知分支仍保守拒绝，不能扩写全部P2/生产准入通过 |
-| 组件准入、资源测量和失败恢复记录 | 固定环境每次运行前核验；下方[组件准入](#组件准入与下一步)、[Store 成本采样](#普通会话-store-有限成本采样2026-10-31)及[交付日志](delivery-log.md)保留范围和原始证据 | 当前只是隔离实验准入；完整 OS/工具链许可与安全清单、目标硬件/负载及生产容量未验收。实验资源观测不等于首批100人容量或生产 SLA |
+| 组件准入、资源测量和失败恢复记录 | 固定环境每次运行前核验；下方[组件准入](#组件准入与下一步)补入实际版本、许可原文哈希和限定结论，[Store 成本采样](#普通会话-store-有限成本采样2026-10-31)及[交付日志](delivery-log.md)保留资源与失败记录 | 当前只是隔离实验准入；完整 OS/工具链及服务端许可清单、目标硬件/负载及生产容量未验收；镜像 SBOM/OS 漏洞扫描按安全计划另行实施。实验资源观测不等于首批100人容量或生产 SLA |
 | M0 推进顺序中的真实请求与最小结果页面 | [HTTP 真实进程闭环](../tests/sandbox/http_loop_test.go)覆盖双提交 API→mTLS 控制端→Worker→HTTP AC/WA；当前[示例做题页](../web/src/preview/ProblemPage.tsx)、[提交空态](../web/src/pages/StatusPages.tsx)及已交付账号浏览器路径 | **页面仍未完成**：HTTP 已在同一专项确认 queued、跨实例原键回执/冲突与终态，SQL仅作不可变源码/attempt旁证；示例提交仍禁用，尚无浏览器真实提交/回执核验/结果观察闭环。P5 完整训练页面归 M1，不据此删除计划中明确要求的 M0 最小页面 |
 
 资源边界、SIGXFSZ/OLE正式Run适配及HTTP真实终态已有分项实测，下一步补受控实验题的最小页面及其失败路径，再按上述要求汇总组件准入与联合验收。普通运行预算保持，分项通过不代表全部P2或生产准入通过。
@@ -22,6 +22,26 @@
 用户已明确“题目来源尚未确定，先继续补齐 M0”；P4 首个录入入口保持未决。最小实验闭环可使用既有受控合成材料，但不能冒充正式题库、邮箱验证后的训练授权或 M1 交付。跨主机、真实独立备份域、生产证书/容量和部署分别按计划的使用节点验收，既不扩成无止境的 M0 前置，也不从后续计划中删除。
 
 计划中 P1 的额度/公平调度明确以“试用开放前”为完成节点；这里保留为 P1 后续子项，不将其新增为 M0 技术实验前置。M0 的 P1 状态须按本阶段子项报告，不能把技术实验通过扩写为全部 P1 或试用准入通过。
+
+## Worker 联合复验与证据适用范围（2026-11-03）
+
+在 `742d77f23c3d6120e3499f98943b875b4c9ec165` 执行 `python3 scripts/test-worker.py all`，驱动退出0；该源码与 #90 的 squash 提交 `f7f7871b39568c1059e5e781bc63e6a68eea2aa2` 完整树相同。仅使用仓库合成材料、专属禁网沙箱和临时数据库；未包含未合并的浏览器候选，不接触既有本地账号数据。共9个独立进程套件PASS、106个PASS条目（含父条目），基础阶段8个显式专项SKIP，随后分别实际运行并通过，不把SKIP计为通过。
+
+| 驱动套件 / 主要 owning test | 本轮父项耗时 | 对应证据 |
+| --- | --- | --- |
+| `sandbox` / `TestSandbox`、`TestBoundedExecution` | 2.54 / 5.44秒 | 基础隔离/执行、宿主停止及纯解析边界 |
+| `report` / [TestExecutionReport](../tests/sandbox/report_test.go) | 16.25秒 | 正式结果及同槽SIGXFSZ/OLE→AC |
+| `dual-worker` / [TestDualWorkerRecovery](../tests/sandbox/dual_worker_test.go) | 44.38秒 | 双Worker竞争、身份与租约接管，重复/迟到回报 |
+| `worker-fault` / [TestWorkerFaults](../tests/sandbox/fault_test.go) | 91.71秒 | 数据库、材料与执行端故障；未知回执不发布伪结果 |
+| `slot-recovery` / [TestWorkerSlotRecovery](../tests/sandbox/dual_worker_test.go) | 46.20秒 | 异常槽隔离、受控重启、自然接管及恢复后AC |
+| `network-fault` / [TestWorkerNetworkFaults](../tests/sandbox/network_fault_test.go) | 54.03秒 | 真实TCP双向失联及已提交丢回执恢复 |
+| `compile-lease` / [TestCompileLeaseFaults](../tests/sandbox/compile_lease_test.go) | 43.60秒 | 编译在途失联/撤销；停止/PID证据分别9.856/6.856秒，均在Worker启动前取样t0后14秒内完成，排除原15秒编译wall耗尽 |
+| `resource-bounds` / [TestSandboxResourceBounds](../tests/sandbox/resource_bounds_test.go) | 2.28秒 | 进程16/EAGAIN、inode/64MiB字节、1MiB单文件/Run内存边界及执行恢复；含固定g++文件上限CE对照 |
+| `http-loop` / [TestHTTPJudgeLoop](../tests/sandbox/http_loop_test.go) | 3.25秒 | 两个真实提交API→mTLS控制端→Worker→HTTP终态、原键回执与归属；本专项没有独立选手PID观察 |
+
+完整日志 `/private/tmp/oj-m0-joint-worker-prepared.log` 的 SHA-256 为 `276eed015e70e19f92f82720ed328fc422757baf48db6f83e38556618f67234b`，父项索引为 `/private/tmp/oj-m0-joint-worker-evidence.json`；这是本机证据位置，不是仓库或 CI 附件，迁移环境前须另行保全。
+
+本次本机Worker联合命令未重跑数据库/普通协议/独立会话完整套件；#90 CI另执行了数据库及普通协议检查，二者范围分开。已复核此前4份日志哈希与 `/private/tmp/oj-m0-audit-evidence-manifest.json` 一致，并核对从 `2b44a50` 至本轮源码的 `internal/{session,identity,submission,httpapi,worker,workerapi,workerclient,workerhost}`、`db`、`tests/{integration,sessionprotocol,sessionexperiment}`、`go.mod/go.sum` 及四个对应命令均无差异；这些历史行为证据继续按原范围使用。`internal/execution` 已有SIGXFSZ修正，由本轮真实套件覆盖，不能混入“未变化”清单。旧日志未记录的数据库小版本不能用本次镜像读数倒填；资源耗尽次数和耗时也不能外推并发容量或SLA。
 
 ## HTTP 真实进程判题闭环（2026-11-03）
 
@@ -609,10 +629,27 @@ PR #1 审查修复（2026-10-25，验证时为基于 `a31e021` 的未提交工�
 
 ## 组件准入与下一步
 
-pgx v5.11.0、Goose v3.29.0、sqlc v1.31.1 已核对官方版本/本地模块许可证（MIT），与 Go 1.26.10 构建和真实 PostgreSQL 测试相容。Goose 库只使用 pgx 驱动，其他数据库 CLI 驱动未链接；其最低 Go 1.26 与 pgx 依赖约束导致必要的传递模块版本变化，见锁文件。sqlc 本机开发二进制约 75 MiB；正式 API/migrate 构建分别约 25/14 MiB，数值随构建而变。PostgreSQL 14.19 仅复用本机实验环境，生产版本与升级窗口未确认。
+结论仍是**允许继续现有隔离合成实验，尚未取得生产/对外分发准入**。兼容证据来自固定源码的 Docker 构建、真实数据库/会话分项与上述九项 Worker 联合复验；安全证据使用对应精确 head 的 [CI 范围](security-checks.md)，不等于无漏洞、完整供应链或许可合规结论。
+
+2026-11-03 只读核对当前本机镜像：沙箱 `sha256:cd40ffdb32619806a8d97e59fe03e890fe4066835f57efa6ae13f919ef3262c5` 为 Linux/arm64、go-judge 1.13.3、GCC 15.3.0、Debian 13/trixie 13.7，内核实验profile仍为 LinuxKit 7.0.14 arm64；`postgres:14-alpine` 夹具实际14.24，离线工具镜像为 Go 1.26.10 linux/arm64 与 PostgreSQL 14.24（Debian包14.24-1.pgdg12+2）。Redis实际7.2.17，使用脚本固定摘要 `0312984fbfeb2ff1d4382ecef45b50e7d65478a6a58cf12ce28d6de7a4142e45`。PostgreSQL tag 可变，本次读数不证明历史每轮均为14.24；旧文14.19只作早期环境记录。生产版本、升级窗口和目标环境尚未确认。
+
+本轮从已有离线模块缓存读取 LICENSE 原文，版本与根 `go.mod` / [会话实验模块](../tests/sessionexperiment/go.mod)一致；仅列实际核对的直接模块，未把整个传递依赖图声明为已审计：
+
+| 组件与固定版本 | 原文类型 | LICENSE SHA-256 |
+| --- | --- | --- |
+| Gin 1.12.0 | MIT | `03458b6d5828e1be1127ca2adf122572eb574fc47b56190c3b38203b8b2a98d0` |
+| pgx 5.11.0 | MIT | `467f95e074fe23079a5623ed652619682692041b8551da27e3c2ddb9659a1507` |
+| Goose 3.29.0 | MIT | `f23985556a879c0e68bb4e136ee4b88a550d26fa33db77a65d76b721c93093ef` |
+| go-redis 9.23.0（客户端，非Redis服务端许可） | BSD-2-Clause | `a3a7dff87da3927db65cb4c87b1cfbc96ca2755704461a485d457be7ae300a86` |
+| x/crypto 0.58.0、x/sync 0.24.0、x/sys 0.49.0；Go工具链LICENSE | BSD-3-Clause，同一原文哈希 | `911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad` |
+| SCS 2.9.0（仅独立会话实验，非正式协议依赖） | MIT | `60aa83c124df5a317fe85b1ad9c4984ad056e0221d572d195b00d5b45b8f3bb1` |
+
+原文、缓存路径和哈希索引在 `/private/tmp/oj-m0-components-readonly/direct-go-license-texts.json`（SHA-256 `ddeaf4581962d2182ec358a50f34a00b2616779bca9d0690c351da1c21f2ee0f`），其他版本原始读数保存在同目录；最终综合索引 `evidence-index-final.json` 的 SHA-256 为 `aa5a17a1e109614edf4d0c430b67816f9c189f0a20bb5c6c458f5f6ad4616189`。本次 `dpkg-query` 的462条记录仅是已登记Debian包，未包含手工安装GCC/复制go-judge等制品，不是完整镜像SBOM；没有执行Docker Scout扫描、上传或云查询。GCC/基础发行版、Redis服务端与PostgreSQL服务端的完整许可来源仍待核验；[安全计划](security-checks.md#工具准入与维护)中的镜像OS漏洞扫描/SBOM保持独立后续，不把本次版本提取扩写为该项通过。
+
+pgx v5.11.0、Goose v3.29.0、sqlc v1.31.1 此前已核对官方版本/本地模块许可证（MIT），与 Go 1.26.10 构建和真实 PostgreSQL 测试相容。Goose 库只使用 pgx 驱动，其他数据库 CLI 驱动未链接；其最低 Go 1.26 与 pgx 依赖约束导致必要的传递模块版本变化，见锁文件。sqlc 本机开发二进制约 75 MiB；正式 API/migrate 构建分别约 25/14 MiB，均为历史测量，数值随构建而变，本轮未重测sqlc许可或二进制大小。
 
 go-judge v1.13.3 官方 arm64 镜像约 58 MB，GCC 15 镜像约 532 MB；实际 GCC 为 15.3.0。固定 tag 的 MIT 许可证已核对并保存 `.local/go-judge-v1.13.3-LICENSE`，SHA-256 为 `a84a0427c3a1c25851a4689410a54283962a759a02558058a107470993b80c5a`；GCC/基础发行版各组件许可及安全清单尚未完整核验，只准入隔离实验，不准入生产或对外分发。[pgx 发布](https://github.com/jackc/pgx/releases/tag/v5.11.0)、[Goose 发布](https://github.com/pressly/goose/releases/tag/v3.29.0)、[sqlc 发布](https://github.com/sqlc-dev/sqlc/releases/tag/v1.31.1)、[go-judge 版本](https://github.com/criyle/go-judge/releases/tag/v1.13.3)、[隔离与 API](https://docs.goj.ac/api)为核验入口。
 
-当前已接入 Worker 命令入口、控制端任务自动恢复、双 Worker 接管和撤销/材料故障专项。专项验收后推进会话关键实验；既有分项不能替代完整生命周期验收，`m0-sum-v1` 继续保持 unvalidated。生产节点检查器、传输与执行端恢复仍须独立验证。
+Worker命令、控制端恢复、双Worker接管、撤销/材料/网络故障、受控槽恢复、资源边界及会话关键实验已有分项记录，当前范围以页首矩阵为准，不再把这些已完成分项列为未开始。异常槽仍须按既有手册人工确认旧宿主操作结束后显式解封；持续隔离、未知回执、失败不发布及重试原键要求保持。生产节点检查器、跨主机传输/恢复与自动执行端重启未验收，`m0-sum-v1` 继续保持 unvalidated。
 
-M0 仍待完整链路与会话实验；M1/M2 仍需试用范围、题库授权、SMTP/HTTPS、负载目标、RPO/RTO 与独立备份位置。不能把本页分项通过视作首期平台可用。
+M0仍待最小浏览器页面交付和失败路径的主线证据，随后逐项评估限定组件准入与整体技术验收；未合并候选不得记为当前主线能力。M1/M2仍需试用范围、题库授权、SMTP/HTTPS、负载目标、RPO/RTO与独立备份位置。不能把本页分项通过视作首期平台可用。

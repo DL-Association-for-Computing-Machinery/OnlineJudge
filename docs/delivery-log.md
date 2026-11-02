@@ -1,5 +1,15 @@
 # 工程交付记录
 
+## 2026-11-03：M0 Worker联合复验及组件证据核对
+
+独立文档目标从成功fetch后的 `origin/main f7f7871` 开始，不依赖尚未合并的浏览器候选。#90 的精确head `742d77f23c3d6120e3499f98943b875b4c9ec165` 经 [CI 41520823800](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/actions/runs/41520823800) 8项成功，frontend-tests按后端范围明确跳过，完整差异/反馈/规则核对后squash合并为 `f7f7871b39568c1059e5e781bc63e6a68eea2aa2`；已证明树一致并归档5个任务二进制，清理仅该已结束worktree/本地分支。
+
+合并前在同一精确head执行 `python3 scripts/test-worker.py all`，退出0，9个独立套件PASS、106个PASS条目（含父项）；基础阶段跳过的8个显式专项随后都实际通过。含新编译文件上限对照、正式Run SIGXFSZ/OLE、双Worker/材料/数据库/槽/网络/编译失权与双API HTTP终态；真实编译失权停止/PID证据9.856/6.856秒均小于14秒界限。准确父项耗时、日志哈希及历史会话/数据库证据的源码适用核对归[M0记录](m0-experiment.md#worker-联合复验与证据适用范围2026-11-03)，不能将含父条目的计数当独立场景数。
+
+禁网只读提取当前镜像版本、8份直接Go模块许可原文、工具链/go-judge LICENSE及462条dpkg记录，不下载、安装或上传材料。当前PG实际14.24，与文中早期14.19区分；仅当前可变tag读数，不倒填旧日志。同步[M0组件准入](m0-experiment.md#组件准入与下一步)的原文哈希、限定实验结论和未知项；完整服务端/OS/工具链许可、传递依赖图、SBOM与OS漏洞检查仍未完成，未将客户端许可冒充服务端许可。当前CI的Go可达漏洞/前端依赖扫描范围也不能外推为完整镜像安全。
+
+仅修改本日志及M0记录，历史命令/耗时不回写覆盖，无应用、依赖、预算、协议或扫描规则变化，不为纯文档重复应用构建。完整M0、生产准入/部署仍未通过；最小页面交付与最终限定技术验收仍待补齐。
+
 ## 2026-11-03：固定g++编译文件上限的真实分类证据
 
 成功fetch后从 `origin/main ff94039` 创建独立 `codex/compile-file-size-evidence` worktree。本项不依赖未合并的浏览器功能，只核对P2剩余疑点：固定g++遭遇文件大小限制时是否实际进入未支持的Compile OLE分支。新增有限合成对照及现有resource-bounds调用，无业务、适配器、协议、材料、SQL/schema、依赖、预算或命令变化，LANG=C沿用原profile。
