@@ -1,5 +1,17 @@
 # 工程交付记录
 
+## 2026-11-03：Worker 真实控制链路网络故障验收
+
+成功 fetch 后从 `origin/main d8a7d6c` 建立独立 `codex/worker-network-faults` worktree，唯一目标为 P2、AC28/29 的网络故障证据。增加透明回环 TCP 中继，只转发原始字节、不持有 TLS 密钥、不解析/替换 HTTP；按方向阻断并记录有界缓冲中的字节，恢复前关闭旧连接。模式检查和有界写入共用屏障锁，生命周期锁独立，取消/关闭等待 Accept、Dial 及双向复制结束。无业务代码、依赖、协议、迁移、生产 SQL、材料版本或预算变化。操作与回退范围见 [README](../README.md#worker-控制链路网络故障专项)；撤回新增测试及驱动选项即可，无数据回退。
+
+`python3 scripts/test-worker.py network-fault` 在 Docker Desktop/LinuxKit 7.0.14、固定 GNU++17/go-judge 材料、临时 PostgreSQL、两个真实控制端进程及先后运行的 Worker 下通过，**54.58 秒**（`/private/tmp/oj-worker-network-sandbox-final.log`）。双向阻断 **36.05 秒**：实际观察 main PID 后阻断，原 Worker 非零退出、沙箱/PID 停止，无结果且下一题仍 queued/零 attempt；第二节点经独立控制端在租约自然到期后完成第 2 次尝试 AC，原尝试 expired，判题/恢复代次仍 1，两个控制端拒绝旧令牌且新结果不变。上行阻断观察为3332字节，不能据此识别请求或报告调用次数；若执行跨过续租周期，也可能先因失权停止，本项不把退出事实等同于特定错误分支。
+
+下行确认丢失 **18.25 秒**：同一 Worker 先完成预热，再执行目标；短测试事务锁定未提交尝试，启用 gate 后立即回滚，真实控制端此后提交 AC。下行观察3821字节被阻断，Worker失败停止、不领预先排队的下一题；新连接及显式重启/复验后继续 AC。捕获首个已提交 payload/hash，在恢复及两个控制端的相同结果确认/冲突拒绝后逐字节不变，目标始终仅1 attempt。测试协调只使用临时行锁，没有编辑时间戳、修改结果、手调 Recover 或伪造 HTTP 响应。最终两个固定槽回读停止/无 PID/未重启，临时数据库无残留。
+
+完整离线 Docker 后端格式、vet、四检测器正负夹具、主模块/sandbox/独立会话模块静态各零、全部 root race 与五命令构建通过（`/private/tmp/oj-worker-network-backend-final.log`）；新增纯回环中继包 race **1.086 秒**。这些安全测试不带 sandbox 标签，现纳入普通 backend；真实 Worker 测试继续显式 opt-in，普通 CI 不执行特权程序。最后的提交前屏障和夹具键增量已通过 sandbox 静态零问题（`oj-worker-network-static-final.log`）及上述真实专项。治理 **64 项，10.551 秒**、仓库策略447文件/链接/空白通过。
+
+首轮完整后端在默认构建下发现 endpoint 方法仅被 sandbox 调用而 unused，改为纯回环测试也通过同一端点接口连接，保留原检查。首个真实驱动在初始化即因夹具幂等键少于16字符被拒，尚未进入网络故障；按既有合同补前缀后通过，未改业务校验。Astra 设计/完整实现复核指出仅观测 PID 再启用 gate 有误判窗口，已用真实行锁把 gate 排在报告提交之前并复核释放逻辑；AI 复核不冒充人工审批。最终完整差异/文档及远端 PR、CI、合并、知识事务结果依回读。本机 TCP 故障注入不替代跨主机/路由器分区、长编译续租、自动执行端恢复、生产容量或完整 M0，未部署。
+
 ## 2026-11-03：Worker 异常槽受控解封
 
 成功 fetch 后从 `origin/main 16deb73` 建立独立 `codex/worker-slot-recovery` worktree，唯一目标为 P2、AC28/29 的显式恢复子项。新增 `worker recover <original-full-container-id>`：不加载节点/控制端凭据，共用规范锁，先持久隔离；固定槽名匹配可信历史原 ID 后绑定 ID/启动时间及固定隔离配置。运行容器复用原严格停止/PID 消失检查，已停止容器单独双次回读；成功才清标记，不领取、不回报、不重启。普通启动/Stop 规则保持，清空后的 Sync 失败尽力重建隔离并始终报告失败。无依赖、协议、SQL、迁移或材料版本变化；操作及回退见 [README](../README.md#worker-异常后的受控解封)。
