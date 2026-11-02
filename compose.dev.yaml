@@ -1,0 +1,105 @@
+# Isolated, opt-in local account environment. Use scripts/dev-up.py for startup.
+services:
+  volume-prepare:
+    image: alpine:3.23@sha256:ff7f0c727dd796aa36787bfcd9a64bf35a6ce72a73451b3359fde849b6703d63
+    user: "0:0"
+    command: [chown, "65532:65532", /state]
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - local-state:/state
+
+  postgres:
+    image: postgres:14-bookworm@sha256:a389ed49344afc8f4444efd4eb512965df07aaa6ed84b239b54a23246e9fe347
+    environment:
+      POSTGRES_DB: oj_local
+      POSTGRES_USER: oj_local
+      # No host ports: trust applies only to this private development network.
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_INITDB_ARGS: --auth-local=trust --auth-host=trust
+    volumes:
+      - local-postgres:/var/lib/postgresql/data
+    networks: [local-private]
+    healthcheck:
+      test: [CMD, pg_isready, -U, oj_local, -d, oj_local]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    stop_grace_period: 30s
+
+  redis:
+    image: redis:7.2.17@sha256:0312984fbfeb2ff1d4382ecef45b50e7d65478a6a58cf12ce28d6de7a4142e45
+    # Authentication is intentionally absent only inside this private network.
+    command: [redis-server, --bind, 0.0.0.0, --protected-mode, "no", --appendonly, "yes", --appendfsync, always, --maxmemory, 128mb, --maxmemory-policy, noeviction]
+    volumes:
+      - local-redis:/data
+    networks: [local-private]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    stop_grace_period: 30s
+
+  localdev-init:
+    image: oj-local-dev-app
+    build:
+      context: .
+      target: localdev
+    command: [init]
+    environment:
+      OJ_LOCAL_STATE_DIR: /state
+    depends_on:
+      volume-prepare:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - local-state:/state
+    networks: [local-private]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+  localdev:
+    image: oj-local-dev-app
+    build:
+      context: .
+      target: localdev
+    environment:
+      OJ_LOCAL_STATE_DIR: /state
+    depends_on:
+      localdev-init:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:8443:8443"
+    volumes:
+      - local-state:/state:ro
+    networks: [local-private, local-edge]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 15s
+    healthcheck:
+      # Process readiness only. Browser CA trust is a separate user action.
+      test: [CMD, wget, --no-check-certificate, -q, -O, /dev/null, "https://localhost:8443/__local/healthz"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+networks:
+  local-edge:
+    driver: bridge
+  local-private:
+    internal: true
+
+volumes:
+  local-postgres:
+  local-redis:
+  local-state:

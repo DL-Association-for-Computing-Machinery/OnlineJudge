@@ -6,6 +6,8 @@
 
 ## 入口与操作
 
+本机需要实际登录时使用[独立 HTTPS 开发入口](local-development.md)，运行 `python3 scripts/dev-up.py` 并访问 `https://localhost:8443/login`。本地专用镜像中的“一键进入测试账号”只把空请求转换为使用服务器私有测试凭据的标准 Begin，随后由现有 controller 执行 Complete→Read；继续受限流、已有会话、原候选和未知结果规则约束。正式 API 没有这个入口，普通会话期限也不因此延长。
+
 静态页面和 API 必须来自同一个 HTTPS Origin。前端仅请求固定相对路径，不接受 API 地址覆盖；API 仍独立检查实际 TLS、Host、同源证据、Cookie 及账号/恢复状态。受信单跳代理须按[会话设计](architecture/session-design.md#714-单跳受信反向代理)配置已验证且固定指纹的 mTLS。默认 Compose 和 Vite 开发代理仍为 HTTP/bootstrap，不能用于密码操作；页面会显示 HTTPS 要求并在序列化或 fetch 前阻止账号请求。现有连接检查只说明进程连通。
 
 | 操作 | 确认条件与后续 |
