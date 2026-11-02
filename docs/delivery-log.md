@@ -1,5 +1,19 @@
 # 工程交付记录
 
+## 2026-11-03：M0 固定合成题最小浏览器闭环
+
+成功fetch后从 `origin/main ff94039` 建立独立 `codex/m0-browser-loop` worktree。新增默认关闭的 `/m0` 固定示例页及三条小型JSON路径；API须另设 `OJ_EXPERIMENT_BROWSER=1`、私有Bearer实验配置、显式127.0.0.1监听和v3材料，实际随机监听后再构造严格Host边界；冲突配置在读取私有文件前拒绝。独立 `m0-browser-operator/m0-browser-training`，服务端仅选择仓库AC/WA源码，不接任意源码/身份/语言，不在API执行程序；原Bearer接口仍拒绝Origin。nonce用于CSRF而非账号身份，同源脚本不在隔离保证内；数据GET需nonce，POST另验单一Origin/Fetch Metadata及标准库防护。页面不使用/设置会话Cookie，不开放CORS，带CSP/no-store/nosniff。
+
+页面沿用现有系统字体/橙色操作和浅色分隔，不新增框架/依赖。sessionStorage仅保存原键/预设/版本及unverified/confirmed/conflict状态；每次POST前先保存未确认，合法POST回执才确认，GET不升级绑定，刷新只重新bootstrap并核验原键。404/503/超时不等于回滚，不自动换键；409后既有结果不能归为当前示例，冲突/未知刷新后保留。终态后显式核验仍发GET，有限轮询可停止但不取消任务；BFCache返回重新加载，存储失败不发送POST。
+
+最终 `browser-loop` **9.98秒**通过（`/private/tmp/oj-m0-browser-visual-verified.log`、产物 `/private/tmp/oj-m0-browser-visual-verified`）：现有Playwright1.57.0、Node22.17.1、实际Chromium145.0.7632.6，桌面1280×960/390×844，12项交互/视觉断言。真实POST已接收后 `route.fetch` 再丢弃响应，页面未知；刷新仅GET，再以原键/原示例POST回原ID。浏览器确认queued后以原子marker通知，SQL旁证两任务/零attempt，才启动真实mTLS控制端和Worker。随后浏览器观察AC/WA；含原Bearer隔离夹具共三任务均finished、各一次completed attempt/双代次1，原始固定源码/独立归属未变，负面请求及重试不产生额外任务。Worker显式排空exit0及槽停止，未独立观察选手PID。
+
+另验真实Host/Origin/额外source/nonce拒绝、已有Bearer行对浏览器404、终态再查询、409→查询→刷新区别、后退恢复、真实原键404、注入查询503恢复、存储写失败及无Bearer/Cookie/外部请求。5条资源错误仅出现在明确的丢回执/409/404/503测试路径，其他console/pageerror零；注入GET 503不冒充真实数据库故障。实际computed字号15/32/21px、正文/辅助字与按钮对比度均≥4.5、控件49px；桌面/窄屏截图人工检查无横向溢出。离线Impeccable检测器无法映射API绝对assets路径，字体/层级推断不完整；既有sidecar漂移未擅自修复，以实际CSS/渲染交叉核验。
+
+原 `http-loop` 因共用启动/排空helper回归 **3.43秒**通过（`oj-m0-browser-http-regression.log`）。最终离线Docker后端格式/模块/vet、四检测器正负夹具、主模块/sandbox/独立会话模块静态各零、root race及五命令构建通过（`oj-m0-browser-backend-verified.log`）；19项配置、32项拒绝零Store调用及错误/nonce/静态隐私边界均覆盖。治理66项 **11.742秒**通过（`oj-m0-browser-governance.log`），467文件策略、OpenAPI YAML及53个引用核对通过。首次局部测试因未用导入失败、首次完整静态提示路由条件简化，均修正后完整重验，未降低门禁。
+
+Astra设计/完整实现及最终增量复核发现并修复终态零请求、冲突归属丢失、BFCache中止器失效及marker半写竞态；不是独立人工审批。首次真实浏览器12.05秒，排版/中文状态后10.01秒，原子发布/内容绑定/诊断后10.55秒，新增computed视觉证据取得上述最终9.98秒；不把较早运行冒充最终快照。契约、README、架构、前端边界、CI与M0进度已同步。无预算、材料版本、SQL/schema、迁移或依赖变更；关闭开关/回退模块即可，已接受任务不删除。普通CI及 `all` 不执行此依赖已有浏览器的特权专项；未重跑全部Worker、账号浏览器或其他浏览器矩阵。M0最小合成页面补证不代表M1训练、完整M0或生产准入通过，未部署。
+
 ## 2026-11-03：HTTP 到真实 Worker 终态联合验收
 
 成功fetch后从 `origin/main 44b1417` 建立独立 `codex/http-judge-loop` worktree。新增 `http-loop` 专项（也加入all），仅测试/驱动和文档，无业务路由、授权、数据库、材料、依赖或预算变化。正式迁移/固定夹具命令初始化空的临时PG；两个真实提交API共享私有实验凭据，通过HTTP提交仓库固定AC/WA源码并确认queued，然后才启动实际mTLS控制端及Worker命令，最终经HTTP观察finished/正确判定，不以SQL代替请求或终态。

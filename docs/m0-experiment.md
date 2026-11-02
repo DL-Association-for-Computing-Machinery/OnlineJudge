@@ -15,13 +15,21 @@
 | 材料缺失/损坏、数据库失败和节点失联 | [接收事务](../tests/integration/submissions_test.go)、[材料授权](../tests/integration/worker_acquisition_test.go)、[Worker 故障](../tests/sandbox/fault_test.go)、网络/槽恢复专项 | 区分真实文件/节点/网络故障和模拟未知回执；异常槽仍需人工排空旧宿主操作并显式恢复，不是自动重启/解封或持久结果队列 |
 | 受限执行与资源预算 | [TestSandbox](../tests/sandbox/sandbox_test.go)、固定[执行环境](../internal/experiment/environment.go)、真实停止/PID及[资源耗尽专项](../tests/sandbox/resource_bounds_test.go)；CPU/内存/输出/进程、inode/字节/单文件边界、隔离及每次执行恢复已有分项实测 | 总字节容量使用现有Compile资源预算的直接探针；普通Run内存先耗尽为MLE，单文件先受1MiB FSIZE约束。[SIGXFSZ/OLE正式Run适配及同槽继续AC](../tests/sandbox/file_size_report_test.go)已补证，Compile对应分支仍保守拒绝，不能扩写全部P2/生产准入通过 |
 | 组件准入、资源测量和失败恢复记录 | 固定环境每次运行前核验；下方[组件准入](#组件准入与下一步)、[Store 成本采样](#普通会话-store-有限成本采样2026-10-31)及[交付日志](delivery-log.md)保留范围和原始证据 | 当前只是隔离实验准入；完整 OS/工具链许可与安全清单、目标硬件/负载及生产容量未验收。实验资源观测不等于首批100人容量或生产 SLA |
-| M0 推进顺序中的真实请求与最小结果页面 | [HTTP 真实进程闭环](../tests/sandbox/http_loop_test.go)覆盖双提交 API→mTLS 控制端→Worker→HTTP AC/WA；当前[示例做题页](../web/src/preview/ProblemPage.tsx)、[提交空态](../web/src/pages/StatusPages.tsx)及已交付账号浏览器路径 | **页面仍未完成**：HTTP 已在同一专项确认 queued、跨实例原键回执/冲突与终态，SQL仅作不可变源码/attempt旁证；示例提交仍禁用，尚无浏览器真实提交/回执核验/结果观察闭环。P5 完整训练页面归 M1，不据此删除计划中明确要求的 M0 最小页面 |
+| M0 推进顺序中的真实请求与最小结果页面 | [HTTP真实进程闭环](../tests/sandbox/http_loop_test.go)覆盖双提交API终态；[最小浏览器页](../internal/m0browser/assets/index.html)及[真实专项](../tests/sandbox/browser_loop_test.go)覆盖固定AC/WA、queued、实际丢接收回执/原键恢复、刷新/冲突和窄屏 | M0受控合成最小页面已有实测；独立固定实验归属，不是账号训练授权。查询503是浏览器路由注入，不能冒充真实数据库故障；普通[做题预览](../web/src/preview/ProblemPage.tsx)提交仍禁用，P5完整训练页面/上传/历史归M1 |
 
-资源边界、SIGXFSZ/OLE正式Run适配及HTTP真实终态已有分项实测，下一步补受控实验题的最小页面及其失败路径，再按上述要求汇总组件准入与联合验收。普通运行预算保持，分项通过不代表全部P2或生产准入通过。
+资源边界、SIGXFSZ/OLE正式Run适配、HTTP真实终态及受控最小浏览器页已有分项实测；下一步按上述要求汇总组件准入与联合验收，复核仍缺的M0技术证据。普通运行预算保持，分项通过不代表全部P2或生产准入通过。
 
 用户已明确“题目来源尚未确定，先继续补齐 M0”；P4 首个录入入口保持未决。最小实验闭环可使用既有受控合成材料，但不能冒充正式题库、邮箱验证后的训练授权或 M1 交付。跨主机、真实独立备份域、生产证书/容量和部署分别按计划的使用节点验收，既不扩成无止境的 M0 前置，也不从后续计划中删除。
 
 计划中 P1 的额度/公平调度明确以“试用开放前”为完成节点；这里保留为 P1 后续子项，不将其新增为 M0 技术实验前置。M0 的 P1 状态须按本阶段子项报告，不能把技术实验通过扩写为全部 P1 或试用准入通过。
+
+## M0 固定合成题最小浏览器页（2026-11-03）
+
+显式双重opt-in在实际127.0.0.1监听提供 `/m0`；服务端固定v3材料/GNU++17/AC或WA源码，单独浏览器实验主体/上下文，与Bearer提交隔离。nonce用于CSRF防护，不认证账号或隔离同源脚本；严格Host/Origin/Fetch Metadata、数据GET nonce、CSP/no-store、不使用/设置会话Cookie、不开放CORS及默认关闭边界归[浏览器契约](../api/m0-browser.openapi.yaml)和[README](../README.md#m0-最小浏览器实验页)。没有放宽旧Bearer Origin拒绝、普通账号训练权限、预算、依赖或数据库schema。
+
+页面保存标签页原键/预设/核验状态，刷新重新bootstrap且仅查原键，不自动POST。真实接收后丢弃响应得到未知；原键核验只证明既有记录，原样POST成功才确认内容绑定，409状态刷新后仍明确区别。轮询次数/时长有界，停止查询不取消任务。桌面/390px已有真实浏览器→API/PG→mTLS控制端→Worker→浏览器AC/WA证据，SQL仅旁证固定源码/归属、每题唯一attempt及拒绝无额外任务；未独立观察选手PID。注入GET 503与真实丢POST回执分开记录，不据此增加真实数据库故障覆盖声明。
+
+普通root race覆盖配置/HTTP边界；真实执行仅由显式 `browser-loop` 启用，需要已安装浏览器工具，不进入普通CI或 `all`。精确耗时、截图和复核归[交付日志](delivery-log.md)。本页补齐M0的最小合成演示，不冒充P5完整训练产品或完整M0验收；回退关闭开关/回退模块即可，无迁移，已接受任务仍保留。
 
 ## HTTP 真实进程判题闭环（2026-11-03）
 
@@ -607,6 +615,6 @@ pgx v5.11.0、Goose v3.29.0、sqlc v1.31.1 已核对官方版本/本地模块许
 
 go-judge v1.13.3 官方 arm64 镜像约 58 MB，GCC 15 镜像约 532 MB；实际 GCC 为 15.3.0。固定 tag 的 MIT 许可证已核对并保存 `.local/go-judge-v1.13.3-LICENSE`，SHA-256 为 `a84a0427c3a1c25851a4689410a54283962a759a02558058a107470993b80c5a`；GCC/基础发行版各组件许可及安全清单尚未完整核验，只准入隔离实验，不准入生产或对外分发。[pgx 发布](https://github.com/jackc/pgx/releases/tag/v5.11.0)、[Goose 发布](https://github.com/pressly/goose/releases/tag/v3.29.0)、[sqlc 发布](https://github.com/sqlc-dev/sqlc/releases/tag/v1.31.1)、[go-judge 版本](https://github.com/criyle/go-judge/releases/tag/v1.13.3)、[隔离与 API](https://docs.goj.ac/api)为核验入口。
 
-当前已接入 Worker 命令入口、控制端任务自动恢复、双 Worker 接管和撤销/材料故障专项。专项验收后推进会话关键实验；既有分项不能替代完整生命周期验收，`m0-sum-v1` 继续保持 unvalidated。生产节点检查器、传输与执行端恢复仍须独立验证。
+当前Worker、会话恢复、资源/故障、HTTP终态及最小合成页面已有分项证据，准确现状以[页首验收表](#m0-验收核对与下一步2026-11-03)为准；不再沿用历史“下一步推进会话实验”的状态。组件整体许可/安全清单及联合验收结论继续待汇总，`m0-sum-v1`保持unvalidated，生产准入另验。
 
-M0 仍待完整链路与会话实验；M1/M2 仍需试用范围、题库授权、SMTP/HTTPS、负载目标、RPO/RTO 与独立备份位置。不能把本页分项通过视作首期平台可用。
+完整M0尚未验收。M1/M2仍需试用范围、题库授权、SMTP/HTTPS、负载目标、RPO/RTO与独立备份位置；不能把合成技术实验通过视作首期平台可用或已部署。

@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"syscall"
 	"testing"
 	"time"
 
@@ -196,27 +195,7 @@ func TestHTTPJudgeLoop(t *testing.T) {
 		t.Logf("HTTP queued→%s/finished; immutable source SHA256=%x; one authenticated Worker attempt", tc.verdict, hash)
 	}
 	counts(2, 2, 2)
-	w.alive(t)
-	if err := w.cmd.Process.Signal(syscall.SIGUSR1); err != nil {
-		t.Fatal("cannot request Worker drain")
-	}
-	select {
-	case err := <-w.done:
-		w.stopped = true
-		if err != nil {
-			t.Fatal("HTTP loop Worker did not exit normally")
-		}
-	case <-time.After(15 * time.Second):
-		_ = w.cmd.Process.Kill()
-		select {
-		case exitErr := <-w.done:
-			w.stopped = true
-			t.Fatalf("Worker missed drain deadline; kill exit error present=%t", exitErr != nil)
-		case <-time.After(5 * time.Second):
-			t.Fatal("Worker exit remains unconfirmed after kill")
-		}
-	}
-	dualStopped(t, id, "")
+	drainHTTPLoopWorker(t, w, id)
 	for _, api := range apis {
 		api.process.stop(t)
 	}

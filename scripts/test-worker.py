@@ -6,9 +6,11 @@ The exported host executables are synthetic test drivers, not Linux sandboxes.
 """
 import argparse
 import fcntl
+import json
 import os
 from pathlib import Path
 import platform
+import shutil
 import subprocess
 import time
 import uuid
@@ -17,6 +19,34 @@ ROOT = Path(__file__).resolve().parent.parent
 DOCKER = ["docker", "--context", "desktop-linux"]
 OWNER = "onlinejudge.desktop-test"
 SLOTS = ["oj-m0-sandbox", "oj-m0-sandbox-secondary"]
+
+
+def browser_environment(args):
+    supplied = any((args.playwright_module, args.chromium_executable, args.output_dir))
+    if args.suite != "browser-loop":
+        if supplied:
+            raise ValueError("browser options require browser-loop")
+        return {}
+    if not args.playwright_module or not args.output_dir:
+        raise ValueError("browser-loop requires existing Playwright and a new external output directory")
+    module = args.playwright_module.resolve(strict=True)
+    package = module / "package.json" if module.is_dir() else module.parent / "package.json"
+    if json.loads(package.read_text()).get("name") not in {"playwright", "playwright-core", "@playwright/test"}:
+        raise ValueError("existing Playwright package required")
+    node = shutil.which("node")
+    if not node:
+        raise ValueError("existing host Node required; no dependencies are installed")
+    output = args.output_dir.resolve()
+    if args.output_dir.is_symlink() or output.exists() or output.is_relative_to(ROOT) or not output.parent.is_dir():
+        raise ValueError("output must be a new directory outside this repository")
+    env = {"OJ_PLAYWRIGHT_MODULE": str(module), "OJ_BROWSER_NODE": str(Path(node).resolve()), "OJ_BROWSER_OUTPUT": str(output)}
+    if args.chromium_executable:
+        binary = args.chromium_executable.resolve(strict=True)
+        if not binary.is_file() or not os.access(binary, os.X_OK):
+            raise ValueError("existing Chromium executable required")
+        env["OJ_BROWSER_CHROMIUM"] = str(binary)
+    output.mkdir(mode=0o700)
+    return env
 
 
 def docker(*args, capture=False):
@@ -38,10 +68,14 @@ def ready(name):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("suite", choices=["all", "sandbox", "report", "dual-worker", "worker-fault", "slot-recovery", "network-fault", "compile-lease", "resource-bounds", "http-loop"])
+    parser.add_argument("suite", choices=["all", "sandbox", "report", "dual-worker", "worker-fault", "slot-recovery", "network-fault", "compile-lease", "resource-bounds", "http-loop", "browser-loop"])
+    parser.add_argument("--playwright-module", type=Path)
+    parser.add_argument("--chromium-executable", type=Path)
+    parser.add_argument("--output-dir", type=Path)
     args = parser.parse_args()
     if platform.system() != "Darwin" or platform.machine() != "arm64":
         raise RuntimeError("Pinned Desktop experiment requires macOS arm64; other profiles need validation")
+    browser_env = browser_environment(args)
     docker("build", "--target", "host-artifacts", "--output", "type=local,dest=.local/bin", ".")
     docker("build", "--provenance=false", "-t", "oj-m0-sandbox:local", "-f",
            "deploy/experiments/go-judge.Dockerfile", "deploy/experiments")
@@ -84,6 +118,7 @@ def main():
             env = {k: v for k, v in os.environ.items() if not k.startswith("OJ_")}
             env.update(OJ_SANDBOX_EXPERIMENT="1",
                        OJ_TEST_DATABASE_URL=f"host=127.0.0.1 port={port} user=oj_test dbname={database} sslmode=disable")
+            env.update(browser_env)
             selection = {"report": ("OJ_SANDBOX_REPORT", "TestExecutionReport"),
                          "dual-worker": ("OJ_SANDBOX_DUAL", "TestDualWorkerRecovery"),
                          "worker-fault": ("OJ_SANDBOX_FAULT", "TestWorkerFaults"),
@@ -91,7 +126,8 @@ def main():
                          "network-fault": ("OJ_SANDBOX_NETWORK", "TestWorkerNetworkFaults"),
                          "compile-lease": ("OJ_SANDBOX_COMPILE_LEASE", "TestCompileLeaseFaults"),
                          "resource-bounds": ("OJ_SANDBOX_RESOURCES", "TestSandboxResourceBounds"),
-                         "http-loop": ("OJ_SANDBOX_HTTP", "TestHTTPJudgeLoop")}
+                         "http-loop": ("OJ_SANDBOX_HTTP", "TestHTTPJudgeLoop"),
+                         "browser-loop": ("OJ_SANDBOX_BROWSER", "TestBrowserJudgeLoop")}
             command = [str(ROOT / ".local/bin/sandbox.test"), "-test.v", "-test.count=1", "-test.timeout=10m"]
             if suite in selection:
                 flag, test = selection[suite]

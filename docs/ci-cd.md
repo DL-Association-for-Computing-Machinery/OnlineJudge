@@ -36,6 +36,8 @@
 
 `http_address_test.go` 的有界启动日志解析是普通 root race 用例，不启动进程或调用 Docker。真实双提交 API、mTLS 控制端、Worker 命令及 HTTP queued→终态由 sandbox 标签的 `http-loop` 专项执行；普通 CI 只编译/静态分析这些源码。准入及证据边界见 [README](../README.md#http-到真实判题终态专项)，不将其视为浏览器或正式训练授权验收。
 
+`internal/m0browser` 的配置/HTTP边界race随backend执行，固定预设、独立归属、拒绝零Store调用及nonce轮换不执行选手程序。`browser-loop` 是独立显式专项，需要已安装的宿主Node/Playwright/Chromium，普通CI和 `all` 均不运行；命令归[README](../README.md#m0-最小浏览器实验页)。它验证实际提交API、PG、mTLS控制端及Worker与桌面/390px浏览器，真实丢接收响应及原键恢复与注入查询503分别报告。现有前端预览和账号浏览器专项保持原入口，不因本页通过而扩写M1训练或账号权限验收。
+
 `tests/sandbox/network_relay*_test.go` 没有 sandbox 标签，只测试标准库回环 TCP 的字节透传、双向/下行阻断、关闭旧流后恢复及并发关闭，已纳入普通 root `go test -race ./...`，不使用 Docker 或执行选手程序。`network_fault_test.go` 的真实 Worker/控制端/数据库及特权沙箱仍要求 sandbox 标签和 `OJ_SANDBOX_NETWORK=1`，由专用驱动提供；两类证据分开记录。
 
 `compile_process_test.go` 的纯进程表解析边界也由普通 root race 执行，不发信号或调用 Docker；`compile_lease_test.go` 的实际编译器暂停、节点失权及提前停止证据仅由显式 `compile-lease` 专项执行。14 秒是早于原15秒编译 wall 的测试证据界限，不是业务预算或 SLA，不能为制造通过而延长。

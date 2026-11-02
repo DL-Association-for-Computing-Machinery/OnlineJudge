@@ -1,0 +1,152 @@
+openapi: 3.1.0
+info:
+  title: OnlineJudge M0 Fixed Browser Demonstration
+  version: 0.1.0
+  description: >-
+    默认关闭，仅可信本机、独占合成数据库的固定示例实验；不是账号身份或训练权限。
+    需要OJ_EXPERIMENT_BROWSER=1、实际127.0.0.1监听、私有Bearer实验配置及m0-sum-v3。
+    /m0页面及固定assets只读。所有路径严格Host，无查询参数、不使用或设置会话Cookie、不开放CORS，全部no-store。
+    nonce用于CSRF防护，不隔离同源脚本，也不认证操作者；私有Bearer不下放浏览器。
+    固定m0-browser-operator/m0-browser-training归属与Bearer主体隔离。
+servers:
+  - url: http://127.0.0.1:8080
+security:
+  - localNonce: []
+paths:
+  /m0/api/bootstrap:
+    get:
+      operationId: getM0BrowserBootstrap
+      security: []
+      description: 只读固定示例及本进程随机nonce，不读写提交；不授予账号身份。
+      responses:
+        '200':
+          description: 固定v3材料及两个服务端源码；nonce不入URL或持久存储
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [nonce, version, presets]
+                properties:
+                  nonce: {type: string, pattern: '^[a-f0-9]{64}$'}
+                  version: {const: m0-sum-v3}
+                  presets:
+                    type: array
+                    minItems: 2
+                    maxItems: 2
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [id, title, source]
+                      properties:
+                        id: {enum: [sum, wrong]}
+                        title: {type: string}
+                        source: {type: string}
+        '403': {$ref: '#/components/responses/Rejected'}
+        '405': {$ref: '#/components/responses/Method'}
+  /m0/api/submissions:
+    post:
+      operationId: acceptFixedM0BrowserPreset
+      description: >-
+        单一Origin必须精确匹配本机http来源，Fetch Metadata若存在必须为单一same-origin；
+        nonce为单一正确请求头。服务端选择固定源码、GNU++17及v3材料，不接客户端源码或身份。
+        最大JSON请求体512字节，拒绝重复字段、额外字段及非法Unicode。
+      parameters:
+        - $ref: './experiment.openapi.yaml#/components/parameters/IdempotencyKey'
+        - in: header
+          name: Origin
+          required: true
+          schema: {type: string}
+          description: 浏览器自动提供；必须为实际127.0.0.1监听的精确http来源
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [preset]
+              properties:
+                preset: {enum: [sum, wrong]}
+      responses:
+        '202': {$ref: '#/components/responses/Receipt'}
+        '200': {$ref: '#/components/responses/Receipt'}
+        '400': {$ref: '#/components/responses/Invalid'}
+        '403': {$ref: '#/components/responses/Rejected'}
+        '405': {$ref: '#/components/responses/Method'}
+        '409':
+          description: IDEMPOTENCY_CONFLICT；不改原记录，既有结果不能据此归为当前预设
+          content:
+            application/problem+json:
+              schema: {$ref: './openapi.yaml#/components/schemas/Problem'}
+        '413':
+          description: BODY_TOO_LARGE，请求体超过512字节
+          content:
+            application/problem+json:
+              schema: {$ref: './openapi.yaml#/components/schemas/Problem'}
+        '415':
+          description: UNSUPPORTED_MEDIA_TYPE，必须application/json
+          content:
+            application/problem+json:
+              schema: {$ref: './openapi.yaml#/components/schemas/Problem'}
+        '503': {$ref: '#/components/responses/Unknown'}
+  /m0/api/receipt:
+    get:
+      operationId: getFixedM0BrowserReceipt
+      description: >-
+        仅按原键读取浏览器固定归属；Origin/Fetch Metadata若存在必须精确同源且单一。
+        GET回执不确认源码/预设一致性；需同原键/原预设POST成功才能确认内容绑定。
+      parameters:
+        - $ref: './experiment.openapi.yaml#/components/parameters/IdempotencyKey'
+      responses:
+        '200': {$ref: '#/components/responses/Receipt'}
+        '400': {$ref: '#/components/responses/Invalid'}
+        '403': {$ref: '#/components/responses/Rejected'}
+        '404':
+          description: NOT_FOUND，暂未查到，不表示提交已回滚或未来不会接收
+          content:
+            application/problem+json:
+              schema: {$ref: './openapi.yaml#/components/schemas/Problem'}
+        '405': {$ref: '#/components/responses/Method'}
+        '503': {$ref: '#/components/responses/Unknown'}
+components:
+  securitySchemes:
+    localNonce:
+      type: apiKey
+      in: header
+      name: X-OJ-M0-Nonce
+      description: bootstrap的随机进程nonce，CSRF校验而非用户身份；不能放URL或日志
+  responses:
+    Receipt:
+      description: queued/running尚无判定；finished为真实选手结果；failed无选手判定。POST新建202、同内容重试200。
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: './experiment.openapi.yaml#/components/schemas/Receipt'
+              - properties:
+                  verdict:
+                    enum: [null, AC, WA, CE, RE, TLE, MLE, OLE]
+    Invalid:
+      description: INVALID_SUBMISSION，格式、预设或原键无效
+      content:
+        application/problem+json:
+          schema: {$ref: './openapi.yaml#/components/schemas/Problem'}
+    Rejected:
+      description: ORIGIN_REJECTED或NONCE_REJECTED；不调用提交Store
+      content:
+        application/problem+json:
+          schema: {$ref: './openapi.yaml#/components/schemas/Problem'}
+    Method:
+      description: METHOD_NOT_ALLOWED，不执行动作；Allow指明支持方法
+      headers:
+        Allow:
+          schema: {type: string}
+      content:
+        application/problem+json:
+          schema: {$ref: './openapi.yaml#/components/schemas/Problem'}
+    Unknown:
+      description: MATERIAL_UNAVAILABLE或ACCEPTANCE_UNKNOWN；失败不证明事务回滚，保留原键核验
+      content:
+        application/problem+json:
+          schema: {$ref: './openapi.yaml#/components/schemas/Problem'}
