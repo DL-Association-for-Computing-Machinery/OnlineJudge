@@ -98,9 +98,11 @@ schema 7 默认不给任何账号授予出题角色。受信维护者先独立�
 
 仅Linux；`material_root`必须是按[存储合同](docs/material-store.md)预建持久根，bundle为已准备的稳定私有快照，两者均由运行euid所有、目录0700/文件0600。来源锁从仓库受信的[固定来源锁](config/problem-sources/library-checker.json)单独配置，不得从请求或bundle自行选作信任根。三个路径须绝对规范，材料根与bundle不得互相包含，锁须在两者之外；部署者也须保证实际挂载/祖先没有把它们别名到同一位置。bundle/锁只读挂载，材料根可写，镜像默认UID65532须有对应访问权。服务不自动建目录、迁移、授予角色或修复文件。
 
-`source_ids`为1—10个不重复候选，启动逐项加载元数据；大对象仍在授权后的导入中验证。`timeout`为正且至多1分钟，`server.write_timeout`不得小于它；`max_in_flight`为1—10，仅限制本实例已授权且命中候选后的材料导入段，不是全部HTTP并发、共享频率或磁盘总额。每对象128MiB、固定bundle上限及同题单份Prepared活动约束继续适用。缺省整个对象关闭能力，关闭后重启保留草稿和材料，无迁移；旧二进制回退前也先移除该对象。
+`source_ids`为1—10个不重复候选，启动逐项加载元数据；大对象仍在授权后的导入中验证。`timeout`为正且至多1分钟，`server.write_timeout`不得小于它；`max_in_flight`为1—10，由本实例已授权的导入/预览材料阶段共享，无等待拒绝，不限制初次预检、普通元数据GET或HTTP输出，不是共享频率或磁盘总额。每对象128MiB、固定bundle上限及同题单份Prepared活动约束继续适用。缺省整个对象关闭能力，关闭后重启保留草稿和材料，无迁移；旧二进制回退前也先移除该对象。
 
-已通过真实普通登录的出题账号可向`POST /api/v1/problem-drafts`发送`{"source_id":"library-checker:aplusb","request_key":"original-import-request-01"}`，需要同源证据及会话Cookie；最多1KiB JSON。成功/原回执均200，再以`GET /api/v1/problem-drafts/草稿ID`读取本人固定JSON元数据；没有材料下载或发布接口。断连/503可能已经提交，保留原键及精确候选快照核验，不自动重试或换键；配置/候选版本切换前须保留原版本供未知回执恢复。完整协议见[OpenAPI](api/problem-drafts.openapi.yaml)。默认Compose及本地测试账号均不自动开启或取得出题权。
+已通过真实普通登录的出题账号可向`POST /api/v1/problem-drafts`发送`{"source_id":"library-checker:aplusb","request_key":"original-import-request-01"}`，需要同源证据及会话Cookie；最多1KiB JSON。成功/原回执均200，再以`GET /api/v1/problem-drafts/草稿ID`读取本人固定JSON元数据。断连/503可能已经提交，保留原键及精确候选快照核验，不自动重试或换键；配置/候选版本切换前须保留原版本供未知回执恢复。完整协议见[OpenAPI](api/problem-drafts.openapi.yaml)。默认Compose及本地测试账号均不自动开启或取得出题权。
+
+`GET /api/v1/problem-drafts/草稿ID/preview`返回本人已入库版本的`markdown`和有序`examples`（id/input/output），不依赖当前候选版本；仍须有效普通会话和当前出题权。先核对全部题面/样例引用与总预算，再逐份验证快照，读取后复核同一凭据和PG授权，失败不返回部分文本。原始markdown/input/output总计至多1MiB，重复对象按返回次数计数；JSON转义可放大到六倍另加元数据。只接受严格UTF-8，保留空格、CRLF及末尾换行，不替换或截断。它是后续管理页的数据接口，未提供HTML渲染、一般材料下载或发布；正式测试与源码不进入预览。最终会话读取之后的退出及最终PG授权之后的撤权沿已接受在途合同，不能原子撤回已经开始发送的响应。关闭整个`private_drafts`能力即可停止入口，已入库资料保留。
 
 ## 本地不可变材料存储
 

@@ -7,7 +7,7 @@ info:
     沿用 session.openapi.yaml 的 TLS/Host、单跳已验证且 pin 的 mTLS 代理及 Cookie 边界。
     登录不授予出题权；每次操作重新检查当前出题角色，GET 仅可读取本人草稿。
     所有响应 no-store、nosniff，无 CORS 许可或 Set-Cookie，不隐式续期。
-    不提供上传、文件下载、执行、审核或发布。未知/外人 ID 返回相同 404；
+    预览仅返回本人题面/样例JSON；不提供上传、一般材料下载、执行、审核或发布。未知/外人 ID 返回相同 404；
     未登录或无出题权不能通过候选查找判断 source_id 是否配置。
 security:
   - ordinarySession: []
@@ -105,7 +105,89 @@ paths:
           $ref: '#/components/responses/Failure'
         '503':
           $ref: '#/components/responses/Failure'
+  /api/v1/problem-drafts/{draft_id}/preview:
+    get:
+      operationId: getOwnPrivateDraftPreview
+      description: >-
+        仅返回已入库固定版本的题面与显式样例，顺序与该版本examples一致。
+        不接受路径、材料hash、测试点选择器或客户端指定版本，不从现候选bundle重建。
+        初次真实会话/owner/当前角色检查后取得材料活动槽；全部引用与总预算先校验，
+        然后逐份读取并验证匿名快照，释放后才读下一份，最后再次核对同一实际凭据及PG授权。
+        Markdown和样例均为严格UTF-8 JSON字符串，保留CRLF/空格/空文件/末尾换行，
+        非UTF-8、缺失/损坏/关联不符及超预算均503，不替换或截断，不返回部分预览。
+        markdown/input/output原始字节总计最多1048576，重复对象按返回次数计费；
+        JSON转义后可达该文本量六倍另加字段元数据。导入/预览共享本实例max_in_flight，
+        预算覆盖初次授权后材料/最终授权阶段，不限制初次预检、普通元数据GET或HTTP输出。
+        最终Redis读取之后的单token退出及最终PG授权之后的撤权沿已接受在途合同，
+        不承诺跨库原子撤回响应。数据不代表HTML已安全渲染或题目已审核/发布。
+      parameters:
+        - name: draft_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9a-f]{32}$'
+      responses:
+        '200':
+          description: 完整本人预览JSON，无Cookie、no-store/nosniff，无CORS授权。
+          headers:
+            Cache-Control:
+              schema:
+                const: no-store
+            X-Content-Type-Options:
+              schema:
+                const: nosniff
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Preview'
+        '401':
+          $ref: '#/components/responses/Failure'
+        '403':
+          $ref: '#/components/responses/Failure'
+        '404':
+          description: 未启用、未知草稿或其他作者草稿。
+          $ref: '#/components/responses/Failure'
+        '405':
+          description: 不支持的方法，Allow为GET。
+          $ref: '#/components/responses/Failure'
+        '503':
+          description: 文档/材料/预算/存储/恢复/取消异常或容量不足；不返回部分文本。
+          $ref: '#/components/responses/Failure'
 components:
+  schemas:
+    Preview:
+      type: object
+      additionalProperties: false
+      required: [draft_id, version, title, language, markdown, examples]
+      properties:
+        draft_id:
+          type: string
+          pattern: '^[0-9a-f]{32}$'
+        version:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        title:
+          type: string
+        language:
+          const: en
+        markdown:
+          type: string
+          description: 未渲染Markdown原文，不是可信HTML。
+        examples:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, input, output]
+            properties:
+              id:
+                type: string
+                pattern: '^case-[0-9]{4}$'
+              input:
+                type: string
+              output:
+                type: string
   securitySchemes:
     ordinarySession:
       $ref: './session.openapi.yaml#/components/securitySchemes/ordinarySession'

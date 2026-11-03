@@ -404,13 +404,13 @@ Close 在同一 mutex 下停止入口和登记活动请求，503/no-store/无 Co
 | `proxy_fingerprints` | direct 为 `[]`；proxy 为 1—16 个唯一非零、64 字符小写十六进制叶证书 DER SHA-256 |
 | 存储 `tls` | private 模式为 `{}`；tls 模式须有 `ca_file`、`server_name`，可另给成对 `certificate_file`/`key_file`；禁止明文 fallback/跳过校验 |
 | `server` | `read_header_timeout`、`read_timeout`、`write_timeout`、`idle_timeout`、`shutdown_timeout`、`max_header_bytes`；header/read/write/shutdown 为正且至多 1m，idle 至多 10m，read ≥ header，write ≥ HTTP 期限，header 1 KiB—1 MiB |
-| 可选 `private_drafts` | `material_root`、`bundle_directory`、外置`source_lock_file`、1—10唯一`source_ids`、正且至多1m的`timeout`、1—10的`max_in_flight`；write ≥ 导入期限。省略关闭，路径/权限和导入段预算见[README](../../README.md#显式启用私有草稿-http) |
+| 可选 `private_drafts` | `material_root`、`bundle_directory`、外置`source_lock_file`、1—10唯一`source_ids`、正且至多1m的`timeout`、1—10的`max_in_flight`；write ≥ 草稿调用期限。省略关闭，导入/本人预览共享材料段预算，路径/权限见[README](../../README.md#显式启用私有草稿-http) |
 
 数据库/Redis 的 `security` 只能为 `"private"`/`"tls"`，`auth` 只能为 `"none"`/`"env"`。后者分别从固定的两个密码环境读取非空值；前者拒绝对应非空残留。解析结果不包含环境获取副作用，配置/解析错误只给固定类别。解析夹具使用合成参数，不能直接作为生产 KDF、限流或资源推荐。
 
 配置、公开证书/CA 与原登录密钥复用 `checkedfile` 的逐级 fd 校验。配置/公开材料允许组/其他只读，禁止执行/特殊位/组或其他写；私钥及登录密钥仅 0400/0600。所有者、目录、单硬链接、无符号链接、读取前后快照及可信本地文件系统限制不变；路径均为绝对规范路径。公开证书/私钥各至多 64 KiB、CA 至多 1 MiB；读取后尽力清理字节。TLS 使用标准库验证，最低 1.2，无自定义弱 cipher；启动核对叶证书有效期、匹配私钥及相应用途。proxy 在同一监听器 `RequireAndVerifyClientCert`，应用再核对 pin；健康检查同样要求真实 mTLS。证书不热重载，轮换须重启并协调多副本。
 
-启动先注册信号，再在同一累计启动期限内读取有界配置/材料、构造 Runtime 和绑定监听器，阶段间检查取消。同步文件读取不能强制中断；Runtime 只检查 schema/恢复/marker，不初始化或修复。bind 或启动取消失败用有限清理预算关闭已构造 Runtime，未准备完成不记录 ready 地址。会话路由对六个完整路径及可选改密/私有草稿路径的所有方法直达同一Handler，保留原Host/TLS/RemoteAddr，不使用Gin前缀重定向；草稿item仅接受单段32位小写十六进制ID，方法、CSRF和Cookie合同由各能力检查。panic在响应提交前固定503且清Cookie，提交后由net/http中止连接，不输出原异常。
+启动先注册信号，再在同一累计启动期限内读取有界配置/材料、构造 Runtime 和绑定监听器，阶段间检查取消。同步文件读取不能强制中断；Runtime 只检查 schema/恢复/marker，不初始化或修复。bind 或启动取消失败用有限清理预算关闭已构造 Runtime，未准备完成不记录 ready 地址。会话路由对六个完整路径及可选改密/私有草稿路径的所有方法直达同一Handler，保留原Host/TLS/RemoteAddr，不使用Gin前缀重定向；草稿item为单段32位小写十六进制ID，题面样例预览仅可追加精确`/preview`，方法、CSRF和Cookie合同由各能力检查。panic在响应提交前固定503且清Cookie，提交后由net/http中止连接，不输出原异常。
 
 SIGTERM/interrupt 后 listener 停止接收，网络 Shutdown 与 Runtime.Close 共用**同一个总退出预算**；Runtime 同时拒绝新工作，并等待实际 Handler/KDF 返回才关存储。网络超时仍启动 Runtime 排空；退出预算耗尽返回非零，不记 graceful，不以强关连接冒充业务排空。只有网络与 Runtime 均确认完成才记 `API stopped gracefully`。启动取消且清理成功可正常退出，其他启动/监听/退出失败非零。日志不输出配置、文件路径、密码、原始 TLS 握手诊断或 panic。
 

@@ -70,7 +70,7 @@ func TestProxyTrust(t *testing.T) {
 				t.Fatal("untrusted proxy metadata accepted")
 			}
 			// No store is installed: reaching any lifecycle store operation panics.
-			for _, path := range []string{"/api/v1/session", "/api/v1/session/activity", "/api/v1/session/logout", "/api/v1/session/login/begin", "/api/v1/session/login/complete", "/api/v1/session/login/abandon", "/api/v1/problem-drafts", "/api/v1/problem-drafts/11111111111111111111111111111111"} {
+			for _, path := range []string{"/api/v1/session", "/api/v1/session/activity", "/api/v1/session/logout", "/api/v1/session/login/begin", "/api/v1/session/login/complete", "/api/v1/session/login/abandon", "/api/v1/problem-drafts", "/api/v1/problem-drafts/11111111111111111111111111111111", "/api/v1/problem-drafts/11111111111111111111111111111111/preview"} {
 				r.URL.Path = path
 				w := httptest.NewRecorder()
 				h.ServeHTTP(w, r)

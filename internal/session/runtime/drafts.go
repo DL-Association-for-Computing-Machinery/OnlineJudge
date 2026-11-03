@@ -17,9 +17,10 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/redisstore"
 )
 
-// PrivateDraftsConfig enables only imports from an explicitly trusted private
-// snapshot. The source lock is provisioned independently outside that snapshot.
-// All paths are local configuration, never HTTP input. No directory is created.
+// PrivateDraftsConfig enables trusted snapshot imports and persisted owner
+// statement/sample previews. The source lock is provisioned independently
+// outside the import snapshot. Paths are local configuration, never HTTP input;
+// no directory is created.
 type PrivateDraftsConfig struct {
 	MaterialRoot, BundleDirectory, SourceLockFile string
 	SourceIDs                                     []string
