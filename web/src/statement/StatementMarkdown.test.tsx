@@ -20,6 +20,17 @@ describe('shared statement rendering', () => {
     expect(html).toContain('referrerPolicy="no-referrer"')
     expect(html).toContain('href="https://example.test/a"')
   })
+  it('renders only exact authorized images and caps repeated image occurrences', () => {
+    const image = { source: 'figures/a.png', media_type: 'image/png' as const, data: 'iVBORw0KGgo', width: 80, height: 40 }
+    const source = ['![known](figures/a.png)', '![alias](./figures/a.png)', '![remote](https://evil.test/x.png)',
+      '![hash](objects/sha256/a.png)', '![inline](data:image/png;base64,x)', ...Array.from({ length: 40 }, () => '![repeat](figures/a.png)')].join('\n\n')
+    const html = renderToStaticMarkup(<StatementMarkdown source={source} images={[image]} />)
+    expect(html.match(/<img\b/g)).toHaveLength(28) // All source occurrences consume the 32-image display budget.
+    expect(html).toContain('src="data:image/png;base64,iVBORw0KGgo"')
+    expect(html).not.toMatch(/src="(?:https:|figures|objects|\.\/)/)
+    expect(html).toContain('图片暂不可用：alias')
+    expect(html).toContain('alt="known" width="80" height="40"')
+  })
   it('contains malformed formula errors and isolates gdef macros between formulas', () => {
     const html = render('$\\badcommand$ then $x+1$\n\n$\\gdef\\testmacro{LEAK}$\n\n$\\testmacro$')
     expect(html).toContain('katex-error')

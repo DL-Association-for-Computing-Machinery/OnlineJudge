@@ -164,10 +164,11 @@ func browserDrafts(t *testing.T, f *fixture, c *sessionruntime.Config, subjectID
 	t.Helper()
 	bundle := problemfixture.New(t)
 	statement := []byte("# Browser statement\n\nInline $x^2$ and display:\n\n$$\n\\sum_{i=1}^n i\n$$\n\n| Input | Output |\n| --- | --- |\n| 1 2 | 3 |\n\n" +
-		"```math\na+b\n```\n\nInvalid $\\badcommand$ then valid $y+1$.\n\n![private source image](https://invalid.example.test/blocked.png)\n\n<script>window.__unsafeStatement=true</script>\n\n[unsafe](javascript:alert%281%29) [reference](https://example.test/reference)\n")
+		"```math\na+b\n```\n\nInvalid $\\badcommand$ then valid $y+1$.\n\n![授权的本题示意图](figures/diagram.png)\n\n![private source image](https://invalid.example.test/blocked.png)\n\n<script>window.__unsafeStatement=true</script>\n\n[unsafe](javascript:alert%281%29) [reference](https://example.test/reference)\n")
 	bundle.Files["statements/aplusb.md"] = statement
 	s := bundle.Document["statement"].(map[string]any)
 	s["size"], s["sha256"] = len(statement), problemfixture.Hash(statement)
+	bundle.AddStatementImage(t, "figures/diagram.png", problemfixture.PNG(t, 640, 160))
 	bundle.Write(t)
 	root := filepath.Join(t.TempDir(), "materials")
 	must(t, os.Mkdir(root, 0700))

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"io"
 	"reflect"
+	"sort"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
@@ -13,19 +15,20 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/redisstore"
 )
 
-// MaxPreviewBytes bounds raw markdown/input/output text. Repeated object
-// references count repeatedly; JSON escaping can use up to six times this.
+// MaxPreviewBytes bounds text plus raw images, and separately text plus encoded
+// PNGs. Repeated references count repeatedly; JSON text can expand sixfold.
 const MaxPreviewBytes int64 = 1 << 20
 
-// Preview contains only the owner's statement and explicitly designated samples.
-// Markdown is data, never trusted HTML. No formal tests or source are included.
+// Preview contains the owner's statement, designated samples and static images.
+// Markdown is data, never trusted HTML. No formal tests or programs are included.
 type Preview struct {
-	DraftID  string    `json:"draft_id"`
-	Version  string    `json:"version"`
-	Title    string    `json:"title"`
-	Language string    `json:"language"`
-	Markdown string    `json:"markdown"`
-	Examples []Example `json:"examples"`
+	DraftID  string         `json:"draft_id"`
+	Version  string         `json:"version"`
+	Title    string         `json:"title"`
+	Language string         `json:"language"`
+	Markdown string         `json:"markdown"`
+	Examples []Example      `json:"examples"`
+	Images   []PreviewImage `json:"images,omitempty"`
 }
 
 // Example preserves exact valid UTF-8 bytes, including whitespace and newlines.
@@ -56,12 +59,28 @@ func (s *Service) preview(ctx context.Context, credential redisstore.Credential,
 	if err != nil {
 		return Preview{}, err
 	}
-	text := make([]string, len(files))
-	for n, file := range files {
+	textCount := 1 + 2*len(doc.Examples)
+	text := make([]string, textCount)
+	for n, file := range files[:textCount] {
 		text[n], err = s.previewText(ctx, file.object)
 		if err != nil {
 			return Preview{}, err
 		}
+	}
+	images := make([]PreviewImage, 0, len(doc.Statement.Images))
+	var pixels int64
+	var outputBytes int64
+	for _, value := range text {
+		outputBytes += int64(len(value))
+	}
+	for _, file := range files[textCount:] {
+		image, err := s.previewImage(ctx, file, &pixels)
+		if err != nil || int64(len(image.Data)) > MaxPreviewBytes-outputBytes {
+			return Preview{}, errors.Join(ErrStore, err)
+		}
+		outputBytes += int64(len(image.Data))
+		image.Source = strings.TrimPrefix(file.name, "original/source/"+doc.Provenance.SourcePath+"/")
+		images = append(images, image)
 	}
 	// Material verification is outside PG locks. Observe the actual credential
 	// again and recheck owner/role after I/O before publishing any private bytes.
@@ -85,7 +104,7 @@ func (s *Service) preview(ctx context.Context, credential redisstore.Credential,
 		return Preview{}, err
 	}
 	out := Preview{DraftID: id, Version: draft.Version, Title: doc.Title, Language: doc.Statement.Language,
-		Markdown: text[0], Examples: make([]Example, len(doc.Examples))}
+		Markdown: text[0], Examples: make([]Example, len(doc.Examples)), Images: images}
 	for n, exampleID := range doc.Examples {
 		out.Examples[n] = Example{ID: exampleID, Input: text[1+2*n], Output: text[2+2*n]}
 	}
@@ -114,6 +133,14 @@ func previewFiles(draft Draft, actor identity.ProblemActor, id string) (document
 			files = append(files, previewFile{"tests/" + c.ID + "/input", c.Input.object()}, previewFile{"tests/" + c.ID + "/answer", c.Answer.object()})
 		}
 	}
+	sources := make([]string, 0, len(doc.Statement.Images))
+	for source := range doc.Statement.Images {
+		sources = append(sources, source)
+	}
+	sort.Strings(sources)
+	for _, source := range sources {
+		files = append(files, previewFile{"original/source/" + doc.Provenance.SourcePath + "/" + source, doc.Statement.Images[source].object()})
+	}
 	var total int64
 	for _, file := range files {
 		if refs[file.name] != file.object || file.object.Size < 0 || file.object.Size > MaxPreviewBytes-total {
@@ -125,19 +152,27 @@ func previewFiles(draft Draft, actor identity.ProblemActor, id string) (document
 }
 
 func (s *Service) previewText(ctx context.Context, object materialstore.Object) (string, error) {
-	snapshot, err := s.materials.Open(ctx, object)
-	if err != nil {
+	raw, err := s.previewBytes(ctx, object)
+	if err != nil || !utf8.Valid(raw) {
 		return "", errors.Join(ErrStore, err)
 	}
+	return string(raw), nil
+}
+
+func (s *Service) previewBytes(ctx context.Context, object materialstore.Object) ([]byte, error) {
+	snapshot, err := s.materials.Open(ctx, object)
+	if err != nil {
+		return nil, errors.Join(ErrStore, err)
+	}
 	if snapshot == nil {
-		return "", ErrStore
+		return nil, ErrStore
 	}
 	// Close each verified snapshot before opening the next: Local retains its
 	// slot until Close, including with a one-operation deployment budget.
 	raw, err := io.ReadAll(io.LimitReader(snapshot, object.Size+1))
 	closeErr := snapshot.Close()
-	if err != nil || closeErr != nil || snapshot.Object != object || int64(len(raw)) != object.Size || !utf8.Valid(raw) {
-		return "", errors.Join(ErrStore, err, closeErr)
+	if err != nil || closeErr != nil || snapshot.Object != object || int64(len(raw)) != object.Size {
+		return nil, errors.Join(ErrStore, err, closeErr)
 	}
-	return string(raw), nil
+	return raw, nil
 }

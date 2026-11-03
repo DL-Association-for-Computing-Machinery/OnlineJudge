@@ -44,7 +44,8 @@ type document struct {
 	Title     string `json:"title"`
 	Statement struct {
 		fileReference
-		Language string `json:"language"`
+		Language string                   `json:"language"`
+		Images   map[string]fileReference `json:"images,omitempty"`
 	} `json:"statement"`
 	TestCases []struct {
 		ID     string        `json:"id"`
@@ -253,6 +254,15 @@ func parseDocument(raw []byte, sourceID string) (document, error) {
 	}
 	for name, r := range p.OriginalFiles {
 		if !validPath(name) || !strings.HasPrefix(name, "source/") || !validFile(r) || r.Path != "objects/sha256/"+r.SHA256 {
+			return d, ErrInvalid
+		}
+	}
+	if len(d.Statement.Images) > MaxPreviewImages {
+		return d, ErrInvalid
+	}
+	for source, r := range d.Statement.Images {
+		original, ok := p.OriginalFiles["source/"+p.SourcePath+"/"+source]
+		if !validImageSource(source) || !validFile(r) || !ok || r != original || r.Size < 1 || r.Size > MaxPreviewImageBytes {
 			return d, ErrInvalid
 		}
 	}

@@ -49,9 +49,9 @@ React Router 声明式路由负责导航，账号 controller 提升到应用生�
 
 `/author/drafts/open` 选择已入库 ID，`/author/drafts/:id` 显式检查会话后 GET 本人固定版本预览。入口可见性不授予出题角色，服务端仍检查真实会话、owner 和当前角色；没有编辑、审核或发布。示例做题页与本人草稿使用同一 `StatementMarkdown` 和原文样例组件，样例复制直接写原字符串，不从 DOM 提取或规范化。
 
-采用 react-markdown 10.1.0、remark-gfm 4.0.1、remark-math 6.0.0、rehype-katex 7.0.1、KaTeX 0.19.1；原始 HTML 跳过，所有源图片只生成占位且不请求资源。链接仅接受无控制字符/反斜杠/凭据的 HTTPS、本站绝对路径或锚点，设置 no-referrer/noopener/noreferrer。KaTeX trust=false、maxExpand=128、maxSize=20，逐公式独立调用，错误局部显示固定提示和转义源码。两个数学插件仍依赖旧 KaTeX，按精确父版本覆盖为 0.19.1，避开[官方公告中的旧版本漏洞](https://github.com/KaTeX/KaTeX/security/advisories/GHSA-238p-pmpm-9mq7)；上游支持安全版本后再移除覆盖。CSS/字体随本地静态资源分发，不走 CDN。
+采用 react-markdown 10.1.0、remark-gfm 4.0.1、remark-math 6.0.0、rehype-katex 7.0.1、KaTeX 0.19.1；原始 HTML 跳过，图片只精确匹配本人预览的[显式图片清单](problem-drafts.md#显式题面图片)，以服务端受限重编码的静态PNG显示，其他源地址保持占位且不请求资源。链接仅接受无控制字符/反斜杠/凭据的 HTTPS、本站绝对路径或锚点，设置 no-referrer/noopener/noreferrer。KaTeX trust=false、maxExpand=128、maxSize=20，逐公式独立调用，错误局部显示固定提示和转义源码。两个数学插件仍依赖旧 KaTeX，按精确父版本覆盖为 0.19.1，避开[官方公告中的旧版本漏洞](https://github.com/KaTeX/KaTeX/security/advisories/GHSA-238p-pmpm-9mq7)；上游支持安全版本后再移除覆盖。CSS/字体随本地静态资源分发，不走 CDN。
 
-显示预算：题面 UTF-8 128 KiB；解析后和 KaTeX 输出各至多 20000 节点、深度64；实际数学候选（含 math 围栏）各4096字节、至多128个、总计32768字节。超限公式保留源码，整题 AST 超限显示纯文本原文；输入超限/异常提供最多32768字符的原文节选。解析与数学渲染仍在主线程，预算和实测不构成硬 CPU 超时/隔离保证。图片授权、目标浏览器/低端设备性能及所有题面人工质量验收另做，草稿发布阻断不因本页面自动解除。
+显示预算：题面 UTF-8 128 KiB；解析后和 KaTeX 输出各至多 20000 节点、深度64；实际数学候选（含 math 围栏）各4096字节、至多128个、总计32768字节。只允许前32次图片出现显示清单资产，超限/未知地址占位；图片最大宽度不超过容器，保留比例及alt，坏图显示说明。超限公式保留源码，整题 AST 超限显示纯文本原文；输入超限/异常提供最多32768字符的原文节选。解析与数学渲染仍在主线程，预算和实测不构成硬 CPU 超时/隔离保证。目标浏览器/低端设备性能及所有题面人工质量验收另做，草稿发布阻断不因本页面自动解除。
 
 响应按7MiB流式上限读取，严格 UTF-8 和 JSON 字符串完整性/字段/ID/版本/样例预算校验；15秒超时，一次 GET，无自动重试或持久缓存。私有请求有独立代次和取消控制。任何本标签账号状态发布、凭据写操作开始/结束、会话到期、focus/visibility/pagehide/pageshow 均清除结果；迟到响应发布前再核对观察到的 deadline。跨标签 BroadcastChannel 只广播无身份/正文的失效消息，接收后清除且不自动读取；恢复须再次按按钮核验。该异步信号不能保证跨标签瞬时撤回，缺少该能力时依靠页面恢复清理；不能撤销已被用户复制的文本或替代服务端授权。
 

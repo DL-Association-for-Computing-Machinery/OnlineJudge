@@ -35,7 +35,11 @@ export async function runDraftChecks(browser, info, email, password, output) {
     assert.equal(await page.locator('.statement-markdown .katex').count(), 4)
     assert.equal(await page.locator('.statement-markdown table').count(), 1)
     assert.equal(await page.locator('.statement-markdown .katex-error').count(), 1)
-    assert.equal(await page.locator('.statement-markdown img, .statement-markdown script, .statement-markdown iframe').count(), 0)
+    assert.equal(await page.locator('.statement-markdown script, .statement-markdown iframe').count(), 0)
+    const authorizedImage = page.getByRole('img', { name: '授权的本题示意图', exact: true })
+    await authorizedImage.waitFor()
+    assert(await authorizedImage.evaluate(async image => { await image.decode(); return image.naturalWidth === 640 && image.naturalHeight === 160 && image.src.startsWith('data:image/png;base64,') }))
+    assert.equal(await page.locator('.statement-markdown img').count(), 1)
     assert.equal(await page.evaluate(() => window.__unsafeStatement), undefined)
     assert(!requests.some(url => !url.startsWith(info.origin)), 'Statement creates zero external requests')
     assert.equal(await page.locator('.statement-markdown a').getAttribute('referrerpolicy'), 'no-referrer')
@@ -50,13 +54,24 @@ export async function runDraftChecks(browser, info, email, password, output) {
       const image = path.join(output, 'private-draft-' + name + '.png')
       await page.screenshot({ path: image, fullPage: true }); screenshots.push(image)
     }
+    const endpoint = '**/api/v1/problem-drafts/' + draft.id + '/preview'
+    // The real image path above is complete; this substitution separately
+    // proves browser decode failures preserve a readable placeholder.
+    phase = 'broken image presentation (HTTP substitution)'
+    const validPreview = await (await context.request.get(info.origin + '/api/v1/problem-drafts/' + draft.id + '/preview')).json()
+    const brokenImage = { ...validPreview.images[0], data: Buffer.from(validPreview.images[0].data, 'base64').subarray(0, 24).toString('base64') }
+    await page.route(endpoint, route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...validPreview, images: [brokenImage] }) }))
+    await open()
+    await page.getByText('图片无法显示：授权的本题示意图', { exact: true }).waitFor()
+    assert.equal(await page.locator('.statement-markdown img').count(), 0)
+    await page.unroute(endpoint)
+    await open(); await displayed()
     // Late HTTP success after hiding must not revive private content.
     phase = 'late response after pagehide'
     let release, captured, finished
     const gate = new Promise(resolve => { release = resolve })
     const capturedResponse = new Promise(resolve => { captured = resolve })
     const finishedResponse = new Promise(resolve => { finished = resolve })
-    const endpoint = '**/api/v1/problem-drafts/' + draft.id + '/preview'
     await page.route(endpoint, async route => {
       const response = await route.fetch()
       captured()
@@ -75,6 +90,7 @@ export async function runDraftChecks(browser, info, email, password, output) {
     await page.getByText('预览已清除，请重新检查会话并打开草稿。', { exact: true }).waitFor()
     await page.unroute(endpoint)
     assert.equal(await page.locator('#draft-title').count(), 0)
+    assert.equal(await page.locator('.statement-markdown img').count(), 0, 'Page invalidation clears private images')
     await open(); await displayed()
     const other = await context.newPage()
     phase = 'cross-tab invalidation without focus'

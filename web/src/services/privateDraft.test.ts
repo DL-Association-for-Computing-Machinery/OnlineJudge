@@ -3,9 +3,19 @@ import { decodeDraftPreview, fetchDraftPreview } from './privateDraft'
 
 const id = 'a'.repeat(32)
 const preview = { draft_id: id, version: 'b'.repeat(64), title: 'Title', language: 'en', markdown: '# Exact\r\n', examples: [{ id: 'case-0001', input: '\ufeff 1\r\n\0', output: '' }] }
+const image = { source: 'figures/a.png', media_type: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jL1sAAAAASUVORK5CYII=', width: 1, height: 1 }
 afterEach(() => vi.unstubAllGlobals())
 describe('private preview response contract', () => {
   it('preserves sample and Markdown strings exactly', () => expect(decodeDraftPreview(preview, id)).toEqual(preview))
+  it('accepts only bounded canonical PNG assets with exact paths and header dimensions', () => {
+    expect(decodeDraftPreview({ ...preview, images: [image] }, id).images).toEqual([image])
+    for (const images of [[], null, [image, image], [{ ...image, source: '../a.png' }], [{ ...image, source: 'https:a.png' }], [{ ...image, source: 'a.png\n' }],
+      [{ ...image, data: 'data:image/svg+xml;base64,x' }], [{ ...image, data: image.data + '\n' }], [{ ...image, width: 2 }],
+      [{ ...image, media_type: 'image/svg+xml' }], [{ ...image, secret: 'extra' }], [{ ...image, data: 'A'.repeat(349_529) }]]) {
+      expect(() => decodeDraftPreview({ ...preview, images }, id)).toThrow()
+    }
+    expect(() => decodeDraftPreview({ ...preview, markdown: 'x'.repeat(1_048_550), images: [image] }, id)).toThrow()
+  })
   it.each([
     { ...preview, version: 1 }, { ...preview, title: '中'.repeat(171) }, { ...preview, markdown: '\ud800' },
     { ...preview, examples: [...preview.examples, ...preview.examples] }, { ...preview, markdown: 'x'.repeat(1_048_577) },

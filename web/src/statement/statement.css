@@ -20,3 +20,4 @@
 .private-draft-page .sample-heading { display: flex; justify-content: space-between; align-items: center; }
 .private-draft-page .sample pre { overflow: auto; padding: 1rem; background: var(--soft); white-space: pre; }
 @media (max-width: 640px) { .private-draft-page .samples { grid-template-columns: 1fr; } }
+.statement-markdown .statement-authorized-image { max-width: 100%; height: auto; object-fit: contain; }

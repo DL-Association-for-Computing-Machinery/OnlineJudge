@@ -7,7 +7,7 @@ info:
     沿用 session.openapi.yaml 的 TLS/Host、单跳已验证且 pin 的 mTLS 代理及 Cookie 边界。
     登录不授予出题权；每次操作重新检查当前出题角色，GET 仅可读取本人草稿。
     所有响应 no-store、nosniff，无 CORS 许可或 Set-Cookie，不隐式续期。
-    预览仅返回本人题面/样例JSON；不提供上传、一般材料下载、执行、审核或发布。未知/外人 ID 返回相同 404；
+    预览仅返回本人题面/样例及显式授权图片JSON；不提供上传、一般材料下载、执行、审核或发布。未知/外人 ID 返回相同 404；
     未登录或无出题权不能通过候选查找判断 source_id 是否配置。
 security:
   - ordinarySession: []
@@ -130,7 +130,10 @@ paths:
         然后逐份读取并验证匿名快照，释放后才读下一份，最后再次核对同一实际凭据及PG授权。
         Markdown和样例均为严格UTF-8 JSON字符串，保留CRLF/空格/空文件/末尾换行，
         非UTF-8、缺失/损坏/关联不符及超预算均503，不替换或截断，不返回部分预览。
-        markdown/input/output原始字节总计最多1048576，重复对象按返回次数计费；
+        markdown/input/output与显式清单图片原始字节总计最多1048576，重复对象按返回次数计费；
+        图片仅绑定该题来源锁原文件，最多16张/原图每张262144字节；PNG/JPEG完整解码后限长重编码为静态PNG，
+        每边至多4096、每图4000000像素、合计8000000像素；每份输出PNG至多262144字节，
+        输出PNG与原文/样例合计仍至多1048576字节。图片缺失/损坏/超限均503，无部分响应；无图省略images字段。
         JSON转义后可达该文本量六倍另加字段元数据。导入/预览共享本实例max_in_flight，
         预算覆盖初次授权后材料/最终授权阶段，不限制初次预检、普通元数据GET或HTTP输出。
         最终Redis读取之后的单token退出及最终PG授权之后的撤权沿已接受在途合同，
@@ -203,6 +206,35 @@ components:
                 type: string
               output:
                 type: string
+        images:
+          type: array
+          minItems: 1
+          maxItems: 16
+          description: 显式题面清单的图片，按source排序；无图省略，不接受图片URL下载请求。
+          items:
+            type: object
+            additionalProperties: false
+            required: [source, media_type, data, width, height]
+            properties:
+              source:
+                type: string
+                maxLength: 240
+                description: task.md相对规范路径，仅ASCII字母/数字/下划线/连字符/点/斜线；无空段或点开头路径段，后缀为小写png/jpg/jpeg。
+              media_type:
+                const: image/png
+              data:
+                type: string
+                contentEncoding: base64
+                maxLength: 349528
+                description: 完整重编码的静态PNG；不包含原图动画、元数据或尾随载荷。
+              width:
+                type: integer
+                minimum: 1
+                maximum: 4096
+              height:
+                type: integer
+                minimum: 1
+                maximum: 4096
   securitySchemes:
     ordinarySession:
       $ref: './session.openapi.yaml#/components/securitySchemes/ordinarySession'
