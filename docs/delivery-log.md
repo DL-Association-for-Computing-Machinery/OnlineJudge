@@ -1,5 +1,21 @@
 # 工程交付记录
 
+## 2026-11-04：primality固定依赖与完整参考验证
+
+成功fetch后从`origin/main b653bfcd9622204c9b5dd056d695aa0a99aa5473`建立`codex/primality-reference-dependencies`，独立于仍为草稿的#114。唯一目标为固定编译依赖闭包及完整13点；没有新依赖、SQL/schema、HTTP/UI、数据库验证状态、生产参数或发布行为变化。
+
+同一可搬迁私有bundle的主源码、4头文件、2个catalog及13组input/answer共33对象逐字节复核，15381625B；证据`/private/tmp/oj-primality-complete-material-evidence-20261104.json` SHA-256 `32f397d6aa3b300d31ee0db92d282fdd671e53c118893a3e01ea486f78dd6cd9`。5份编译材料9285B，固定相对include链及`common/random.h`原始非ASCII字节保持，不做文本展开。匿名快照、plan路径/对象身份、64KiB聚合源/32MiB全材料、2MiB输入/512KiB答案和完整集合在执行前验证。新独立profile/tier4与6对象双端账本复用原medium槽锁；旧四profile摘要固定保持，未知3不准入。完整规则归[参考验证](reference-validation.md)。
+
+Astra/high设计及完整实现复核未发现生产阻断；建议的真实驱动首组失败即终止/编译AC断言、五材料共享独立5秒context/父取消后仍尝试全部清理、旧suffix摘要及来源借用零Verify已补验。覆盖路径/大小写/前缀冲突零上传、64KiB精确边界、逐个上传未知回执隔离、最后头文件坏哈希、原始二进制/UTF-8及调用者切片分离、清理失败保留exe和八条诊断上限。AI复核不代替人工审批。
+
+现有离线Docker Go1.26.10六包基线/定向race及vet、最终完整backend模块核验/格式/静态/root race/七命令Linux构建、sandbox标签vet、独立Darwin驱动构建通过。首次完整静态发现新测试Close错误未检查及路径表达式建议，修正后全量通过；复核测试主动取消父context后预期须保留新增取消证据，修正后两包race及最终静态通过。日志`/private/tmp/oj-primality-{baseline,first-targeted,targeted,verified-targeted,full-backend,full-backend-fixed,review-regression,review-regression-fixed,final-quality}.log`保留失败与成功，不把失败计为通过。Linux/Darwin产物分目录。
+
+固定Desktop LinuxKit7.0.14/arm64、go-judge v1.13.3/GCC15.3.0和原medium CID下，一次双组11.84秒通过：可信5文件嵌套include2.77秒编译AC并运行输出核验；真实完整13点CLI9.07秒全部AC/停止确认/清锁。报告`/private/tmp/oj-primality-reference-report-20261104/report.json` SHA-256 `b35cb36b519a42e45b7197285ade3f9b265f9e600fd825f44c2ab3114de179b0`，plan `9ea3ea01f987edae4cf1b7433f9a282ed45d9d2abc0aed483c9c03d31d42e290`、profile `68f8cab1263e8c12897c6f0fc3a66ce915ba5296ee3304c03b2a6b5bd3419276`。编译CPU251511000ns/内存105353216B；逐点最大CPU370179000ns、沙箱内存786432B；Darwin CLI wait4 maxrss29261824B，非并发总RSS或Go heap。0700/0600、无INCOMPLETE、成功两类诊断省略，publication仍blocked。
+
+原四来源一次串行回归全部通过（任一失败即终止，无重试）：A+B九组22.01秒，完整12点及AC/WA/CE/RE/TLE/MLE/OLE/取消；unionfind两组15.32秒，完整18点及输出边界；zalgorithm三组20.11秒，完整29点及4MiB collector/8MiB文件边界；suffixarray完整50点24.68秒。旧plan/profile保持，五份报告均全AC/Stop/0700/0600/无INCOMPLETE且成功诊断省略；报告哈希索引`/private/tmp/oj-primality-report-hashes-20261104.json`，四份旧来源报告位于`/private/tmp/oj-primality-{aplusb,unionfind,zalgorithm,suffixarray}-regression-20261104/report.json`，对应日志`oj-primality-*-real.log`。结束时三个原CID均exited/PID0、owner符合，canonical私有锁为空且无占用；无新槽、恢复或手清marker。本地没有重跑PG/Redis、前端/浏览器或完整M0；精确head远端CI另核验。
+
+其余五题（含#114）、持久化验证任务/权限接纳、完整质量/终审发布及整体P4仍待完成。旧suffixarray失败与根因未知保持，不因本次新来源通过解除草稿；未部署。
+
 ## 2026-11-04：suffixarray 故障窗口与顺序对照调查
 
 成功fetch后从`origin/main 61aaa4bb44889d1c0f5e8d20c7fda2048011f72f`建立独立调查分支。原medium完整CID/镜像/owner/配置、停止PID0、canonical私有空锁与无旧控制操作先核验；原固定镜像/Go1.26.10离线四包race基线与独立Darwin构建、精确测试清单通过。只新增[调查记录](reference-validation-investigation.md)并同步维护入口，没有应用代码、依赖、预算、来源或停止门禁变更。

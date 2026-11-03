@@ -8,6 +8,7 @@ import (
 
 type referenceReader interface {
 	ReadSource(context.Context) ([]byte, error)
+	ReadDependencies(context.Context) ([]problem.ReferenceSourceFile, error)
 	ReadAnswer(context.Context, int) ([]byte, error)
 	ReadCase(context.Context, int) ([]byte, []byte, error)
 	Close() error
@@ -26,6 +27,10 @@ func freezeReferences(ctx context.Context, prepared *problem.Prepared, profile P
 }
 
 type memoryReference struct{ plan problem.ReferencePlan }
+
+func (m memoryReference) ReadDependencies(ctx context.Context) ([]problem.ReferenceSourceFile, error) {
+	return nil, ctx.Err()
+}
 
 func (m memoryReference) ReadSource(ctx context.Context) ([]byte, error) {
 	return m.plan.SourceData, ctx.Err()

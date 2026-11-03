@@ -27,14 +27,15 @@ type referenceSpan struct{ offset, size int64 }
 // may be active in this process, and its Prepared remains occupied until Close.
 // No original bundle file is read after preparation returns successfully.
 type ReferenceSnapshot struct {
-	mu     sync.Mutex
-	file   *os.File
-	ctx    context.Context
-	owner  *Prepared
-	plan   ReferencePlan
-	spans  []referenceSpan // source, then each ordered input/answer pair
-	closed bool
-	err    error
+	mu        sync.Mutex
+	file      *os.File
+	ctx       context.Context
+	owner     *Prepared
+	plan      ReferencePlan
+	spans     []referenceSpan // primary source, dependencies, then ordered point pairs
+	caseStart int             // compilation files precede point spans
+	closed    bool
+	err       error
 }
 
 // PrepareUnionFindReference freezes the complete source-locked unionfind draft.
@@ -43,7 +44,7 @@ func (p *Prepared) PrepareUnionFindReference(ctx context.Context, limits Referen
 	if p == nil || ctx == nil || limits != UnionFindReferenceLimits() {
 		return nil, ErrInvalid
 	}
-	return p.prepareDiskReference(ctx, "library-checker:unionfind", diskReferenceAdmission{"data_structure/unionfind", limits})
+	return p.prepareDiskReference(ctx, "library-checker:unionfind", diskReferenceAdmission{path: "data_structure/unionfind", limits: limits})
 }
 
 // PrepareDiskReference selects the complete source's fixed admission internally.
@@ -77,7 +78,12 @@ func (p *Prepared) prepareDiskReference(ctx context.Context, sourceID string, ad
 	if err != nil {
 		return nil, err
 	}
+	dependencies, err := bindReferenceDependencies(&plan, d, admission)
+	if err != nil {
+		return nil, err
+	}
 	s.plan = plan
+	s.caseStart = 1 + len(dependencies)
 	f, err := os.CreateTemp("", "oj-reference-snapshot-*")
 	if err != nil {
 		return nil, errors.New("reference snapshot unavailable")
@@ -87,6 +93,7 @@ func (p *Prepared) prepareDiskReference(ctx context.Context, sourceID string, ad
 		return nil, errors.New("reference snapshot anonymity unavailable")
 	}
 	refs := []fileReference{d.Provenance.OriginalFiles["source/"+admission.path+"/sol/correct.cpp"]}
+	refs = append(refs, dependencies...)
 	for _, c := range d.TestCases {
 		refs = append(refs, c.Input, c.Answer)
 	}
@@ -130,6 +137,7 @@ func (s *ReferenceSnapshot) Plan() ReferencePlan {
 	defer s.mu.Unlock()
 	p := s.plan
 	p.Cases = append([]ReferenceCase(nil), p.Cases...)
+	p.Dependencies = append([]ReferenceDependency(nil), p.Dependencies...)
 	return p
 }
 
@@ -143,7 +151,7 @@ func (s *ReferenceSnapshot) ReadAnswer(ctx context.Context, index int) ([]byte, 
 	if index < 0 || index >= len(s.plan.Cases) {
 		return nil, ErrInvalid
 	}
-	return s.read(ctx, 2+2*index)
+	return s.read(ctx, s.caseStart+1+2*index)
 }
 
 // ReadCase loads only one frozen input and answer. Callers release these slices
@@ -152,11 +160,11 @@ func (s *ReferenceSnapshot) ReadCase(ctx context.Context, index int) ([]byte, []
 	if index < 0 || index >= len(s.plan.Cases) {
 		return nil, nil, ErrInvalid
 	}
-	in, err := s.read(ctx, 1+2*index)
+	in, err := s.read(ctx, s.caseStart+2*index)
 	if err != nil {
 		return nil, nil, err
 	}
-	answer, err := s.read(ctx, 2+2*index)
+	answer, err := s.read(ctx, s.caseStart+1+2*index)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -166,6 +174,10 @@ func (s *ReferenceSnapshot) ReadCase(ctx context.Context, index int) ([]byte, []
 func (s *ReferenceSnapshot) read(ctx context.Context, index int) ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.readLocked(ctx, index)
+}
+
+func (s *ReferenceSnapshot) readLocked(ctx context.Context, index int) ([]byte, error) {
 	if ctx == nil || s.closed || index < 0 || index >= len(s.spans) {
 		return nil, ErrInvalid
 	}

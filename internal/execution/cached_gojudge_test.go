@@ -26,6 +26,7 @@ type cacheFixture struct {
 	reference                     bool
 	referenceOutput               int
 	stdout                        []byte
+	compilationEntry              string
 }
 
 func (f *cacheFixture) add(data []byte) string {
@@ -102,7 +103,11 @@ func (f *cacheFixture) RoundTrip(r *http.Request) (*http.Response, error) {
 	result := map[string]any{"status": "Accepted", "exitStatus": 0, "time": 1, "memory": 1}
 	if compile {
 		f.compiles++
-		if _, ok := copyIn["main.cpp"].(map[string]any)["fileId"]; !ok || copyIn["main.cpp"].(map[string]any)["content"] != nil {
+		entry := f.compilationEntry
+		if entry == "" {
+			entry = "main.cpp"
+		}
+		if _, ok := copyIn[entry].(map[string]any)["fileId"]; !ok || copyIn[entry].(map[string]any)["content"] != nil {
 			f.t.Error("source was inlined")
 		}
 		result["files"] = map[string]string{"stdout": "", "stderr": ""}

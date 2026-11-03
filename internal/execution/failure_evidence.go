@@ -147,7 +147,7 @@ func safeFailureEntry(d FailureEntry) FailureEntry {
 		d.Phase = "unknown"
 	}
 	switch d.Role {
-	case "source", "input", "executable", "stdout", "environment":
+	case "source", "dependency", "input", "executable", "stdout", "environment":
 	default:
 		d.Role = "unknown"
 	}

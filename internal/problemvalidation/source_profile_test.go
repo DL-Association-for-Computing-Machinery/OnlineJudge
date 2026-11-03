@@ -24,11 +24,17 @@ func TestSourceProfilesPreserveOldDigestsAndRejectBorrowing(t *testing.T) {
 	if err != nil || suffixTier != tier || suffix.Materials.TotalBytes != 128<<20 || p.Materials.TotalBytes != 64<<20 || suffix.Digest() == p.Digest() {
 		t.Fatal("source-specific snapshot admission", err)
 	}
+	if suffix.Digest() != "0082bb2f961c1f1c082c0ed671881bca49cdaae72d9587bb76d8424ff5e661e7" {
+		t.Fatal("suffixarray profile changed")
+	}
 	if _, _, err := problemvalidation.ResolveSource("library-checker:unknown"); err == nil {
 		t.Fatal("unknown source accepted")
 	}
 	_, prepared := unionRunnerFixture(t, []byte("5\n"))
 	s := &sandbox{}
+	if _, err := problemvalidation.New(s).ValidateSource(context.Background(), prepared, "library-checker:primality_test"); err == nil || len(s.calls) != 0 {
+		t.Fatal("old source borrowed dependency runtime")
+	}
 	if _, err := problemvalidation.New(s).ValidateSource(context.Background(), prepared, "library-checker:zalgorithm"); err == nil || len(s.calls) != 0 {
 		t.Fatal("source borrowed medium runtime")
 	}
