@@ -1,0 +1,38 @@
+{
+  "schema": "oj.problem-draft-evidence.v1",
+  "date": "2026-11-03",
+  "base": "c5f003e94dd1f13465e9360de977dc7da3647b4b",
+  "scope": "static pinned Library Checker source to private self-contained drafts; no program execution or publication",
+  "problems": 10,
+  "test_cases": 254,
+  "examples": 18,
+  "source_files": 162,
+  "import_and_relocation_seconds": 4.675,
+  "repeat_versions_equal": true,
+  "relocated_integrity": true,
+  "private_modes": "directories 0700; files 0600",
+  "bundle_index_sha256": "b65c3835ddec74af9726b85f9d36e721b5e4323bf295141c83d07a879acd0f29",
+  "local_bundle": "/private/tmp/oj-library-checker-draft-final-relocated-20261103",
+  "local_evidence": "/private/tmp/oj-draft-final-evidence-20261103.json",
+  "governance": {
+    "tests": 100,
+    "seconds": 11.733,
+    "result": "passed",
+    "new_draft_tests": 17,
+    "local_log": "/private/tmp/oj-draft-final-governance-20261103.log",
+    "log_sha256": "a64835b6cf167fbc4cbe20865c96c1bdfad8681d3b905a9d73bd2d5e50bd3c70"
+  },
+  "owning_source_sha256": {
+    "scripts/import-library-checker.py": "75f63064f4dadb766307baa767bb1498d401d393fff8c003f2834fd46fe6f357",
+    "scripts/problem_draft_files.py": "dc341930f896186d66012b3ea9ee1c5b8c4861b3f17b8c6e0c4c92be08e717cb",
+    "scripts/library_checker_statement.py": "29be502df345421995d938214d30cd38499d960f68075066dabeb766260aa23b",
+    "tests/governance/test_problem_drafts.py": "7b87408a55f61612445952ceb961a04c6824735d25c0ef61ff36cf8dce5079db"
+  },
+  "not_claimed": [
+    "site validation: all drafts remain not-run and blocked",
+    "statement or formula rendering compatibility",
+    "production checker or resource admission",
+    "business database, identity, review or publication integration",
+    "durable backup, arbitrary upload support, or ICPC format compatibility"
+  ]
+}

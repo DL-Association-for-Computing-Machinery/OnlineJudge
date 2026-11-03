@@ -1,5 +1,13 @@
 # 工程交付记录
 
+## 2026-11-03：Library Checker统一私有草稿适配
+
+成功fetch后从 `origin/main c5f003e94dd1f13465e9360de977dc7da3647b4b` 建立独立 `codex/library-checker-drafts`。唯一目标为[离线统一私有草稿](problem-drafts.md)：重新核对固定锁内162份来源及254点材料，将英文模板/参数/18样例转换成Markdown，保持来源测试顺序、显式精确大小写敏感token配置、内容版本及来源/许可对象。输入安全读取、同描述符流式哈希、自含内容寻址副本、0700/0600、完成前INCOMPLETE和独立搬迁复验均有实现；没有新依赖、网络、来源程序执行、数据库、公开接口或Worker门禁变化。
+
+最终真实材料导入/搬迁复验 **4.675秒**，10题/254点/18样例；与此前独立目录导入版本一致，所有对象和引用哈希/权限通过。产物 `/private/tmp/oj-library-checker-draft-final-relocated-20261103` 可不依赖原候选目录复验，临时目录不是备份；机器证据见[索引](evidence/problem-drafts-20261103.json)。17项新增回归通过，完整治理 **100项、11.733秒**通过；首次受限运行的doctor回环绑定失败，按原断言授权重跑成功，没有降低检查。
+
+针对性Astra复核发现并修正索引可遗漏/错误描述草稿、默认复验未拒INCOMPLETE，以及元数据先验后重读的竞态；相应行为回归通过。AI复核不代替人工审批。来源准备报告保留原字节并单独索引，本站验证仍not-run，生产限制/检查器兼容、题面渲染、权限/非作者审核和发布保持阻断。同步README、题源/题包设计、计划及文档索引；P4业务接线和训练闭环继续后续，未部署。远端状态以最终head的CI与合并回读为准。
+
 ## 2026-11-03：首批 Library Checker 离线题源准备
 
 用户确认“Library Checker 起步＋官方 ICPC 赛事包扩充＋爬虫补充”。成功 fetch 后从 `origin/main 182b9700621d359f8a2b1e3a62ff81ab113f0285` 建立独立 `codex/library-checker-source`。唯一目标为[十题离线私有候选准备](problem-sources.md)：锁定官方提交 `73876f1cbcf082d2b22722924b924d3d65a2f00e` 的162份必要原始文件，以非root/断网/只读/有界Docker执行生成器、标程、validator和原checker，完整保留来源及Apache/MIT/Testlib原notice；不新增依赖、数据库、公开接口或任意上传执行服务。
