@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -22,6 +23,32 @@ type referenceHost struct {
 	requests   int
 	cancel     context.CancelFunc
 	stopCancel context.CancelFunc
+	fileIDs    int
+	fileData   map[string][]byte
+}
+
+func (h *referenceHost) UploadFile(ctx context.Context, data []byte) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	if h.fileData == nil {
+		h.fileData = map[string][]byte{}
+	}
+	h.fileIDs++
+	id := "upload-" + strconv.Itoa(h.fileIDs)
+	h.fileData[id] = append([]byte(nil), data...)
+	return id, nil
+}
+
+func (h *referenceHost) ReadFile(ctx context.Context, id string, maximum int64) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	raw, ok := h.fileData[id]
+	if !ok || int64(len(raw)) > maximum {
+		return nil, errors.New("missing file")
+	}
+	return append([]byte(nil), raw...), nil
 }
 
 func (h *referenceHost) Stop(ctx context.Context) error {
@@ -41,11 +68,15 @@ func (h *referenceHost) RoundTrip(r *http.Request) (*http.Response, error) {
 		h.requests++
 		body = `[{"status":"Accepted","exitStatus":0,"time":1,"memory":1,"files":{"stdout":"","stderr":""},"fileIds":{"main":"compiled"}}]`
 		if h.requests > 1 {
-			body = `[{"status":"Accepted","exitStatus":0,"time":1,"memory":1,"files":{"stdout":"3\n","stderr":""}}]`
+			id := "stdout-" + strconv.Itoa(h.requests)
+			h.fileData[id] = []byte("3\n")
+			body = `[{"status":"Accepted","exitStatus":0,"time":1,"memory":1,"files":{"stderr":""},"fileIds":{"stdout":"` + id + `"}}]`
 			if h.cancel != nil {
 				h.cancel()
 			}
 		}
+	} else {
+		delete(h.fileData, strings.TrimPrefix(r.URL.Path, "/file/"))
 	}
 	return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body))}, nil
 }

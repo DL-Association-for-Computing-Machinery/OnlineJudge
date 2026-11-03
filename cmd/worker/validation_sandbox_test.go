@@ -89,6 +89,8 @@ int main(){puts("wrong");}`, "WA"},
 		{"CE", `this is not C++`, "CE"},
 		{"RE", `int main(){return 1;}`, "RE"},
 		{"TLE", `int main(){for(;;){asm volatile("");}}`, "TLE"},
+		{"MLE", `#include <cstdlib>
+int main(){volatile char* p=(char*)malloc(64*1024*1024);if(!p)return 4;for(int i=0;i<64*1024*1024;i+=4096)p[i]=1;}`, "MLE"},
 		{"OLE", `#include <cstdio>
 int main(){for(;;)puts("bounded output");}`, "OLE"},
 	} {
@@ -159,7 +161,7 @@ int main(){for(;;)puts("bounded output");}`, "OLE"},
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		transport := &cancelReferenceTransport{host: h, cancel: cancel}
-		r, runErr := problemvalidation.New(execution.NewGoJudge(transport, h.Verify)).Validate(ctx, p, problemvalidation.PinnedProfile())
+		r, runErr := problemvalidation.New(execution.NewCachedGoJudge(transport, h.Verify, h)).Validate(ctx, p, problemvalidation.PinnedProfile())
 		stopCtx, done := context.WithTimeout(context.Background(), 15*time.Second)
 		stopErr := h.Stop(stopCtx)
 		done()

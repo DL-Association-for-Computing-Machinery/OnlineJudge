@@ -1,5 +1,19 @@
 # 工程交付记录
 
+## 2026-11-03：P4 缓存文件的保真执行通路
+
+成功fetch后从`origin/main 61ba081249a26711f354a27ec373c87c973aae8f`建立`codex/reference-byte-execution`。首份完整参考验证实际改用独立`CachedGoJudge`：源码/输入上传后回读SHA-256、缓存stdin、stdout原始字节拉取，答案留在宿主。M0默认构造器、内联白名单/预算、原样提取的结果校验及Runtime保持；新模式先严格验证角色/互斥表示/原始长度，再复用结构化证据校验。材料移除ASCII约束，参考答案仍全部在编译前按UTF-8/token域先验，坏编码不会触发沙箱。无新依赖、SQL/schema、公共HTTP或UI变化，草稿版本/not-run/production null不变。
+
+新profile `p4-lc-reference-files-small-desktop-arm64-v1`绑定`p4-gojudge-cached-files-v1`和48MiB单文件、64MiB存活缓存、128MiB任务载荷、4活动对象/512操作；创建前预留exe/stdout未知大小，失败占额不退款，零字节操作/ID历史有界并预留DELETE额度。只接受本操作角色ID，未知回执不重传或猜测删除；每点独立清理input/stdout，最终清exe，失败封闭适配器并由Stop收束。Host使用有限reader/有界sink、标准库随机MIME、curl上传流及固定四字节状态尾，active覆盖完整IO/子进程。新增真实子进程stdin背压与注入宿主Stop排空回归。清理期间取消测试先复现返回nil（`oj-reference-bytes-cleanup-cancel-repro.log`），修复为独立清理后最终检查父context，回归通过；原Stop10秒及隔离规则不放宽。
+
+Docker Go1.26.10/linux arm64相关基线、最终模块验证/格式/vet/三范围静态/root race/七命令构建和cmd sandbox标签检查全部通过（`/private/tmp/oj-reference-bytes-backend.log`、`oj-reference-bytes-targeted-verified.log`）。真实驱动追加MLE后仅重验受影响标签静态和驱动构建（`oj-reference-bytes-mle-driver-build.log`），产品代码未变，不重复无关套件。Astra针对核心差异及约束复核无阻断，AI复核不代替人工approval；治理/秘密/精确head远端门禁仍按交付流程核验。本地未重跑PG/Redis/浏览器或完整M0，不把新模式实测扩写为这些套件通过。
+
+固定Desktop LinuxKit7.0.14/arm64、go-judge v1.13.3/GCC15.3.0、原镜像与私有cgroup中，字节专项5.53秒两子例通过：50331648字节上传/下载SHA-256为`dd3e5d8ff490678599d36f2c49f7ab607621c0bd4a9764f49896055277137ff7`，精确上限成功、上限+1拒绝；空/256/50331648字节stdin由受信memcmp程序逐块验全字节模式，输出含0—255及自身尾LF＋200仍保真。大stdin CPU4591000ns、进程内存524288字节，小输出269字节。`/tmp`和`/dev/shm`容量各134217728，阶段采样中shm最大观察值50409472、清理后0，不作为连续峰值；外层沙箱cgroup memory.peak为260976640，小于固定1073741824。tmp各采样时为0，不证明其历史峰值为0；外层计量不含宿主Worker堆，也不是全部存储域的硬峰值证明。记录在`oj-reference-bytes-real.log`。
+
+新通路的真实12点CLI及原八组专项20.05秒全部通过（CLI6.75秒），另定向新增真实MLE2.06秒通过，返回MLE/后续NOT_RUN并停止确认（`oj-reference-bytes-reference-real.log`、`oj-reference-bytes-mle-real.log`）；没有把分开运行写作单轮九组。全部停止确认，最后同CID回读停止/PID0、marker为空，无恢复或重试至绿。报告`/private/tmp/oj-reference-bytes-20261103/report.json`的SHA-256为`741c1b9a8af3f6a0c3ac64e1f473cfa3e49b233b7c7711a54a0cdeefbf0db380`，profile为`658fef827daa872a726e6a728ad05c84a08103bd9857c71606fe76cff92c1437`，plan仍为`12e87eb8d0771e34a8d187cb2bfc3b5cbf266a3d09768fc20194cfa4927f1325`，0700/0600且字段白名单只含身份/用量/状态。
+
+这证明固定环境的文件协议和本轮边界，不是其余九题或完整P4准入：完整材料仍限输入16KiB/总2MiB、Run stdout仍4KiB，较大输出/临时盘、私有头文件、大材料快照、持久化任务/权限接纳、完整质量/终审发布仍待完成。此前两次停止故障本轮未复现，根因继续未知，不追认旧报告，未部署。临时日志与制品不是独立备份。
+
 ## 2026-11-03：停止失败的脱敏诊断与真实输出界限
 
 成功fetch后从`origin/main c9cf31c8c4f8f713bd79b8219237e79bcb6f3000`建立`codex/sandbox-stop-diagnostics`，承接上一阶段两次原因未知的停止确认失败。宿主命令错误只保留固定类别及context判等，原始命令/路径/stderr/Reader错误和退出码不外传；Stop各失败出口增加阶段及0—128进程计数，私有参考报告以可选stop_diagnostic投影，核心不依赖Docker适配器。枚举失败仍kill、多失败kill优先、首探针失败即停、最终context检查、10秒总预算及隔离/确认规则保持；清marker失败不能伪装成Stop失败或通过。

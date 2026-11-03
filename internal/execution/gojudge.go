@@ -103,27 +103,40 @@ func command(p experiment.ExecutionProfile, args []string, l experiment.Limits, 
 	}
 }
 
-func (g *GoJudge) execute(ctx context.Context, c map[string]any, p experiment.ExecutionProfile, compile bool) (Observation, error) {
-	var results []struct {
-		Status     string             `json:"status"`
-		Exit       *int               `json:"exitStatus"`
-		CPU        *int64             `json:"time"`
-		Memory     *int64             `json:"memory"`
-		Files      map[string]*string `json:"files"`
-		IDs        map[string]string  `json:"fileIds"`
-		Error      string             `json:"error"`
-		FileErrors []struct {
-			Name string `json:"name"`
-			Type string `json:"type"`
-		} `json:"fileError"`
-	}
+type goJudgeResult struct {
+	Status     string             `json:"status"`
+	Exit       *int               `json:"exitStatus"`
+	CPU        *int64             `json:"time"`
+	Memory     *int64             `json:"memory"`
+	Files      map[string]*string `json:"files"`
+	IDs        map[string]string  `json:"fileIds"`
+	Error      string             `json:"error"`
+	FileErrors []struct {
+		Name string `json:"name"`
+		Type string `json:"type"`
+	} `json:"fileError"`
+}
+
+func (g *GoJudge) result(ctx context.Context, c map[string]any) (goJudgeResult, error) {
+	var results []goJudgeResult
 	if err := g.request(ctx, "POST", "/run", map[string]any{"cmd": []any{c}}, &results); err != nil {
-		return Observation{}, err
+		return goJudgeResult{}, err
 	}
 	if len(results) != 1 {
-		return Observation{}, errors.New("invalid sandbox result count")
+		return goJudgeResult{}, errors.New("invalid sandbox result count")
 	}
-	r := results[0]
+	return results[0], nil
+}
+
+func (g *GoJudge) execute(ctx context.Context, c map[string]any, p experiment.ExecutionProfile, compile bool) (Observation, error) {
+	r, err := g.result(ctx, c)
+	if err != nil {
+		return Observation{}, err
+	}
+	return inlineObservation(r, p, compile)
+}
+
+func inlineObservation(r goJudgeResult, p experiment.ExecutionProfile, compile bool) (Observation, error) {
 	var stdout, stderr string
 	if value := r.Files["stdout"]; value != nil {
 		stdout = *value

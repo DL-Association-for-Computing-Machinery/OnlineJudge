@@ -19,17 +19,18 @@ const SourceLockSHA256 = "fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f2
 
 // Profile separates the reference trial from production contestant limits.
 type Profile struct {
-	ID        string                      `json:"id"`
-	Runtime   experiment.ExecutionProfile `json:"runtime"`
-	Materials problem.ReferenceLimits     `json:"materials"`
-	Checker   string                      `json:"checker"`
-	Text      judging.TextLimits          `json:"text"`
-	Wall      time.Duration               `json:"wall_ns"`
+	ID        string                           `json:"id"`
+	Runtime   experiment.ExecutionProfile      `json:"runtime"`
+	Files     experiment.ReferenceFilesProfile `json:"files"`
+	Materials problem.ReferenceLimits          `json:"materials"`
+	Checker   string                           `json:"checker"`
+	Text      judging.TextLimits               `json:"text"`
+	Wall      time.Duration                    `json:"wall_ns"`
 }
 
 // PinnedProfile returns fresh trial values; it never updates draft configuration.
 func PinnedProfile() Profile {
-	return Profile{ID: "p4-lc-reference-small-desktop-arm64-v1", Runtime: experiment.PinnedEnvironment(), Materials: problem.ReferenceLimits{SourceBytes: 64 << 10, InputBytes: 16 << 10, AnswerBytes: 4096, TotalBytes: 2 << 20, Cases: 64}, Checker: judging.LibraryCheckerTextVersion, Text: judging.TextLimits{Bytes: 4096, TokenBytes: 4096}, Wall: 2 * time.Minute}
+	return Profile{ID: "p4-lc-reference-files-small-desktop-arm64-v1", Runtime: experiment.PinnedEnvironment(), Files: experiment.PinnedReferenceFiles(), Materials: problem.ReferenceLimits{SourceBytes: 64 << 10, InputBytes: 16 << 10, AnswerBytes: 4096, TotalBytes: 2 << 20, Cases: 64}, Checker: judging.LibraryCheckerTextVersion, Text: judging.TextLimits{Bytes: 4096, TokenBytes: 4096}, Wall: 2 * time.Minute}
 }
 
 func digest(value any) string {
