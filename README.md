@@ -86,6 +86,7 @@ docker --context desktop-linux run --rm --network none --cap-drop ALL \
     mkdir -p .local/validation-host
     go build -trimpath -o .local/validation-host/worker ./cmd/worker
     go test -c -tags=sandbox -o .local/validation-host/worker-validation.test ./cmd/worker
+    go test -c -o .local/validation-host/workerhost-stop.test ./internal/workerhost
   '
 OJ_SANDBOX_EXPERIMENT=1 OJ_WORKER_M0_SLOT=secondary \
   .local/validation-host/worker validate-reference \
@@ -97,7 +98,16 @@ OJ_SANDBOX_EXPERIMENT=1 OJ_WORKER_M0_SLOT=secondary \
 
 路径替换为已有完整私有bundle和新的报告目录。`--start-stopped-slot`在持锁/同步dirty后仅启动预存在、固定owner/配置匹配的停止槽；省略则要求槽已由维护者启动。启动回执未知时仍确认原生命周期停止；不能确认停止或清标记失败才保持quarantine，即使随后安全解封，本次报告仍失败。禁止自动重试、换槽掩盖失败或手工清标记。成功也会停止该槽。`report.json`私有保存逐点结果、完整plan/profile及容器生命周期，`publication`始终blocked；失败输出与支持域见[受限参考验证](docs/reference-validation.md)。
 
-停止失败报告的可选`stop_diagnostic`提供固定阶段/错误类别与有界计数，不含PID、命令参数或原始错误。`pid_present`仅表示探测时路径存在，可能发生PID复用；`deadline`不证明进程仍在或已退出。诊断不授予清理隔离标记的权限，旧失败报告不追认通过。
+停止失败报告的可选`stop_diagnostic`提供固定阶段/错误类别、有界计数和最多六步的耗时记录，不含PID、命令参数或原始错误。`elapsed_ms`超过60000时截断并标记`elapsed_capped`，不是停止时限；原共享10秒Stop预算保持。kill步骤记录调用前context、调用尝试及本地CLI启动证据，`local_process_start`不证明Docker daemon收到kill或容器收到信号，`unknown`不表示未启动。`pid_present`仅表示探测时路径存在，可能发生PID复用；`deadline`不证明进程仍在或已退出。诊断不授予清理隔离标记的权限，旧失败报告不追认通过；字段与证据限制见[受限参考验证](docs/reference-validation.md)。
+
+停止诊断的受信命令单测随普通Docker backend运行；在Darwin核对本地执行器时，使用上面单独构建的workerhost测试包，先确认列表恰含下列三项，再选择执行。`cmd/worker`驱动不包含依赖包的单测，空匹配的PASS不能算验证。此处仅运行固定受信shell及测试替身，不启动沙箱槽或执行题源：
+
+```sh
+.local/validation-host/workerhost-stop.test \
+  -test.list='^(TestStopTraceDistinguishesExpiredKillAttempt|TestLocalCommandStartEvidence|TestStopElapsedIsBoundedAndMarked)$'
+.local/validation-host/workerhost-stop.test -test.v -test.count=1 \
+  -test.run='^(TestStopTraceDistinguishesExpiredKillAttempt|TestLocalCommandStartEvidence|TestStopElapsedIsBoundedAndMarked)$' -test.timeout=1m
+```
 
 维护入口使用独立缓存文件通路：源码/输入上传后回读核对SHA-256，输出原始字节拉取，参考答案留在宿主。默认A+B保留2MiB材料/4KiB输出，unionfind使用64MiB匿名磁盘快照与256KiB运行stdout。zalgorithm使用64MiB快照，suffixarray独立准入128MiB快照；后两者共用4MiB stdout、256MiB累计传输档位及同一medium槽锁，所有磁盘来源共用进程内一份快照额度。两端账本均按档位计量。编译双流/运行stderr仍各4KiB，磁盘来源的CPU1秒/wall5秒/memory128MiB只作参考试验；其余六题仍待准入，生产配置不变。
 

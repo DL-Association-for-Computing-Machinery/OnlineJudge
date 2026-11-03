@@ -22,11 +22,14 @@ type Point struct {
 // StopDiagnostic contains only the host adapter's bounded failure projection.
 // It supplies a diagnosis, never authority to accept a failed reference report.
 type StopDiagnostic struct {
-	Stage     string `json:"stage"`
-	Code      string `json:"code"`
-	Observed  int    `json:"observed"`
-	Confirmed int    `json:"confirmed"`
-	Probe     int    `json:"probe,omitempty"`
+	Stage         string     `json:"stage"`
+	Code          string     `json:"code"`
+	Observed      int        `json:"observed"`
+	Confirmed     int        `json:"confirmed"`
+	Probe         int        `json:"probe,omitempty"`
+	ElapsedMS     int64      `json:"elapsed_ms,omitempty"`
+	ElapsedCapped bool       `json:"elapsed_capped,omitempty"`
+	Steps         []StopStep `json:"steps,omitempty"`
 }
 
 // Report describes reference correctness only. A pass requires a separate owner

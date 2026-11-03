@@ -1,5 +1,19 @@
 # 工程交付记录
 
+## 2026-11-04：停止步骤与本地CLI启动证据
+
+成功fetch后从`origin/main b7f18f1d393abf7859a10321dbd628ff5910eb8b`建立`codex/reference-failure-evidence`。本PR唯一目标为受限Stop失败证据：保留原stage/code/observed/confirmed/probe、原顺序、共享10秒预算、kill优先主错误、context原因、零重试及停止/dirty成功门禁，仅失败时附加整体和最多六个已到达步骤的毫秒记录。各耗时截断上限60000及elapsed_capped是证据边界，不是操作预算；整体含fence/锁等待/返回处理，不能用步骤之和或记录值证明时限严格兑现。PID探针只记合计次数，最多128；StopDetails及owner均复制列表。
+
+kill记录调用前context与call_attempted；真实命令执行器仅用cmd.Process是否存在区分本地CLI not_started/started，nil error或无证据替身为unknown。active只是调用前采样，started不证明daemon接收kill或容器收到信号。确定性故障注入先耗尽caller期限，再沿原路径尝试kill：主诊断仍kill/deadline、observed0，但步骤可见enumerate/deadline及kill/context_before=deadline/call_attempted=true/local_process_start=not_started。另一固定受信shell实际发出启动信号后超时，记录started；这不复现或解释#114历史根因。
+
+原Stop故障矩阵额外核对六步顺序/终止位置、PID合计次数、complete失败、枚举失败后kill成功仍unknown；验证耗时截断与owner完整复制ElapsedCapped/Count等字段。修改报告结构前固定成功JSON样本SHA-256 `8bf9e56626c84d19e31a7050e36330866f798ab8c59b56866032ef7cfea4baa6`，新增字段omitempty后保持同值。Docker离线Go1.26.10四包基线及三包定向race/vet、完整backend模块/格式/静态/root race/七命令构建、cmd sandbox标签lint通过（`/private/tmp/oj-failure-evidence-{baseline,original-json}.log`、`oj-stop-trace-{targeted,verified-build,backend}.log`）。
+
+同一固定Desktop LinuxKit7.0.14/arm64、go-judge v1.13.3/GCC15.3.0与原secondary槽下，A+B九组22.72秒全部通过（`/private/tmp/oj-stop-trace-real.log`）：完整12点CLI7.01秒全AC并确认停止，AC/WA/CE/RE/TLE/MLE/OLE/取消保持。报告`/private/tmp/oj-stop-trace-aplusb-report-20261104/report.json` SHA-256 `3a8199be1af87e5e86a008fe445274caf7938eabdd3ab6327a7d4ca3f99bfe10`，旧plan `12e87eb8d0771e34a8d187cb2bfc3b5cbf266a3d09768fc20194cfa4927f1325`、profile `658fef827daa872a726e6a728ad05c84a08103bd9857c71606fe76cff92c1437`保持；0700/0600、无INCOMPLETE、成功未添加stop_diagnostic。最终三个固定槽均停止/PID0、canonical锁为空且无占用，没有恢复或手清marker。
+
+初次将原生命令单测指向cmd/worker驱动，返回no tests to run，没有计入通过（`oj-stop-trace-native-command.log`）；改为独立构建workerhost测试包，先断言精确三项测试清单，再在Darwin执行，三项共约1.1秒通过（`oj-stop-trace-native-{package-build,command-verified}.log`）。只执行固定受信shell和测试替身，不启动沙箱槽或执行题源；README同步独立构建和列表核验命令。
+
+Astra/high针对性设计/完整差异复核无阻断，补充其建议的矩阵与映射断言后重验通过；AI不代替人工审批。执行失败阶段与多清理错误诊断可独立验收，已按一个PR一个目标拆开，九个自有WIP文件及五个基线文件按哈希保留在`/private/tmp/oj-execution-evidence-wip-20261104`，尚未验证/交付，不混入本次差异。本次未故意制造真实Docker停止失败，也未重跑suffixarray；#114仍为草稿，原`19513bf8…`失败与交付阻断、未定根因保留，后续补执行阶段后再做独立诊断调查。无新依赖、SQL/schema、公共HTTP/UI或运行/传输预算变化；本地未重跑PG/Redis、前端/浏览器或完整M0，精确head CI另核验，原始草稿not-run/生产null/publication blocked保持，未部署。临时证据不构成独立备份。
+
 ## 2026-11-04：suffixarray 全50点参考验证
 
 成功fetch后从`origin/main 934923ccefe0b42d7d50a018dbb98327bb7b1853`建立`codex/suffixarray-reference`。维护CLI新增固定来源`library-checker:suffixarray`，完整50点不采样。独立profile `p4-lc-suffixarray-reference-desktop-arm64-v1`仅将该来源完整快照总量准入128MiB；source64KiB/input1MiB/answer4MiB/64点、Medium Runtime/文件协议保持。zalgorithm仍64MiB，旧三profile/plan摘要均回归不变。所有磁盘来源共用匿名单文件与进程内一份额度；suffixarray与zalgorithm共用原medium槽、canonical锁与停止/dirty门禁，没有新增/替换容器或修改配置。

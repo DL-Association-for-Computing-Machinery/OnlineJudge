@@ -12,7 +12,9 @@ import (
 // kills the bound container lifetime, and verifies stopped state plus absence of
 // the host PIDs observed before the kill. PID reuse conservatively fails. It does
 // not restart the container, and must be called with an independent context.
-func (h *Host) Stop(ctx context.Context) error {
+func (h *Host) Stop(ctx context.Context) (result error) {
+	trace := stopTrace{started: time.Now()}
+	defer func() { result = trace.attach(result) }()
 	h.mu.Lock()
 	if h.closed {
 		h.mu.Unlock()
@@ -30,26 +32,43 @@ func (h *Host) Stop(ctx context.Context) error {
 	defer cancel()
 	// Drain client dispatch before killing: no delayed docker exec may race a
 	// successful stop acknowledgement. Closing the gate precedes cancellation.
+	stepStart := time.Now()
 	select {
 	case <-h.drained:
+		trace.record("drain", stepStart, "ok")
 	case <-ctx.Done():
+		trace.record("drain", stepStart, failureCode(ctx.Err()))
 		return stopError("drain", failureCode(ctx.Err()), 0, 0, 0, ctx.Err())
 	}
+	stepStart = time.Now()
 	s, err := h.inspect(ctx, h.id)
 	if err != nil {
+		trace.record("inspect_before", stepStart, failureCode(err))
 		return stopError("inspect_before", failureCode(err), 0, 0, 0, err)
 	}
 	if s.ID != h.id || s.Started != h.started || s.Restart != "no" || s.Restarting {
+		trace.record("inspect_before", stepStart, "lifetime_changed")
 		return stopError("inspect_before", "lifetime_changed", 0, 0, 0, nil)
 	}
 	if !s.Running || s.PID <= 1 {
+		trace.record("inspect_before", stepStart, "evidence_unavailable")
 		return stopError("inspect_before", "evidence_unavailable", 0, 0, 0, nil)
 	}
+	trace.record("inspect_before", stepStart, "ok")
+	stepStart = time.Now()
 	out, topErr := h.docker(ctx, nil, "top", h.id, "-eo", "pid")
 	pids, parseErr := parsePIDs(string(out), s.PID)
+	code := stepCode(topErr)
+	if topErr == nil && parseErr != nil {
+		code = "invalid_evidence"
+	}
+	trace.record("enumerate", stepStart, code)
 	// Even if process enumeration fails, kill the verified owned lifetime. Missing
 	// evidence must never become success, but should not leave known work running.
+	stepStart = time.Now()
+	beforeKill := contextState(ctx)
 	_, killErr := h.docker(ctx, nil, "kill", "--signal", "KILL", h.id)
+	trace.recordKill(stepStart, beforeKill, killErr)
 	// A failed kill takes diagnostic precedence over missing enumeration; neither
 	// outcome can become a stop acknowledgement. Enumeration always precedes kill.
 	if killErr != nil {
@@ -61,13 +80,18 @@ func (h *Host) Stop(ctx context.Context) error {
 	if parseErr != nil {
 		return stopError("enumerate", "invalid_evidence", 0, 0, 0, nil)
 	}
+	stepStart = time.Now()
 	s, err = h.inspect(ctx, h.id)
 	if err != nil {
+		trace.record("inspect_after", stepStart, failureCode(err))
 		return stopError("inspect_after", failureCode(err), len(pids), 0, 0, err)
 	}
 	if s.ID != h.id || s.Started != h.started || s.Running || s.PID != 0 || s.Restarting {
+		trace.record("inspect_after", stepStart, "state_unconfirmed")
 		return stopError("inspect_after", "state_unconfirmed", len(pids), 0, 0, nil)
 	}
+	trace.record("inspect_after", stepStart, "ok")
+	stepStart = time.Now()
 	for i, pid := range pids {
 		_, err := h.run(ctx, nil, "docker", PIDProbeArgs(strconv.Itoa(pid))...)
 		if err != nil {
@@ -81,8 +105,14 @@ func (h *Host) Stop(ctx context.Context) error {
 					code = "pid_present"
 				}
 			}
+			if step := trace.record("pid_probe", stepStart, code); step != nil {
+				step.Count = i + 1
+			}
 			return stopError("pid_probe", code, len(pids), i, i+1, err)
 		}
+	}
+	if step := trace.record("pid_probe", stepStart, "ok"); step != nil {
+		step.Count = len(pids)
 	}
 	if err := ctx.Err(); err != nil {
 		return stopError("complete", failureCode(err), len(pids), len(pids), 0, err)

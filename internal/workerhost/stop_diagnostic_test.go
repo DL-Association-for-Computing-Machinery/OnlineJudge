@@ -108,6 +108,29 @@ func TestStopFailureStagesAndEvidence(t *testing.T) {
 			if test.name != "inspect-before" && test.name != "lifetime" && kills != 1 {
 				t.Fatal("missing kill attempt")
 			}
+			wantSteps := []string{"drain", "inspect_before", "enumerate", "kill", "inspect_after", "pid_probe"}
+			switch test.stage {
+			case "inspect_before":
+				wantSteps = wantSteps[:2]
+			case "enumerate", "kill":
+				wantSteps = wantSteps[:4]
+			case "inspect_after":
+				wantSteps = wantSteps[:5]
+			}
+			if len(d.Steps) != len(wantSteps) {
+				t.Fatalf("unreached or missing steps: %+v", d.Steps)
+			}
+			for i, step := range d.Steps {
+				if step.Stage != wantSteps[i] || step.ElapsedMS < 0 || step.ElapsedMS > 60000 {
+					t.Fatal("stop step order or bounds", d.Steps)
+				}
+				if step.Stage == "kill" && (!step.CallAttempted || step.ContextBefore != "active" || step.LocalProcessStart != "unknown") {
+					t.Fatal("test double acquired local process evidence", step)
+				}
+				if step.Stage == "pid_probe" && step.Count != probes {
+					t.Fatal("PID aggregate count changed", step)
+				}
+			}
 			if (test.name == "deadline" || test.name == "complete-deadline") && !errors.Is(err, context.DeadlineExceeded) || test.name == "complete" && !errors.Is(err, context.Canceled) {
 				t.Fatal("lost context identity")
 			}
