@@ -6,6 +6,7 @@ export interface ImportReceipt {
   state: 'private-draft'; validation_state: 'not-run'; created_at: string
 }
 export interface ImportTuple { owner: string; source: string; key: string; revision: string }
+export interface OwnDraftPage { drafts: ImportReceipt[]; next_cursor: string }
 export const validRevision = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)
 export const validKey = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(value)
 const wellFormed = (value: string) => new TextDecoder('utf-8', { ignoreBOM: true }).decode(new TextEncoder().encode(value)) === value
@@ -35,6 +36,22 @@ export function decodeSources(value: unknown): ImportSource[] {
   return value.sources as ImportSource[]
 }
 
+export function decodeOwnDraftPage(value: unknown, owner: string): OwnDraftPage {
+  if (!validDraftID(owner) || !object(value) || Object.keys(value).length !== 2 || !Array.isArray(value.drafts) || value.drafts.length > 20 ||
+    typeof value.next_cursor !== 'string' || value.next_cursor !== '' && (!/^[A-Za-z0-9_-]{1,192}$/.test(value.next_cursor) || value.drafts.length !== 20)) throw new ImportError()
+  const ids = new Set<string>()
+  const keys = new Set<string>()
+  const drafts = value.drafts.map((row: unknown) => {
+    if (!object(row) || !validKey(row.request_key) || !validSource(row.source_id) || !validRevision(row.import_revision)) throw new ImportError()
+    const receipt = decodeReceipt(row, { owner, key: row.request_key, source: row.source_id, revision: row.import_revision })
+    if (ids.has(receipt.draft_id) || keys.has(receipt.request_key)) throw new ImportError()
+    ids.add(receipt.draft_id)
+    keys.add(receipt.request_key)
+    return receipt
+  })
+  return { drafts, next_cursor: value.next_cursor }
+}
+
 const base = '/api/v1/problem-draft-management'
 // No compatibility fallback: old servers must refuse this namespace rather than
 // silently ignoring the subject precondition on an older import endpoint.
@@ -62,7 +79,7 @@ async function request(owner: string, path: string, signal: AbortSignal, body?: 
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length }
   const data: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes))
   if (response.status !== 200) {
-    const known: Record<string, number> = { SESSION_REQUIRED: 401, PROBLEM_AUTHOR_REQUIRED: 403, DRAFT_NOT_FOUND: 404, DRAFT_SUBJECT_CHANGED: 409, DRAFT_SOURCE_CHANGED: 409, DRAFT_REQUEST_CONFLICT: 409 }
+    const known: Record<string, number> = { SESSION_REQUIRED: 401, PROBLEM_AUTHOR_REQUIRED: 403, DRAFT_NOT_FOUND: 404, DRAFT_SUBJECT_CHANGED: 409, DRAFT_SOURCE_CHANGED: 409, DRAFT_REQUEST_CONFLICT: 409, DRAFT_CURSOR_INVALID: 400 }
     throw new ImportError(object(data) && typeof data.code === 'string' && known[data.code] === response.status ? data.code : 'UNCONFIRMED')
   }
   return data
@@ -72,3 +89,10 @@ export const fetchImportReceipt = async (tuple: ImportTuple, signal: AbortSignal
 export const postImport = async (tuple: ImportTuple, signal: AbortSignal) => decodeReceipt(await request(tuple.owner, '/imports', signal, {
   source_id: tuple.source, request_key: tuple.key, expected_revision: tuple.revision,
 }), tuple)
+export async function fetchOwnDraftPage(owner: string, cursor: string, signal: AbortSignal): Promise<OwnDraftPage> {
+  if (cursor !== '' && !/^[A-Za-z0-9_-]{1,192}$/.test(cursor)) throw new ImportError('DRAFT_CURSOR_INVALID')
+  // Cursor bytes are opaque: never round the PG microsecond boundary through JS Date/Number.
+  const page = decodeOwnDraftPage(await request(owner, '/drafts' + (cursor ? '?cursor=' + cursor : ''), signal), owner)
+  if (cursor && page.next_cursor === cursor) throw new ImportError()
+  return page
+}

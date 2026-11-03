@@ -1,5 +1,23 @@
 # 工程交付记录
 
+## 2026-11-03：服务器本人草稿列表与独立分页发现
+
+成功fetch后从`origin/main 7bffd18e80a2f9f7f34d6dbb261deccbf658e868`建立`codex/own-draft-list`。本阶段补齐`/author/drafts`的服务器本人列表，使新浏览器、清空/禁用本机存储后仍能分页发现已提交草稿并进入真实本人预览；本机pending日志保持独立，不自动确认、替换、清理或POST。图片、编辑、独立受限验证、非作者审核、原子发布及训练提交继续待完成，不解除private-draft/not-run阻断，未部署。
+
+新增`GET /api/v1/problem-draft-management/drafts`及独立可选能力；沿真实普通会话读取后比较单个规范`X-OJ-Expected-Subject`，再在同一短PG事务中持有恢复/账号/作者权限锁并按owner读取，commit成功才返回完整页。旧实例/缺能力404，无fallback。只投影既有八字段回执，不读/解析最多1MiB的document，不查材料/现候选或占材料槽，不提供他人计数。来源ID、创建时间、固定版本及草稿ID用于发现，标题留给真实预览，不加回填title列或跨页长事务。
+
+固定20条，按created_at和id的C排序降序seek，first/after两个sqlc查询读取21条判定续页，游标取第20条。游标是规范raw-base64url的版本/owner/十进制Unix微秒/ID，仅seek不授予权限，真实actor/header匹配后才验owner；严格长度/编码/时间范围，前端不经Date/Number重建。仅列表允许单个cursor query，空值、重复、未知字段、编码别名和裸问号400，内部/未知/取消优先503，21条含哨兵都校验后才发布。不宣称跨页快照：created_at先于提交，晚提交旧时间戳可被旧边界漏过，须重查首屏，空/末页不是无在途证明。
+
+schema8仅新增`problem_drafts_owner_created_id_idx(owner_subject_id,created_at DESC,id COLLATE C DESC)`；每次新草稿多一个B-tree条目和相应WAL/磁盘，无冗余document覆盖。普通事务CREATE INDEX需维护窗口排空/停止旧API/Worker/维护写入，独立迁移后启动匹配新版；旧进程不会因schema变化自动停止。新程序精确要求8，回退先停新版、Down8仅删索引保留草稿与权限后才能启动要求7的旧版；原Down7非空数据保护仍执行。README/会话与积压当前版本说明、API、计划、界面和CI约定同步，无新增依赖。
+
+Docker Go1.26.10/linux arm64完整格式/vet/三范围静态/root race/七命令/sqlc通过。完整真实PG14.990秒通过：0/20/21/45、45条完全相同时间戳跨多页、微秒边界、owner隔离、三种撤销锁、死事务零结果、infinity/10000年拒绝、有数据8→7→8及精确schema门禁；实际事务屏障证明迟提交不可见/越界漏过及重新首屏发现，新时间提交不重复旧页。12,000行（两个owner各6000）权威SQL首/深页均为目标Index Scan、无Sort；深页Index Cond包含owner及ROW(created_at,id) seek，索引样本2383872字节，不当生产容量/性能承诺。计划原文保存在`/private/tmp/oj-own-list-postgres-verified.log`。首次root整合PG在CLI构建完成前过早启动，CLI验收失败，按build→PG顺序原样重跑通过，没有改产品或断言来通过；Terra早期定向输出未保存，不伪造原始日志，最终以root完整日志为准。
+
+真实Redis/PG/direct TLS与pinned mTLS双API完整协议52.621秒通过：默认拒绝、同owner两已提交摘要、目录换版后旧列表、他人空列表、实际cookie主体错配、撤权/退出和正常排空。Docker前端类型/lint（含7项检测器）/103项测试/生产构建通过；独立控制器只留当前页，下一页/首屏都先Read，账户/页面/期限变化清除，迟到分页及只改时钟未跑timer的过期结果不复活；解码同时拒绝重复ID/请求键。100治理14.753秒、repository与OpenAPI本地引用验证通过。
+
+最终已有Playwright1.64.1/Chromium141.0.7390.37的15组浏览器及真实race API/PG/Redis夹具42.239秒通过，浏览器/夹具/容器/Redis/清理均true。新档案禁用IndexedDB后通过真实API准备22条草稿，连同原2条共24条/两页，UI遍历逐ID与服务端相同且无重复、实际打开本人题面；发现流程仅GET、迟到下一页清除。服务器列表不会改写已提交但本机仍pending的原记录，实际A→B Cookie切换对四条管理路由409。1280×960/390×844首屏及全页截图已查看，无水平溢出、框架overlay或意外console/pageerror；Browser插件未列出，按skill使用已有Playwright，不安装新浏览器。证据位于`/private/tmp/oj-own-list-browser-qa-verified`、`oj-own-list-backend-full.log`、`oj-own-list-frontend-verified.log`、`oj-own-list-real-session.log`和`oj-own-list-governance.log`；临时证据不是备份，不扩写为题源十题页面或生产浏览器矩阵验收。
+
+Astra设计及实现针对性复核无代码阻断，采纳非快照语义、微秒/C一致边界、最小DTO、重复请求键解码与精确迁移停启；补列表409 OpenAPI及不返回Set-Cookie的精确表述。AI复核不代替人工审批；完整候选/最终历史秘密扫描和精确head远端门禁按交付流程核验，未把阶段列表成功当P4/M1或部署通过。下一步推进图片授权，再做本站独立受限验证/审核发布。
+
 ## 2026-11-03：私有草稿导入管理与本机回执恢复
 
 从成功fetch的`origin/main 1cf96c76934c6fe2cf735cfc46dc65ff42443353`建立`codex/draft-import-management`。唯一目标为`/author/drafts`来源选择、固定完整修订导入、本机原tuple恢复及接入本人预览，原按ID入口移至`/author/drafts/open`。没有服务端完整本人列表、图片、编辑、独立受限验证、审核/发布或训练提交，不解除private-draft/not-run阻断，不部署。

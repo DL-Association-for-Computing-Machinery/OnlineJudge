@@ -4,13 +4,61 @@ info:
   version: 0.1.0
   description: >-
     独立可选管理能力；未启用返回404，客户端不得回退到旧路径。
-    沿用普通HTTPS会话、固定Host、同源POST、无query及无转义路径别名的约束。
+    沿用普通HTTPS会话、固定Host、同源POST及无转义路径别名；仅列表允许单个规范cursor query。
     每次首次读取实际会话后，在权限、候选、容量、材料或回执访问前比较请求头。
     请求头仅是前置条件，绝不作为身份或权限来源；不匹配返回409 DRAFT_SUBJECT_CHANGED。
     基础设施故障及未知结果优先返回503。所有响应no-store/nosniff。
 security:
   - ordinarySession: []
 paths:
+  /api/v1/problem-draft-management/drafts:
+    parameters:
+      - $ref: '#/components/parameters/ExpectedSubject'
+      - name: cursor
+        in: query
+        required: false
+        description: >-
+          不透明的owner绑定seek边界，非访问授权。只允许单个规范cursor；拒绝空值、重复、未知字段、编码别名及裸问号。
+          首次不带query，之后原样使用next_cursor，不经浏览器Date/Number重建。
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 192
+          pattern: '^[A-Za-z0-9_-]+$'
+    get:
+      operationId: listOwnPrivateDrafts
+      description: >-
+        当前真实会话先匹配预期主体，再在同一短PG事务中检查恢复/账号/作者权限并按owner查询。
+        按created_at降序、id的C排序降序，每页至多20条；只读八字段摘要，不读题面/材料或现候选，不占材料槽。
+        只提供每页当前已提交视图，跨页不持有快照；较早时间戳的在途导入可迟提交而被旧边界漏过，需重新查看第一页。
+        空页或末页不证明没有在途导入，不自动确认/替换/清理本机pending。
+      responses:
+        '200':
+          description: 本人已提交草稿；无他人计数或全局统计。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [drafts, next_cursor]
+                properties:
+                  drafts:
+                    type: array
+                    maxItems: 20
+                    items:
+                      $ref: './problem-draft-imports.openapi.yaml#/components/schemas/ImportReceipt'
+                  next_cursor:
+                    type: string
+                    maxLength: 192
+                    pattern: '^[A-Za-z0-9_-]*$'
+                    description: 空字符串表示本次无下一页；非空时仅当前页20条且观察到额外一条，游标取第20条。
+        '400': { $ref: '#/components/responses/Failure' }
+        '401': { $ref: '#/components/responses/Failure' }
+        '403': { $ref: '#/components/responses/Failure' }
+        '404': { $ref: '#/components/responses/Failure' }
+        '405': { $ref: '#/components/responses/Failure' }
+        '409': { $ref: '#/components/responses/Failure' }
+        '503': { $ref: '#/components/responses/Failure' }
   /api/v1/problem-draft-management/sources:
     parameters:
       - $ref: '#/components/parameters/ExpectedSubject'

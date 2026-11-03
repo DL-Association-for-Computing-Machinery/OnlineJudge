@@ -48,6 +48,10 @@ func (*previewRepository) CheckAuthor(context.Context, identity.ProblemActor) er
 func (*previewRepository) Receipt(context.Context, identity.ProblemActor, string) (ImportReceipt, error) {
 	return ImportReceipt{}, ErrNotFound
 }
+
+func (*previewRepository) ListOwn(context.Context, identity.ProblemActor, *ListPosition) ([]ImportReceipt, error) {
+	return nil, nil
+}
 func (r *previewRepository) Create(context.Context, identity.ProblemActor, string, *Prepared) (Draft, error) {
 	return r.draft, nil
 }

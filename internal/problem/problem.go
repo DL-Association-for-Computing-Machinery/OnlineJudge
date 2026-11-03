@@ -75,6 +75,7 @@ type Repository interface {
 	Create(context.Context, identity.ProblemActor, string, *Prepared) (Draft, error)
 	GetOwn(context.Context, identity.ProblemActor, string) (Draft, error)
 	Receipt(context.Context, identity.ProblemActor, string) (ImportReceipt, error)
+	ListOwn(context.Context, identity.ProblemActor, *ListPosition) ([]ImportReceipt, error)
 }
 
 // SessionReader accepts only opaque ordinary-session credentials.
