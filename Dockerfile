@@ -69,6 +69,16 @@ FROM backend-source AS backend-build
 RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 go build -trimpath -o /out/api ./cmd/api
 
+# Explicit Linux-only maintenance image; it is not part of the API service.
+FROM backend-source AS materialstore-build
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 go build -trimpath -o /out/materialstore ./cmd/materialstore
+
+FROM alpine:3.23@sha256:ff7f0c727dd796aa36787bfcd9a64bf35a6ce72a73451b3359fde849b6703d63 AS materialstore
+COPY --from=materialstore-build /out/materialstore /usr/local/bin/oj-materialstore
+USER 65532:65532
+ENTRYPOINT ["/usr/local/bin/oj-materialstore"]
+
 FROM alpine:3.23@sha256:ff7f0c727dd796aa36787bfcd9a64bf35a6ce72a73451b3359fde849b6703d63 AS api
 COPY --from=backend-build /out/api /usr/local/bin/oj-api
 USER 65532:65532

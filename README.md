@@ -64,6 +64,27 @@ python3 -B -m unittest discover -s tests/governance -p test_problem_drafts.py -v
 
 输入须为稳定私有快照；输出为仓库外、与输入不重叠的新目录。工具重新核对源码和全部数据哈希，生成自含的10题/254点/18样例草稿、英文Markdown题面、来源映射与许可对象。所有路径相对bundle，移到其他目录后可独立复验，不依赖原候选目录。失败保留 `INCOMPLETE` 和部分文件，重试用新目录；临时目录不是持久备份。格式、权限及发布阻断见[草稿合同](docs/problem-drafts.md)。当前尚未接入业务题库、授权审核、题面渲染或生产判题配置。
 
+## 本地不可变材料存储
+
+Linux维护工具使用预建持久根，根为运行euid所有且权限0700；维护者须先完成根/父目录持久化准备。默认镜像UID为65532，输入也须允许该用户读取。命令不初始化或修复目录，不提供用户授权、数据库草稿导入或发布；完整合同见[本地材料存储](docs/material-store.md)。
+
+```sh
+docker --context desktop-linux build --target materialstore -t oj-materialstore:local .
+docker --context desktop-linux run --rm --network none --read-only --cap-drop ALL \
+  --security-opt no-new-privileges:true \
+  --mount type=bind,src=/ABS/PREPROVISIONED_PRIVATE_ROOT,dst=/store \
+  --mount type=bind,src=/ABS/READABLE_INPUT_DIRECTORY,dst=/input,readonly \
+  oj-materialstore:local put --root /store --source /input/OBJECT_FILE \
+  --sha256 SHA256_VALUE --size BYTE_LENGTH --max-object-bytes 134217728 --timeout 2m
+docker --context desktop-linux run --rm --network none --read-only --cap-drop ALL \
+  --security-opt no-new-privileges:true \
+  --mount type=bind,src=/ABS/PREPROVISIONED_PRIVATE_ROOT,dst=/store \
+  oj-materialstore:local verify --root /store --sha256 SHA256_VALUE \
+  --size BYTE_LENGTH --max-object-bytes 134217728 --timeout 2m
+```
+
+替换全部大写占位值。128MiB/2分钟仅为调用示例，不是生产阈值；维护镜像只在Linux执行，与默认API/Compose分开。成功只输出对象hash/size；写入失败可能已保存，按原对象重试Put确认后才提交引用。verify校验读取完整性，不确认失败写入的持久化。输出与错误均不包含材料正文。
+
 ## 运行环境
 
 Docker 工具链使用 Go 1.26.10、pnpm 11.25.0、Node 24.19.0，与 `go.mod`、[Node 版本](web/.node-version)及 [package.json](web/package.json)对应；依赖锁文件为 `go.sum` 和 `web/pnpm-lock.yaml`。宿主无需另外安装这些构建工具。

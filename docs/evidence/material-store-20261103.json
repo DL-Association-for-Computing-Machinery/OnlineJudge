@@ -1,0 +1,84 @@
+{
+  "schema": "oj.material-store-evidence.v1",
+  "date": "2026-11-03",
+  "base": "eab59a975fb97e8541bfe994b57e774875174775",
+  "scope": "Linux private immutable storage primitive; no problem database/authorization/publication",
+  "toolchain": "Go1.26.10 linux/arm64, existing verified offline modules",
+  "image": "sha256:db3767069081d44714dc796b67295efba0b45dcd5c00d908718b18f3a38e9618",
+  "default_image_user": "65532:65532",
+  "validation_volume": "oj-materialstore-evidence-20261103",
+  "volume_owner_label": "onlinejudge.materialstore-validation",
+  "actual_volume": {
+    "objects": 597,
+    "bytes": 1460825722,
+    "root_mode": "0o700",
+    "owner_uid": 501,
+    "files_mode": "0600",
+    "filesystem": [
+      "ext4"
+    ],
+    "kernel": "7.0.14-linuxkit"
+  },
+  "corpus": {
+    "source_bundle": "/private/tmp/oj-library-checker-draft-final-relocated-20261103",
+    "problems": 10,
+    "cases": 254,
+    "deduplicated_objects": 597,
+    "bytes": 1460825722,
+    "reopened_without_source_mount": true,
+    "all_objects_hash_size_verified": true
+  },
+  "checks": {
+    "backend": "format, module verify, vet, four detector controls, three static scopes, all root race, six commands built: passed",
+    "unit_packages": {
+      "internal/materialstore": "3.077s",
+      "cmd/materialstore": "1.007s"
+    },
+    "normal_suite_skips": "owner fixture (explicit root); bounded real capacity fixture (explicit env/mount)",
+    "owner_special": "isolated root tmp fixture with CHOWN/DAC_OVERRIDE, 1.015s passed",
+    "real_capacity_special": "empty dedicated 512KiB tmpfs, actual write ENOSPC, no final object, same-store recovery; 1.010s passed",
+    "process_exit_stages": [
+      "partial write",
+      "written before sync",
+      "file synced",
+      "linked",
+      "directory synced"
+    ],
+    "governance": {
+      "tests": 100,
+      "seconds": 12.057,
+      "result": "passed"
+    }
+  },
+  "owning_source_sha256": {
+    "Dockerfile": "3135f4accdb1a358fe4b1705706999a82f8ed69885ab950f71fdec73dcd2e820",
+    "scripts/toolchain.sh": "5e2350e9699503a23b653257a9e837c889dfe2eb2afb3e0f39dc14539b038fb3",
+    "internal/materialstore/capacity_linux_test.go": "c1ce99e774a51affdb1e796effd0a0ff80b2e04cdab9c7b5b3f9d69782666e68",
+    "internal/materialstore/failure_test.go": "f32413a4eb2067e36625953f854145e14ea21504135c20bb28cd61be0a6eddf4",
+    "internal/materialstore/process_test.go": "80110c2a48073ae2e35953a9262574a511d94d7acd1154994d134ec02ae7d8d2",
+    "internal/materialstore/put.go": "7bd6714483d03aced6fa3ab82286ba2014dd669c26bb8d6516a58be78103d9c4",
+    "internal/materialstore/read.go": "f3d5e0b2ac11c48708c3908400a0ae2ecd21dd6921629a99d9e89efd3eeb2669",
+    "internal/materialstore/store.go": "74913486c4d1f7aaa7ca95af9acc8716837aa6a290590acc5d2a0ddb7d5ca7c9",
+    "internal/materialstore/store_test.go": "c970889442d5ba7c6c05a93e4c28a6c8d64d519da2f76d7576bb6e1db1970b2b",
+    "cmd/materialstore/main.go": "af96be2907f42a616b29a145f8668086098c502f9a00fd78fb8a6447c7b03723",
+    "cmd/materialstore/main_test.go": "4170bec71b54f1a040963bedac039261ba1bfefd98a5dcd9289eb112e21e0a2d"
+  },
+  "local_log_sha256": {
+    "/private/tmp/oj-materialstore-backend-final.log": "98f3b9dedebbae692f4e06e0ddb3376a621f4d3d2fde7698282aee485356f906",
+    "/private/tmp/oj-materialstore-unit-final.log": "5e19b5e0f13bf7ad01ed8c0217143ffdd818f675a3ab5ef7d622e8f12aebf766",
+    "/private/tmp/oj-materialstore-umask-before.log": "5f0c0532ae0fb572e55a2938c09ecc287fd2821f990d0d44435878c30e352ba5",
+    "/private/tmp/oj-materialstore-real-capacity.log": "9a7b3595655c34964ae34d509a5779f57dae2e48e7022654cb41fa1e8f2393bb",
+    "/private/tmp/oj-materialstore-owner-verified.log": "7e270c4f63e58ef989920bf30fde4ebeb594497e229405d5dda3654d370b5fbe",
+    "/private/tmp/oj-materialstore-corpus-import.log": "ea728f2cc87c9d3601ee9f2aa890f8c75c191c49639d37855f3b62ff9dbed6df",
+    "/private/tmp/oj-materialstore-corpus-reopen.log": "e15e33a6937a67e0472b5643a9d3ada96f235863f2823d250938c74d608ffc17",
+    "/private/tmp/oj-materialstore-governance.log": "4fd8d086ad2316829794d65950ca6009f42becc6c2af8b1efa5d310dec690572",
+    "/private/tmp/oj-materialstore-image-final.log": "50180b5eda7c6ec776ef17f5b2d1ccf4a48bf4c15c00c1546fb6a56dac2ad20b",
+    "/private/tmp/oj-materialstore-volume-metadata.json": "556d5c2c9885b2f77a3c8d44fc1b778ee09fb7ec1cc47bdd3d1ec0d703a0df86"
+  },
+  "not_claimed": [
+    "power-cut durability, full disk capacity or production filesystem qualification",
+    "global storage quota, retention or orphan collection",
+    "business draft database references, authorization, review or publication",
+    "worker material integration, shared object storage, independent backups or deployment"
+  ]
+}

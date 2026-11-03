@@ -34,6 +34,8 @@
 
 普通 CI 包含治理、Go 静态分析/race/构建、前端、真实 PostgreSQL 集成、Compose 冒烟及安全扫描。Go 静态分析及检测器正反例由 `toolchain backend` 执行，覆盖独立会话模块和 sandbox 标签源码，范围见[代码质量检查](code-quality.md)。`containers` 在 backend 或 frontend 受影响时执行页面/代理、容器权限、重建与启停验证，结果传递到必需门禁。工具链与基础镜像由 Dockerfile/锁文件固定，宿主不需要 Go、Node 或 Make。
 
+`internal/materialstore`和维护命令随普通backend做格式、静态、race及构建；文件同步故障注入、双实例/双进程及受控退出不运行题源程序。真实512KiB tmpfs写满需要`OJ_MATERIALSTORE_CAPACITY=1`及固定空挂载，异主owner专项需要独立root夹具；普通非root CI显式跳过二者，不能冒充专项通过。真实十题对象持久卷导入/无来源跨容器复验为手动专项，范围归[存储合同](material-store.md)。
+
 特权判题实验不进入普通 PR CI。本机使用 `python3 scripts/test-worker.py all`（也可选择 sandbox/report/dual-worker/worker-fault/slot-recovery/network-fault/compile-lease/resource-bounds/http-loop），运行合成材料的隔离、回报、双 Worker 接管、异常槽解封、网络故障、编译在途失权、资源预算及 HTTP 真实判题闭环验证；不得在普通 runner 执行生产不可信提交。原专用 VM 与当前 Docker Desktop 的边界、失败诊断和历史结果见 [M0 实验记录](m0-experiment.md)及交付日志，不以普通 CI 代替专项验收。
 
 `http_address_test.go` 的有界启动日志解析是普通 root race 用例，不启动进程或调用 Docker。真实双提交 API、mTLS 控制端、Worker 命令及 HTTP queued→终态由 sandbox 标签的 `http-loop` 专项执行；普通 CI 只编译/静态分析这些源码。准入及证据边界见 [README](../README.md#http-到真实判题终态专项)，不将其视为浏览器或正式训练授权验收。
