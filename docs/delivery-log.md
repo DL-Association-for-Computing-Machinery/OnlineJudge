@@ -1,5 +1,21 @@
 # 工程交付记录
 
+## 2026-11-04：zalgorithm 全29点与封闭参考档位
+
+成功fetch后从`origin/main f7b92c9477a2783603f6561fb550997a9e7f0604`建立`codex/zalgorithm-reference`。显式来源入口新增zalgorithm完整29点，不采样。固定来源表选择受信布局/材料预算，Runner在准备前及冻结后核对sourceID；所有来源仍先冻结/哈希完整集合、预检全部答案，再调用execution Verify/Compile。单匿名磁盘文件、进程级一份额度和按点加载共用；原A+B/unionfind API作为兼容入口保留，不借用新profile。按固定LC锁重核源码`string/zalgorithm/sol/correct.cpp`为969B、SHA-256 `9f7168d28138fb61d7706b5b899bb0ae21503a848428fc7d7551c5a8507ff8d7`，仅标准库iostream/vector，无私有依赖。
+
+新增封闭Small/Medium档位解析及不可变配置副本，新factory和opaque tier slot拒0及未知值，无法回落M0；Host私有0仅表示原M0，构造/启动/恢复和每次控制/文件派发均先解析。Medium Runtime `p4-reference-medium-gnu17-desktop-arm64-v1`保持CPU1秒/wall5秒/memory128MiB、编译/诊断4KiB，raw stdout4MiB；zalgorithm完整快照input1MiB/answer4MiB/total64MiB。文件协议`p4-gojudge-cached-files-medium-v1`只升双端累计payload256MiB，其余48MiB单file/64MiB live/4对象/512操作保持；29点按请求上限计量已140258181B另加源码双传，不能沿用旧128MiB。新增29点累计跨旧上限、两端新cap/漂移、坏末点零执行、来源借用和未知档位零派发回归。
+
+显式新建停止槽`oj-reference-medium-sandbox`，CID`f050f360e93733f021f5102fc52532ccedf2416301e0686d2ca8ad0377c16082`，固定owner、无网络/端口/挂载、private cgroup；旧槽不替换。使用同一固定镜像覆盖Entrypoint为`[/opt/go-judge]`并严格匹配固定Cmd，只升global output/RLIMIT8MiB、global copy-out仍1MiB，内层64MiB/外层1GiB及128MiB tmp/shm保持。新增`sandbox_cmd,omitempty`不改旧JSON，旧nil/空Cmd均接受，Medium非空参数必须精确相等；旧两profile golden摘要及真实回读一致。CLI不配置或创建槽；`recover-reference [source-id] CID`省略source仍只选原unionfind，显式zalgorithm才选Medium，拒A+B/未知source，独立停止/dirty门禁保持。
+
+固定Desktop LinuxKit7.0.14/arm64、go-judge v1.13.3/GCC15.3.0与原镜像下，首轮三组20.22秒全部通过（`/private/tmp/oj-zalgorithm-real.log`）：完整29点CLI14.64秒全AC并停止确认，input总9311668B/answer总30611793B、最大499693B/3348946B；最大执行CPU22126000ns/内存6815744B。1MiB+1与4MiB全字节stdout保真AC，4MiB SHA-256为`2b07811057df887086f06a67edc6ebf911de8b6741156e7a2eb1416a4b8b1b2e`；4194305B为collector OLE，精确标签/状态/Exit0/用量presence比较全true。隔离内artifact写1048577B/8388608B成功并核对实际大小，8388609B为OLE/Exit25且无collector截断，区分全局RLIMIT与stdout预算。
+
+资源证据分别计量：CLI wait4 Maxrss为42106880B，Darwin字节换算按[Go官方实现](https://go.dev/src/runtime/pprof/pprof_rusage.go)核实，不当作Go heap或CLI/Docker/沙箱并发RSS总和；4MiB缓存活跃时shm采样4272128B，host Go HeapAlloc7065384/HeapInuse8437760/Sys22792456B，均为阶段样本。collector与global probe的outer memory.peak分别40955904/43663360B，tmp/shm容量各134217728B，清理后采样均0；不含宿主堆、不构成连续存储峰值或任意材料组合容量证明。报告`/private/tmp/oj-zalgorithm-reference-report-20261104/report.json` SHA-256为`127ff2701e08ea21ad147412975b709030586a3ddad2e345a78b6f3ae935ef03`，plan `2fb3a00287701df144b0810ffc5dbbf4ae43e84402e20bc087829c475bdab40f`，profile `32aa64eb913108ccc089a0548a98cb777f019f37cd4bc349ab87ff0ddd1a515d`；0700/0600且字段只含身份/状态/用量。
+
+同构建的旧unionfind两组11.99秒（18点CLI9.33秒）与A+B九组21.90秒（12点CLI6.30秒、AC/WA/CE/RE/TLE/MLE/OLE/取消）全部通过并确认停止（`oj-zalgorithm-unionfind-real.log`、`oj-zalgorithm-aplusb-real.log`）。报告SHA-256分别`88e2f295240becb4fe78d5d3233a195a4314c221a234eb50d982a4c4b20f1bac`与`12584c42ed4ecf91cae53148f0c520b2523d98f8ad90416a9d8f2964309a7aa5`，目录分别`oj-zalgorithm-unionfind-regression-20261104`/`oj-zalgorithm-aplusb-regression-20261104`，旧plan/profile摘要不变。没有重试至绿、恢复或手清标记；旧历史停止故障本轮未复现，根因仍未知，不追认旧报告。
+
+Docker离线Go1.26.10基线/定向六包race/vet、模块/格式/三范围静态/完整root race/七命令构建和cmd sandbox标签检查通过（`oj-zalgorithm-{baseline,targeted,static-verified,backend}.log`）。首轮静态拒绝已无正常调用的私有lockReference包装，删除后原槽仍用同canonical锁名，未屏蔽unused规则。Astra/high分阶段设计/差异/真实驱动与证据复核无阻断，AI不代替人工审批。无新依赖、SQL/schema、公共HTTP或UI变化；本地未重跑PG/Redis、浏览器或完整M0，精确head远端CI另核验。原始私有材料、草稿版本/not-run/生产null/publication blocked保持，仍有七题及持久化验证任务/权限接纳、完整质量/非作者终审发布待完成，未部署。临时日志/报告/产物不是独立备份。
+
 ## 2026-11-03：unionfind 完整参考验证与磁盘快照
 
 成功fetch后从`origin/main 0f77fec0f5f7c0b12bd32377b499a90c7450dda1`建立`codex/unionfind-reference`。维护CLI显式`--source-id library-checker:unionfind`接完整18点；默认A+B12点保持原profile。新增单个0600匿名磁盘快照，同fd完整哈希所有source/input/answer，完整catalog、逐点顺序/身份及总预算先核验；进程最多一份，Prepared占用至Close。全部答案UTF-8/token预检先于execution Verify/Compile，执行时只加载当前点，原材料随后修改不影响冻结值；CLI槽启动/Host探测仍先发生。失败关闭与取消、Read/Close竞争、完整集合超限、末点无效零执行、元数据不改内部span均有回归。磁盘准备失败可无完整plan/点列表；匿名unlink失败在写内容前拒绝，极端情况下只可能留空0600文件。

@@ -9,8 +9,6 @@ import (
 	"mime/multipart"
 	"strconv"
 	"time"
-
-	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 )
 
 // UploadFile is an explicit P4 capability, separate from RoundTrip's M0 subset.
@@ -66,7 +64,10 @@ func (h *Host) ReadFile(parent context.Context, id string, maximum int64) ([]byt
 }
 
 func (h *Host) fileContext(parent context.Context, maximum int64) (context.Context, func(), error) {
-	p := experiment.PinnedReferenceFiles()
+	_, p, configErr := h.configuration()
+	if configErr != nil {
+		return nil, nil, configErr
+	}
 	if parent == nil || maximum < 0 || maximum > p.FileBytes {
 		return nil, nil, errors.New("reference file budget rejected")
 	}
@@ -100,11 +101,15 @@ func (h *Host) fileCurl(method, path string, maximum int64) []string {
 }
 
 func (h *Host) fileExchange(ctx context.Context, input io.Reader, output io.Writer, maximum int64, args []string) error {
+	p, _, err := h.configuration()
+	if err != nil {
+		return err
+	}
 	s, err := h.inspect(ctx, h.id)
 	if err != nil {
 		return errors.New("reference file host inspection failed")
 	}
-	if err := h.validate(s, h.profile()); err != nil {
+	if err := h.validate(s, p); err != nil {
 		return err
 	}
 	run := h.stream

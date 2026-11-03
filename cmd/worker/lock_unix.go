@@ -31,11 +31,10 @@ func lockM0Mode(slot workerhost.M0Slot, recovery bool) (*slotLock, error) {
 	return lockSlotMode(slot.LockName(), recovery)
 }
 
-func lockReference() (*slotLock, error) {
-	return lockSlotMode(workerhost.ReferenceSlot{}.LockName(), false)
-}
-
 func lockSlotMode(name string, recovery bool) (*slotLock, error) {
+	if name == "" {
+		return nil, errors.New("invalid canonical slot lock")
+	}
 	u, err := user.Current()
 	if err != nil || !filepath.IsAbs(u.HomeDir) {
 		return nil, errors.New("cannot resolve M0 owner home")

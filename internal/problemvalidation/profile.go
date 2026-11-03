@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
@@ -45,6 +46,33 @@ func UnionFindProfile() Profile {
 	p.Wall = 3 * time.Minute
 	p.Diagnostics = experiment.ReferenceDiagnosticBytes
 	return p
+}
+
+// ResolveSource binds the closed set of maintenance sources to exact profiles.
+// Tier zero is only the legacy A+B/M0 entry; reference tier factories reject it.
+func ResolveSource(sourceID string) (Profile, experiment.ReferenceTier, error) {
+	switch sourceID {
+	case "library-checker:aplusb":
+		return PinnedProfile(), 0, nil
+	case "library-checker:unionfind":
+		return UnionFindProfile(), experiment.ReferenceSmall, nil
+	case "library-checker:zalgorithm":
+		c, err := experiment.ResolveReferenceTier(experiment.ReferenceMedium)
+		if err != nil {
+			return Profile{}, 0, err
+		}
+		limits, err := problem.DiskReferenceLimits(sourceID)
+		if err != nil {
+			return Profile{}, 0, err
+		}
+		p := UnionFindProfile()
+		p.ID = "p4-lc-zalgorithm-reference-desktop-arm64-v1"
+		p.Runtime, p.Files, p.Materials = c.Runtime, c.Files, limits
+		p.Text.Bytes = 4 << 20
+		return p, experiment.ReferenceMedium, nil
+	default:
+		return Profile{}, 0, errors.New("unsupported reference source")
+	}
 }
 
 func digest(value any) string {

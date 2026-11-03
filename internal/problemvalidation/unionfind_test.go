@@ -18,8 +18,13 @@ import (
 
 func unionRunnerFixture(t *testing.T, lastAnswer []byte) (*problemfixture.Bundle, *problem.Prepared) {
 	t.Helper()
-	b := problemfixture.NewUnionFind(t)
-	b.AddOriginal(t, "data_structure/unionfind/sol/correct.cpp", []byte("int main(){}"))
+	return referenceRunnerFixture(t, problemfixture.NewUnionFind(t), lastAnswer)
+}
+
+func referenceRunnerFixture(t *testing.T, b *problemfixture.Bundle, lastAnswer []byte) (*problemfixture.Bundle, *problem.Prepared) {
+	t.Helper()
+	provenance := b.Document["provenance"].(map[string]any)
+	b.AddOriginal(t, provenance["source_path"].(string)+"/sol/correct.cpp", []byte("int main(){}"))
 	second := map[string]any{"id": "case-0002", "sample": false}
 	for role, raw := range map[string][]byte{"input": []byte("2 3\n"), "answer": lastAnswer} {
 		sha := problemfixture.Hash(raw)
@@ -31,7 +36,7 @@ func unionRunnerFixture(t *testing.T, lastAnswer []byte) (*problemfixture.Bundle
 	p["source_case_mapping"] = append(p["source_case_mapping"].([]any), map[string]any{"case_id": "case-0002", "upstream_case": "random_00"})
 	b.BindReferenceCases(t)
 	b.Write(t)
-	prepared, err := problem.LoadBundle(b.Directory, "library-checker:unionfind", b.Lock)
+	prepared, err := problem.LoadBundle(b.Directory, provenance["source_id"].(string), b.Lock)
 	if err != nil {
 		t.Fatal(err)
 	}

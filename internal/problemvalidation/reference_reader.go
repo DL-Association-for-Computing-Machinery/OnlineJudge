@@ -15,7 +15,7 @@ type referenceReader interface {
 
 func freezeReferences(ctx context.Context, prepared *problem.Prepared, profile Profile, disk bool) (problem.ReferencePlan, referenceReader, error) {
 	if disk {
-		s, err := prepared.PrepareUnionFindReference(ctx, profile.Materials)
+		s, err := prepared.PrepareDiskReference(ctx)
 		if err != nil {
 			return problem.ReferencePlan{}, nil, err
 		}

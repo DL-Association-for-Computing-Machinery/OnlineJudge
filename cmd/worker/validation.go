@@ -43,9 +43,16 @@ func validateReference(ctx context.Context, args []string, logger *slog.Logger) 
 	if !referenceOutputOutside(*bundle, *output) {
 		return errors.New("report output must be outside the private bundle")
 	}
-	unionfind := *sourceID == "library-checker:unionfind"
-	if (*sourceID != "library-checker:aplusb" && !unionfind) || (unionfind && os.Getenv("OJ_WORKER_M0_SLOT") != "") {
+	_, tier, err := problemvalidation.ResolveSource(*sourceID)
+	if err != nil || (tier != 0 && os.Getenv("OJ_WORKER_M0_SLOT") != "") {
 		return errors.New("unsupported reference source or M0 slot override")
+	}
+	var referenceSlot workerhost.ReferenceTierSlot
+	if tier != 0 {
+		referenceSlot, err = workerhost.ReferenceSlotForTier(tier)
+		if err != nil {
+			return err
+		}
 	}
 	slot, err := workerhost.ParseM0Slot(os.Getenv("OJ_WORKER_M0_SLOT"))
 	if err != nil {
@@ -67,8 +74,8 @@ func validateReference(ctx context.Context, args []string, logger *slog.Logger) 
 		return err
 	}
 	var lock *slotLock
-	if unionfind {
-		lock, err = lockReference()
+	if tier != 0 {
+		lock, err = lockSlotMode(referenceSlot.LockName(), false)
 	} else {
 		lock, err = lockM0(slot)
 	}
@@ -76,13 +83,13 @@ func validateReference(ctx context.Context, args []string, logger *slog.Logger) 
 		return err
 	}
 	defer lock.Close()
-	report, runErr := runReferenceProfileLocked(ctx, prepared, lock, func(ctx context.Context) (validationHost, error) {
+	report, runErr := runReferenceSourceLocked(ctx, prepared, lock, func(ctx context.Context) (validationHost, error) {
 		var host *workerhost.Host
 		var err error
-		if unionfind && *start {
-			host, err = workerhost.StartReference(ctx)
-		} else if unionfind {
-			host, err = workerhost.OpenReference(ctx)
+		if tier != 0 && *start {
+			host, err = workerhost.StartReferenceSlot(ctx, referenceSlot)
+		} else if tier != 0 {
+			host, err = workerhost.OpenReferenceSlot(ctx, referenceSlot)
 		} else if *start {
 			host, err = workerhost.StartM0Slot(ctx, slot)
 		} else {
@@ -94,13 +101,13 @@ func validateReference(ctx context.Context, args []string, logger *slog.Logger) 
 			return nil, err
 		}
 		return host, err
-	}, unionfind)
+	}, *sourceID)
 	if report.Schema == "" {
 		return runErr
 	}
 	report.Slot = slot.ContainerName()
-	if unionfind {
-		report.Slot = (workerhost.ReferenceSlot{}).ContainerName()
+	if tier != 0 {
+		report.Slot = referenceSlot.ContainerName()
 	}
 	if err := persistReferenceReport(*output, report); err != nil {
 		return errors.New("reference report persistence failed; keep incomplete output")
@@ -167,10 +174,18 @@ func runReferenceLocked(ctx context.Context, prepared *problem.Prepared, lock *s
 }
 
 func runReferenceProfileLocked(ctx context.Context, prepared *problem.Prepared, lock *slotLock, open func(context.Context) (validationHost, error), unionfind bool) (problemvalidation.Report, error) {
-	var report problemvalidation.Report
-	p := problemvalidation.PinnedProfile()
+	sourceID := "library-checker:aplusb"
 	if unionfind {
-		p = problemvalidation.UnionFindProfile()
+		sourceID = "library-checker:unionfind"
+	}
+	return runReferenceSourceLocked(ctx, prepared, lock, open, sourceID)
+}
+
+func runReferenceSourceLocked(ctx context.Context, prepared *problem.Prepared, lock *slotLock, open func(context.Context) (validationHost, error), sourceID string) (problemvalidation.Report, error) {
+	var report problemvalidation.Report
+	p, tier, err := problemvalidation.ResolveSource(sourceID)
+	if err != nil {
+		return report, err
 	}
 	if err := lock.dirty(); err != nil {
 		return report, err
@@ -182,12 +197,15 @@ func runReferenceProfileLocked(ctx context.Context, prepared *problem.Prepared, 
 		return report, errors.New("reference sandbox preflight failed; slot remains quarantined")
 	}
 	if openErr == nil {
-		if unionfind {
-			report, openErr = problemvalidation.New(execution.NewReferenceGoJudge(host, host.Verify, host)).ValidateUnionFind(ctx, prepared, p)
-		} else {
-			report, openErr = problemvalidation.New(execution.NewCachedGoJudge(host, host.Verify, host)).Validate(ctx, prepared, p)
+		g := execution.NewCachedGoJudge(host, host.Verify, host)
+		if tier != 0 {
+			g, openErr = execution.NewReferenceGoJudgeForTier(host, host.Verify, host, tier)
 		}
-	} else {
+		if openErr == nil {
+			report, openErr = problemvalidation.New(g).ValidateSource(ctx, prepared, sourceID)
+		}
+	}
+	if report.Schema == "" {
 		report = problemvalidation.Report{Schema: "oj.reference-validation.v1", Status: "reference-validation-failed", Publication: "blocked", Profile: p, ProfileSHA256: p.Digest(), Verdict: "SE", Points: []problemvalidation.Point{}}
 	}
 	report.ContainerID, report.StartedAt = host.Identity()

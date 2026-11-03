@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 	"time"
+
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 )
 
 // Identity returns the bound full container ID and process lifetime, never a
@@ -21,13 +23,17 @@ func StartM0Slot(ctx context.Context, slot M0Slot) (*Host, error) {
 }
 
 func startM0Slot(ctx context.Context, run command, slot M0Slot) (*Host, error) {
-	return startConfiguredSlot(ctx, run, slot.ContainerName(), false)
+	return startConfiguredSlot(ctx, run, slot.ContainerName(), 0)
 }
 
-func startConfiguredSlot(ctx context.Context, run command, name string, reference bool) (*Host, error) {
+func startConfiguredSlot(ctx context.Context, run command, name string, tier experiment.ReferenceTier) (*Host, error) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	h := &Host{run: run, reference: reference, active: make(map[uint64]context.CancelFunc), drained: make(chan struct{})}
+	h := &Host{run: run, tier: tier, active: make(map[uint64]context.CancelFunc), drained: make(chan struct{})}
+	p, _, err := h.configuration()
+	if err != nil {
+		return nil, err
+	}
 	s, err := h.inspect(ctx, name)
 	if err != nil {
 		return nil, err
@@ -35,7 +41,7 @@ func startConfiguredSlot(ctx context.Context, run command, name string, referenc
 	if !containerID.MatchString(s.ID) || s.Running || s.PID != 0 || s.Paused || s.Restarting {
 		return nil, errors.New("reference slot is not safely stopped")
 	}
-	if err := validateIsolation(s, h.profile()); err != nil {
+	if err := validateIsolation(s, p); err != nil {
 		return nil, err
 	}
 	h.id, h.started = s.ID, s.Started
@@ -56,7 +62,7 @@ func startConfiguredSlot(ctx context.Context, run command, name string, referenc
 	if startErr != nil {
 		return h, startErr
 	}
-	if err := h.Verify(ctx, h.profile()); err != nil {
+	if err := h.Verify(ctx, p); err != nil {
 		return h, err
 	}
 	return h, nil

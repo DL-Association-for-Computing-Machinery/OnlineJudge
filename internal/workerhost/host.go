@@ -1,4 +1,4 @@
-// Package workerhost adapts the dedicated offline Docker Desktop M0 sandbox. The caller
+// Package workerhost adapts pinned offline Docker Desktop sandbox slots. The caller
 // must exclusively own this container and its trusted Docker control plane.
 // It is not a generic Docker host controller or a production node provisioner.
 package workerhost
@@ -25,9 +25,9 @@ type Host struct {
 	run         command
 	stream      streamCommand
 	fileBusy    atomic.Bool
-	filePayload int64 // guarded by mu; charges are not refunded after ambiguity
-	fileOps     int   // guarded by mu; bounds even empty transfers
-	reference   bool  // fixed by the constructor, never caller-selected budgets
+	filePayload int64                    // guarded by mu; charges are not refunded after ambiguity
+	fileOps     int                      // guarded by mu; bounds even empty transfers
+	tier        experiment.ReferenceTier // zero is the separate M0 configuration
 	id, started string
 	mu          sync.Mutex
 	closed      bool
@@ -52,11 +52,15 @@ func open(ctx context.Context, run command) (*Host, error) {
 }
 
 func openSlot(ctx context.Context, run command, slot M0Slot) (*Host, error) {
-	return openConfiguredSlot(ctx, run, slot.ContainerName(), false)
+	return openConfiguredSlot(ctx, run, slot.ContainerName(), 0)
 }
 
-func openConfiguredSlot(ctx context.Context, run command, name string, reference bool) (*Host, error) {
-	h := &Host{run: run, reference: reference, active: make(map[uint64]context.CancelFunc), drained: make(chan struct{})}
+func openConfiguredSlot(ctx context.Context, run command, name string, tier experiment.ReferenceTier) (*Host, error) {
+	h := &Host{run: run, tier: tier, active: make(map[uint64]context.CancelFunc), drained: make(chan struct{})}
+	p, _, err := h.configuration()
+	if err != nil {
+		return nil, err
+	}
 	s, err := h.inspect(ctx, name)
 	if err != nil {
 		return nil, err
@@ -65,17 +69,18 @@ func openConfiguredSlot(ctx context.Context, run command, name string, reference
 		return nil, errors.New("sandbox identity unavailable")
 	}
 	h.id, h.started = s.ID, s.Started
-	if err := h.Verify(ctx, h.profile()); err != nil {
+	if err := h.Verify(ctx, p); err != nil {
 		return nil, err
 	}
 	return h, nil
 }
 
-func (h *Host) profile() experiment.ExecutionProfile {
-	if h.reference {
-		return experiment.PinnedReferenceEnvironment()
+func (h *Host) configuration() (experiment.ExecutionProfile, experiment.ReferenceFilesProfile, error) {
+	if h.tier == 0 {
+		return experiment.PinnedEnvironment(), experiment.PinnedReferenceFiles(), nil
 	}
-	return experiment.PinnedEnvironment()
+	c, err := experiment.ResolveReferenceTier(h.tier)
+	return c.Runtime, c.Files, err
 }
 
 var containerID = regexp.MustCompile(`^[a-f0-9]{64}$`)
@@ -116,7 +121,11 @@ func (h *Host) Verify(ctx context.Context, p experiment.ExecutionProfile) error 
 		return err
 	}
 	defer done()
-	if !reflect.DeepEqual(p, h.profile()) {
+	want, _, err := h.configuration()
+	if err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(p, want) {
 		return errors.New("unsupported host profile")
 	}
 	s, err := h.inspect(ctx, h.id)
@@ -174,9 +183,13 @@ func (h *Host) validate(s state, p experiment.ExecutionProfile) error {
 }
 
 func validateIsolation(s state, p experiment.ExecutionProfile) error {
+	cmdMatches := len(s.Cmd) == 0
+	if len(p.SandboxCmd) != 0 {
+		cmdMatches = reflect.DeepEqual(s.Cmd, p.SandboxCmd)
+	}
 	if s.Image != p.ImageID || s.Network != "none" || !s.Readonly || s.Mounts != 0 || !s.Privileged ||
 		s.Memory != 1<<30 || s.CPUs != 1e9 || s.Pids != 128 || s.Shm != 128<<20 ||
-		s.Restart != "no" || s.PIDMode != "" || s.IPCMode != "private" || len(s.Cmd) != 0 ||
+		s.Restart != "no" || s.PIDMode != "" || s.IPCMode != "private" || !cmdMatches ||
 		!reflect.DeepEqual(s.Entrypoint, p.SandboxArgs) || !reflect.DeepEqual(s.Tmpfs, map[string]string{"/tmp": "rw,nosuid,size=128m"}) {
 		return errors.New("sandbox identity, lifetime or isolation mismatch")
 	}

@@ -43,6 +43,23 @@ func (p *Prepared) PrepareUnionFindReference(ctx context.Context, limits Referen
 	if p == nil || ctx == nil || limits != UnionFindReferenceLimits() {
 		return nil, ErrInvalid
 	}
+	return p.prepareDiskReference(ctx, "library-checker:unionfind", diskReferenceAdmission{"data_structure/unionfind", limits})
+}
+
+// PrepareDiskReference selects the complete source's fixed admission internally.
+// No caller-supplied layout or budget can widen the shared snapshot protocol.
+func (p *Prepared) PrepareDiskReference(ctx context.Context) (*ReferenceSnapshot, error) {
+	if p == nil || ctx == nil {
+		return nil, ErrInvalid
+	}
+	a, err := referenceDiskAdmission(p.content.SourceID)
+	if err != nil {
+		return nil, err
+	}
+	return p.prepareDiskReference(ctx, p.content.SourceID, a)
+}
+
+func (p *Prepared) prepareDiskReference(ctx context.Context, sourceID string, admission diskReferenceAdmission) (_ *ReferenceSnapshot, err error) {
 	if err := p.acquire(); err != nil {
 		return nil, err
 	}
@@ -56,7 +73,7 @@ func (p *Prepared) PrepareUnionFindReference(ctx context.Context, limits Referen
 			err = errors.Join(err, s.Close())
 		}
 	}()
-	plan, d, err := p.referenceMetadata(ctx, limits, "library-checker:unionfind", "data_structure/unionfind")
+	plan, d, err := p.referenceMetadata(ctx, admission.limits, sourceID, admission.path)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +86,7 @@ func (p *Prepared) PrepareUnionFindReference(ctx context.Context, limits Referen
 	if err := os.Remove(f.Name()); err != nil {
 		return nil, errors.New("reference snapshot anonymity unavailable")
 	}
-	refs := []fileReference{d.Provenance.OriginalFiles["source/data_structure/unionfind/sol/correct.cpp"]}
+	refs := []fileReference{d.Provenance.OriginalFiles["source/"+admission.path+"/sol/correct.cpp"]}
 	for _, c := range d.TestCases {
 		refs = append(refs, c.Input, c.Answer)
 	}

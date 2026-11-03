@@ -49,11 +49,15 @@ func (h *Host) RoundTrip(r *http.Request) (*http.Response, error) {
 		return nil, errors.New("unexpected sandbox body")
 	}
 	// Recheck process lifetime immediately before dispatch, including cleanup.
+	p, _, err := h.configuration()
+	if err != nil {
+		return nil, err
+	}
 	s, err := h.inspect(ctx, h.id)
 	if err != nil {
 		return nil, err
 	}
-	if err := h.validate(s, h.profile()); err != nil {
+	if err := h.validate(s, p); err != nil {
 		return nil, err
 	}
 	args := []string{"exec", "-i", h.id, "curl", "--disable", "--silent", "--show-error", "--noproxy", "*", "--max-time", "20", "--max-filesize", "131072", "--proto", "=http", "--request", r.Method, "--header", "Content-Type: application/json", "--write-out", "\n%{http_code}"}

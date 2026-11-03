@@ -19,7 +19,7 @@ func TestReferenceSlotAndHostRuntimeBinding(t *testing.T) {
 		t.Fatal("M0 parser admitted reference")
 	}
 	f := &fakeHost{s: goodState()}
-	h, err := openConfiguredSlot(context.Background(), f.run, slot.ContainerName(), true)
+	h, err := openConfiguredSlot(context.Background(), f.run, slot.ContainerName(), experiment.ReferenceSmall)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,8 +64,8 @@ func TestReferenceSlotUnknownStartReceiptStillStops(t *testing.T) {
 		}
 		return f.run(ctx, input, name, args...)
 	}
-	h, err := startConfiguredSlot(context.Background(), run, (ReferenceSlot{}).ContainerName(), true)
-	if err == nil || h == nil || !h.reference {
+	h, err := startConfiguredSlot(context.Background(), run, (ReferenceSlot{}).ContainerName(), experiment.ReferenceSmall)
+	if err == nil || h == nil || h.tier != experiment.ReferenceSmall {
 		t.Fatal("lost start binding", err)
 	}
 	if err := h.Stop(context.Background()); err != nil {
@@ -94,7 +94,7 @@ func TestReferenceRecoveryOnlyConfirmsOriginalFixedSlot(t *testing.T) {
 			if scenario == "isolation" {
 				f.s.Network = "host"
 			}
-			err := recoverConfiguredSlot(context.Background(), f.run, (ReferenceSlot{}).ContainerName(), id, true)
+			err := recoverConfiguredSlot(context.Background(), f.run, (ReferenceSlot{}).ContainerName(), id, experiment.ReferenceSmall)
 			if (err == nil) != (scenario == "stopped" || scenario == "running") {
 				t.Fatal("recovery outcome", err)
 			}

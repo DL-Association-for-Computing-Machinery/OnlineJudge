@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 )
 
 // RecoverM0Slot confirms termination of a quarantined slot. The caller must hold
@@ -18,23 +20,37 @@ func RecoverM0Slot(ctx context.Context, slot M0Slot, expectedID string) error {
 }
 
 func recoverSlot(ctx context.Context, run command, slot M0Slot, expectedID string) error {
-	return recoverConfiguredSlot(ctx, run, slot.ContainerName(), expectedID, false)
+	return recoverConfiguredSlot(ctx, run, slot.ContainerName(), expectedID, 0)
 }
 
 // RecoverReference confirms only the fixed reference slot's original lifetime.
 // It has the same external dispatch-fence prerequisites as RecoverM0Slot and
 // never starts a container or clears a marker itself.
 func RecoverReference(ctx context.Context, expectedID string) error {
-	return recoverConfiguredSlot(ctx, runCommand, ReferenceSlot{}.ContainerName(), expectedID, true)
+	return recoverConfiguredSlot(ctx, runCommand, ReferenceSlot{}.ContainerName(), expectedID, experiment.ReferenceSmall)
 }
 
-func recoverConfiguredSlot(ctx context.Context, run command, name, expectedID string, reference bool) error {
+// RecoverReferenceSlot confirms a fixed tier slot under the same external
+// dispatch-fence prerequisites as RecoverM0Slot. It never starts the container.
+func RecoverReferenceSlot(ctx context.Context, slot ReferenceTierSlot, expectedID string) error {
+	name, _, tier, err := slot.configuration()
+	if err != nil {
+		return err
+	}
+	return recoverConfiguredSlot(ctx, runCommand, name, expectedID, tier)
+}
+
+func recoverConfiguredSlot(ctx context.Context, run command, name, expectedID string, tier experiment.ReferenceTier) error {
 	if !containerID.MatchString(expectedID) {
 		return errors.New("original full M0 container ID required")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	h := &Host{run: run, reference: reference, id: expectedID, active: make(map[uint64]context.CancelFunc), drained: make(chan struct{})}
+	h := &Host{run: run, tier: tier, id: expectedID, active: make(map[uint64]context.CancelFunc), drained: make(chan struct{})}
+	p, _, err := h.configuration()
+	if err != nil {
+		return err
+	}
 	s, err := h.inspect(ctx, name)
 	if err != nil {
 		return errors.New("recovery sandbox inspection failed")
@@ -42,7 +58,7 @@ func recoverConfiguredSlot(ctx context.Context, run command, name, expectedID st
 	if s.ID != expectedID || s.Started == "" || s.Restarting || s.Paused {
 		return errors.New("recovery sandbox identity or lifetime unavailable")
 	}
-	if err := validateIsolation(s, h.profile()); err != nil {
+	if err := validateIsolation(s, p); err != nil {
 		return err
 	}
 	h.started = s.Started
@@ -60,7 +76,7 @@ func recoverConfiguredSlot(ctx context.Context, run command, name, expectedID st
 	if err != nil || s.ID != expectedID || s.Started != h.started || s.Running || s.PID != 0 || s.Restarting || s.Paused {
 		return errors.New("recovery sandbox stopped state unconfirmed")
 	}
-	if err := validateIsolation(s, h.profile()); err != nil {
+	if err := validateIsolation(s, p); err != nil {
 		return err
 	}
 	return ctx.Err()

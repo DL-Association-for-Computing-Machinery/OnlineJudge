@@ -65,23 +65,33 @@ func New(s execution.Sandbox) *Runner { return &Runner{sandbox: s} }
 // Artifact cleanup uses an independent deadline; HTTP cancellation alone never
 // proves sandbox stop. Finalize must be called after the owner confirms stop.
 func (r *Runner) Validate(ctx context.Context, prepared *problem.Prepared, profile Profile) (report Report, err error) {
-	return r.validate(ctx, prepared, profile, false)
+	return r.validate(ctx, prepared, profile, "library-checker:aplusb")
 }
 
 // ValidateUnionFind admits the independently pinned disk snapshot/runtime. All
 // answers are prechecked before the first execution adapter call.
 func (r *Runner) ValidateUnionFind(ctx context.Context, prepared *problem.Prepared, profile Profile) (report Report, err error) {
-	return r.validate(ctx, prepared, profile, true)
+	return r.validate(ctx, prepared, profile, "library-checker:unionfind")
 }
 
-func (r *Runner) validate(ctx context.Context, prepared *problem.Prepared, profile Profile, disk bool) (report Report, err error) {
-	report = Report{Schema: "oj.reference-validation.v1", Status: "reference-validation-failed", Publication: "blocked", Profile: profile, ProfileSHA256: profile.Digest(), Verdict: "SE", Points: []Point{}}
-	admitted := PinnedProfile()
-	if disk {
-		admitted = UnionFindProfile()
+// ValidateSource selects only a complete admitted source's fixed profile. It
+// cannot run one Prepared under another source's resource admission.
+func (r *Runner) ValidateSource(ctx context.Context, prepared *problem.Prepared, sourceID string) (Report, error) {
+	p, _, err := ResolveSource(sourceID)
+	if err != nil {
+		return Report{}, err
 	}
-	if r == nil || ctx == nil || r.sandbox == nil || !r.used.CompareAndSwap(false, true) || !reflect.DeepEqual(profile, admitted) {
+	return r.validate(ctx, prepared, p, sourceID)
+}
+
+func (r *Runner) validate(ctx context.Context, prepared *problem.Prepared, profile Profile, sourceID string) (report Report, err error) {
+	report = Report{Schema: "oj.reference-validation.v1", Status: "reference-validation-failed", Publication: "blocked", Profile: profile, ProfileSHA256: profile.Digest(), Verdict: "SE", Points: []Point{}}
+	admitted, _, admissionErr := ResolveSource(sourceID)
+	if r == nil || ctx == nil || r.sandbox == nil || admissionErr != nil || !r.used.CompareAndSwap(false, true) || !reflect.DeepEqual(profile, admitted) {
 		return report, errors.New("unsupported or occupied reference validation")
+	}
+	if prepared.Content().SourceID != sourceID {
+		return report, errors.New("reference source identity mismatch")
 	}
 	ctx, cancel := context.WithTimeout(ctx, profile.Wall)
 	defer cancel()
@@ -91,7 +101,7 @@ func (r *Runner) validate(ctx context.Context, prepared *problem.Prepared, profi
 			err = errors.Join(err, e)
 		}
 	}()
-	plan, frozen, err := freezeReferences(ctx, prepared, profile, disk)
+	plan, frozen, err := freezeReferences(ctx, prepared, profile, sourceID != "library-checker:aplusb")
 	report.Plan = plan
 	for _, c := range plan.Cases {
 		report.Points = append(report.Points, Point{ID: c.ID, Verdict: "NOT_RUN"})
@@ -105,6 +115,9 @@ func (r *Runner) validate(ctx context.Context, prepared *problem.Prepared, profi
 			err = errors.Join(err, e)
 		}
 	}()
+	if plan.SourceID != sourceID {
+		return report, errors.New("frozen reference source identity mismatch")
+	}
 	report.Plan, report.PlanSHA256 = plan, plan.Digest()
 	for i := range plan.Cases {
 		answer, err := frozen.ReadAnswer(ctx, i)
