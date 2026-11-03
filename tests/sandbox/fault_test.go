@@ -68,6 +68,7 @@ func TestWorkerFaults(t *testing.T) {
 	if err := store.RegisterFixture(ctx); err != nil {
 		t.Fatal(err)
 	}
+	configureSandboxBacklog(t, ctx, pool)
 	for _, fault := range []string{"disabled", "rotated", "missing", "corrupt"} {
 		if !t.Run(fault, func(t *testing.T) { testWorkerFault(t, pool, store, fault) }) {
 			break // A failed exclusive-slot experiment requires operator inspection.

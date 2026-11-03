@@ -101,17 +101,22 @@ func (s *Store) Accept(ctx context.Context, subject, scope, key string, req subm
 	receiptKey := submissiondb.GetReceiptParams{SubjectID: subject, ContextID: scope, IdempotencyKey: key}
 	fingerprint := submission.Digest(req)
 	// Return historical acceptance even if the material store later becomes unavailable.
-	existing, err := q.GetReceipt(ctx, receiptKey)
-	if err == nil {
-		if existing.RequestSha256 != fingerprint {
-			return submission.Receipt{}, false, submission.ErrConflict
-		}
-		return receipt(existing), false, nil
+	if existing, found, err := acceptedReceipt(ctx, q, receiptKey, fingerprint); found || err != nil {
+		return existing, false, err
 	}
-	if !errors.Is(err, pgx.ErrNoRows) {
+	limits, err := lockBacklog(ctx, q)
+	if err != nil {
 		return submission.Receipt{}, false, err
 	}
+	// Waiting for the policy lock must finish before taking a fresh receipt and
+	// count snapshot. One CTE that locks and counts could use a pre-wait snapshot.
+	if existing, found, err := acceptedReceipt(ctx, q, receiptKey, fingerprint); found || err != nil {
+		return existing, false, err
+	}
 	if err := s.checkMaterial(ctx, q); err != nil {
+		return submission.Receipt{}, false, err
+	}
+	if err := checkBacklog(ctx, q, limits, subject); err != nil {
 		return submission.Receipt{}, false, err
 	}
 	idBytes := make([]byte, 16)

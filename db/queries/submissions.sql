@@ -26,3 +26,24 @@ VALUES ($1, $2, $3) ON CONFLICT (version_id) DO NOTHING;
 
 -- name: GetMaterial :one
 SELECT manifest_sha256, manifest FROM submission_materials WHERE version_id = $1;
+
+-- name: SetBacklogPolicy :exec
+INSERT INTO submission_backlog_policy (singleton, global_limit, subject_limit)
+VALUES (true, $1, $2)
+ON CONFLICT (singleton) DO UPDATE
+SET global_limit = EXCLUDED.global_limit, subject_limit = EXCLUDED.subject_limit;
+
+-- name: LockBacklogPolicy :one
+SELECT global_limit, subject_limit FROM submission_backlog_policy
+WHERE singleton = true FOR UPDATE;
+
+-- name: CountBacklog :one
+-- A full global window already rejects admission. Below it, both counts are exact.
+WITH active AS MATERIALIZED (
+    SELECT s.subject_id FROM judge_tasks t JOIN submissions s ON s.id = t.submission_id
+    WHERE t.state IN ('queued', 'running')
+    LIMIT sqlc.arg(maximum)::bigint
+)
+SELECT count(*)::bigint AS total,
+    count(*) FILTER (WHERE subject_id = sqlc.arg(subject)::text)::bigint AS personal
+FROM active;

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OnlineJudge M0 Fixed Browser Demonstration
-  version: 0.1.0
+  version: 0.2.0
   description: >-
     默认关闭，仅可信本机、独占合成数据库的固定示例实验；不是账号身份或训练权限。
     需要OJ_EXPERIMENT_BROWSER=1、实际127.0.0.1监听、私有Bearer实验配置及m0-sum-v3。
@@ -89,6 +89,7 @@ paths:
           content:
             application/problem+json:
               schema: {$ref: './openapi.yaml#/components/schemas/Problem'}
+        '429': {$ref: './experiment.openapi.yaml#/components/responses/Backlog'}
         '503': {$ref: '#/components/responses/Unknown'}
   /m0/api/receipt:
     get:
@@ -146,7 +147,7 @@ components:
         application/problem+json:
           schema: {$ref: './openapi.yaml#/components/schemas/Problem'}
     Unknown:
-      description: MATERIAL_UNAVAILABLE或ACCEPTANCE_UNKNOWN；失败不证明事务回滚，保留原键核验
+      description: POST另含ADMISSION_UNAVAILABLE（共享策略未配置，本次未新建任务）；MATERIAL_UNAVAILABLE或ACCEPTANCE_UNKNOWN及GET失败不证明先前事务回滚，保留原键核验。无Retry-After。
       content:
         application/problem+json:
           schema: {$ref: './openapi.yaml#/components/schemas/Problem'}

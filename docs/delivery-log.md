@@ -1,5 +1,17 @@
 # 工程交付记录
 
+## 2026-11-03：P1跨API共享未终结积压准入
+
+成功fetch后从 `origin/main 37cf338021f5840843e6979fa013d6bacce0735f` 建立独立 `codex/shared-submission-backlog`。唯一目标是[共享积压准入](submission-backlog.md)：schema6单一显式策略、全局/主体跨上下文queued＋running权威计数，事务内锁后使用新语句快照，再同事务写提交/任务。满额或缺策略仍优先返回原回执/409，降低限额不删除已接受任务；没有冗余计数器、生产默认数值、公开管理接口或频率限流/公平调度变化。新增独立 `migrate backlog GLOBAL SUBJECT`，原fixture不暗设额度，升级必须停全部旧写API后迁移/配置/启动同版；已配置或含任何提交的schema6拒绝Down，须向前修复。跨上下文计量是已落实验证的工程选择，尚未作为用户确认的产品口径。
+
+本地实测：Docker离线工具链完成模块校验、sqlc生成、格式/vet/lint、完整root单元/race及构建；真实PostgreSQL/race **180个含父级PASS条目、15.421秒**，包括最后名额竞争、主体跨场景、锁等待后的回执/计数新快照、策略提交/回滚、取消不冒充额度拒绝、终态释放、重复回报和Down并发保护。权威计数SQL实际EXPLAIN ANALYZE/BUFFERS在2048终态/3未终结样本选用unfinished部分索引；记录索引写/WAL/vacuum及扫描代价，不宣称固定查询成本或容量。两个真实API进程验证未配置503无写入、最后名额202/429、满额原键200/冲突409、原24并发幂等及重启/v3兼容。
+
+固定Docker Desktop LinuxKit7.0.14 arm64、镜像 `sha256:cd40ffdb32619806a8d97e59fe03e890fe4066835f57efa6ae13f919ef3262c5` 上 `python3 scripts/test-worker.py all` 九个独立专项全部通过，106个含父级PASS条目；初始宽选的9个SKIP中，8项由all后续显式执行，浏览器另有独立实测，不将SKIP算作PASS。浏览器独立 **15.48秒/14项**，真实AC/WA、丢弃成功POST响应后的原键恢复、桌面/390px等通过；新增429/ADMISSION_UNAVAILABLE展示为明确标记的路由注入，不能冒充真实后端并发证据。五个原服务未重启，旧#89分支/工作区/三处未提交修改及HTTPS工作区保留，未部署。
+
+失败及修正：首次PG基线仅未来schema常数6因新模式变更而失败，改为7；随后新增隔离夹具修改typed config再调用ConnString导致search_path丢失，只在本轮可丢弃数据库的public混用并触发重复数据失败。修正为stdlib.OpenDB/pgxpool.NewWithConfig深拷贝，实际核对迁移及两pool的current_schema与四表归属后，完整重跑通过；不是生产Store缺陷。前schema6的历史迁移测试改用四组严格合成白名单的test-only夹具，保留快照/竞争断言，无正式准入旁路。旧失败日志分别保留为 `oj-backlog-pg-baseline.log`、`oj-backlog-pg-full.log`；成功证据归 `/private/tmp/oj-backlog-{pg-isolation-fixed,backend-quality,worker-all,browser}.log`、`oj-backlog-browser-qa/result.json`，31份运行代码/测试及日志哈希归 `/private/tmp/oj-backlog-evidence.json`。普通doctor在受限沙箱无Docker权限，授权只读复核Engine可访问；8080由原服务占用，专项使用独立随机端口。
+
+同步README、OpenAPI、架构、计划及M0当前进度；原#93验收JSON/旧日志哈希不追改，其“owning路径无变化”只适用于原审计快照。完整目标仍含频率限流、DOMjudge虚拟时间公平调度、真实训练权限/题库与生产验收；测试的10000/10000不作为试用阈值。针对性Astra工程复核未发现阻断，AI审查不充当人工批准；远端交付以精确head的CI及合并回读为准。
+
 ## 2026-11-03：固定合成环境M0技术证据收口
 
 成功fetch后从 `origin/main da7ef2c` 建立独立 `codex/m0-acceptance-record`。唯一目标是按开发计划的显式M0条件收口证据、资源与限定组件准入，不新增业务功能、依赖、schema、预算、扫描规则或部署。新增[技术验收记录](m0-acceptance.md)及[机器索引](evidence/m0-20261103.json)，将条件→owning test/断言→实际命令/结果/日志哈希→当前源码适用范围串联；P1额度/公平调度继续按原文列为试用前gate，不把全部P1/P2或产品开放记为完成。

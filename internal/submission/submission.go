@@ -17,10 +17,12 @@ import (
 const MaxSourceBytes = 65536
 
 var (
-	ErrInvalid  = errors.New("invalid submission")
-	ErrConflict = errors.New("idempotency key already used with different content")
-	ErrNotFound = errors.New("submission not found")
-	ErrMaterial = errors.New("material unavailable or inconsistent")
+	ErrInvalid         = errors.New("invalid submission")
+	ErrConflict        = errors.New("idempotency key already used with different content")
+	ErrNotFound        = errors.New("submission not found")
+	ErrMaterial        = errors.New("material unavailable or inconsistent")
+	ErrBacklog         = errors.New("submission backlog limit reached")
+	ErrAdmissionPolicy = errors.New("submission admission policy unavailable")
 )
 
 var keyPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{16,128}$`)

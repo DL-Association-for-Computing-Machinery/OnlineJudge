@@ -8,6 +8,7 @@
 | 产品需求与 AC 验收条款 | [需求与验收](requirements.md) |
 | 发布范围、组件引入时机、P0—P7 与里程碑 | [开发与交付计划](phase-1-development-plan.md) |
 | 当前 M0 证据与剩余缺口 | [M0 记录](m0-experiment.md)；限定技术结论与逐项证据归[验收记录](m0-acceptance.md)及[机器索引](evidence/m0-20261103.json) |
+| 共享提交积压、显式策略与 schema 6 升降级 | [积压准入](submission-backlog.md) |
 | 会话实验细节、夹具与专项复现 | [会话实验 README](../tests/sessionexperiment/README.md) |
 | 跨模块架构、数据库迁移与资源预算 | [总体架构](architecture/system-design.md) |
 | 初始选型的理由、备选与取舍 | [ADR-001](architecture/001-go-gin.md) |

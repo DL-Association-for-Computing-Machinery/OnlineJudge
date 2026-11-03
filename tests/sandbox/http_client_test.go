@@ -53,12 +53,12 @@ func migrateHTTPLoop(t *testing.T, ctx context.Context, dsn, root string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, step := range []string{"up", "fixture"} {
+	for _, step := range [][]string{{"up"}, {"fixture"}, {"backlog", "10000", "10000"}} {
 		log, err := os.CreateTemp(t.TempDir(), "migration-log-")
 		if err != nil {
 			t.Fatal(err)
 		}
-		cmd := exec.CommandContext(ctx, binary, step)
+		cmd := exec.CommandContext(ctx, binary, step...)
 		cmd.Env = httpLoopEnvironment("OJ_DATABASE_URL="+dsn, "OJ_MATERIAL_ROOT="+root,
 			"OJ_EXPERIMENT_MATERIAL_VERSION="+experiment.PinnedVersion)
 		cmd.Stdout, cmd.Stderr = log, log

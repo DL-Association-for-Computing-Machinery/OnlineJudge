@@ -31,7 +31,7 @@ func testIdentityMigrations(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 		if db.CheckSchema(ctx, pool) == nil {
 			t.Fatal("new API accepted schema two")
 		}
-		row, _, err := submissions.Accept(ctx, "synthetic-pre-identity", "training", "identity-upgrade-existing-01", submission.Request{
+		row, _, err := acceptLegacySubmission(ctx, pool, "synthetic-pre-identity", "training", "identity-upgrade-existing-01", submission.Request{
 			MaterialVersion: experiment.Version, Language: "gnu++17", Source: "// synthetic v2 retained source"})
 		must(t, err)
 		_, err = pool.Exec(ctx, `INSERT INTO worker_nodes(id,credential_version) VALUES('pre-identity-node',1)`)

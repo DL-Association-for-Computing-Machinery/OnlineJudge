@@ -32,7 +32,7 @@ func testSessionRecoveryMigrations(t *testing.T, ctx context.Context, a, b *pgxp
 		requireIdentitySchemaThree(t, ctx, a)
 		account, err := store.Initialize(ctx, identityID(700), true, identityRecord(t, h, "synthetic retained password"))
 		must(t, err)
-		work, _, err := submissions.Accept(ctx, "synthetic-pre-recovery", "training", "recovery-upgrade-existing-01", submission.Request{
+		work, _, err := acceptLegacySubmission(ctx, a, "synthetic-pre-recovery", "training", "recovery-upgrade-existing-01", submission.Request{
 			MaterialVersion: experiment.Version, Language: "gnu++17", Source: "// synthetic retained version-three source"})
 		must(t, err)
 		_, err = a.Exec(ctx, `INSERT INTO worker_nodes(id,credential_version) VALUES('pre-recovery-node',1)`)
@@ -83,7 +83,7 @@ func testSessionRecoveryMigrations(t *testing.T, ctx context.Context, a, b *pgxp
 				_, err = a.Exec(ctx, `DELETE FROM identity_credentials WHERE id=$1`, id)
 				must(t, err)
 			} else {
-				work, _, err := submissions.Accept(ctx, "synthetic-recovery-rollback", "training", "recovery-rollback-sub-only-01", submission.Request{
+				work, _, err := acceptLegacySubmission(ctx, a, "synthetic-recovery-rollback", "training", "recovery-rollback-sub-only-01", submission.Request{
 					MaterialVersion: experiment.Version, Language: "gnu++17", Source: "// synthetic submission-only rollback fixture"})
 				must(t, err)
 				capture := func() string {
@@ -223,6 +223,6 @@ func requireRecoverySchemaFour(t *testing.T, ctx context.Context, pool *pgxpool.
 	var version int64
 	must(t, pool.QueryRow(ctx, `SELECT version_id FROM goose_db_version ORDER BY id DESC LIMIT 1`).Scan(&version))
 	if version != 4 || db.CheckSchema(ctx, pool) == nil {
-		t.Fatal("expected schema four, rejected by the schema-five API")
+		t.Fatal("expected schema four, rejected by the current API")
 	}
 }

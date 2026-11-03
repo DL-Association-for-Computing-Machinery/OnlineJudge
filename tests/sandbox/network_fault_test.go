@@ -68,6 +68,7 @@ func TestWorkerNetworkFaults(t *testing.T) {
 	if err := store.RegisterFixture(ctx); err != nil {
 		t.Fatal(err)
 	}
+	configureSandboxBacklog(t, ctx, pool)
 	for _, fault := range []string{"partition", "acknowledgement"} {
 		if !t.Run(fault, func(t *testing.T) { testWorkerNetworkFault(t, pool, store, fault) }) {
 			break // Stop after a failed exclusive-slot experiment; do not mask its state.

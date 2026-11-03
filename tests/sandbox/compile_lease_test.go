@@ -70,6 +70,7 @@ func TestCompileLeaseFaults(t *testing.T) {
 	if err := store.RegisterFixture(ctx); err != nil {
 		t.Fatal(err)
 	}
+	configureSandboxBacklog(t, ctx, pool)
 	for _, fault := range []string{"network", "disabled"} {
 		if !t.Run(fault, func(t *testing.T) { testCompileLeaseFault(t, pool, store, fault) }) {
 			break

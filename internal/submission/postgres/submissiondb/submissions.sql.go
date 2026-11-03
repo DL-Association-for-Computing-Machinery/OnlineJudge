@@ -11,6 +11,35 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countBacklog = `-- name: CountBacklog :one
+WITH active AS MATERIALIZED (
+    SELECT s.subject_id FROM judge_tasks t JOIN submissions s ON s.id = t.submission_id
+    WHERE t.state IN ('queued', 'running')
+    LIMIT $2::bigint
+)
+SELECT count(*)::bigint AS total,
+    count(*) FILTER (WHERE subject_id = $1::text)::bigint AS personal
+FROM active
+`
+
+type CountBacklogParams struct {
+	Subject string
+	Maximum int64
+}
+
+type CountBacklogRow struct {
+	Total    int64
+	Personal int64
+}
+
+// A full global window already rejects admission. Below it, both counts are exact.
+func (q *Queries) CountBacklog(ctx context.Context, arg CountBacklogParams) (CountBacklogRow, error) {
+	row := q.db.QueryRow(ctx, countBacklog, arg.Subject, arg.Maximum)
+	var i CountBacklogRow
+	err := row.Scan(&i.Total, &i.Personal)
+	return i, err
+}
+
 const createSubmission = `-- name: CreateSubmission :one
 INSERT INTO submissions (id, subject_id, context_id, idempotency_key, request_sha256,
     material_version, manifest_sha256, language, source_code)
@@ -149,6 +178,23 @@ func (q *Queries) GetSubmission(ctx context.Context, arg GetSubmissionParams) (G
 	return i, err
 }
 
+const lockBacklogPolicy = `-- name: LockBacklogPolicy :one
+SELECT global_limit, subject_limit FROM submission_backlog_policy
+WHERE singleton = true FOR UPDATE
+`
+
+type LockBacklogPolicyRow struct {
+	GlobalLimit  int64
+	SubjectLimit int64
+}
+
+func (q *Queries) LockBacklogPolicy(ctx context.Context) (LockBacklogPolicyRow, error) {
+	row := q.db.QueryRow(ctx, lockBacklogPolicy)
+	var i LockBacklogPolicyRow
+	err := row.Scan(&i.GlobalLimit, &i.SubjectLimit)
+	return i, err
+}
+
 const registerMaterial = `-- name: RegisterMaterial :exec
 INSERT INTO submission_materials (version_id, manifest_sha256, manifest)
 VALUES ($1, $2, $3) ON CONFLICT (version_id) DO NOTHING
@@ -162,5 +208,22 @@ type RegisterMaterialParams struct {
 
 func (q *Queries) RegisterMaterial(ctx context.Context, arg RegisterMaterialParams) error {
 	_, err := q.db.Exec(ctx, registerMaterial, arg.VersionID, arg.ManifestSha256, arg.Manifest)
+	return err
+}
+
+const setBacklogPolicy = `-- name: SetBacklogPolicy :exec
+INSERT INTO submission_backlog_policy (singleton, global_limit, subject_limit)
+VALUES (true, $1, $2)
+ON CONFLICT (singleton) DO UPDATE
+SET global_limit = EXCLUDED.global_limit, subject_limit = EXCLUDED.subject_limit
+`
+
+type SetBacklogPolicyParams struct {
+	GlobalLimit  int64
+	SubjectLimit int64
+}
+
+func (q *Queries) SetBacklogPolicy(ctx context.Context, arg SetBacklogPolicyParams) error {
+	_, err := q.db.Exec(ctx, setBacklogPolicy, arg.GlobalLimit, arg.SubjectLimit)
 	return err
 }

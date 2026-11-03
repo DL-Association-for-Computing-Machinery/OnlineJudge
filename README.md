@@ -6,6 +6,7 @@
 
 - [开发与交付计划](docs/phase-1-development-plan.md)：发布范围、组件引入时机、P0—P7 与里程碑。
 - [M0 记录](docs/m0-experiment.md)：Worker、数据库与会话实验的证据及剩余缺口，是当前进度入口。
+- [共享提交积压准入](docs/submission-backlog.md)：schema 6、显式全局/主体策略、跨 API 原子检查及升级/回退边界；频率限流和公平调度待完成。
 - [会话实验](tests/sessionexperiment/README.md)：独立测试模块的复现与限制，尚未接入正式登录。
 - [密码记录核心](docs/architecture/session-design.md#71-同步密码记录核心)与[主体凭据](docs/architecture/session-design.md#72-主体凭据持久化与条件更新)：显式策略的 Argon2id、PostgreSQL 状态与条件更新，HTTP 接线见下述入口。
 - [密码计算准入](docs/architecture/session-design.md#73-密码计算准入)：创建/验证共享实例额度、有限排队及取消后保留实际计算名额；多 API 总预算与生产容量仍待验证。
@@ -71,7 +72,7 @@ API 镜像的 `/usr/local/bin/oj-api` 在非空 `OJ_SESSION_CONFIG_FILE` 下切�
 
 数据库及 Redis 的密码来源各自显式选择 `auth: "none"` 或 `"env"`。后者只读取固定的 `OJ_SESSION_DATABASE_PASSWORD` / `OJ_SESSION_REDIS_PASSWORD`，必须非空；前者拒绝对应非空残留环境。密码、登录 key、TLS 私钥均不写入配置 JSON、镜像或命令行。数据库不消费 `OJ_DATABASE_URL`，连接类 PG 环境变量须按运行时合同清理；服务不修改进程环境。
 
-启动前须由受信维护流程完成 schema 5、恢复状态开门、共享密钥分发及匹配的限流 marker 初始化；命令只检查，不自动迁移、初始化或修复。配置与公开证书可只读挂载，登录密钥及 TLS 私钥必须满足 0400/0600、root/进程 euid 所有等约束。非 root 容器须能遍历并读取这些文件。不要把完整配置或秘密对象输出到日志。
+启动前须由受信维护流程完成当前 schema 6（邮箱模型始于 schema 5）、恢复状态开门、共享密钥分发及匹配的限流 marker 初始化；命令只检查，不自动迁移、初始化或修复。配置与公开证书可只读挂载，登录密钥及 TLS 私钥必须满足 0400/0600、root/进程 euid 所有等约束。非 root 容器须能遍历并读取这些文件。不要把完整配置或秘密对象输出到日志。
 
 direct 模式要求客户端直接 TLS；proxy 模式要求同一监听器的已验证客户端证书和允许的叶证书指纹，健康检查也须经 mTLS。现有 Compose/Nginx 的明文 backend 和浏览器页面尚未配置该入口；部署、生产阈值、真实证书/存储 TLS 和完整账号权限另行验收。回退先停服务并移除显式配置环境，不把旧明文路径接到会话 Handler。
 
@@ -152,6 +153,8 @@ Worker 启动完成后，向该 Worker 进程发送 `SIGUSR1`（`kill -USR1 PID`
 
 ### HTTP 到真实判题终态专项
 
+受信维护流程须先使用 Docker 构建的 `.local/bin/migrate up` 升级 schema，再按材料版本执行 `.local/bin/migrate fixture`，最后显式执行 `.local/bin/migrate backlog <全局上限> <主体上限>`；命令共用私有 `OJ_DATABASE_URL`。不执行最后一步会拒绝新提交，API 不自动设值。专项驱动在独占临时数据库配置的 `10000 10000` 仅为合成夹具，不是生产建议。升级已有服务必须先停止全部旧版写入 API，详见[升级与回退](docs/submission-backlog.md#升级与回退)。
+
 `python3 scripts/test-worker.py http-loop` 显式设置 `OJ_SANDBOX_HTTP=1`，`all` 同样包含此项。驱动建立空的临时 PostgreSQL，实际运行迁移/固定材料初始化、两个提交 API 进程、mTLS 控制端及 Worker 命令；只提交仓库内固定 AC/WA 合成源码。先由 HTTP 确认 queued，再启动 Worker，通过 HTTP 观察 finished/AC 或 WA；数据库仅旁证原始源码、固定归属及每题唯一完成 attempt。
 
 专项检查跨 API 原键重试/回执、异源冲突、缺失/错误凭据、Origin 拒绝无写入、闭合回执字段及无 Cookie/CORS、Worker 正常排空和槽停止。提交 API 用 `127.0.0.1:0`，仅从自身私有有界 JSON 日志取得回环地址，客户端禁代理/重定向；控制端沿用既有临时端口流程。私有 Bearer 留在服务端测试进程中。该入口不支持浏览器，不授予普通账号训练权限；独立opt-in最小页面及其失败路径见下节。无 API、迁移或预算变化，可单独回退专项及驱动选择器。
@@ -173,7 +176,7 @@ python3 scripts/test-worker.py browser-loop \
   --output-dir /absolute/new/path/m0-browser
 ```
 
-Chromium参数可省略以使用该Playwright已安装的浏览器。产物必须为仓库外新目录，含检查JSON、私有日志及桌面/390px截图；测试以真实POST提交成功后丢弃响应验证未知/原键恢复，在浏览器确认queued且数据库无attempt后才启动真实Worker。查询503另由浏览器路由注入，不冒充真实数据库故障。回退关闭开关或回退本模块即可，无迁移；已接受任务仍按原Worker协议处理。
+Chromium参数可省略以使用该Playwright已安装的浏览器。产物必须为仓库外新目录，含检查JSON、私有日志及桌面/390px截图；测试以真实POST提交成功后丢弃响应验证未知/原键恢复，在浏览器确认queued且数据库无attempt后才启动真实Worker。查询503及提交BACKLOG_LIMIT/ADMISSION_UNAVAILABLE展示另由浏览器路由注入，不冒充真实数据库故障；共享准入后端另有真实PostgreSQL/双API验证。回退页面可关闭开关；数据库schema6按上述升级与回退处理，不能直接启动旧版写入API；已接受任务仍按原Worker协议处理。
 
 ### 沙箱资源预算专项
 

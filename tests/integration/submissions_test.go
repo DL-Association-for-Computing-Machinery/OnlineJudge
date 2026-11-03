@@ -111,6 +111,7 @@ func TestAcceptance(t *testing.T) {
 	store, err := postgres.New(pool, experiment.Version, experiment.Manifest())
 	must(t, err)
 	request := submission.Request{MaterialVersion: experiment.Version, Language: "gnu++17", Source: "int main() { return 0; }\n"}
+	must(t, postgres.ConfigureBacklog(ctx, pool, postgres.BacklogLimits{Global: 10000, Subject: 10000}))
 	t.Run("missing and conflicting material", func(t *testing.T) {
 		_, _, err := store.Accept(ctx, "subject", "training", "missing-material-01", request)
 		if !errors.Is(err, submission.ErrMaterial) {
@@ -125,6 +126,9 @@ func TestAcceptance(t *testing.T) {
 		}
 	})
 
+	// Historical migration fixtures below must remain pre-admission schemas.
+	_, err = pool.Exec(ctx, `DELETE FROM submission_backlog_policy`)
+	must(t, err)
 	secondPool, err := postgres.Open(ctx, dsn)
 	must(t, err)
 	defer secondPool.Close()
@@ -136,6 +140,7 @@ func TestAcceptance(t *testing.T) {
 	t.Run("session recovery authority", func(t *testing.T) { testSessionRecoveryAuthority(t, ctx, pool, secondPool) })
 	t.Run("personal email identities", func(t *testing.T) { testPersonalEmails(t, ctx, pool, secondPool) })
 	t.Run("personal credential workflow", func(t *testing.T) { testPersonalCredentialGate(t, ctx, pool, secondPool) })
+	must(t, postgres.ConfigureBacklog(ctx, pool, postgres.BacklogLimits{Global: 10000, Subject: 10000}))
 	servers := []*httptest.Server{
 		httptest.NewServer(httpapi.NewHandler(httpapi.Experiment{Store: store, Token: token})),
 		httptest.NewServer(httpapi.NewHandler(httpapi.Experiment{Store: secondStore, Token: token})),
@@ -352,7 +357,7 @@ func TestAcceptance(t *testing.T) {
 	t.Run("controller startup recovery", func(t *testing.T) { testControllerRecovery(t, ctx, pool, store) })
 	t.Run("authenticated worker protocol", func(t *testing.T) { testWorkerAPI(t, ctx, pool, store) })
 	t.Run("schema ahead rejected", func(t *testing.T) {
-		_, err := conn.Exec(`INSERT INTO goose_db_version(version_id,is_applied) VALUES(6,true)`)
+		_, err := conn.Exec(`INSERT INTO goose_db_version(version_id,is_applied) VALUES(7,true)`)
 		must(t, err)
 		if db.CheckSchema(ctx, pool) == nil {
 			t.Fatal("future schema accepted")

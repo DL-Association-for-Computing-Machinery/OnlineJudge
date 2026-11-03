@@ -71,6 +71,7 @@ func TestExecutionReport(t *testing.T) {
 	if err := store.RegisterFixture(ctx); err != nil {
 		t.Fatal(err)
 	}
+	configureSandboxBacklog(t, ctx, pool)
 	if _, err := pool.Exec(ctx, `INSERT INTO worker_nodes(id,credential_version) VALUES('report-node',1),('other-node',1),('entry-node',1),('drain-node',1)`); err != nil {
 		t.Fatal(err)
 	}

@@ -205,6 +205,10 @@ func (*handler) respond(w http.ResponseWriter, result submission.Receipt, create
 			writeProblem(w, 404, "NOT_FOUND")
 		case errors.Is(err, submission.ErrMaterial):
 			writeProblem(w, 503, "MATERIAL_UNAVAILABLE")
+		case errors.Is(err, submission.ErrBacklog):
+			writeProblem(w, 429, "BACKLOG_LIMIT")
+		case errors.Is(err, submission.ErrAdmissionPolicy):
+			writeProblem(w, 503, "ADMISSION_UNAVAILABLE")
 		default:
 			writeProblem(w, 503, "ACCEPTANCE_UNKNOWN")
 		}
