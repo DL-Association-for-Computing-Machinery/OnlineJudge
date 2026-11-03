@@ -4,9 +4,9 @@ import { ImportJournal, JournalError, type JournalEntry } from './importJournal'
 
 interface ManagementState {
   owner: string | null; sources: ImportSource[]; entries: JournalEntry[]
-  receipts: Record<string, ImportReceipt>; busy: boolean; notice: string
+  receipts: ReadonlyMap<string, ImportReceipt>; busy: boolean; notice: string
 }
-const empty = (notice: string): ManagementState => ({ owner: null, sources: [], entries: [], receipts: {}, busy: false, notice })
+const empty = (notice: string): ManagementState => ({ owner: null, sources: [], entries: [], receipts: new Map(), busy: false, notice })
 type Action = { owner: string; signal: AbortSignal; current: () => boolean }
 const messages: Record<string, string> = {
   SESSION_REQUIRED: '会话已失效，请重新登录后查询原回执。',
@@ -70,7 +70,7 @@ export class DraftManagementController {
   private async show(action: Action, notice: string, receipt?: ImportReceipt, busy = false) {
     const entries = await this.journal.list(action.owner)
     if (action.current()) this.publish({ ...this.state, owner: action.owner, entries, busy, notice,
-      receipts: receipt ? { ...this.state.receipts, [receipt.request_key]: receipt } : this.state.receipts })
+      receipts: receipt ? new Map(this.state.receipts).set(receipt.request_key, receipt) : this.state.receipts })
   }
   load = async () => this.run(null, async action => {
     // Recoverable tuples remain available even if the configured catalog is now

@@ -41,15 +41,15 @@ export default function DraftManagementPage() {
         <p>记录按账号隔离，最多 32 条。未确认记录不会自动删除或重试；清除浏览器数据、存储回收或换设备可能使记录丢失。这里不代表服务端的完整草稿列表。</p>
         {state.entries.length === 0 ? <p>此账号在本机没有保留记录。</p> : <>
           <a className="button button-outline" download="oj-import-recovery.json" href={`data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify({ format: 'oj-import-recovery-v1', records: state.entries }, null, 2))}`}>导出本机恢复记录</a>
-          <ul className="management-list">{state.entries.map(entry => <li key={entry.key}><div><h3>{entry.source}</h3>
-            <p>{state.receipts[entry.key] ? '服务端回执已核验' : entry.status === 'pending' ? '结果待确认' : '已保存回执 · 待重新核验'}</p>
+          <ul className="management-list">{state.entries.map(entry => { const receipt = state.receipts.get(entry.key); return <li key={entry.key}><div><h3>{entry.source}</h3>
+            <p>{receipt ? '服务端回执已核验' : entry.status === 'pending' ? '结果待确认' : '已保存回执 · 待重新核验'}</p>
             <details><summary>查看原请求与修订</summary><p>请求键 <code>{entry.key}</code></p><p>完整导入修订 <code>{entry.revision}</code></p>{entry.status === 'confirmed' && <p>草稿 ID <code>{entry.draftId}</code></p>}</details>
           </div><div className="management-actions">
             <button className="button button-outline" disabled={disabled} type="button" onClick={() => void controller.recover(entry)}>查询原回执</button>
             {entry.status === 'pending' && <button className="button button-outline" disabled={disabled} type="button" onClick={() => void controller.recover(entry, true)}>重试同一请求</button>}
-            {state.receipts[entry.key] && <Link className="button button-primary" to={`/author/drafts/${state.receipts[entry.key].draft_id}`}>打开草稿预览</Link>}
+            {receipt && <Link className="button button-primary" to={`/author/drafts/${receipt.draft_id}`}>打开草稿预览</Link>}
             {entry.status === 'confirmed' && <button className="button button-outline" disabled={disabled} type="button" onClick={() => void controller.remove(entry)}>移除本机已确认记录</button>}
-          </div></li>)}</ul>
+          </div></li> })}</ul>
         </>}
       </section>
     </>}

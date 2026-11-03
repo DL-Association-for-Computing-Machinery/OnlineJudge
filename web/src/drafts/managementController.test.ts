@@ -50,10 +50,10 @@ it('recovers an existing committed request with GET only and never trusts a loca
   f.fetch.mockResolvedValueOnce(Response.json(session())).mockResolvedValueOnce(Response.json(receipt))
   await f.controller.recover(pending, true)
   expect(f.fetch.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
-  expect(f.controller.getSnapshot().receipts[pending.key]).toEqual(receipt)
+  expect(f.controller.getSnapshot().receipts.get(pending.key)).toEqual(receipt)
   f.fetch.mockResolvedValueOnce(Response.json(session())).mockResolvedValueOnce(Response.json(receipt))
   await f.controller.recover({ ...pending, status: 'confirmed', draftId: 'e'.repeat(32) })
-  expect(f.controller.getSnapshot().receipts).toEqual({}); f.stop()
+  expect(f.controller.getSnapshot().receipts.size).toBe(0); f.stop()
 })
 it('explicit retry GETs first, then POSTs the original tuple only after the revision still matches', async () => {
   for (const revision of [source.import_revision, 'e'.repeat(64)]) {
@@ -96,7 +96,7 @@ it('drops late catalog and receipt results on invalidation, disposal, and elapse
       else vi.setSystemTime(Date.now() + 60_001)
       release(Response.json(operation === 'catalog' ? { sources: [source] } : receipt)); await action
       expect(f.controller.getSnapshot().sources).toEqual([])
-      expect(f.controller.getSnapshot().receipts).toEqual({})
+      expect(f.controller.getSnapshot().receipts.size).toBe(0)
       expect(f.journal.confirm).not.toHaveBeenCalled()
       f.stop(); vi.useRealTimers()
     }
@@ -123,7 +123,21 @@ it('clears records already shown when a late catalog or POST observes expiry bef
     expect(f.controller.getSnapshot().entries).toEqual([pending])
     vi.setSystemTime(Date.now() + 60_001)
     release(Response.json(operation === 'catalog' ? { sources: [source] } : receipt)); await action
-    expect(f.controller.getSnapshot()).toMatchObject({ owner: null, entries: [], sources: [], receipts: {}, busy: false })
+    expect(f.controller.getSnapshot()).toMatchObject({ owner: null, entries: [], sources: [], busy: false })
+    expect(f.controller.getSnapshot().receipts.size).toBe(0)
     expect(f.journal.confirm).not.toHaveBeenCalled(); f.stop(); vi.useRealTimers()
   }
+})
+it('never treats an inherited Object property as server receipt evidence', async () => {
+  const f = await setup(); const inherited: JournalEntry = { ...pending, key: 'propertyIsEnumerable' }
+  f.journal.list.mockResolvedValue([inherited]); await f.controller.load()
+  expect(f.controller.getSnapshot().receipts.has(inherited.key)).toBe(false)
+  f.fetch.mockResolvedValueOnce(Response.json(session())).mockResolvedValueOnce(Response.json({ code: 'DRAFT_NOT_FOUND' }, { status: 404, headers: { 'Content-Type': 'application/problem+json' } }))
+  await f.controller.recover(inherited)
+  expect(f.controller.getSnapshot().receipts.has(inherited.key)).toBe(false)
+  expect(f.fetch.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
+  f.fetch.mockResolvedValueOnce(Response.json(session())).mockResolvedValueOnce(Response.json({ ...receipt, request_key: inherited.key }))
+  await f.controller.recover(inherited)
+  expect(f.controller.getSnapshot().receipts.get(inherited.key)?.draft_id).toBe(receipt.draft_id)
+  f.controller.clear(); expect(f.controller.getSnapshot().receipts.size).toBe(0); f.stop()
 })

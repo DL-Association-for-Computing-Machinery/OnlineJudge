@@ -33,6 +33,22 @@ export async function runManagementChecks(browser, info, ready, password, output
     phase = 'real owner import with lost committed response'
     await login(); await page.goto(info.origin + '/author/drafts', { waitUntil: 'networkidle' }); await load()
     assert.equal(posts().length, 0)
+    phase = 'inherited Object key is not receipt evidence'
+    await page.evaluate(async owner => {
+      const db = await new Promise(resolve => { const r = indexedDB.open('oj-draft-import-recovery', 1); r.onsuccess = () => resolve(r.result) })
+      const entry = { owner, source: 'fixture:inherited-key', key: 'propertyIsEnumerable', revision: '0'.repeat(64), status: 'pending' }
+      await new Promise(resolve => { const tx = db.transaction(['records', 'slots'], 'readwrite'); tx.objectStore('records').put(entry, [owner, entry.key]); tx.objectStore('slots').put({ owner, source: entry.source, key: entry.key }, [owner, entry.source]); tx.oncomplete = resolve }); db.close()
+    }, ready.subject_id)
+    await load()
+    assert.equal(await page.getByText('结果待确认', { exact: true }).count(), 1)
+    assert.equal(await page.getByText('服务端回执已核验', { exact: true }).count(), 0)
+    assert.equal(await page.getByRole('link', { name: '打开草稿预览', exact: true }).count(), 0)
+    await page.getByRole('button', { name: '查询原回执', exact: true }).click()
+    await page.getByText('此刻尚未查到回执，不代表原请求已取消。可手动重试同一请求。', { exact: true }).waitFor()
+    assert.equal(await page.getByRole('link', { name: '打开草稿预览', exact: true }).count(), 0)
+    assert.equal(posts().length, 0); assert.equal((await readRecords())[0].key, 'propertyIsEnumerable')
+    await clearRecords(); await load()
+    phase = 'real owner import with lost committed response'
     let committed
     const lose = async route => {
       try { const response = await route.fetch(); assert.equal(response.status(), 200); committed = await response.json(); await route.fulfill(problem('DRAFT_UNAVAILABLE')) }
