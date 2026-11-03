@@ -6,6 +6,8 @@
 
 `tests/governance/test_problem_sources.py` 验证离线题源工具的来源哈希、完整集合、安全提取及输出/清理失败边界，随 governance 执行；不下载或执行外部题源程序。十题完整数据生成/validator/checker只由 README 的显式本地 Docker 命令运行，不进入普通 CI，也不构成生产 Worker/SPJ 或 P4 发布验收。
 
+`internal/judging`的独立Library Checker文本组件及M0回归随backend执行；`tests/checkercompat`仅在显式`checkercompat`标签和README专用断网/只读/非root Docker中运行锁定上游wcmp，不进入普通CI。组件差分不改草稿not-run或代替本站受限程序验证；支持域及预算见[准入约定](checker-admission.md)。
+
 `integration-tests` 在既有 sqlc/真实 PostgreSQL 检查后，构建同一 Docker 工具链并下载固定摘要 Redis 7.2.17，执行 `scripts/test-session-protocol.py --context default`。专项使用私有网络、临时 PG、双客户端/双连接池及 TLS 入口验证正式普通 Redis 协议、文件加载的合成密钥、两步登录与共享准入/限流故障，以及固定单跳 TLS→mTLS 反代的证书、来源和 Cookie 路径，失败传递到原 integration 必需门禁；不开放宿主端口，不持有生产凭据或运行选手代码。命令归 README，隔离和结果归 M0/交付记录；不代表公开 HTTP/SCS、真实浏览器/生产代理、生产阈值或完整恢复验收。
 
 `containers` 在原 Compose 冒烟后执行 `scripts/test-local-development.py`：全新 UUID 项目验证本地账号首次初始化、重复初始化不改材料、Redis marker 丢失后拒绝启动且不修复，再核验并清理该轮自有资源。此专项不启动 HTTPS 网关或占用 8443，不触及用户的持久 `oj-local-dev`。加入第二套真实容器检查后，该 job 超时为 30 分钟，原必需门禁保持。

@@ -18,34 +18,45 @@ const tokenBudget = 1 << 16
 // CompareText compares ordered ASCII-whitespace-delimited UTF-8 tokens, folding
 // only A-Z unless caseSensitive is set. It never normalizes numbers or Unicode.
 func CompareText(reference, output []byte, caseSensitive bool) (bool, error) {
+	// Preserve the original M0 error precedence as well as its whitespace rules.
 	if len(reference) > TextBudget || !utf8.Valid(reference) {
 		return false, ErrReference
 	}
 	if len(output) > TextBudget {
 		return false, ErrOutput
 	}
+	return compareText(reference, output, caseSensitive, TextBudget, tokenBudget, asciiSpace)
+}
+
+func compareText(reference, output []byte, caseSensitive bool, byteLimit, tokenLimit int, space func(byte) bool) (bool, error) {
+	if len(reference) > byteLimit || !utf8.Valid(reference) {
+		return false, ErrReference
+	}
 	// Validate every reference token before considering any contestant mismatch.
 	for rest := reference; len(rest) > 0; {
-		token, next := nextToken(rest)
+		token, next := nextToken(rest, space)
 		rest = next
-		if len(token) > tokenBudget {
+		if len(token) > tokenLimit {
 			return false, ErrReference
 		}
+	}
+	if len(output) > byteLimit {
+		return false, ErrOutput
 	}
 	if !utf8.Valid(output) {
 		return false, nil
 	}
 	for rest := output; len(rest) > 0; {
-		token, next := nextToken(rest)
+		token, next := nextToken(rest, space)
 		rest = next
-		if len(token) > tokenBudget {
+		if len(token) > tokenLimit {
 			return false, ErrOutput
 		}
 	}
 	for {
 		var a, b []byte
-		a, reference = nextToken(reference)
-		b, output = nextToken(output)
+		a, reference = nextToken(reference, space)
+		b, output = nextToken(output, space)
 		if len(a) == 0 || len(b) == 0 {
 			return len(a) == len(b), nil
 		}
@@ -69,8 +80,9 @@ func CompareText(reference, output []byte, caseSensitive bool) (bool, error) {
 	}
 }
 
-func nextToken(data []byte) ([]byte, []byte) {
-	space := func(b byte) bool { return b == ' ' || b >= '\t' && b <= '\r' }
+func asciiSpace(b byte) bool { return b == ' ' || b >= '\t' && b <= '\r' }
+
+func nextToken(data []byte, space func(byte) bool) ([]byte, []byte) {
 	i := 0
 	for i < len(data) && space(data[i]) {
 		i++

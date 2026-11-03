@@ -1,5 +1,13 @@
 # 工程交付记录
 
+## 2026-11-03：首批 Library Checker 文本语义组件
+
+成功fetch后从`origin/main ebcca026ac71fc5dc13a9b9bc8445eb3623ac650`建立`codex/library-checker-text-admission`。P4独立受限验证前置新增`CompareLibraryCheckerText`与独立`lc-wcmp-tokens-v1`，显式每文件/每token预算，仅SP/TAB/LF/CR分隔、大小写/数字逐字节比较；配置错误、完整参考异常、输出超限分别返回。原M0空白、预算和错误优先级保留。支持域为UTF-8、单token至多64KiB、单文件配置上限128MiB；不是Testlib全域等价、已分配内存隔离或生产资源准入。草稿/Worker未接线，原版本、null生产配置、not-run及发布阻断不变。无依赖、SQL/schema或HTTP变化。
+
+真实专项在已有镜像`sha256:fbfd84489b660f3cacaa8b211999116291589211abbacdf6f7d894f53f013afa`、Go1.26.10/GNU++17 g++12.2.0、linux arm64中执行，镜像无VOLUME；非root501:20、断网、只读根和两个只读挂载、4GiB内存/2CPU/128进程、1GiB临时执行盘、128MiB单文件、编译120秒/每次检查5秒及整体10分钟。十份checker和库头/hash.json均核验固定锁SHA-256，全部输入/答案独立核验上游hash.json，不用来源validation.json判定通过。先全量准入254份答案，再执行1026次正常/空白/额外/缺失token和十项边界差分，最终36.879秒通过。答案共509886584字节，最大10369461字节，103份超过M0的1MiB；本轮显式16MiB/64KiB实验预算不当生产限制。无效编码与65537字节token上游可AC但本站拒绝；`1\xffignored`的上游EOF哨兵AC而本站WA也实证，明确记录域外差异，未放宽输入来制造等价。
+
+Docker完整离线模块验证/格式/vet/三范围静态/root race/七命令构建通过，最终补充回归与checkercompat标签静态检查通过。101治理12.439秒及repository通过；首轮治理因沙箱回环bind/环境读取限制失败，原样在授权环境重跑，无测试或阈值更改。针对性Astra设计/实现复核补充M0与LC错误优先级、非法编码先于token检查和EOF域外控制；AI复核不代替人工审批。源码、测试、支持域、计划、README及CI边界已同步，远端精确head CI/审查/合并另按门禁核验。原始日志在`/private/tmp/oj-checker-{compat-final,backend,final-targeted,governance-verified}.log`，临时日志不是备份；本轮没有本地PG/Redis/浏览器或完整真实Worker复验，不代表完整P4或部署。
+
 ## 2026-11-03：用户确认提交积压计量口径
 
 用户明确答复采用P1训练积压建议：同一用户跨训练场景统计queued＋running，每份提交计一次；终态释放，超额只拒绝新增，同键重试保留原语义。具体限额继续要求显式配置，不预设生产值。本条取代#94交付时“尚未获用户确认”的状态，旧交付记录保留当时语境。
