@@ -171,5 +171,5 @@ func cachedError(ctx context.Context, label string, err error) error {
 	if cause == nil && errors.Is(err, context.Canceled) {
 		cause = context.Canceled
 	}
-	return errors.Join(withFailureCode(errors.New(label), errorFailureCode(err)), cause)
+	return errors.Join(withFailureMetadata(errors.New(label), err), cause)
 }

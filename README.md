@@ -87,6 +87,7 @@ docker --context desktop-linux run --rm --network none --cap-drop ALL \
     go build -trimpath -o .local/validation-host/worker ./cmd/worker
     go test -c -tags=sandbox -o .local/validation-host/worker-validation.test ./cmd/worker
     go test -c -o .local/validation-host/workerhost-stop.test ./internal/workerhost
+    go test -c -o .local/validation-host/workerhost-control.test ./internal/workerhost
   '
 OJ_SANDBOX_EXPERIMENT=1 OJ_WORKER_M0_SLOT=secondary \
   .local/validation-host/worker validate-reference \
@@ -109,6 +110,15 @@ OJ_SANDBOX_EXPERIMENT=1 OJ_WORKER_M0_SLOT=secondary \
   -test.list='^(TestStopTraceDistinguishesExpiredKillAttempt|TestLocalCommandStartEvidence|TestStopElapsedIsBoundedAndMarked)$'
 .local/validation-host/workerhost-stop.test -test.v -test.count=1 \
   -test.run='^(TestStopTraceDistinguishesExpiredKillAttempt|TestLocalCommandStartEvidence|TestStopElapsedIsBoundedAndMarked)$' -test.timeout=1m
+```
+
+Host控制失败时，执行诊断条目可附带有界`host_trace`，区分入场、准备、inspect、command及响应校验；本地CLI已启动不代表daemon收件。字段范围、取整及缺失证据限制见[执行失败诊断](docs/reference-validation.md#执行失败诊断)。以下原生专项仅运行固定受信命令与替身；先核对清单恰含八项再执行，不能以空匹配PASS计为验证：
+
+```sh
+.local/validation-host/workerhost-control.test \
+  -test.list='^(TestControlTrace.*|TestHostTraceCrossesExecutionTransportWithoutOldCause|TestSuccessfulHostThenDecodeFailureHasNoHostTrace)$'
+.local/validation-host/workerhost-control.test -test.v -test.count=1 \
+  -test.run='^(TestControlTrace.*|TestHostTraceCrossesExecutionTransportWithoutOldCause|TestSuccessfulHostThenDecodeFailureHasNoHostTrace)$' -test.timeout=1m
 ```
 
 维护入口使用独立缓存文件通路：源码/输入上传后回读核对SHA-256，输出原始字节拉取，参考答案留在宿主。默认A+B保留2MiB材料/4KiB输出，unionfind使用64MiB匿名磁盘快照与256KiB运行stdout。zalgorithm使用64MiB快照，suffixarray独立准入128MiB快照；两者共用4MiB stdout及256MiB累计传输档位。primality_test独立冻结32MiB以内材料及固定4个头文件，stdout512KiB、6个缓存对象；它与前两者共用medium槽锁。所有磁盘来源共用进程内一份快照额度，两端账本均按档位计量。编译双流/运行stderr仍各4KiB，磁盘来源的CPU1秒/wall5秒/memory128MiB只作参考试验；其余五题仍待准入，#114仍草稿，生产配置不变。

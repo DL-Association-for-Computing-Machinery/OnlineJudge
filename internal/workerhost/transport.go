@@ -18,9 +18,15 @@ const requestLimit = 512 * 1024
 // RoundTrip sends only the bounded go-judge API subset through container-local
 // curl. No host port, proxy, redirect, arbitrary URL or host file is accepted.
 // Request bodies must be finite, in-memory readers as supplied by execution.GoJudge.
-func (h *Host) RoundTrip(r *http.Request) (*http.Response, error) {
+func (h *Host) RoundTrip(r *http.Request) (response *http.Response, err error) {
+	var caller context.Context
+	if r != nil {
+		caller = r.Context()
+	}
+	trace := newControlTrace(caller)
+	defer func() { err = trace.attach(err) }()
 	if r == nil {
-		return nil, errors.New("missing sandbox request")
+		return nil, trace.freeze(errors.New("missing sandbox request"))
 	}
 	if r.Body != nil {
 		// Cleanup does not change the completed operation or its primary error.
@@ -29,56 +35,64 @@ func (h *Host) RoundTrip(r *http.Request) (*http.Response, error) {
 	if r.URL == nil || r.URL.Scheme != "http" || r.URL.Host != "127.0.0.1:5050" ||
 		r.URL.User != nil || r.URL.RawQuery != "" || r.URL.ForceQuery || r.URL.Fragment != "" ||
 		r.URL.Opaque != "" || r.URL.RawPath != "" || !allowed(r.Method, r.URL.Path) {
-		return nil, errors.New("unsupported sandbox request")
+		return nil, trace.freeze(errors.New("unsupported sandbox request"))
 	}
 	ctx, done, err := h.begin(r.Context())
 	if err != nil {
-		return nil, err
+		return nil, trace.freeze(err)
 	}
 	defer done()
 	ctx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
+	trace.enter(ctx, "prepare")
 	var body []byte
 	if r.Body != nil {
 		body, err = io.ReadAll(io.LimitReader(r.Body, requestLimit+1))
 		if err != nil || len(body) > requestLimit {
-			return nil, errors.New("sandbox request exceeds budget")
+			return nil, trace.freeze(errors.New("sandbox request exceeds budget"))
 		}
 	}
 	if len(body) != 0 && r.Method != http.MethodPost {
-		return nil, errors.New("unexpected sandbox body")
+		return nil, trace.freeze(errors.New("unexpected sandbox body"))
 	}
 	// Recheck process lifetime immediately before dispatch, including cleanup.
 	p, _, err := h.configuration()
 	if err != nil {
-		return nil, err
+		return nil, trace.freeze(err)
 	}
+	trace.enter(ctx, "inspect")
+	trace.attempt()
 	s, err := h.inspect(ctx, h.id)
+	trace.commandResult(err)
 	if err != nil {
-		return nil, err
+		return nil, trace.freeze(err)
 	}
 	if err := h.validate(s, p); err != nil {
-		return nil, err
+		return nil, trace.freeze(err)
 	}
 	args := []string{"exec", "-i", h.id, "curl", "--disable", "--silent", "--show-error", "--noproxy", "*", "--max-time", "20", "--max-filesize", "131072", "--proto", "=http", "--request", r.Method, "--header", "Content-Type: application/json", "--write-out", "\n%{http_code}"}
 	if r.Method == http.MethodPost {
 		args = append(args, "--data-binary", "@-")
 	}
 	args = append(args, r.URL.String())
+	trace.enter(ctx, "command")
+	trace.attempt()
 	out, err := h.docker(ctx, bytes.NewReader(body), args...)
+	trace.commandResult(err)
 	if err != nil {
-		return nil, err
+		return nil, trace.freeze(err)
 	}
+	trace.enter(ctx, "response_validation")
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, trace.freeze(err)
 	}
 	// Preserve actual status. curl's exit success alone is not HTTP success.
 	i := bytes.LastIndexByte(out, '\n')
 	if i < 0 || string(out[i+1:]) != "200" {
-		return nil, errors.New("sandbox HTTP response rejected")
+		return nil, trace.freeze(errors.New("sandbox HTTP response rejected"))
 	}
 	if i > 128*1024 {
-		return nil, errors.New("sandbox response exceeds budget")
+		return nil, trace.freeze(errors.New("sandbox response exceeds budget"))
 	}
 	return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(bytes.NewReader(out[:i])), Request: r}, nil
 }

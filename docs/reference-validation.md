@@ -101,6 +101,24 @@ phase为verify、upload、readback、control、stdout_read、validate、delete�
 
 覆盖缓存适配器Verify/Compile/Run/Remove、Runner调用/结果校验、快照关闭及最终取消；不承诺覆盖Host.Start、材料预检或所有操作系统错误。control仅表示控制调用失败，不证明服务端执行或daemon接收。执行与停止诊断可同时持久化，均不改变SE、停止/dirty门禁、资源预算、零重试或publication blocked；旧报告不反推新字段，也不提供恢复权限。
 
+`Host.RoundTrip`失败时，对应条目可选`host_trace`保留以下固定阶段的前缀，最多五项：
+
+| 阶段 | 范围 |
+| --- | --- |
+| `admission` | 请求形状/路由与Host活动入场 |
+| `prepare` | 有界请求体、固定配置解析 |
+| `inspect` | 本次容器inspect命令及身份/生命周期/隔离校验 |
+| `command` | 本次固定Docker CLI控制调用 |
+| `response_validation` | 命令返回后的context、HTTP状态与响应大小校验 |
+
+整体`phase`为失败阶段，`last_completed`为上一个完整阶段或`none`；各step含`completed`、`elapsed_ms`/`elapsed_capped`、进入时`context_before`、`has_deadline`、`remaining_ms`/`remaining_capped`。耗时用单调时钟，负值归0、超过60000ms截断；剩余期限也非负且有界，不改变实际期限。context采样与剩余时间并非原子观察，0ms可来自取整或两次采样之间到期，不能单凭它判过期。失败阶段在返回点冻结，不吸收后续defer清理；整体耗时包含body关闭及Host活动收尾，不能把总量或阶段之和解释成纯沙箱执行时间/硬时限证明。
+
+inspect/command的`call_attempted`只证明调用该函数；`local_process_start`仅接受本次直接`commandFailure`的`started`/`not_started`，成功返回、包装错误或无证据替身保持`unknown`。本地进程启动不证明Docker daemon收到请求。固定顺序、完成位置、计数与枚举先校验再复制，未到达数组槽清零，非法或歧义trace省略；不能从一个join分支借另一操作的trace。脱敏重建错误前只复制元数据，不重新挂回原传输错误；主control、点内input清理和最终exe清理各自保留归属，finish附加context不复制trace。
+
+新增数据不进入Profile/Plan；成功JSON/schema和既有错误`Is/As`语义保持。元数据检索与公开投影分别有64槽界限；公开投影在provider终止节点只读其自身类别，裸provider未声明类别时可为unknown，不重开嵌套遍历。总条目仍最多八条，字段不含命令/路径/缓存ID/材料/原错误；外来getter、Unwrap或类别方法自身成本不由槽计数保证。缺少`host_trace`可表示能力不适用、数据无效/歧义或检索受限，不能证明没有Host调用。
+
+范围只覆盖RoundTrip控制请求（GET元数据、POST/run、DELETE），不覆盖Host.Start/Stop/Verify或独立文件传输，也不能回溯已成功返回的输入回读内部耗时。Host成功返回、随后GoJudge JSON decode失败时没有Host trace，不通过成功响应侧通道补造证据。新增字段不是故障修复、题源准入或自动重试授权；#114及staticrmq草稿#119的原失败保持，后续须另行预注册有可检验假设的调查。
+
 ## 槽所有权与停止
 
 显式`OJ_SANDBOX_EXPERIMENT=1`和跨checkout文件锁仍是前置条件。默认A+B使用primary/secondary；unionfind使用固定small reference槽，zalgorithm、suffixarray与primality_test共用固定medium reference槽及同一锁，均拒绝非空`OJ_WORKER_M0_SLOT`，不从M0 parser选择新槽。quarantine不自动恢复。命令先持锁并同步dirty标记，再接触沙箱。`--start-stopped-slot`只启动预存在、停止/PID0、固定owner及完整隔离配置匹配的槽，使用原full ID，不创建、替换、重启运行中容器或接管其他项目。返回Host绑定该ID与新StartedAt；运行中每次请求继续校验同一生命周期。
