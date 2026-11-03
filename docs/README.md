@@ -14,6 +14,7 @@
 | 初始选型的理由、备选与取舍 | [ADR-001](architecture/001-go-gin.md) |
 | 前端、草稿与渲染 | [前端设计](architecture/frontend-sandbox-options.md) |
 | 判题语义、浮点与 SPJ | [判题设计](architecture/judging-design.md) |
+| 首批 Library Checker 文本支持域与独立差分 | [检查器组件准入](checker-admission.md) |
 | 题包、存储、会话、比赛 | [题包](architecture/problem-package-design.md)、[存储](architecture/storage-design.md)、[会话](architecture/session-design.md)、[比赛](architecture/contest-design.md) |
 | 首批题源、固定来源与离线私有候选 | [题源准备](problem-sources.md) |
 | 私有草稿、来源映射、授权入库/本人读取及分页列表、题面样例HTTP与 schema 7/8 | [私有草稿](problem-drafts.md)、[HTTP契约](../api/problem-drafts.openapi.yaml) |

@@ -49,6 +49,29 @@ python3 -B scripts/prepare-library-checker.py \
 python3 -B -m unittest discover -s tests/governance -p test_problem_sources.py -v
 ```
 
+### 首批文本检查器差分
+
+已有完整私有候选及同时含 Go 1.26.10、GNU++17 的本地镜像时，显式执行下列专用隔离实验。替换镜像为已审阅的本地不可变 ID；`CHECKER_CORPUS` 指向已有 `materials/` 目录。不下载/安装工具，不在宿主或普通 CI 执行题源 checker：
+
+```sh
+CHECKER_CORPUS=/private/tmp/oj-library-checker-corpus/materials
+CHECKER_IMAGE=sha256:YOUR_EXISTING_REVIEWED_IMAGE_ID
+docker --context desktop-linux run --rm --network none --read-only \
+  --cap-drop ALL --security-opt no-new-privileges:true --user "$(id -u):$(id -g)" \
+  --memory 4g --memory-swap 4g --cpus 2 --pids-limit 128 \
+  --ulimit nofile=256:256 --ulimit fsize=134217728:134217728 --ulimit core=0:0 \
+  --no-healthcheck --tmpfs /work:rw,exec,nosuid,nodev,size=1g,mode=1777 \
+  --mount "type=bind,src=$PWD,dst=/src,readonly" \
+  --mount "type=bind,src=$CHECKER_CORPUS,dst=/corpus,readonly" \
+  --workdir /src --entrypoint /usr/bin/env "$CHECKER_IMAGE" \
+  -i PATH=/usr/local/go/bin:/usr/bin:/bin HOME=/work TMPDIR=/work \
+  GOCACHE=/work/go-cache GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off \
+  OJ_CHECKER_COMPAT=isolated-docker \
+  go test -tags=checkercompat -count=1 -timeout=10m -v ./tests/checkercompat
+```
+
+镜像须无声明式 VOLUME，运行用户必须非 root 且可读取私有候选；在 root 环境须另配明确非 root UID/GID，不直接复制执行上述用户参数。所有写入仅在临时内存盘，编译/检查子进程各限120秒/5秒。模式 `lc-wcmp-tokens-v1` 保留 M0 规则，区别 VT/FF 并显式约束字节/token；[支持域与限制](docs/checker-admission.md)不等于完整题目验证或生产预算准入，草稿继续 `not-run`。
+
 ### 转换为统一私有草稿
 
 已有完整私有候选后，用 Python 3.11+ 在宿主进行静态适配；不执行题源程序、不联网或安装依赖：
