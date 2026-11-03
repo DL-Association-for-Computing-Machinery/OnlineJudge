@@ -97,6 +97,8 @@ OJ_SANDBOX_EXPERIMENT=1 OJ_WORKER_M0_SLOT=secondary \
 
 路径替换为已有完整私有bundle和新的报告目录。`--start-stopped-slot`在持锁/同步dirty后仅启动预存在、固定owner/配置匹配的停止槽；省略则要求槽已由维护者启动。启动回执未知时仍确认原生命周期停止；不能确认停止或清标记失败才保持quarantine，即使随后安全解封，本次报告仍失败。禁止自动重试、换槽掩盖失败或手工清标记。成功也会停止该槽。`report.json`私有保存逐点结果、完整plan/profile及容器生命周期，`publication`始终blocked；失败输出与支持域见[受限参考验证](docs/reference-validation.md)。
 
+停止失败报告的可选`stop_diagnostic`提供固定阶段/错误类别与有界计数，不含PID、命令参数或原始错误。`pid_present`仅表示探测时路径存在，可能发生PID复用；`deadline`不证明进程仍在或已退出。诊断不授予清理隔离标记的权限，旧失败报告不追认通过。
+
 真实专项另覆盖固定12点CLI、合成正确/错误/编译错误/RE/TLE/OLE和取消后的停止确认。它不需要PG/Redis或控制端，不进入普通CI：
 
 ```sh

@@ -19,24 +19,35 @@ type Point struct {
 	Usage   *execution.Usage `json:"usage,omitempty"`
 }
 
+// StopDiagnostic contains only the host adapter's bounded failure projection.
+// It supplies a diagnosis, never authority to accept a failed reference report.
+type StopDiagnostic struct {
+	Stage     string `json:"stage"`
+	Code      string `json:"code"`
+	Observed  int    `json:"observed"`
+	Confirmed int    `json:"confirmed"`
+	Probe     int    `json:"probe,omitempty"`
+}
+
 // Report describes reference correctness only. A pass requires a separate owner
 // to confirm sandbox stop, marker cleanup and report persistence; it is never a
 // complete problem-validation or publication authorization.
 type Report struct {
-	Schema        string                `json:"schema"`
-	Status        string                `json:"status"`
-	Publication   string                `json:"publication"`
-	Profile       Profile               `json:"profile"`
-	ProfileSHA256 string                `json:"profile_sha256"`
-	PlanSHA256    string                `json:"plan_sha256,omitempty"`
-	Plan          problem.ReferencePlan `json:"plan"`
-	Verdict       string                `json:"verdict"`
-	Points        []Point               `json:"points"`
-	CompileUsage  *execution.Usage      `json:"compile_usage,omitempty"`
-	StopConfirmed bool                  `json:"stop_confirmed"`
-	Slot          string                `json:"slot"`
-	ContainerID   string                `json:"container_id"`
-	StartedAt     string                `json:"started_at"`
+	Schema         string                `json:"schema"`
+	Status         string                `json:"status"`
+	Publication    string                `json:"publication"`
+	Profile        Profile               `json:"profile"`
+	ProfileSHA256  string                `json:"profile_sha256"`
+	PlanSHA256     string                `json:"plan_sha256,omitempty"`
+	Plan           problem.ReferencePlan `json:"plan"`
+	Verdict        string                `json:"verdict"`
+	Points         []Point               `json:"points"`
+	CompileUsage   *execution.Usage      `json:"compile_usage,omitempty"`
+	StopConfirmed  bool                  `json:"stop_confirmed"`
+	StopDiagnostic *StopDiagnostic       `json:"stop_diagnostic,omitempty"`
+	Slot           string                `json:"slot"`
+	ContainerID    string                `json:"container_id"`
+	StartedAt      string                `json:"started_at"`
 }
 
 // Runner owns one operation. The owner must stop its sandbox even after success;

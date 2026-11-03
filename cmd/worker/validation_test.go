@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -78,7 +79,7 @@ func TestReferenceOwnerStopAndQuarantine(t *testing.T) {
 			}
 			h := &referenceHost{}
 			if scenario == "stop" {
-				h.stopErr = errors.New("unconfirmed")
+				h.stopErr = errors.New("synthetic-reference-secret")
 			}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -106,6 +107,18 @@ func TestReferenceOwnerStopAndQuarantine(t *testing.T) {
 			}
 			if (r.Status == "reference-validation-passed") != (scenario == "pass") {
 				t.Fatal("pass escaped cleanup")
+			}
+			if scenario != "open" {
+				if r.StopConfirmed != (scenario != "stop") || (r.StopDiagnostic != nil) != (scenario == "stop") {
+					t.Fatal("stop and marker-clean evidence conflated")
+				}
+				if scenario == "stop" && (r.StopDiagnostic.Stage != "unknown" || r.StopDiagnostic.Code != "unknown") {
+					t.Fatal("invented diagnosis for unknown stop error")
+				}
+				raw, e := json.Marshal(r)
+				if e != nil || strings.Contains(string(raw), "synthetic-reference-secret") {
+					t.Fatal("report leaked host error")
+				}
 			}
 			if scenario != "open" && (h.stops != 1 || !h.independent) {
 				t.Fatal("stop must happen once with live independent context")
