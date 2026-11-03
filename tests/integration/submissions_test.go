@@ -284,11 +284,22 @@ func TestAcceptance(t *testing.T) {
 		}
 	})
 	t.Run("rollback refuses accepted data atomically", func(t *testing.T) {
+		// Target the owning backlog migration, rather than assuming the newest
+		// additive migration must reject unrelated accepted submission data.
+		_, err := provider.DownTo(ctx, 6)
+		must(t, err)
 		if _, err := provider.Down(ctx); err == nil {
 			t.Fatal("destructive rollback allowed")
 		}
+		var version int
+		must(t, pool.QueryRow(ctx, `SELECT version_id FROM goose_db_version ORDER BY id DESC LIMIT 1`).Scan(&version))
+		if version != 6 {
+			t.Fatal("owning migration changed after refused rollback")
+		}
+		_, err = provider.Up(ctx)
+		must(t, err)
 		must(t, db.CheckSchema(ctx, pool))
-		_, err := store.Get(ctx, "m0-operator", "m0-training", accepted.ID)
+		_, err = store.Get(ctx, "m0-operator", "m0-training", accepted.ID)
 		must(t, err)
 	})
 	t.Run("corrupt manifest blocks new acceptance", func(t *testing.T) {
@@ -357,7 +368,7 @@ func TestAcceptance(t *testing.T) {
 	t.Run("controller startup recovery", func(t *testing.T) { testControllerRecovery(t, ctx, pool, store) })
 	t.Run("authenticated worker protocol", func(t *testing.T) { testWorkerAPI(t, ctx, pool, store) })
 	t.Run("schema ahead rejected", func(t *testing.T) {
-		_, err := conn.Exec(`INSERT INTO goose_db_version(version_id,is_applied) VALUES(7,true)`)
+		_, err := conn.Exec(`INSERT INTO goose_db_version(version_id,is_applied) VALUES(8,true)`)
 		must(t, err)
 		if db.CheckSchema(ctx, pool) == nil {
 			t.Fatal("future schema accepted")

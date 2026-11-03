@@ -87,18 +87,22 @@ func TestBacklogLifecycle(t *testing.T) {
 func TestBacklogMigrationGuard(t *testing.T) {
 	t.Run("empty rollback and configured policy protection", func(t *testing.T) {
 		f := newBacklogFixture(t)
-		_, err := f.provider.Down(f.ctx)
+		// Exercise the migration that owns backlog policy, independently of
+		// newer additive migrations whose empty rollback is permitted.
+		_, err := f.provider.DownTo(f.ctx, 6)
+		must(t, err)
+		_, err = f.provider.Down(f.ctx)
 		must(t, err)
 		if db.CheckSchema(f.ctx, f.a) == nil {
 			t.Fatal("new API accepted old schema")
 		}
-		_, err = f.provider.Up(f.ctx)
+		_, err = f.provider.UpTo(f.ctx, 6)
 		must(t, err)
 		backlogPolicy(t, f, 2, 1)
 		if _, err = f.provider.Down(f.ctx); err == nil {
 			t.Fatal("rollback discarded configured policy")
 		}
-		must(t, db.CheckSchema(f.ctx, f.a))
+		requireBacklogSchemaSix(t, f)
 		var global, subject int64
 		must(t, f.a.QueryRow(f.ctx, `SELECT global_limit,subject_limit FROM submission_backlog_policy`).Scan(&global, &subject))
 		if global != 2 || subject != 1 {
@@ -116,6 +120,8 @@ func TestBacklogMigrationGuard(t *testing.T) {
 	for _, commit := range []bool{false, true} {
 		t.Run(fmt.Sprintf("configuration race commit=%v", commit), func(t *testing.T) {
 			f := newBacklogFixture(t)
+			_, err := f.provider.DownTo(f.ctx, 6)
+			must(t, err)
 			held, err := f.a.Begin(f.ctx)
 			must(t, err)
 			defer held.Rollback(context.Background())
@@ -134,7 +140,7 @@ func TestBacklogMigrationGuard(t *testing.T) {
 				if err == nil {
 					t.Fatal("rollback lost committed configuration")
 				}
-				must(t, db.CheckSchema(f.ctx, f.a))
+				requireBacklogSchemaSix(t, f)
 			} else {
 				must(t, err)
 				if db.CheckSchema(f.ctx, f.a) == nil {
@@ -142,6 +148,15 @@ func TestBacklogMigrationGuard(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func requireBacklogSchemaSix(t *testing.T, f backlogFixture) {
+	t.Helper()
+	var version int
+	must(t, f.a.QueryRow(f.ctx, `SELECT version_id FROM goose_db_version ORDER BY id DESC LIMIT 1`).Scan(&version))
+	if version != 6 {
+		t.Fatalf("backlog migration changed on refused rollback: %d", version)
 	}
 }
 
