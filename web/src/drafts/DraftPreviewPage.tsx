@@ -48,7 +48,7 @@ export default function DraftPreviewPage() {
   return <div className="page-width private-draft-page">
     <p className="breadcrumb"><Link to="/">题库</Link> / 本人私有草稿</p>
     <h1>私有草稿预览</h1>
-    <p>输入已导入草稿的 ID。仅作者本人可访问；导入、审核和发布管理尚未开放。图片资源暂不可用。</p>
+    <p>输入已导入草稿的 ID。仅作者本人可访问；审核和发布尚未开放。图片资源暂不可用。<Link to="/author/drafts">返回导入管理</Link></p>
     <form className="private-draft-form" onSubmit={event => { event.preventDefault(); if (validDraftID(input)) void navigate(`/author/drafts/${input}`) }}>
       <label>草稿 ID<input value={input} onChange={event => setInput(event.target.value)} required pattern="[a-f0-9]{32}" maxLength={32} autoComplete="off" spellCheck={false} placeholder="32 位小写十六进制 ID" /></label>
       <button className="button button-outline" type="submit">选择草稿</button>

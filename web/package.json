@@ -20,6 +20,7 @@
     "@codemirror/state": "6.7.6",
     "@codemirror/view": "6.43.15",
     "codemirror": "6.0.2",
+    "idb": "8.0.3",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "react-error-boundary": "6.1.6",

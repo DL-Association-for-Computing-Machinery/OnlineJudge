@@ -23,8 +23,8 @@ export async function runDraftChecks(browser, info, email, password, output) {
     await page.getByLabel('密码', { exact: true }).fill(password)
     await page.getByRole('button', { name: '登录', exact: true }).click()
     await page.getByText('登录成功，当前会话已核验。', { exact: true }).waitFor()
-    // Provision through the same authorized import API. There is no import UI
-    // or alternate identity shortcut in the application under test.
+    // This renderer regression retains legacy API coverage. The separate
+    // management flow exercises the new subject-pinned import UI.
     const imported = await context.request.post(info.origin + '/api/v1/problem-drafts', { headers: { Origin: info.origin }, data: { source_id: 'library-checker:aplusb', request_key: 'browser-render-draft-1' } })
     assert.equal(imported.status(), 200)
     const draft = await imported.json()

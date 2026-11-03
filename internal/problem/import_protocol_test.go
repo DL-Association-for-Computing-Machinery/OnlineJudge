@@ -68,6 +68,58 @@ func protocolFixture(t *testing.T, prepared *Prepared) (*Importer, *sequencedSes
 	return importer, sessions, repo, credential
 }
 
+func TestSubjectPinPrecedesAllBusinessIO(t *testing.T) {
+	for _, op := range []string{"sources", "import", "receipt"} {
+		t.Run(op, func(t *testing.T) {
+			i, sessions, repo, credential := protocolFixture(t, nil)
+			expected := strings.Repeat("a", 32) // Actual session belongs to another subject.
+			var err error
+			switch op {
+			case "sources":
+				_, err = i.SourcesForSubject(t.Context(), credential, expected)
+			case "import":
+				_, err = i.ImportPinnedForSubject(t.Context(), credential, "original-receipt-request", "unknown", strings.Repeat("f", 64), expected)
+			case "receipt":
+				_, err = i.ReceiptForSubject(t.Context(), credential, "original-receipt-request", expected)
+			}
+			if !errors.Is(err, ErrSubjectChanged) || sessions.calls != 1 || repo.checks != 0 || repo.receipts != 0 || repo.creates != 0 || repo.materials.puts != 0 || len(i.slots) != 0 {
+				t.Fatalf("subject mismatch reached business I/O: %v", err)
+			}
+		})
+	}
+}
+
+func TestSubjectPinMatchingUsesExistingFinalAuthority(t *testing.T) {
+	for _, op := range []string{"sources", "import", "receipt"} {
+		t.Run(op, func(t *testing.T) {
+			i, sessions, repo, credential := protocolFixture(t, nil)
+			expected := sessions.observations[0].view.SubjectID
+			var err error
+			switch op {
+			case "sources":
+				_, err = i.SourcesForSubject(t.Context(), credential, expected)
+				if sessions.calls != 2 || repo.checks != 2 {
+					t.Fatal("source omitted final authority")
+				}
+			case "import":
+				content := i.sources["library-checker:aplusb"].Content()
+				_, err = i.ImportPinnedForSubject(t.Context(), credential, "original-receipt-request", content.SourceID, content.RequestSHA256, expected)
+				if sessions.calls != 2 || repo.checks != 1 || repo.creates != 1 || repo.materials.puts == 0 {
+					t.Fatal("import omitted final authority")
+				}
+			case "receipt":
+				_, err = i.ReceiptForSubject(t.Context(), credential, "original-receipt-request", expected)
+				if sessions.calls != 1 || repo.receipts != 1 {
+					t.Fatal("receipt omitted owner-scoped read")
+				}
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 func TestSourceCatalogFinalAuthorityAndDetachedSummary(t *testing.T) {
 	for _, mode := range []string{"success", "initial-session", "initial-role", "final-session", "actor-changed", "final-role", "canceled"} {
 		t.Run(mode, func(t *testing.T) {

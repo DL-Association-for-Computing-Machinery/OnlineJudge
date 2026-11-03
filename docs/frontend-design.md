@@ -13,7 +13,8 @@
 | `/` | 示例题库，题号/名称搜索、折叠难度和标签筛选、每页六题；条件保存在 URL |
 | `/login` | 独立窄表单；沿用真实同源 HTTPS 登录与原候选恢复流程 |
 | `/account` | 当前会话、显式续期/退出、可选改密；连接诊断折叠，旧 `/#account-title` 转到此页 |
-| `/author/drafts` | 输入已入库草稿ID；仅提供选择入口，没有导入或列表管理 |
+| `/author/drafts` | 已授权来源选择、固定修订导入、本机导入记录及原请求回执恢复；不是服务端完整草稿列表 |
+| `/author/drafts/open` | 输入已有草稿 ID，跳转本人预览 |
 | `/author/drafts/:id` | 显式核验普通会话后读取本人固定版本，共享题面渲染及原文样例复制 |
 | `/preview/problems/:id` | 本地合成题面、CodeMirror C++ 编辑、键盘/拖动分栏、文件导入和下载；提交禁用 |
 | `/submissions` | 明确提示正式提交记录尚未开放 |
@@ -26,13 +27,23 @@ React Router 声明式路由负责导航，账号 controller 提升到应用生�
 
 示例代码只存在当前标签页内存，站内导航按题号保留；观察到身份空间变化时清除，刷新/关闭提示下载。上传只接受不超过 128 KiB 的 UTF-8 `.cpp/.cc/.cxx/.txt`，拒绝 NUL/无效 UTF-8；未编辑的导入文本下载保留原始 Unicode 和换行。异步文件读取在卸载或编辑版本变化后不能覆盖新输入。示例功能不向 API 发送代码，不把内存暂存声称为 AC21 的 IndexedDB 持久草稿。
 
-精确版本归 [package.json](../web/package.json) 与锁文件：Router、CodeMirror 及共享 Markdown/数学渲染库均 MIT，生产传递依赖另含 ISC/BSD-2-Clause；分发许可保留在 `web/public/THIRD-PARTY-NOTICES.txt`。Router 的 Node 下限为 22.22，项目支持 `^22.22.0 || ^24.0.0`，Docker 固定 Node 24.19.0。编辑器和题面渲染按路由懒加载，首页/登录首屏不下载 KaTeX/CSS/字体；未引入 Query 或持久草稿。
+精确版本归 [package.json](../web/package.json) 与锁文件：Router、CodeMirror 及共享 Markdown/数学渲染库均 MIT，idb 8.0.3 为 ISC 且无运行依赖，生产传递依赖另含 ISC/BSD-2-Clause；分发许可保留在 `web/public/THIRD-PARTY-NOTICES.txt`。Router 的 Node 下限为 22.22，项目支持 `^22.22.0 || ^24.0.0`，Docker 固定 Node 24.19.0。编辑器、管理页和题面渲染按路由懒加载，首页/登录首屏不下载 KaTeX/CSS/字体；未引入 Query 或代码持久草稿。
+
+## 私有草稿导入管理
+
+`/author/drafts` 显式检查会话后读取来源摘要及当前账号的本机记录。管理页使用[主体绑定协议](../api/problem-draft-management.openapi.yaml)，三条路由位于独立 `/api/v1/problem-draft-management` 命名空间，必须发送 `X-OJ-Expected-Subject`；服务端在实际会话读取后、任何业务访问前比较主体，避免另一标签已换 Cookie、失效通知尚未到达时将旧账号操作写入新账号。旧实例返回404，不回退旧端点；该前置条件不代替真实会话/当前作者角色，也不原子撤回已接受在途请求。
+
+点击导入先将最小 owner/source/key/revision/pending 写入 IndexedDB 恢复日志并等待 strict 事务完成，再发送三字段 POST。一次 readwrite 事务检查来源活动记录、全部 owner 主键前缀内容及32条上限，只有新记录插入的胜出者首次发 POST；同来源 pending 返回原记录而不重发。已确认同修订先核验原回执，不创建重复请求；新修订须先核验旧确认回执，再以完整记录 CAS 创建新 pending，旧确认历史保留。所有 POST 前重新核验原记录仍存在，不从内存回退。浏览器不支持 strict、打开受阻/超时/升级/损坏/配额/提交失败均阻止新导入；不 deleteDatabase 修复或自动驱逐记录。
+
+结果未知时保留原 tuple，刷新只加载记录。手动“查询原回执”只 GET；“重试同一请求”先 GET，只有404且现配置仍有完全相同来源修订时，才显式重发原 tuple。404/409不证明原请求已取消；403/503、修订变化或回执不匹配不能换键/换修订。确认标志及草稿 ID 都不是本地授权依据，只有本次真实回执匹配才显示预览链接。移除已确认记录先重新核验服务端回执，只删该本机记录，不能删新 pending 或服务端草稿；pending 无删除入口。
+
+会话发布、期限、路由卸载和 focus/visibility/pagehide/pageshow 清除内存结果并取消请求，提交后仍检查 deadline；日志保留，重新显示须显式核验。账号空间更换可能重建页面，需再次点击加载。跨标签通知只失效，不带身份/正文或触发自动读取/POST；IDB 事务独立仲裁并发，通知缺失不产生第二个首次请求。退出后恢复日志仍保留且只枚举当前账号；它只含恢复元数据，不含凭据、题面/样例/代码，不是AC21代码草稿或对本机使用者的加密隔离。最多32条/账号，无TTL或自动清理；可导出最小JSON供人工核验，没有自动回灌。清除/回收浏览器存储或换设备仍可能丢失，不能代替服务端完整本人列表或备份。
 
 ## 共享题面与本人预览
 
-后续导入管理页使用[绑定导入协议](problem-drafts.md#管理页导入协议)选择已授权候选、提交完整expected_revision并只读恢复本人原键回执；服务协议已提供，当前页面尚未接入导入或列表。题目version不替代完整import_revision，未知结果保留原source/key/revision，不能自动POST、换键或回退旧接口；404/409不证明原请求无在途效果。
+导入管理遵循上节及[导入协议](problem-drafts.md#管理页导入协议)；题目version不替代覆盖全部引用的完整import_revision。
 
-`/author/drafts` 选择已入库 ID，`/author/drafts/:id` 显式检查会话后 GET 本人固定版本预览。入口可见性不授予出题角色，服务端仍检查真实会话、owner 和当前角色；没有列表、导入表单、编辑、审核或发布。示例做题页与本人草稿使用同一 `StatementMarkdown` 和原文样例组件，样例复制直接写原字符串，不从 DOM 提取或规范化。
+`/author/drafts/open` 选择已入库 ID，`/author/drafts/:id` 显式检查会话后 GET 本人固定版本预览。入口可见性不授予出题角色，服务端仍检查真实会话、owner 和当前角色；没有编辑、审核或发布。示例做题页与本人草稿使用同一 `StatementMarkdown` 和原文样例组件，样例复制直接写原字符串，不从 DOM 提取或规范化。
 
 采用 react-markdown 10.1.0、remark-gfm 4.0.1、remark-math 6.0.0、rehype-katex 7.0.1、KaTeX 0.19.1；原始 HTML 跳过，所有源图片只生成占位且不请求资源。链接仅接受无控制字符/反斜杠/凭据的 HTTPS、本站绝对路径或锚点，设置 no-referrer/noopener/noreferrer。KaTeX trust=false、maxExpand=128、maxSize=20，逐公式独立调用，错误局部显示固定提示和转义源码。两个数学插件仍依赖旧 KaTeX，按精确父版本覆盖为 0.19.1，避开[官方公告中的旧版本漏洞](https://github.com/KaTeX/KaTeX/security/advisories/GHSA-238p-pmpm-9mq7)；上游支持安全版本后再移除覆盖。CSS/字体随本地静态资源分发，不走 CDN。
 
@@ -44,4 +55,4 @@ React Router 声明式路由负责导航，账号 controller 提升到应用生�
 
 执行 README 中 Docker 前端检查及[浏览器账号专项](../README.md#浏览器账号专项)。浏览器专项保留原账号断言，并检查跨页改密保护、编辑前身份检查、迟到上传隔离、原文下载、站内保留、全局离开提醒、搜索/筛选/分页、减少动画及示例零 POST。正常账号流程使用隔离的真实 HTTPS/race API/PostgreSQL/Redis；故障回执为定向注入。
 
-默认 Compose 仍为 HTTP/bootstrap，登录表单禁用；本机预览不代表生产账号入口或判题已上线。没有数据库迁移，回退前端构建即可恢复原界面；后端会话持久状态不随静态资源回退撤销。生产 HTTPS、注册、正式题库/提交、IndexedDB 草稿及完整 M0 另行交付。
+默认 Compose 仍为 HTTP/bootstrap，登录表单禁用；本机预览不代表生产账号入口或判题已上线。无PG迁移；回退静态资源或旧二进制保留服务端资料及本机恢复数据库，新管理路径404须停写且不得降级。生产 HTTPS、注册、正式题库/提交、IndexedDB代码草稿及完整 M0 另行交付。

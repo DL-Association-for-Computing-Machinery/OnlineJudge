@@ -1,0 +1,16 @@
+.management-page section { margin-block: 32px; }
+.management-page h2 { font-size: 22px; }
+.management-page h3 { margin: 0; font-size: 17px; }
+.management-notice { min-height: 2em; }
+.management-list { padding: 0; list-style: none; border-top: 1px solid var(--line); }
+.management-list > li { display: flex; align-items: start; justify-content: space-between; gap: 24px; padding-block: 22px; border-bottom: 1px solid var(--line); }
+.management-list > li > div:first-child { min-width: 0; }
+.management-list code { overflow-wrap: anywhere; font-size: 13px; }
+.management-list details { margin-block: 8px; color: var(--muted); }
+.management-list summary { cursor: pointer; min-height: 44px; display: list-item; align-content: center; }
+.management-actions { display: flex; flex-wrap: wrap; justify-content: end; gap: 8px; max-width: 430px; }
+@media (max-width: 640px) {
+  .management-list > li { flex-direction: column; gap: 12px; }
+  .management-actions { justify-content: start; }
+  .management-page > .button { width: 100%; }
+}
