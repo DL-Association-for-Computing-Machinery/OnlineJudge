@@ -75,7 +75,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	method := ""
-	isDraft := draftPath(r.URL.Path)
+	isDraft := IsPrivateDraftPath(r.URL.Path)
 	switch r.URL.Path {
 	case "/api/v1/session":
 		method = http.MethodGet
@@ -102,8 +102,12 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			problem(w, http.StatusNotFound, "NOT_FOUND", "接口不存在")
 			return
 		}
+		if _, available := h.drafts.(DraftImportProtocol); draftImportPath(r.URL.Path) && !available {
+			problem(w, http.StatusNotFound, "NOT_FOUND", "接口不存在")
+			return
+		}
 		method = http.MethodGet
-		if r.URL.Path == draftCollection {
+		if r.URL.Path == draftCollection || r.URL.Path == draftImports {
 			method = http.MethodPost
 		}
 	}

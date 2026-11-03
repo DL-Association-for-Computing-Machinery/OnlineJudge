@@ -97,11 +97,16 @@ func TestPrivateDraftCommitUnknown(t *testing.T) {
 		t.Fatal("COMMIT transport fault was not reached")
 	}
 	f.count(t, 1, len(f.prepared.Content().References))
+	observedReceipt, err := f.repository.Receipt(f.ctx, f.actor, "lost-commit-original-key-01")
+	must(t, err)
+	if observedReceipt.ImportRevision != f.prepared.Content().RequestSHA256 || observedReceipt.RequestKey != "lost-commit-original-key-01" {
+		t.Fatal("read-only receipt failed to recover an unknown commit")
+	}
 	again, err := repository.Create(f.ctx, f.actor, "lost-commit-original-key-01", f.prepared)
 	must(t, err)
 	got, err := f.repository.GetOwn(f.ctx, f.actor, again.ID)
 	must(t, err)
-	if got.ID != again.ID || got.RequestKey != "lost-commit-original-key-01" {
+	if got.ID != again.ID || got.ID != observedReceipt.DraftID || got.RequestKey != "lost-commit-original-key-01" {
 		t.Fatal("original-key recovery changed receipt")
 	}
 	f.count(t, 1, len(f.prepared.Content().References))

@@ -1,5 +1,21 @@
 # 工程交付记录
 
+## 2026-11-03：管理页的绑定导入与只读回执协议
+
+成功fetch后从`origin/main 171bc6fefe9390bc5d53bf469c541107276c49a2`建立独立`codex/draft-import-protocol`。唯一目标是补齐管理页选题、完整修订绑定及未知回执恢复的[服务协议](problem-drafts.md#管理页导入协议)，随后再接页面；本阶段没有新增导入表单/本人列表、图片授权、受限执行、审核、发布或部署，不解除private-draft/not-run阻断。无依赖、schema、新SQL或索引变化，整个private_drafts仍默认关闭且须成功预加载启动。
+
+增加三条能力：`GET /api/v1/problem-draft-sources`返回已授权且排序的配置摘要，前后真实会话/PG角色检查；`POST /api/v1/problem-draft-imports`严格source_id/request_key/expected_revision，授权后比较完整修订，再占原材料槽和复用原持久化事务；`GET /api/v1/problem-draft-imports/{key}`在当前权限和owner/key同一PG事务读取最小八字段回执，修订来自已存row.RequestSha256，不依赖现候选或材料槽/对象/关联查询。旧两字段POST及预览JSON保持兼容，不作为新客户端失败降级；新协议拒绝query/转义路径别名，沿同一TLS/pinned代理/Cookie/POST同源和no-store/nosniff/no-CORS/no-Cookie边界。
+
+关键取舍是绑定Prepared.RequestSHA256而非仅Content.Version：同题面版本下index/来源报告仍可能变化，完整修订包含全部排序引用。修订变化409发生于任何材料I/O之前，且不证明旧请求没提交。404只表示本次没观察到回执，不锁不存在的键或取消在途POST；原source/key/revision必须保留，优先手动只读核验，不自动POST/换键/换修订。回执只在成功启用实例中脱离当前候选读取，不绕过配置或启动门禁；最终观察后的退出/撤权仍按已接受在途合同。
+
+实测：已有离线Docker Go1.26.10/linux arm64基线及完整模块/格式/vet/三范围静态/root race/七命令/sqlc通过；真实PG全套13.214秒，新增回执owner/同键隔离、三种撤销锁、死事务不得改用其他连接、在途创建前404而后提交成功。原真实COMMIT回包消费后断连的未知提交，现先只读查得完整回执再原键重放；原2048行EXPLAIN ANALYZE继续自然使用owner/key唯一索引。单元覆盖同题目version但证据/index变化的旧修订拒绝且材料零I/O、满槽前拒绝、目录终验取消/失效不返回部分、返回切片隔离及回执不依赖候选/材料槽；新三字段与旧两字段严格分离。
+
+真实Redis/PG协议50.852秒通过，双实际API的direct TLS/pinned mTLS覆盖未登录/无角色同样拒绝已知未知候选、源目录、成功响应体未消费便关闭后由另一API只读恢复、原tuple重放、换候选后旧回执仍可读、未提交旧修订409且无记录、外人同键统一404、撤权/退出与正常排空。成功体关闭的HTTP情况与实际PG COMMIT回包丢失分别证明，不把完整读取后忽略变量冒充网络丢失。100治理12.019秒及repository、OpenAPI YAML/全部本地引用验证通过。
+
+实际十题专项在只读来源、全新容器私有材料根与临时PG中验证十份排序候选、完整修订、绑定导入/只读回执，254点/18样例及6449原文字节仍逐字节一致；子例10.16秒，完整PG22.763秒。785逻辑引用、622对象/1461321676字节在Store关闭后和新PG池重开复验。该大语料会话观察为stub，真实身份/HTTP由上述小型夹具单独验证，不宣称十题HTTP或管理页验收。日志为仓库外`/private/tmp/oj-import-protocol-backend-verified.log`、`oj-import-protocol-real-session-verified.log`、`oj-import-protocol-corpus.log`和`oj-import-protocol-governance.log`；本轮临时对象/数据库随容器退出清理，原来源/旧证据保持，临时日志不是备份。
+
+验证过程中静态检查要求简化字段许可表达式，已修正且未关闭规则；首次真实API测试发现外层httpapi路由未转发新端点，改用共享公开路径谓词并扩展精确路由/代理拒绝回归，之后完整专项通过。Astra针对性复核指出完整修订须覆盖证据而非仅题面版本，采纳后最终无安全/一致性阻断，AI复核不替代人工审批。受影响README、API、CI/CD、计划和前端后续约定已同步，精确head远端CI及合并状态按交付门禁另行回读。
+
 ## 2026-11-03：共享题面渲染与本人私有预览页
 
 成功fetch后从`origin/main 3c5b1a37457a1974f953625e03f78161ae862153`建立独立`codex/private-draft-rendering`。增加`/author/drafts`及`/author/drafts/:id`，显式检查普通会话后读取现有本人预览API；与示例做题页共用Markdown/GFM/数学组件和原文样例复制。只按已入库ID打开，不提供列表、导入表单、编辑、审核或发布；服务端当前角色/owner检查不变，无schema、API或后端授权规则变化。

@@ -1,10 +1,10 @@
 # 统一题目模型与题目包导入设计
 
-日期：2026-10-25。版本：0.6。状态：用户确认统一内部题目模型，优先验证 ICPC／Kattis Problem Package Format 2025-09 子集导入及下述导入/发布约定；试用录入入口按开发与交付计划选择。Library Checker离线草稿合同已有实现，标准题包兼容矩阵、业务持久化和完整发布流程仍待验证。关联 [总体架构](system-design.md)、[判题设计](judging-design.md)、[存储](storage-design.md)、[题面渲染](frontend-sandbox-options.md#33-已确认的题面-markdown-与公式渲染)及 [需求](../requirements.md)。
+日期：2026-10-25。版本：0.6。状态：用户确认统一内部题目模型及下述导入/发布约定；试用录入入口按开发与交付计划选择。首批Library Checker固定候选已实现离线适配、授权私有草稿持久化/HTTP与[绑定导入和只读回执](../problem-drafts.md#管理页导入协议)，不等于标准题包或完整发布支持。ICPC／Kattis Problem Package Format 2025-09子集兼容矩阵、一般导入流程和完整发布仍待验证。关联 [总体架构](system-design.md)、[判题设计](judging-design.md)、[存储](storage-design.md)、[题面渲染](frontend-sandbox-options.md#33-已确认的题面-markdown-与公式渲染)及 [需求](../requirements.md)。
 
 ## 1. 已确认路线与取舍
 
-2026-11-03 用户确认[首批来源](../problem-sources.md)：Library Checker 十题起步，官方 ICPC 赛事包扩充，爬虫作为补充。固定上游原生材料已有离线私有候选及[统一私有草稿适配](../problem-drafts.md)，包含内容版本、模板/样例转换、全部材料哈希、自含复验、授权数据库入库及可选HTTP导入/本人读取和固定版本题面/样例预览数据；Markdown/公式渲染、本站受限验证及审核发布仍待完成。Library Checker 的 `info.toml`/模板不等于 ICPC ZIP，以下统一模型与 2025-09 子集验证约定继续适用于正式导入，不据此声明标准题包兼容。
+2026-11-03 用户确认[首批来源](../problem-sources.md)：Library Checker 十题起步，官方 ICPC 赛事包扩充，爬虫作为补充。固定上游原生材料已有离线私有候选及[统一私有草稿适配](../problem-drafts.md)，包含内容版本、模板/样例转换、全部材料哈希、自含复验、授权数据库入库、HTTP导入/本人读取、固定版本题面/样例预览、共享Markdown/公式渲染及绑定导入/只读回执协议；导入管理页面、图片授权、本站受限验证及审核发布仍待完成。Library Checker 的 `info.toml`/模板不等于 ICPC ZIP，以下统一模型与 2025-09 子集验证约定继续适用于正式导入，不据此声明标准题包兼容。
 
 后台手动录入与 ZIP 题包导入统一转换为本站内部题目模型，之后使用同一验证、审核和不可变版本发布流程。训练试用按实际授权题库来源先实现其中一个入口，不要求双入口同时完成；不能延期版本、审核、私有材料保护和受限验证。外部格式由导入适配器解释，业务模块、Worker 和存储不直接依赖外部目录或供应商字段。
 

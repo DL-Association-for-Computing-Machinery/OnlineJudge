@@ -30,6 +30,8 @@ React Router 声明式路由负责导航，账号 controller 提升到应用生�
 
 ## 共享题面与本人预览
 
+后续导入管理页使用[绑定导入协议](problem-drafts.md#管理页导入协议)选择已授权候选、提交完整expected_revision并只读恢复本人原键回执；服务协议已提供，当前页面尚未接入导入或列表。题目version不替代完整import_revision，未知结果保留原source/key/revision，不能自动POST、换键或回退旧接口；404/409不证明原请求无在途效果。
+
 `/author/drafts` 选择已入库 ID，`/author/drafts/:id` 显式检查会话后 GET 本人固定版本预览。入口可见性不授予出题角色，服务端仍检查真实会话、owner 和当前角色；没有列表、导入表单、编辑、审核或发布。示例做题页与本人草稿使用同一 `StatementMarkdown` 和原文样例组件，样例复制直接写原字符串，不从 DOM 提取或规范化。
 
 采用 react-markdown 10.1.0、remark-gfm 4.0.1、remark-math 6.0.0、rehype-katex 7.0.1、KaTeX 0.19.1；原始 HTML 跳过，所有源图片只生成占位且不请求资源。链接仅接受无控制字符/反斜杠/凭据的 HTTPS、本站绝对路径或锚点，设置 no-referrer/noopener/noreferrer。KaTeX trust=false、maxExpand=128、maxSize=20，逐公式独立调用，错误局部显示固定提示和转义源码。两个数学插件仍依赖旧 KaTeX，按精确父版本覆盖为 0.19.1，避开[官方公告中的旧版本漏洞](https://github.com/KaTeX/KaTeX/security/advisories/GHSA-238p-pmpm-9mq7)；上游支持安全版本后再移除覆盖。CSS/字体随本地静态资源分发，不走 CDN。
