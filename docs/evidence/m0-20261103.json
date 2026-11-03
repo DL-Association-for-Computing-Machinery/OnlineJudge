@@ -1,0 +1,677 @@
+{
+  "schema": 1,
+  "audit_date": "2026-11-03",
+  "reviewed_source": "da7ef2c5739b76384225d507bab195c47d1d7fd1",
+  "conclusion": "explicit M0 technical conditions met only for the fixed synthetic environment",
+  "not_claimed": [
+    "complete P1/P2",
+    "M1/trial admission",
+    "production/deployment or image redistribution approval",
+    "human product acceptance",
+    "all AC criteria",
+    "zero vulnerabilities or complete image licensing/SBOM"
+  ],
+  "environment": {
+    "ServerVersion": "29.8.1",
+    "KernelVersion": "7.0.14-linuxkit",
+    "OperatingSystem": "Docker Desktop",
+    "OSType": "linux",
+    "Architecture": "aarch64",
+    "NCPU": 10,
+    "MemTotal": 8319504384,
+    "Driver": "overlayfs"
+  },
+  "images": {
+    "sandbox": {
+      "Id": "sha256:cd40ffdb32619806a8d97e59fe03e890fe4066835f57efa6ae13f919ef3262c5",
+      "RepoTags": [
+        "oj-m0-sandbox:local"
+      ],
+      "RepoDigests": [
+        "oj-m0-sandbox@sha256:cd40ffdb32619806a8d97e59fe03e890fe4066835f57efa6ae13f919ef3262c5"
+      ],
+      "Created": "2026-10-29T12:11:45.763918584Z",
+      "Architecture": "arm64",
+      "Os": "linux",
+      "Size": 2157588245
+    },
+    "postgres": {
+      "Id": "sha256:4ea9e5ed06591da7ea23eb65465e8d3187fe79f4d5ec3ae976d29a33b013e77a",
+      "RepoTags": [
+        "postgres:14-alpine"
+      ],
+      "RepoDigests": [
+        "postgres@sha256:4ea9e5ed06591da7ea23eb65465e8d3187fe79f4d5ec3ae976d29a33b013e77a"
+      ],
+      "Created": "2026-09-17T21:33:44.300809998Z",
+      "Architecture": "arm64",
+      "Os": "linux",
+      "Size": 405661519
+    },
+    "redis": {
+      "Id": "sha256:0312984fbfeb2ff1d4382ecef45b50e7d65478a6a58cf12ce28d6de7a4142e45",
+      "RepoTags": [
+        "redis@sha256:0312984fbfeb2ff1d4382ecef45b50e7d65478a6a58cf12ce28d6de7a4142e45"
+      ],
+      "RepoDigests": [
+        "redis@sha256:0312984fbfeb2ff1d4382ecef45b50e7d65478a6a58cf12ce28d6de7a4142e45"
+      ],
+      "Created": "2026-10-28T02:55:25.283505977Z",
+      "Architecture": "arm64",
+      "Os": "linux",
+      "Size": 189171620
+    }
+  },
+  "upstream_licenses": [
+    {
+      "artifact": "redis-7.2.17-COPYING",
+      "repository": "redis/redis",
+      "ref": "7.2.17",
+      "path": "COPYING",
+      "blob_sha": "a381681a1c2524ed586c6a87dfeb9ccdf1e86ded",
+      "html_url": "https://github.com/redis/redis/blob/7.2.17/COPYING",
+      "download_url": "https://raw.githubusercontent.com/redis/redis/7.2.17/COPYING",
+      "sha256": "97f0a15b7bbae580d2609dad2e11f1956ae167be296ab60f4691ab9c30ee9828",
+      "bytes": 1487,
+      "commit": "83937c51afb53e1c69661c8e1533e0e19b896fe1",
+      "immutable_url": "https://github.com/redis/redis/blob/83937c51afb53e1c69661c8e1533e0e19b896fe1/COPYING"
+    },
+    {
+      "artifact": "postgres-14.24-COPYRIGHT",
+      "repository": "postgres/postgres",
+      "ref": "REL_14_24",
+      "path": "COPYRIGHT",
+      "blob_sha": "0a397648dcd3c2177acc58bd7daecd11ad64be62",
+      "html_url": "https://github.com/postgres/postgres/blob/REL_14_24/COPYRIGHT",
+      "download_url": "https://raw.githubusercontent.com/postgres/postgres/REL_14_24/COPYRIGHT",
+      "sha256": "3d6af92ff8a4c2cdf69afb1cf44edea727922f5cd0cf8b5f72b11cdecac8fdfd",
+      "bytes": 1198,
+      "commit": "6b3806732b7c5df06bdd0ed150e8a07b4ad62315",
+      "immutable_url": "https://github.com/postgres/postgres/blob/6b3806732b7c5df06bdd0ed150e8a07b4ad62315/COPYRIGHT"
+    },
+    {
+      "artifact": "gcc-15.3.0-COPYING3",
+      "repository": "gcc-mirror/gcc",
+      "ref": "releases/gcc-15.3.0",
+      "path": "COPYING3",
+      "blob_sha": "94a9ed024d3859793618152ea559a168bbcbb5e2",
+      "html_url": "https://github.com/gcc-mirror/gcc/blob/releases/gcc-15.3.0/COPYING3",
+      "download_url": "https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-15.3.0/COPYING3",
+      "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+      "bytes": 35147,
+      "commit": "4db0e8df15bef836558857c291c323add11d035c",
+      "immutable_url": "https://github.com/gcc-mirror/gcc/blob/4db0e8df15bef836558857c291c323add11d035c/COPYING3"
+    },
+    {
+      "artifact": "gcc-15.3.0-COPYING.RUNTIME",
+      "repository": "gcc-mirror/gcc",
+      "ref": "releases/gcc-15.3.0",
+      "path": "COPYING.RUNTIME",
+      "blob_sha": "e1b3c69c179dfaff5744ea4bf853e6b0d90c9ef9",
+      "html_url": "https://github.com/gcc-mirror/gcc/blob/releases/gcc-15.3.0/COPYING.RUNTIME",
+      "download_url": "https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-15.3.0/COPYING.RUNTIME",
+      "sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+      "bytes": 3324,
+      "commit": "4db0e8df15bef836558857c291c323add11d035c",
+      "immutable_url": "https://github.com/gcc-mirror/gcc/blob/4db0e8df15bef836558857c291c323add11d035c/COPYING.RUNTIME"
+    }
+  ],
+  "license_header_index": [
+    {
+      "artifact": "gcc_c_c-lang.cc",
+      "path": "gcc/c/c-lang.cc",
+      "commit": "4db0e8df15bef836558857c291c323add11d035c",
+      "blob_sha": "c69077b2a933e9df5ad2f49ede986e3ce0793548",
+      "sha256": "2dec69add5f9361d2d6046f2e3d2356d697748a780391ffe8bbce5b146d043c1"
+    },
+    {
+      "artifact": "libstdc++-v3_include_bits_stl_vector.h",
+      "path": "libstdc++-v3/include/bits/stl_vector.h",
+      "commit": "4db0e8df15bef836558857c291c323add11d035c",
+      "blob_sha": "b74274ae63d9bd89818800c780f5dc9f50ef81f9",
+      "sha256": "b2163ab89f65b9b0df05b2af52e30186cd6bfa6c15e2eca8262ceb1f906a0fd7"
+    }
+  ],
+  "requirements": [
+    {
+      "id": "P1-receipt-and-transaction",
+      "status": "met_for_M0",
+      "owning_tests": [
+        {
+          "path": "tests/integration/submissions_test.go",
+          "symbol": "TestAcceptance"
+        }
+      ],
+      "evidence": [
+        "database",
+        "ci92-integration"
+      ],
+      "assertions": "original-key identical/conflict, unknown acknowledgment lookup, transaction rollback and no orphan task"
+    },
+    {
+      "id": "P1-lease-and-result",
+      "status": "met_for_M0",
+      "owning_tests": [
+        {
+          "path": "tests/integration/leases_test.go",
+          "symbol": "testLeases"
+        }
+      ],
+      "evidence": [
+        "database",
+        "worker-joint"
+      ],
+      "assertions": "exclusive valid claim, generations, three attempts then failed without contestant verdict, duplicate/conflicting/late reports"
+    },
+    {
+      "id": "P1-query-pool-and-migration",
+      "status": "met_for_M0",
+      "owning_tests": [
+        {
+          "path": "tests/integration/submissions_test.go",
+          "symbol": "TestAcceptance"
+        }
+      ],
+      "owning_sources": [
+        "internal/submission/postgres/pool.go",
+        "internal/submission/postgres/leases.go",
+        "db/migrate.go"
+      ],
+      "evidence": [
+        "database",
+        "ci92-integration"
+      ],
+      "assertions": "receipt EXPLAIN/ANALYZE index validation, bounded pool/claim, transaction ends before execution, migration lock/repeat/timeout/rollback"
+    },
+    {
+      "id": "P1-shared-quota-and-fairness",
+      "status": "later_trial_gate",
+      "policy": "docs/phase-1-development-plan.md#p1-提交持久化与任务协议",
+      "reason": "explicitly required before trial opening; not implemented and not counted as all-P1 complete"
+    },
+    {
+      "id": "P2-verdict-and-text",
+      "status": "met_for_M0",
+      "owning_tests": [
+        {
+          "path": "internal/execution/execution_test.go",
+          "symbol": "TestOutcomeClassification"
+        },
+        {
+          "path": "internal/judging/text_test.go",
+          "symbol": "TestTextRules"
+        },
+        {
+          "path": "internal/judging/text_test.go",
+          "symbol": "TestTextBudgetsAndReferencePrecedence"
+        },
+        {
+          "path": "tests/sandbox/execution_test.go",
+          "symbol": "TestBoundedExecution"
+        }
+      ],
+      "evidence": [
+        "worker-joint",
+        "ci92-backend"
+      ],
+      "assertions": "AC/WA/CE/RE/TLE/MLE/OLE/SE, unknown evidence fails closed, ASCII token/case rules, no normal-exit shortcut"
+    },
+    {
+      "id": "P2-ordered-attempt-and-cleanup",
+      "status": "met_for_M0",
+      "owning_tests": [
+        {
+          "path": "internal/execution/execution_test.go",
+          "symbol": "TestOrderedAttempt"
+        },
+        {
+          "path": "internal/execution/execution_test.go",
+          "symbol": "TestFailureStopsAndCleans"
+        }
+      ],
+      "evidence": [
+        "worker-joint",
+        "ci92-backend"
+      ],
+      "assertions": "one compile per attempt, fresh point environment, stop on first contestant failure, NOT_RUN/no fabricated usage, bounded system recovery"
+    },
+    {
+      "id": "P2-budgets-and-isolation",
+      "status": "met_for_M0",
+      "owning_tests": [
+        {
+          "path": "tests/sandbox/resource_bounds_test.go",
+          "symbol": "TestSandboxResourceBounds"
+        },
+        {
+          "path": "tests/sandbox/sandbox_test.go",
+          "symbol": "TestSandbox"
+        }
+      ],
+      "evidence": [
+        "worker-joint",
+        "compile-resource"
+      ],
+      "assertions": "CPU/wall/memory/output/process/filesystem bounds, denied escape/network, next-execution resource recovery; fixed profiles only"
+    },
+    {
+      "id": "M0-dual-api-worker-and-faults",
+      "status": "met_for_M0",
+      "owning_tests": [
+        {
+          "path": "tests/sandbox/dual_worker_test.go",
+          "symbol": "TestDualWorkerRecovery"
+        },
+        {
+          "path": "tests/sandbox/fault_test.go",
+          "symbol": "TestWorkerFaults"
+        },
+        {
+          "path": "tests/sandbox/network_fault_test.go",
+          "symbol": "TestWorkerNetworkFaults"
+        },
+        {
+          "path": "tests/sandbox/compile_lease_test.go",
+          "symbol": "TestCompileLeaseFaults"
+        },
+        {
+          "path": "tests/sandbox/dual_worker_test.go",
+          "symbol": "TestWorkerSlotRecovery"
+        }
+      ],
+      "evidence": [
+        "worker-joint",
+        "database"
+      ],
+      "assertions": "two API/Worker identities, competition/natural expiry/revocation, missing/corrupt materials, real network/lost receipt, stop/PID and controlled slot recovery"
+    },
+    {
+      "id": "M0-session-experiments",
+      "status": "met_for_M0",
+      "owning_tests": [
+        {
+          "path": "tests/sessionexperiment/process_test.go",
+          "symbol": "TestIndependentAPIProcessesAndRestart"
+        },
+        {
+          "path": "tests/sessionexperiment/database_restore_test.go",
+          "symbol": "TestDatabaseRestoreRejectsRetiredRecoveryState"
+        },
+        {
+          "path": "tests/sessionexperiment/postgres_restore_test.go",
+          "symbol": "TestPostgresSessionsAndAccountsRestore"
+        }
+      ],
+      "evidence": [
+        "session-experiment",
+        "session-protocol",
+        "ci92-integration"
+      ],
+      "assertions": "cross-process revocation and atomic limits, Redis/PG failure and backup restoration gates; no restoration of post-backup account security facts"
+    },
+    {
+      "id": "M0-real-request-and-minimal-browser",
+      "status": "met_for_M0",
+      "owning_tests": [
+        {
+          "path": "tests/sandbox/http_loop_test.go",
+          "symbol": "TestHTTPJudgeLoop"
+        },
+        {
+          "path": "tests/sandbox/browser_loop_test.go",
+          "symbol": "TestBrowserJudgeLoop"
+        }
+      ],
+      "owning_sources": [
+        "tests/browser/m0-qa.mjs",
+        "internal/m0browser/handler.go"
+      ],
+      "evidence": [
+        "worker-joint",
+        "browser",
+        "ci92"
+      ],
+      "assertions": "queued receipt, real Worker AC/WA, actual committed POST response loss/original-key recovery, narrow viewport; query503 is explicit injection"
+    },
+    {
+      "id": "M0-admission-resources-and-recovery-record",
+      "status": "met_for_fixed_synthetic_use",
+      "owning_sources": [
+        "docs/m0-acceptance.md",
+        "internal/experiment/environment.go"
+      ],
+      "evidence": [
+        "component-license-index",
+        "store-cost",
+        "compile-resource",
+        "worker-joint"
+      ],
+      "assertions": "version/digest/license source, measured sample and configured budgets distinguished, failure and operator recovery requirements recorded"
+    }
+  ],
+  "evidence": {
+    "database": {
+      "local_path": "/private/tmp/oj-m0-audit-database.log",
+      "sha256": "6bafbc087232ddcb69cddafe92bb0958b9efbce2a39e8311dbcc32e67d051ab5",
+      "source": "2b44a50b07d920b3f09a418fa6bea3d437039096"
+    },
+    "session-experiment": {
+      "local_path": "/private/tmp/oj-m0-audit-session-final.log",
+      "sha256": "74b91c1d7f7f21a9d6ed4d0df130c18991e385e3e28811828bb462ef279894f0",
+      "source": "2b44a50b07d920b3f09a418fa6bea3d437039096"
+    },
+    "session-protocol": {
+      "local_path": "/private/tmp/oj-m0-audit-protocol.log",
+      "sha256": "0b9de8ef3973228efb4d687be213fb26e99a31c7655305ac8a8f4860d6c373ab",
+      "source": "2b44a50b07d920b3f09a418fa6bea3d437039096"
+    },
+    "worker-joint": {
+      "local_path": "/private/tmp/oj-m0-joint-worker-prepared.log",
+      "sha256": "276eed015e70e19f92f82720ed328fc422757baf48db6f83e38556618f67234b",
+      "source": "742d77f23c3d6120e3499f98943b875b4c9ec165"
+    },
+    "compile-resource": {
+      "local_path": "/private/tmp/oj-compile-size-final.log",
+      "sha256": "3353969088f60b50fdab8b7870ac8c25b14027d4dd703e5f1d963aacfbc90dfe",
+      "source": "742d77f23c3d6120e3499f98943b875b4c9ec165"
+    },
+    "browser": {
+      "local_path": "/private/tmp/oj-m0-browser-integrated-browser.log",
+      "sha256": "36cb145d8a96473d8c4a813691c9ae7454126c21e57ceb315b2fcd7b6f989e58",
+      "source": "uncommitted integrated candidate; runtime hashes below match current source"
+    },
+    "store-cost": {
+      "local_path": "/private/tmp/oj-session-cost-full-20261031.json",
+      "sha256": "0a86c18dd7cede46d58dc93d168ec6d03a963e9f99c63a937a1c8c3e31f14851",
+      "source": "143da2797bbea199956977d13ced86dd3c33594b"
+    },
+    "component-license-index": {
+      "local_path": "/private/tmp/oj-m0-admission-readonly/upstream-license-index-pinned.json",
+      "sha256": "b39066ea317c50b1caf55366be640f09926ba87292eef4799ff7f4851e314849",
+      "source": "da7ef2c5739b76384225d507bab195c47d1d7fd1"
+    },
+    "ci92": {
+      "url": "https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/actions/runs/41550599046",
+      "head": "26614038e48139cbb9c9f26a7c9b78a9d73ca03c",
+      "result": "success",
+      "job": "all nine jobs",
+      "local_metadata_sha256": "b0af6a290bd66677850a64bea8eda1d54e211c69d016fe3f41c9d4ce555089e1"
+    },
+    "ci92-integration": {
+      "url": "https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/actions/runs/41550599046",
+      "head": "26614038e48139cbb9c9f26a7c9b78a9d73ca03c",
+      "result": "success",
+      "job": "integration-tests",
+      "local_metadata_sha256": "b0af6a290bd66677850a64bea8eda1d54e211c69d016fe3f41c9d4ce555089e1"
+    },
+    "ci92-backend": {
+      "url": "https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/actions/runs/41550599046",
+      "head": "26614038e48139cbb9c9f26a7c9b78a9d73ca03c",
+      "result": "success",
+      "job": "backend-tests",
+      "local_metadata_sha256": "b0af6a290bd66677850a64bea8eda1d54e211c69d016fe3f41c9d4ce555089e1"
+    }
+  },
+  "source_applicability": [
+    {
+      "from": "2b44a50b07d920b3f09a418fa6bea3d437039096",
+      "to": "da7ef2c5739b76384225d507bab195c47d1d7fd1",
+      "unchanged_owning_paths": [
+        "internal/session",
+        "internal/identity",
+        "internal/submission",
+        "internal/httpapi",
+        "internal/worker",
+        "internal/workerapi",
+        "internal/workerclient",
+        "internal/workerhost",
+        "db",
+        "tests/integration",
+        "tests/sessionprotocol",
+        "tests/sessionexperiment",
+        "go.mod",
+        "go.sum",
+        "cmd/worker",
+        "cmd/worker-api",
+        "cmd/migrate"
+      ]
+    },
+    {
+      "from": "742d77f23c3d6120e3499f98943b875b4c9ec165",
+      "to": "da7ef2c5739b76384225d507bab195c47d1d7fd1",
+      "unchanged_owning_paths": [
+        "internal/execution",
+        "internal/judging",
+        "internal/worker",
+        "internal/workerapi",
+        "internal/workerclient",
+        "internal/workerhost",
+        "internal/experiment",
+        "internal/submission",
+        "db",
+        "go.mod",
+        "go.sum",
+        "cmd/worker",
+        "cmd/worker-api",
+        "cmd/migrate",
+        "tests/sandbox/compile_file_size_test.go",
+        "tests/sandbox/resource_bounds_test.go"
+      ]
+    },
+    {
+      "browser_runtime_sha256": [
+        {
+          "path": "api/experiment.openapi.yaml",
+          "sha256": "dba5bb96e6708a1c976c78a661789264da06a6d3206941916887f98558f877a1"
+        },
+        {
+          "path": "api/m0-browser.openapi.yaml",
+          "sha256": "e0768fe0f5ed05367af40889e62eb12c1690d5e09620f523462f4b7e7bbe22fe"
+        },
+        {
+          "path": "cmd/api/main.go",
+          "sha256": "82986787da1f49bd68621f8a4d0b25c1e1e1fc0db5843b1a4a3506200991c1d8"
+        },
+        {
+          "path": "cmd/api/main_test.go",
+          "sha256": "d2faaba993a0585542e9c958f55dd3e92c73c3384ab24a6f760da3155515df25"
+        },
+        {
+          "path": "internal/m0browser/assets/index.html",
+          "sha256": "744b969c737b5e705eabc99f5b64b3070457c1cc8066c012a24a455ccac5ad31"
+        },
+        {
+          "path": "internal/m0browser/assets/page.css",
+          "sha256": "5bae32a825d74f7c69dcb5a4a56e99765145b0d7286172a5bdd72970e69d3448"
+        },
+        {
+          "path": "internal/m0browser/assets/page.js",
+          "sha256": "e34f152adee4bd75813e17bbc51a83a93355670462ef11c344d5303bb6f68566"
+        },
+        {
+          "path": "internal/m0browser/config.go",
+          "sha256": "12b9e5b1301512e1dd9692cf9cb86f57167be27d7b4748e1a08004e8a2bb8111"
+        },
+        {
+          "path": "internal/m0browser/config_test.go",
+          "sha256": "e584b30b280599317d9ad979202589068094e4a3d7a088d19df552a46b0d6a85"
+        },
+        {
+          "path": "internal/m0browser/handler.go",
+          "sha256": "ffe0b2bc73f9ac42be601dab3b3d5f5037ac76d9c64fb3ae762a7e00af38a6d2"
+        },
+        {
+          "path": "internal/m0browser/handler_test.go",
+          "sha256": "6d292489f40cf2e5a2296f095db6e5ef4fe739e73778fb847ffaec10e42fad97"
+        },
+        {
+          "path": "internal/m0browser/privacy_test.go",
+          "sha256": "ccb684bd81db056050f56992ef6e0902bfc2a2a30f9e56b9edfaddebf0130900"
+        },
+        {
+          "path": "scripts/test-worker.py",
+          "sha256": "39a522e13409e1245f9c5143eef4ba462c309568393cf23c93c69264895c9b8b"
+        },
+        {
+          "path": "tests/browser/m0-qa.mjs",
+          "sha256": "a72c65f5e5eef8cb32daf9cdb3b3d247a4a0215bee10a5bccc23655ac3abb680"
+        },
+        {
+          "path": "tests/governance/test_worker_driver.py",
+          "sha256": "c28532d4392e824ff61664442a20c539859de733e069db5c2ba86c0b339e5ee1"
+        },
+        {
+          "path": "tests/sandbox/browser_loop_test.go",
+          "sha256": "743a223bff60e653791192b2aeb0abc5a48dfa329bd31b87fa5a5e172f3b8108"
+        },
+        {
+          "path": "tests/sandbox/http_client_test.go",
+          "sha256": "ce6178017701e7076221c3d73064d6c8215b0609dcff26a7c6a762d6d8fc4500"
+        },
+        {
+          "path": "tests/sandbox/http_loop_test.go",
+          "sha256": "55e2beb4e9aa6b2978842ceb807e655f712d41ba8d29a8f5ee032b9f976abd75"
+        }
+      ],
+      "current_source": "da7ef2c5739b76384225d507bab195c47d1d7fd1"
+    },
+    {
+      "store_cost_source_sha256": [
+        {
+          "path": "scripts/test-session-cost.py",
+          "sha256": "db2e2623db1560fb32f06bf88f2629fabad2243f7dea613414f3a7241c3a73df"
+        },
+        {
+          "path": "tests/sessionexperiment/auth_test.go",
+          "sha256": "e9731b2bae1bc0609281fc82477d67a90ede7ad183bd8aab90f2c79338263956"
+        },
+        {
+          "path": "tests/sessionexperiment/cost_fixture_test.go",
+          "sha256": "f7d6466ac197bd99bf61aafca0f69a4d27f7bf60c3792151ef69cddb3bce8ee5"
+        },
+        {
+          "path": "tests/sessionexperiment/cost_measure_test.go",
+          "sha256": "9fe5d979f23e67185e23f7548c18edbd72063ffa2dcfc823e346eab592db65fe"
+        },
+        {
+          "path": "tests/sessionexperiment/cost_state_test.go",
+          "sha256": "225ab1c3bc858b099f64b010cc7d1ea3c0f46a0c66090f433b395410af57fa65"
+        },
+        {
+          "path": "tests/sessionexperiment/cost_contract_test.go",
+          "sha256": "b0d9ba258d0d0897d34d33ef6f075b774a8419b15f195d1f0bc75927a63a61ba"
+        },
+        {
+          "path": "tests/sessionexperiment/go.mod",
+          "sha256": "086cde298bfb10e28d1f9a3ff40826c42dbf83c9a2427a94ecf18f9ae0b4512f"
+        },
+        {
+          "path": "tests/sessionexperiment/go.sum",
+          "sha256": "451bc558fa0fc0d787a8499cfabd01c38ee2646efaa25df92ce8d41fd6ec0e5f"
+        }
+      ],
+      "current_source": "da7ef2c5739b76384225d507bab195c47d1d7fd1"
+    },
+    {
+      "ci_head": "26614038e48139cbb9c9f26a7c9b78a9d73ca03c",
+      "merged_source": "da7ef2c5739b76384225d507bab195c47d1d7fd1",
+      "complete_tree_equal": true
+    }
+  ],
+  "resource_observations": {
+    "worker_joint": {
+      "independent_suites": 9,
+      "pass_entries_including_parents": 106,
+      "initial_skips_later_executed": 8
+    },
+    "compile_sample": {
+      "raw_status": "Nonzero Exit Status",
+      "exit": 4,
+      "cpu_ns": 17350000,
+      "memory_bytes": 9953280,
+      "scope": "single compile file-size failure, not throughput/peak capacity"
+    },
+    "sandbox_probes": {
+      "process_peak": 16,
+      "inode_empty_files": 4094,
+      "filesystem_bytes": 67108864,
+      "single_file_bytes": 1048576,
+      "scope": "bounded probes with separate compile-envelope and ordinary-run limits; not all contestant outcomes share one resource budget"
+    },
+    "store_cost": {
+      "sample_count": 42,
+      "measured_requests": 86016,
+      "successes": 61440,
+      "expected_rejections": 24576
+    },
+    "store_cost_scope": "historical direct Store, concurrency8, PG tmpfs/Redis persistence disabled; source hashes unchanged; not HTTP/password login or capacity/SLA",
+    "browser": {
+      "seconds": 11.95,
+      "checks": 12,
+      "playwright": "1.62.1",
+      "node": "22.17.1",
+      "chromium": "145.0.7632.6"
+    }
+  },
+  "reproduction_entries": [
+    {
+      "command": "python3 scripts/test-worker.py all",
+      "document": "README.md"
+    },
+    {
+      "command": "python3 scripts/test-worker.py browser-loop --playwright-module <existing-module> --chromium-executable <existing-binary> --output-dir <new-external-directory>",
+      "document": "README.md#m0-最小浏览器实验页"
+    },
+    {
+      "command": "python3 scripts/test-session.py --module-cache <existing-cache>",
+      "document": "tests/sessionexperiment/README.md"
+    },
+    {
+      "command": "python3 -B scripts/test-session-protocol.py --toolchain-image <existing-image> --build-cache-volume <cache-setting>",
+      "document": "README.md"
+    },
+    {
+      "command": "docker --context desktop-linux compose run --rm toolchain db",
+      "document": "README.md"
+    }
+  ],
+  "operating_boundaries": [
+    "Dedicated Docker Desktop/macOS arm64 synthetic-only profile; never run arbitrary production submissions on ordinary host/CI.",
+    "Unknown receipt is not rollback; original key/content only, no new-key blind retry; GET does not confirm source binding.",
+    "Quarantine on unknown sandbox lifecycle; drain old trusted host operations and recover using the original full owned container ID from trusted history. Recovery may stop that still-running container. StartedAt binds only the lifetime observed during this recovery, not the pre-crash lifetime; no automatic restart claim.",
+    "Restore experiments discard retired session/recovery state; backup cannot restore security facts created after backup, so no production reopening approval.",
+    "Keep Redis baseline; no second authoritative session store.",
+    "Production node credentials/certificates, target hardware/load, SMTP/HTTPS, quotas/fairness and independent backups remain tied to their planned product gates.",
+    "Complete OS/third-party image licensing, reproducible binary provenance, SBOM and image OS vulnerability scanning not proven by upstream license files or dpkg inventory.",
+    "Local raw artifacts are not repository/CI attachments; preserve separately before machine migration."
+  ],
+  "configured_execution_limits": {
+    "source": "internal/experiment/environment.go",
+    "compile": {
+      "cpu_ns": 10000000000,
+      "wall_ns": 15000000000,
+      "memory_bytes": 536870912,
+      "processes": 16
+    },
+    "run": {
+      "cpu_ns": 200000000,
+      "wall_ns": 2000000000,
+      "memory_bytes": 33554432,
+      "processes": 16
+    },
+    "output_bytes_per_stream": 4096,
+    "executable_bytes": 1048576,
+    "filesystem_bytes": 67108864,
+    "filesystem_inodes": 4096,
+    "outer_container": {
+      "cpu": 1,
+      "memory_bytes": 1073741824,
+      "pids": 128
+    },
+    "text_check": {
+      "source": "internal/judging/text.go",
+      "bytes_per_side": 1048576,
+      "bytes_per_token": 65536
+    }
+  }
+}
