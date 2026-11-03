@@ -24,9 +24,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
+	identitypg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/postgres"
 	protocol "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/redisstore"
 	sessionruntime "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/runtime"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/testpki"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/tests/problemfixture"
 )
 
 // TestBrowserFixture is a manually selected fixture, not a regular integration
@@ -44,6 +47,7 @@ func TestBrowserFixture(t *testing.T) {
 	must(t, protocol.InitializeLoginLimits(f.ctx, f.store(t, c.Namespace, 0, protocol.OrdinaryPolicy()), secrets, c.LoginLimits))
 	rules := enableEntryPasswordChange(t, f, &c, protocol.PasswordChangeLimits{Global: bucket, Source: bucket, Subject: bucket}, true)
 	subject := f.subject(t, false)
+	browserDrafts(t, f, &c, subject.ID)
 	ca := testpki.New(t)
 	proxyCert, _, _ := ca.Issue(t, "spiffe://onlinejudge/proxy/browser-fixture", x509.ExtKeyUsageClientAuth, time.Now().Add(time.Hour))
 	c.Mode = sessionruntime.ProxyMTLS
@@ -151,6 +155,27 @@ func TestBrowserFixture(t *testing.T) {
 	}
 }
 
+func browserDrafts(t *testing.T, f *fixture, c *sessionruntime.Config, subjectID string) {
+	t.Helper()
+	bundle := problemfixture.New(t)
+	statement := []byte("# Browser statement\n\nInline $x^2$ and display:\n\n$$\n\\sum_{i=1}^n i\n$$\n\n| Input | Output |\n| --- | --- |\n| 1 2 | 3 |\n\n" +
+		"```math\na+b\n```\n\nInvalid $\\badcommand$ then valid $y+1$.\n\n![private source image](https://invalid.example.test/blocked.png)\n\n<script>window.__unsafeStatement=true</script>\n\n[unsafe](javascript:alert%281%29) [reference](https://example.test/reference)\n")
+	bundle.Files["statements/aplusb.md"] = statement
+	s := bundle.Document["statement"].(map[string]any)
+	s["size"], s["sha256"] = len(statement), problemfixture.Hash(statement)
+	bundle.Write(t)
+	root := filepath.Join(t.TempDir(), "materials")
+	must(t, os.Mkdir(root, 0700))
+	lock := filepath.Join(t.TempDir(), "trusted-lock.json")
+	must(t, os.WriteFile(lock, bundle.Lock, 0600))
+	c.PrivateDrafts = &sessionruntime.PrivateDraftsConfig{MaterialRoot: root, BundleDirectory: bundle.Directory, SourceLockFile: lock,
+		SourceIDs: []string{"library-checker:aplusb"}, Timeout: 3 * time.Second, MaxInFlight: 1}
+	access, err := identitypg.NewProblemAccess(f.pools[0])
+	must(t, err)
+	_, err = access.SetAuthorRole(f.ctx, identity.ProblemRoleChange{SubjectID: subjectID, Enabled: true, ExpectedRevision: 0, Operator: "browser-fixture", Reason: "synthetic preview author"})
+	must(t, err)
+}
+
 func browserOrigin(t *testing.T) *url.URL {
 	t.Helper()
 	raw := os.Getenv("OJ_BROWSER_ORIGIN")
@@ -196,7 +221,7 @@ func browserStatic(directory string) http.Handler {
 			return
 		}
 		// Mirror the production SPA fallback for the explicit UI routes only.
-		if r.URL.Path == "/login" || r.URL.Path == "/account" || r.URL.Path == "/submissions" || strings.HasPrefix(r.URL.Path, "/preview/problems/") {
+		if r.URL.Path == "/login" || r.URL.Path == "/account" || r.URL.Path == "/submissions" || r.URL.Path == "/author/drafts" || strings.HasPrefix(r.URL.Path, "/author/drafts/") || strings.HasPrefix(r.URL.Path, "/preview/problems/") {
 			r = r.Clone(r.Context())
 			r.URL.Path = "/"
 			r.URL.RawPath = ""

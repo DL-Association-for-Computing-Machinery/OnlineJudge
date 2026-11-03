@@ -13,6 +13,8 @@
 | `/` | 示例题库，题号/名称搜索、折叠难度和标签筛选、每页六题；条件保存在 URL |
 | `/login` | 独立窄表单；沿用真实同源 HTTPS 登录与原候选恢复流程 |
 | `/account` | 当前会话、显式续期/退出、可选改密；连接诊断折叠，旧 `/#account-title` 转到此页 |
+| `/author/drafts` | 输入已入库草稿ID；仅提供选择入口，没有导入或列表管理 |
+| `/author/drafts/:id` | 显式核验普通会话后读取本人固定版本，共享题面渲染及原文样例复制 |
 | `/preview/problems/:id` | 本地合成题面、CodeMirror C++ 编辑、键盘/拖动分栏、文件导入和下载；提交禁用 |
 | `/submissions` | 明确提示正式提交记录尚未开放 |
 
@@ -24,7 +26,17 @@ React Router 声明式路由负责导航，账号 controller 提升到应用生�
 
 示例代码只存在当前标签页内存，站内导航按题号保留；观察到身份空间变化时清除，刷新/关闭提示下载。上传只接受不超过 128 KiB 的 UTF-8 `.cpp/.cc/.cxx/.txt`，拒绝 NUL/无效 UTF-8；未编辑的导入文本下载保留原始 Unicode 和换行。异步文件读取在卸载或编辑版本变化后不能覆盖新输入。示例功能不向 API 发送代码，不把内存暂存声称为 AC21 的 IndexedDB 持久草稿。
 
-精确版本归 [package.json](../web/package.json) 与锁文件：React Router 8.5.1、CodeMirror 6.0.2、C++ 扩展 6.0.3、state 6.7.6、view 6.43.15，均 MIT。Router 的 Node 下限为 22.22，项目支持 `^22.22.0 || ^24.0.0`，Docker 固定 Node 24.19.0。编辑器按路由懒加载，避免首页/登录首屏下载；未引入 Query、持久草稿或 Markdown 渲染依赖。
+精确版本归 [package.json](../web/package.json) 与锁文件：Router、CodeMirror 及共享 Markdown/数学渲染库均 MIT，生产传递依赖另含 ISC/BSD-2-Clause；分发许可保留在 `web/public/THIRD-PARTY-NOTICES.txt`。Router 的 Node 下限为 22.22，项目支持 `^22.22.0 || ^24.0.0`，Docker 固定 Node 24.19.0。编辑器和题面渲染按路由懒加载，首页/登录首屏不下载 KaTeX/CSS/字体；未引入 Query 或持久草稿。
+
+## 共享题面与本人预览
+
+`/author/drafts` 选择已入库 ID，`/author/drafts/:id` 显式检查会话后 GET 本人固定版本预览。入口可见性不授予出题角色，服务端仍检查真实会话、owner 和当前角色；没有列表、导入表单、编辑、审核或发布。示例做题页与本人草稿使用同一 `StatementMarkdown` 和原文样例组件，样例复制直接写原字符串，不从 DOM 提取或规范化。
+
+采用 react-markdown 10.1.0、remark-gfm 4.0.1、remark-math 6.0.0、rehype-katex 7.0.1、KaTeX 0.19.1；原始 HTML 跳过，所有源图片只生成占位且不请求资源。链接仅接受无控制字符/反斜杠/凭据的 HTTPS、本站绝对路径或锚点，设置 no-referrer/noopener/noreferrer。KaTeX trust=false、maxExpand=128、maxSize=20，逐公式独立调用，错误局部显示固定提示和转义源码。两个数学插件仍依赖旧 KaTeX，按精确父版本覆盖为 0.19.1，避开[官方公告中的旧版本漏洞](https://github.com/KaTeX/KaTeX/security/advisories/GHSA-238p-pmpm-9mq7)；上游支持安全版本后再移除覆盖。CSS/字体随本地静态资源分发，不走 CDN。
+
+显示预算：题面 UTF-8 128 KiB；解析后和 KaTeX 输出各至多 20000 节点、深度64；实际数学候选（含 math 围栏）各4096字节、至多128个、总计32768字节。超限公式保留源码，整题 AST 超限显示纯文本原文；输入超限/异常提供最多32768字符的原文节选。解析与数学渲染仍在主线程，预算和实测不构成硬 CPU 超时/隔离保证。图片授权、目标浏览器/低端设备性能及所有题面人工质量验收另做，草稿发布阻断不因本页面自动解除。
+
+响应按7MiB流式上限读取，严格 UTF-8 和 JSON 字符串完整性/字段/ID/版本/样例预算校验；15秒超时，一次 GET，无自动重试或持久缓存。私有请求有独立代次和取消控制。任何本标签账号状态发布、凭据写操作开始/结束、会话到期、focus/visibility/pagehide/pageshow 均清除结果；迟到响应发布前再核对观察到的 deadline。跨标签 BroadcastChannel 只广播无身份/正文的失效消息，接收后清除且不自动读取；恢复须再次按按钮核验。该异步信号不能保证跨标签瞬时撤回，缺少该能力时依靠页面恢复清理；不能撤销已被用户复制的文本或替代服务端授权。
 
 ## 验证与回退
 

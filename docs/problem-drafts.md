@@ -43,6 +43,8 @@
 
 ### 本人题面与样例预览
 
+浏览器页面 `/author/drafts/:id` 已复用此接口和[共享 Markdown/数学渲染](frontend-design.md#共享题面与本人预览)，显式核验会话后展示本人固定版本，并可原文复制样例。当前只有按ID读取，导入管理、图片资源授权、审核与发布另行交付；页面不会修改 `not-run` 或自动清除任何发布阻断。
+
 `Importer.Preview`和`GET /api/v1/problem-drafts/{id}/preview`只读取已入库固定版本。初次新鲜actor及同事务owner/当前角色检查成功后取得材料槽；解析PG固定文档，核对ID/owner/source/version/state、draft.json原文关联及无重复逻辑名，再将statement与所有sample=true点的input/answer逐一匹配文档和存储引用。examples顺序必须与固定测试清单相符。客户端不能选择路径、hash或任意测试点，正式数据、原始程序和来源报告不读取；该题在现候选中换版或不再选中时，已启用服务仍读取旧存储版本。入口启动的受信bundle/配置条件保持。
 
 全部所选引用及原始markdown/input/output累计1MiB预算先核验，再执行第一次Open；同对象在多个字段出现也重复计费，不截断超限资料。逐份Open得到已完整哈希验证的匿名快照，限长读完并Close后才读下一份，支持Local活动预算为1。只允许严格UTF-8，保留CRLF、空格、空样例、BOM/NUL及末尾换行；不作替换、trim或归一化。JSON转义后文本可占六倍另加字段/元数据，响应不是可信HTML或渲染验收。

@@ -166,11 +166,17 @@ export async function runPreviewChecks(browser, info, output) {
     await page.getByRole('button', { name: '清除搜索与筛选', exact: true }).click()
     await page.locator('.filters summary').click()
     await page.getByRole('combobox', { name: '难度', exact: true }).selectOption('中等')
+    await page.waitForFunction(() => {
+      const text = document.querySelector('.problem-table tbody')?.textContent || ''
+      return text.includes('最长递增子序列') && !text.includes('A+B Problem')
+    })
     assert((await page.locator('.problem-table tbody').innerText()).includes('最长递增子序列'))
     assert(!(await page.locator('.problem-table tbody').innerText()).includes('A+B Problem'))
     await page.getByRole('button', { name: '清除筛选', exact: true }).click()
+    await page.getByRole('link', { name: 'A+B Problem', exact: true }).waitFor()
     await page.locator('.filters summary').click()
     await page.getByRole('button', { name: '下一页', exact: true }).click()
+    await page.getByRole('link', { name: '最大值', exact: true }).waitFor()
     assert((await page.locator('.problem-table tbody').innerText()).includes('最大值'))
     await page.getByRole('button', { name: '上一页', exact: true }).click()
     await shot('desktop-library')

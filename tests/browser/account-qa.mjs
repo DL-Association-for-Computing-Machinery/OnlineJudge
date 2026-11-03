@@ -6,6 +6,7 @@ import console from 'node:console'
 import { URL } from 'node:url'
 import { createRequire } from 'node:module'
 import { runPreviewChecks } from './preview-qa.mjs'
+import { runDraftChecks } from './draft-qa.mjs'
 
 // The Python runner validates these local paths. This driver never installs a
 // browser or package, and always creates a fresh profile for synthetic accounts.
@@ -296,6 +297,10 @@ const problem = (status, code) => ({ status, contentType: 'application/problem+j
     phase = 'preview interaction and navigation regressions'
     report.screenshots.push(...await runPreviewChecks(browser, info, output))
     passed('preview identity gate, late upload isolation, source export, history retention, global leave guard and zero code POSTs')
+
+    phase = 'private draft rendering and account fences'
+    report.screenshots.push(...await runDraftChecks(browser, info, ready.email, finalPassword, output))
+    passed('real owner draft render, math safety, local fonts, exact copy, mobile layout, late response and cross-tab invalidation')
 
     phase = 'mobile visual and HTTP boundary'
     await page.setViewportSize({ width: 390, height: 844 })

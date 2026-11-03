@@ -64,6 +64,7 @@ def arguments():
     parser.add_argument("--build-cache-volume", default="onlinejudge_toolchain-cache")
     parser.add_argument("--playwright-module", type=Path, required=True)
     parser.add_argument("--chromium-executable", type=Path)
+    parser.add_argument("--statement-corpus", type=Path, help="optional prepared bundle statements directory, renderer-only checks")
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
     output = args.output_dir.resolve()
@@ -76,6 +77,20 @@ def arguments():
     if not (module.is_dir() or module.is_file()) or json.loads(package.read_text())["name"] not in {"playwright", "playwright-core", "@playwright/test"}:
         raise ValueError("existing Playwright package or entry required")
     args.playwright_module = module
+    args.statements = []
+    if args.statement_corpus:
+        corpus = local_path(args.statement_corpus, directory=True)
+        files = sorted(corpus.iterdir())
+        if not 1 <= len(files) <= 10:
+            raise ValueError("bounded statement corpus required")
+        for path in files:
+            if path.is_symlink() or not path.is_file() or path.suffix != ".md" or path.stat().st_size > 131072:
+                raise ValueError("regular bounded Markdown corpus required")
+            with path.open("rb") as stream:
+                raw = stream.read(131073)
+            if len(raw) > 131072:
+                raise ValueError("statement corpus grew beyond budget")
+            args.statements.append({"name": path.stem, "markdown": raw.decode("utf-8", errors="strict")})
     if args.module_cache:
         args.module_cache = local_path(args.module_cache, directory=True)
     if args.chromium_executable:
@@ -171,11 +186,11 @@ def main():
         if args.build_cache_volume:
             docker.run("volume", "inspect", args.build_cache_volume)
         script = fixture_script()
-        for name in ("src", "scripts", "index.html", "vite.config.ts", "tsconfig.json", "eslint.config.js", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", ".npmrc"):
+        for name in ("src", "scripts", "public", "index.html", "vite.config.ts", "tsconfig.json", "eslint.config.js", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", ".npmrc"):
             if not (ROOT / "web" / name).exists():
                 raise ValueError("frontend source incomplete")
         expected_checks = re.findall(r"^\s+passed\('([^'\n]+)'\)", (ROOT / "tests/browser/account-qa.mjs").read_text(), re.M)
-        if len(expected_checks) != 12 or len(set(expected_checks)) != 12:
+        if len(expected_checks) != 13 or len(set(expected_checks)) != 13:
             raise ValueError("browser driver check contract changed")
         phase = "FRONTEND"
         print("Building assets with cached dependencies", flush=True)
@@ -184,8 +199,8 @@ def main():
         build = """set -eu
 cmp package.json /workspace/web/package.json
 cmp pnpm-lock.yaml /workspace/web/pnpm-lock.yaml
-rm -rf src scripts dist
-cp -R /workspace/web/src /workspace/web/scripts .
+rm -rf src scripts public dist
+cp -R /workspace/web/src /workspace/web/scripts /workspace/web/public .
 for file in index.html vite.config.ts tsconfig.json eslint.config.js package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc; do cp /workspace/web/$file .; done
 pnpm build
 cp -R dist/. /out/
@@ -231,7 +246,7 @@ cp -R dist/. /out/
         process = subprocess.Popen([*docker.command, "exec", "-e", "OJ_BROWSER_ORIGIN=" + origin, "-e", "OJ_BROWSER_UI_DIR=/browser-assets", containers["test"], "sh", "/browser-fixture.sh"], stdout=handles[-1], stderr=subprocess.STDOUT)
         ready = wait_ready(process, fixture_log, origin)
         info = out / "fixture.json"
-        info.write_text(json.dumps({"origin": origin, "http_origin": http_origin, "log": str(fixture_log), "email": ready["email"], "subject_id": ready["subject_id"]}, indent=2) + "\n")
+        info.write_text(json.dumps({"origin": origin, "http_origin": http_origin, "log": str(fixture_log), "email": ready["email"], "subject_id": ready["subject_id"], "statements": args.statements}, indent=2) + "\n")
         phase = "BROWSER_QA"
         print("Running real browser account checks", flush=True)
         env = {key: os.environ[key] for key in ("PATH", "HOME", "USER", "TMPDIR", "TMP", "TEMP", "LANG", "LC_ALL") if key in os.environ}

@@ -62,7 +62,7 @@ python3 -B scripts/import-library-checker.py \
 python3 -B -m unittest discover -s tests/governance -p test_problem_drafts.py -v
 ```
 
-输入须为稳定私有快照；输出为仓库外、与输入不重叠的新目录。工具重新核对源码和全部数据哈希，生成自含的10题/254点/18样例草稿、英文Markdown题面、来源映射与许可对象。所有路径相对bundle，移到其他目录后可独立复验，不依赖原候选目录。失败保留 `INCOMPLETE` 和部分文件，重试用新目录；临时目录不是持久备份。格式、权限及发布阻断见[草稿合同](docs/problem-drafts.md)。已增加私有草稿入库服务；审核、题面渲染和生产判题配置仍未接通。
+输入须为稳定私有快照；输出为仓库外、与输入不重叠的新目录。工具重新核对源码和全部数据哈希，生成自含的10题/254点/18样例草稿、英文Markdown题面、来源映射与许可对象。所有路径相对bundle，移到其他目录后可独立复验，不依赖原候选目录。失败保留 `INCOMPLETE` 和部分文件，重试用新目录；临时目录不是持久备份。格式、权限及发布阻断见[草稿合同](docs/problem-drafts.md)。已增加私有草稿入库服务；审核和生产判题配置仍未接通；已有按ID本人题面预览。
 
 ### 出题角色维护与草稿入库服务
 
@@ -102,7 +102,9 @@ schema 7 默认不给任何账号授予出题角色。受信维护者先独立�
 
 已通过真实普通登录的出题账号可向`POST /api/v1/problem-drafts`发送`{"source_id":"library-checker:aplusb","request_key":"original-import-request-01"}`，需要同源证据及会话Cookie；最多1KiB JSON。成功/原回执均200，再以`GET /api/v1/problem-drafts/草稿ID`读取本人固定JSON元数据。断连/503可能已经提交，保留原键及精确候选快照核验，不自动重试或换键；配置/候选版本切换前须保留原版本供未知回执恢复。完整协议见[OpenAPI](api/problem-drafts.openapi.yaml)。默认Compose及本地测试账号均不自动开启或取得出题权。
 
-`GET /api/v1/problem-drafts/草稿ID/preview`返回本人已入库版本的`markdown`和有序`examples`（id/input/output），不依赖当前候选版本；仍须有效普通会话和当前出题权。先核对全部题面/样例引用与总预算，再逐份验证快照，读取后复核同一凭据和PG授权，失败不返回部分文本。原始markdown/input/output总计至多1MiB，重复对象按返回次数计数；JSON转义可放大到六倍另加元数据。只接受严格UTF-8，保留空格、CRLF及末尾换行，不替换或截断。它是后续管理页的数据接口，未提供HTML渲染、一般材料下载或发布；正式测试与源码不进入预览。最终会话读取之后的退出及最终PG授权之后的撤权沿已接受在途合同，不能原子撤回已经开始发送的响应。关闭整个`private_drafts`能力即可停止入口，已入库资料保留。
+`GET /api/v1/problem-drafts/草稿ID/preview`返回本人已入库版本的`markdown`和有序`examples`（id/input/output），不依赖当前候选版本；仍须有效普通会话和当前出题权。先核对全部题面/样例引用与总预算，再逐份验证快照，读取后复核同一凭据和PG授权，失败不返回部分文本。原始markdown/input/output总计至多1MiB，重复对象按返回次数计数；JSON转义可放大到六倍另加元数据。只接受严格UTF-8，保留空格、CRLF及末尾换行，不替换或截断。它是管理页的数据接口，不提供一般材料下载或发布；正式测试与源码不进入预览。最终会话读取之后的退出及最终PG授权之后的撤权沿已接受在途合同，不能原子撤回已经开始发送的响应。关闭整个`private_drafts`能力即可停止入口，已入库资料保留。
+
+浏览器从 `/author/drafts` 输入已导入的32位小写十六进制ID，再显式检查会话并打开本人预览。Markdown/GFM/数学公式使用共享组件和本地KaTeX字体，样例原文复制；图片仅占位，导入管理、审核和发布尚未开放。账号操作、页面恢复/隐藏或期限到达会清除结果，再次显示须重新检查；无持久缓存。预算与隐私边界见[前端设计](docs/frontend-design.md#共享题面与本人预览)。默认HTTP Compose及未启用private_drafts的账号环境不提供草稿能力。
 
 ## 本地不可变材料存储
 
@@ -222,7 +224,7 @@ python3 scripts/test-browser-account.py \
   --output-dir /absolute/new/path/browser-account
 ```
 
-可选 `--chromium-executable /absolute/path/to/existing/chromium` 指定已有浏览器；`--toolchain-image`、`--module-cache`、`--build-cache-volume` 和 `--context` 的约束沿用现有专项。驱动只发布随机回环 HTTPS/HTTP 对照端口，建立隔离的合成账号/存储；真实 race API 使用固定 pin 的 mTLS，外层临时证书只在新测试 context 忽略。控制端点仅供本夹具，不能对外开放或接入真实数据。
+可选 `--chromium-executable /absolute/path/to/existing/chromium` 指定已有浏览器；`--statement-corpus /absolute/path/to/prepared-bundle/statements` 增加至多10份只读Markdown的浏览器渲染耗时/节点测量（响应替换，不冒充十题真实HTTP授权验收）；`--toolchain-image`、`--module-cache`、`--build-cache-volume` 和 `--context` 的约束沿用现有专项。驱动只发布随机回环 HTTPS/HTTP 对照端口，建立隔离的合成账号/存储；真实 race API 使用固定 pin 的 mTLS，外层临时证书只在新测试 context 忽略。控制端点仅供本夹具，不能对外开放或接入真实数据。
 
 产物包含日志、浏览器断言 JSON 与桌面/390px 截图；驱动分别检查浏览器和夹具结果，结束只清理本轮带 owner 标签的资源。`integration && browser` 夹具只运行 `TestBrowserFixture`，普通 PR CI 不自动执行此手动浏览器专项。生产证书、浏览器兼容矩阵及完整业务验收仍须另做。
 
