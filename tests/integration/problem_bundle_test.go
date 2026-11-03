@@ -80,19 +80,65 @@ func TestPrivateDraftConfiguredBundle(t *testing.T) {
 	must(t, err)
 	var drafts []problem.Draft
 	cases, examples := 0, 0
+	var previewBytes int
 	for _, entry := range index.Problems {
 		prepared, e := problem.LoadBundle(directory, entry.SourceID, lock)
 		must(t, e)
 		content := prepared.Content()
 		var doc struct {
-			Cases    []json.RawMessage `json:"test_cases"`
-			Examples []string          `json:"examples"`
+			Title     string `json:"title"`
+			Statement struct {
+				Path string `json:"path"`
+			} `json:"statement"`
+			Cases []struct {
+				ID     string `json:"id"`
+				Sample bool   `json:"sample"`
+				Input  struct {
+					Path string `json:"path"`
+				} `json:"input"`
+				Answer struct {
+					Path string `json:"path"`
+				} `json:"answer"`
+			} `json:"test_cases"`
+			Examples []string `json:"examples"`
 		}
 		must(t, json.Unmarshal(content.Document, &doc))
 		cases += len(doc.Cases)
 		examples += len(doc.Examples)
 		draft, e := service.Create(f.ctx, c, "configured-corpus-"+entry.SourceID[len("library-checker:"):], prepared)
 		must(t, e)
+		importer, e := problem.NewImporter(service, map[string]*problem.Prepared{entry.SourceID: prepared}, 1)
+		must(t, e)
+		preview, e := importer.Preview(f.ctx, c, draft.ID)
+		must(t, e)
+		statement, e := os.ReadFile(filepath.Join(directory, doc.Statement.Path))
+		must(t, e)
+		if preview.DraftID != draft.ID || preview.Version != draft.Version || preview.Title != doc.Title || preview.Language != "en" ||
+			preview.Markdown != string(statement) || len(preview.Examples) != len(doc.Examples) {
+			t.Fatal("actual corpus preview changed statement, version or sample count")
+		}
+		previewBytes += len(preview.Markdown)
+		for n, exampleID := range doc.Examples {
+			matched := false
+			for _, point := range doc.Cases {
+				if point.ID != exampleID || !point.Sample {
+					continue
+				}
+				input, e := os.ReadFile(filepath.Join(directory, point.Input.Path))
+				must(t, e)
+				answer, e := os.ReadFile(filepath.Join(directory, point.Answer.Path))
+				must(t, e)
+				got := preview.Examples[n]
+				if got.ID != exampleID || got.Input != string(input) || got.Output != string(answer) {
+					t.Fatal("actual corpus preview changed sample order or exact bytes")
+				}
+				previewBytes += len(got.Input) + len(got.Output)
+				matched = true
+			}
+			if !matched {
+				t.Fatal("actual corpus preview included a non-sample case")
+			}
+		}
 		must(t, prepared.Close())
 		drafts = append(drafts, draft)
 	}
@@ -127,5 +173,5 @@ func TestPrivateDraftConfiguredBundle(t *testing.T) {
 	if cases != 254 || examples != 18 {
 		t.Fatal("configured source case/example mapping changed")
 	}
-	t.Logf("configured ten drafts/254 cases/18 examples committed; %d logical references, %d immutable objects, %d bytes independently reopened after Store close; owner scope checked through new PG pool; session observation stubbed here", references, len(unique), bytes)
+	t.Logf("configured ten drafts/254 cases/18 examples committed and exact statement/sample previews verified (%d raw bytes); %d logical references, %d immutable objects, %d bytes independently reopened after Store close; owner scope checked through new PG pool; session observation stubbed here", previewBytes, references, len(unique), bytes)
 }

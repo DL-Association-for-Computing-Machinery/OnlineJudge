@@ -88,7 +88,7 @@ func (b *Bundle) Write(t *testing.T) {
 			total += len(raw)
 		}
 	}
-	b.Files["index.json"] = JSON(t, map[string]any{"schema": "oj.private-draft-bundle.v1", "state": "private-unpublished", "access": "synthetic private fixture", "copied_source_bytes": total, "files": inventory, "problems": []any{map[string]any{"draft": "drafts/aplusb.json", "source_id": "library-checker:aplusb", "version": b.Document["version"], "test_cases": 1, "examples": 1}}})
+	b.Files["index.json"] = JSON(t, map[string]any{"schema": "oj.private-draft-bundle.v1", "state": "private-unpublished", "access": "synthetic private fixture", "copied_source_bytes": total, "files": inventory, "problems": []any{map[string]any{"draft": "drafts/aplusb.json", "source_id": "library-checker:aplusb", "version": b.Document["version"], "test_cases": len(b.Document["test_cases"].([]any)), "examples": len(b.Document["examples"].([]string))}}})
 	for p, raw := range b.Files {
 		target := filepath.Join(b.Directory, filepath.FromSlash(p))
 		if err := os.MkdirAll(filepath.Dir(target), 0700); err != nil {

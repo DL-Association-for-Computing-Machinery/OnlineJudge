@@ -35,7 +35,7 @@ func WithPrivateDrafts(base http.Handler, drafts Drafts, timeout time.Duration) 
 }
 
 func draftPath(path string) bool {
-	return path == draftCollection || (strings.HasPrefix(path, draftCollection+"/") && identity.ValidID(strings.TrimPrefix(path, draftCollection+"/")))
+	return path == draftCollection || draftPreviewID(path) != "" || (strings.HasPrefix(path, draftCollection+"/") && identity.ValidID(strings.TrimPrefix(path, draftCollection+"/")))
 }
 
 func (h *handler) serveDraft(w http.ResponseWriter, r *http.Request) {
@@ -46,6 +46,10 @@ func (h *handler) serveDraft(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), h.draftTimeout)
 	defer cancel()
+	if id := draftPreviewID(r.URL.Path); id != "" {
+		h.serveDraftPreview(w, ctx, credential, id)
+		return
+	}
 	var draft draftproblem.Draft
 	if r.Method == http.MethodPost {
 		key, source, ok := draftBody(w, r)

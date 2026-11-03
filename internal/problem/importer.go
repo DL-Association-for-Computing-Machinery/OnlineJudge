@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/redisstore"
 )
 
@@ -19,7 +20,8 @@ type Importer struct {
 }
 
 // NewImporter copies a bounded catalog and requires explicit per-instance
-// concurrency. This is neither a shared rate limit nor a persistent disk quota.
+// material concurrency shared by imports and previews. This is neither a shared
+// rate limit nor a persistent disk quota.
 func NewImporter(service *Service, sources map[string]*Prepared, maxInFlight int) (*Importer, error) {
 	if service == nil || len(sources) == 0 || len(sources) > 10 || maxInFlight < 1 || maxInFlight > 10 {
 		return nil, ErrInvalid
@@ -51,13 +53,41 @@ func (i *Importer) Import(ctx context.Context, credential redisstore.Credential,
 		if !ok {
 			return nil, ErrUnknownSource
 		}
-		select {
-		case i.slots <- struct{}{}:
-			acquired = true
-			return p, nil
-		default:
-			return nil, ErrBusy
+		if err := i.acquire(); err != nil {
+			return nil, err
 		}
+		acquired = true
+		return p, nil
+	})
+}
+
+func (i *Importer) acquire() error {
+	select {
+	case i.slots <- struct{}{}:
+		return nil
+	default:
+		return ErrBusy
+	}
+}
+
+// Preview reads persisted owner-scoped statement/sample materials. It does not
+// depend on the current import catalog containing the old draft version.
+func (i *Importer) Preview(ctx context.Context, credential redisstore.Credential, id string) (Preview, error) {
+	if i == nil || ctx == nil || !identity.ValidID(id) {
+		return Preview{}, ErrInvalid
+	}
+	acquired := false
+	defer func() {
+		if acquired {
+			<-i.slots
+		}
+	}()
+	return i.service.preview(ctx, credential, id, func() error {
+		if err := i.acquire(); err != nil {
+			return err
+		}
+		acquired = true
+		return nil
 	})
 }
 

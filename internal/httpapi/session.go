@@ -15,7 +15,7 @@ func NewSessionHandler(session http.Handler) http.Handler {
 	bootstrap := NewHandler()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
-		draft := path == "/api/v1/problem-drafts" || (strings.HasPrefix(path, "/api/v1/problem-drafts/") && identity.ValidID(strings.TrimPrefix(path, "/api/v1/problem-drafts/")))
+		draft := path == "/api/v1/problem-drafts" || (strings.HasPrefix(path, "/api/v1/problem-drafts/") && identity.ValidID(strings.TrimSuffix(strings.TrimPrefix(path, "/api/v1/problem-drafts/"), "/preview")))
 		switch r.URL.Path {
 		case "/api/v1/session", "/api/v1/session/activity", "/api/v1/session/logout",
 			"/api/v1/session/login/begin", "/api/v1/session/login/complete", "/api/v1/session/login/abandon", "/api/v1/account/password":

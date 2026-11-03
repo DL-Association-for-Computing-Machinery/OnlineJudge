@@ -16,6 +16,7 @@ import (
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
 	identitypg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/postgres"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 	transport "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/httptransport"
 	sessionruntime "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/runtime"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/testpki"
@@ -118,6 +119,14 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	if string(got.body) != string(created.body) {
 		t.Fatal("owner read changed immutable metadata")
 	}
+	preview := get(y, draft.ID+"/preview", cookies)
+	loginStatus(t, preview, 200)
+	var content problem.Preview
+	must(t, json.Unmarshal(preview.body, &content))
+	if content.DraftID != draft.ID || content.Markdown != "# Synthetic A + B\n" || content.Title != "Synthetic A + B" ||
+		len(content.Examples) != 1 || content.Examples[0].ID != "case-0001" || content.Examples[0].Input != "1 2\n" || content.Examples[0].Output != "3\n" {
+		t.Fatal("actual HTTP preview changed private statement or sample bytes")
+	}
 	changed := problemfixture.New(t)
 	changed.Document["provenance"].(map[string]any)["original_title"] = "changed private metadata"
 	changed.Write(t)
@@ -127,7 +136,13 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	dChanged.BundleDirectory = changed.Directory
 	cChanged.PrivateDrafts = &dChanged
 	third := entryStart(t, binary, entryConfig(t, cChanged, ca, 3*time.Second), "127.0.0.1:0")
-	loginStatus(t, loginCall(endpoint(third), collection, body, cookies, nil), 409)
+	thirdEndpoint := endpoint(third)
+	loginStatus(t, loginCall(thirdEndpoint, collection, body, cookies, nil), 409)
+	oldVersion := get(thirdEndpoint, draft.ID+"/preview", cookies)
+	loginStatus(t, oldVersion, 200)
+	if string(oldVersion.body) != string(preview.body) {
+		t.Fatal("preview followed current import catalog instead of persisted version")
+	}
 	third.signal(t)
 	third.wait(t, true)
 	noRuntimeConnections(t, f, cChanged.Database.ApplicationName)
@@ -143,12 +158,20 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	if string(foreign.body) != string(missing.body) {
 		t.Fatal("foreign existence disclosed")
 	}
+	foreign, missing = get(x, draft.ID+"/preview", strangerCookies), get(x, strings.Repeat("f", 32)+"/preview", strangerCookies)
+	loginStatus(t, foreign, 404)
+	loginStatus(t, missing, 404)
+	if string(foreign.body) != string(missing.body) {
+		t.Fatal("preview disclosed another author's existence")
+	}
 	_, err = access.SetAuthorRole(f.ctx, identity.ProblemRoleChange{SubjectID: subject.ID, Enabled: false, ExpectedRevision: 1, Operator: "entry-fixture", Reason: "revoke author"})
 	must(t, err)
 	loginStatus(t, get(y, draft.ID, cookies), 403)
+	loginStatus(t, get(y, draft.ID+"/preview", cookies), 403)
 	loginStatus(t, loginCall(y, collection, body, cookies, nil), 403)
 	loginStatus(t, loginCall(x, "/api/v1/session/logout", "", cookies, nil), 204)
 	loginStatus(t, get(y, draft.ID, cookies), 401)
+	loginStatus(t, get(y, draft.ID+"/preview", cookies), 401)
 	var count, refs int
 	must(t, f.pools[0].QueryRow(f.ctx, `SELECT count(*),(SELECT count(*) FROM problem_draft_materials WHERE draft_id=$2) FROM problem_drafts WHERE owner_subject_id=$1`, subject.ID, draft.ID).Scan(&count, &refs))
 	if count != 1 || refs != 10 {

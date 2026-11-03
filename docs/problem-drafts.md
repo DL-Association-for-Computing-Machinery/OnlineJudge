@@ -37,9 +37,19 @@
 
 `internal/problem.Service`提供`Create`和`GetOwn`，`Importer`在相同授权预检后从冻结候选目录选择Prepared。创建接收普通`redisstore.Credential`、owner范围的16—128位ASCII请求键及已准备草稿；不接收客户端指定的主体、认证代次、恢复代次或权限。登录和账号启用不自动赋予出题权；identity拥有独立默认缺省的`problem_author`状态、修订与维护审计。现有/本地开发账号均不自动授予，维护CAS及命令归README。作者撤权后，读取本人旧草稿及恢复原回执也拒绝；其他作者与未知ID均为同一`ErrNotFound`。
 
-可选[HTTP合同](../api/problem-drafts.openapi.yaml)只提供POST导入与GET本人读取，启用方式归[README](../README.md#显式启用私有草稿-http)。沿用普通会话TLS/Host、固定单跳mTLS代理、严格Cookie及POST正向同源检查，所有响应no-store/nosniff，不续期或写Cookie。POST只接受source_id/request_key两个精确字段，最多1024字节，拒绝重复/未知/null/大小写别名/坏Unicode/尾随数据；不接受路径、客户端材料或主体。候选存在性只在会话和角色预检通过后可观察。返回独立JSON DTO，document为JSON对象而非base64；逻辑引用不是材料下载授权。
+可选[HTTP合同](../api/problem-drafts.openapi.yaml)提供POST导入、GET本人元数据及题面/样例预览，启用方式归[README](../README.md#显式启用私有草稿-http)。沿用普通会话TLS/Host、固定单跳mTLS代理、严格Cookie及POST正向同源检查，所有响应no-store/nosniff，不续期或写Cookie。POST只接受source_id/request_key两个精确字段，最多1024字节，拒绝重复/未知/null/大小写别名/坏Unicode/尾随数据；不接受路径、客户端材料或主体。候选存在性只在会话和角色预检通过后可观察。返回独立JSON DTO，document为JSON对象而非base64；逻辑引用不是材料下载授权。
 
-每实例显式导入活动预算无等待，作用于授权且选中候选后的复制/最终写入段；不限制预检或GET，不代替共享频率/磁盘额度。材料异常、容量不足、未知提交、取消和存储失败统一503；不能将Prepared文件异常的ErrInvalid变为400或选手错误。服务调用成功后仍检查请求取消。未知回执用原键和精确候选版本核验；相同source_id的新内容为409，维护变更须保留旧快照处理未确认操作。Runtime跟踪整个同步调用，排空后才关闭全部Prepared、Local及PG/Redis；启动部分失败也释放已打开资源。HTTP关闭不删除已有数据；不新增schema或依赖。
+每实例显式材料活动预算由导入和预览共享，无等待，作用于初次授权后的材料/最终授权阶段；不限制初次预检、普通元数据GET或HTTP输出，不代替共享频率/磁盘额度。材料异常、容量不足、未知提交、取消和存储失败统一503；不能将Prepared文件异常的ErrInvalid变为400或选手错误。服务调用成功后仍检查请求取消。未知回执用原键和精确候选版本核验；相同source_id的新内容为409，维护变更须保留旧快照处理未确认操作。Runtime跟踪整个同步调用，排空后才关闭全部Prepared、Local及PG/Redis；启动部分失败也释放已打开资源。HTTP关闭不删除已有数据；不新增schema或依赖。
+
+### 本人题面与样例预览
+
+`Importer.Preview`和`GET /api/v1/problem-drafts/{id}/preview`只读取已入库固定版本。初次新鲜actor及同事务owner/当前角色检查成功后取得材料槽；解析PG固定文档，核对ID/owner/source/version/state、draft.json原文关联及无重复逻辑名，再将statement与所有sample=true点的input/answer逐一匹配文档和存储引用。examples顺序必须与固定测试清单相符。客户端不能选择路径、hash或任意测试点，正式数据、原始程序和来源报告不读取；该题在现候选中换版或不再选中时，已启用服务仍读取旧存储版本。入口启动的受信bundle/配置条件保持。
+
+全部所选引用及原始markdown/input/output累计1MiB预算先核验，再执行第一次Open；同对象在多个字段出现也重复计费，不截断超限资料。逐份Open得到已完整哈希验证的匿名快照，限长读完并Close后才读下一份，支持Local活动预算为1。只允许严格UTF-8，保留CRLF、空格、空样例、BOM/NUL及末尾换行；不作替换、trim或归一化。JSON转义后文本可占六倍另加字段/元数据，响应不是可信HTML或渲染验收。
+
+读取完成后再次读同一实际Credential并比较完整actor，再通过GetOwn重新核对当前owner/账号/恢复/角色及固定文档、source/version和引用。材料I/O不持PG锁，任何失败返回空预览；缺失/损坏、非法UTF-8、关联/预算异常、容量不足和取消为503，明确会话拒绝401、撤权403、未知/他人草稿404。最终Redis读取后的单token退出及最终PG授权后的撤权沿已接受在途合同，不承诺跨库原子撤回HTTP。返回专用JSON DTO，仅包含draft_id/version/title/language/markdown/有序examples；无Set-Cookie或公开下载。页面、Markdown/KaTeX渲染、本站受限验证、审核发布和训练授权仍需后续交付。
+
+### 入库、版本与迁移
 
 创建顺序为：新鲜会话读取→短出题授权预检→逐项持久化材料→再次读取同一实际凭据→同一READ COMMITTED事务核对恢复、账号及当前角色并写入草稿。全流程锁序为恢复→账号→角色→草稿，identity公开窄事务适配器，problem不读取identity私有SQL。材料复制/哈希和Redis读取均不在PG锁内。最终Read之前退出、过期或存储故障拒绝写入；Read之后的单token退出遵循普通会话“已接受在途工作不追溯撤销”合同，不宣称Redis与PG跨库原子退出。
 
@@ -47,7 +57,7 @@
 
 每题保存题面、选中题目的输入/答案、原始源码/许可、草稿文档及四份来源证据和bundle索引。逻辑名绑定hash/size，不存宿主绝对路径，不按对象哈希授予下载权。bundle索引中其他题目的条目只作来源证据，本草稿仅拥有自己列出的材料引用。内容版本继续绑定原始草稿语义；请求摘要另绑定文档及有序全部引用（含证据/index），因而来源报告字节变化也会改变请求内容。
 
-PG事务同一次提交owner、稳定ID、不可变文档/版本、全部引用及请求回执。同owner同键同内容返回原记录，不同内容为`ErrConflict`。`ErrCommitUnknown`后保持原键/原bundle核验；不得用新键制造重复记录。Put失败/未知不提交引用，已成功的无引用对象保留，当前没有全局磁盘额度或孤儿GC。业务接口不提供改写、删除、转让、列表、共享或材料下载，状态结构性固定`private-draft/not-run`。
+PG事务同一次提交owner、稳定ID、不可变文档/版本、全部引用及请求回执。同owner同键同内容返回原记录，不同内容为`ErrConflict`。`ErrCommitUnknown`后保持原键/原bundle核验；不得用新键制造重复记录。Put失败/未知不提交引用，已成功的无引用对象保留，当前没有全局磁盘额度或孤儿GC。业务接口只增加上述本人题面/样例JSON，不提供改写、删除、转让、列表、共享或一般材料下载，状态结构性固定`private-draft/not-run`。
 
 schema7新增角色/审计及草稿/材料关联表，不为历史账号授予权限。升级前停止旧API/维护进程，独立`migrate up`后启动同版二进制；当前API拒绝6或未来schema。schema7仅在角色、审计、草稿均空时允许Down到6，保留账号、恢复和原积压表；存在任何上述数据均须向前修复。继续回退6时仍满足原积压保护，不清表绕过。新增owner/key唯一索引支持有界幂等定位，草稿主键支持本人ID查询，材料复合主键支持按草稿读取；每次草稿/引用/审计写入需维护相应索引并占用存储，无按版本/哈希扩建的冗余索引。
 

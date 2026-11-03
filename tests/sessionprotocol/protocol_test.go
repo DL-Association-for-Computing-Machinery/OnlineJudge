@@ -177,6 +177,7 @@ func TestOrdinaryProtocol(t *testing.T) {
 	t.Run("password change owner association", func(t *testing.T) { testPasswordChangeOwner(t, f) })
 	t.Run("real API process entry", func(t *testing.T) { testEntry(t, f) })
 	t.Run("private draft session boundaries", func(t *testing.T) { testPrivateDraftSessions(t, f) })
+	t.Run("private preview session boundaries", func(t *testing.T) { testPrivatePreviewSessions(t, f) })
 	for _, c := range f.clients {
 		if c.PoolStats().TotalConns > 8 {
 			t.Fatal("Redis client exceeded explicit connection ceiling")

@@ -64,7 +64,7 @@ type SessionReader interface {
 }
 
 // Service binds fresh session observations, current permissions and storage.
-// It does not publish, share, execute, or expose raw material downloads.
+// It does not publish, share, execute, or grant general material downloads.
 type Service struct {
 	sessions   SessionReader
 	repository Repository
