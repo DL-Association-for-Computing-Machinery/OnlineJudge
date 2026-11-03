@@ -43,11 +43,26 @@ python3 -B scripts/prepare-library-checker.py \
   --output /private/tmp/oj-library-checker-corpus
 ```
 
-`--output` 必须为仓库外的新目录。成功生成 `materials/catalog.json`、来源/许可、全部数据及验证记录；失败保留 `INCOMPLETE`，重试使用新目录。私有候选不会自动进入数据库、Web 题库或 Worker；题面转换、审核发布和生产资源/检查器适配仍待实现。工具行为回归：
+`--output` 必须为仓库外的新目录。成功生成 `materials/catalog.json`、来源/许可、全部数据及验证记录；失败保留 `INCOMPLETE`，重试使用新目录。私有候选不会自动进入数据库、Web 题库或 Worker。工具行为回归：
 
 ```sh
 python3 -B -m unittest discover -s tests/governance -p test_problem_sources.py -v
 ```
+
+### 转换为统一私有草稿
+
+已有完整私有候选后，用 Python 3.11+ 在宿主进行静态适配；不执行题源程序、不联网或安装依赖：
+
+```sh
+python3 -B scripts/import-library-checker.py \
+  --corpus /private/tmp/oj-library-checker-corpus/materials \
+  --output /private/tmp/oj-library-checker-drafts
+python3 -B scripts/import-library-checker.py \
+  --verify-bundle /private/tmp/oj-library-checker-drafts/bundle
+python3 -B -m unittest discover -s tests/governance -p test_problem_drafts.py -v
+```
+
+输入须为稳定私有快照；输出为仓库外、与输入不重叠的新目录。工具重新核对源码和全部数据哈希，生成自含的10题/254点/18样例草稿、英文Markdown题面、来源映射与许可对象。所有路径相对bundle，移到其他目录后可独立复验，不依赖原候选目录。失败保留 `INCOMPLETE` 和部分文件，重试用新目录；临时目录不是持久备份。格式、权限及发布阻断见[草稿合同](docs/problem-drafts.md)。当前尚未接入业务题库、授权审核、题面渲染或生产判题配置。
 
 ## 运行环境
 
