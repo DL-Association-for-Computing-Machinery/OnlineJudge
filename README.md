@@ -154,7 +154,26 @@ Worker 启动完成后，向该 Worker 进程发送 `SIGUSR1`（`kill -USR1 PID`
 
 `python3 scripts/test-worker.py http-loop` 显式设置 `OJ_SANDBOX_HTTP=1`，`all` 同样包含此项。驱动建立空的临时 PostgreSQL，实际运行迁移/固定材料初始化、两个提交 API 进程、mTLS 控制端及 Worker 命令；只提交仓库内固定 AC/WA 合成源码。先由 HTTP 确认 queued，再启动 Worker，通过 HTTP 观察 finished/AC 或 WA；数据库仅旁证原始源码、固定归属及每题唯一完成 attempt。
 
-专项检查跨 API 原键重试/回执、异源冲突、缺失/错误凭据、Origin 拒绝无写入、闭合回执字段及无 Cookie/CORS、Worker 正常排空和槽停止。提交 API 用 `127.0.0.1:0`，仅从自身私有有界 JSON 日志取得回环地址，客户端禁代理/重定向；控制端沿用既有临时端口流程。私有 Bearer 留在服务端测试进程中。该入口不支持浏览器，不授予普通账号训练权限；最小页面及其失败路径仍待实现。无 API、迁移或预算变化，可单独回退专项及驱动选择器。
+专项检查跨 API 原键重试/回执、异源冲突、缺失/错误凭据、Origin 拒绝无写入、闭合回执字段及无 Cookie/CORS、Worker 正常排空和槽停止。提交 API 用 `127.0.0.1:0`，仅从自身私有有界 JSON 日志取得回环地址，客户端禁代理/重定向；控制端沿用既有临时端口流程。私有 Bearer 留在服务端测试进程中。该入口不支持浏览器，不授予普通账号训练权限；独立opt-in最小页面及其失败路径见下节。无 API、迁移或预算变化，可单独回退专项及驱动选择器。
+
+### M0 最小浏览器实验页
+
+API 额外设置 `OJ_EXPERIMENT_BROWSER=1` 才提供 `/m0` 页面及[浏览器实验契约](api/m0-browser.openapi.yaml)。必须同时显式设置 `OJ_API_ADDR=127.0.0.1:<端口>`（可用0）、私有 `OJ_EXPERIMENT_TOKEN_FILE`、实验数据库及 `OJ_EXPERIMENT_MATERIAL_VERSION=m0-sum-v3`；不能混用 `OJ_SESSION_CONFIG_FILE`。其他开关值、主机名/通配监听或材料版本拒绝启动。仅供可信本机和独占合成数据库；从实际API启动日志取得回环地址访问 `/m0`，默认 Compose、账号网关和做题预览不开放此页。
+
+页面只接受服务端固定AC/WA示例，不接收任意源码、主体、上下文或语言。独立实验归属与原Bearer提交隔离；Bearer不下放，随机nonce用于CSRF防护，不隔离同源脚本，也不代表账号身份。所有写请求严格检查Host、单一Origin、Fetch Metadata及nonce；数据GET也需nonce。不使用或设置会话Cookie、不开放CORS，页面含CSP/no-store/nosniff；HTTP回环实验不等于生产HTTPS或训练准入。
+
+原键/预设和内容核验状态只保存于当前标签页的sessionStorage，刷新后重新bootstrap并只查询原键，不自动提交。未知回执/404/503不等于回滚；原样重试才确认内容归属，409既有结果与当前示例明确分开。停止查询不取消任务，自动查询次数/时长有界；只有收到终态后才可显式开始下一次实验。
+
+使用已有Playwright和Chromium验收（不自动安装，不包含在 `all` 中）：
+
+```sh
+python3 scripts/test-worker.py browser-loop \
+  --playwright-module /absolute/path/to/existing/playwright \
+  --chromium-executable /absolute/path/to/existing/chromium \
+  --output-dir /absolute/new/path/m0-browser
+```
+
+Chromium参数可省略以使用该Playwright已安装的浏览器。产物必须为仓库外新目录，含检查JSON、私有日志及桌面/390px截图；测试以真实POST提交成功后丢弃响应验证未知/原键恢复，在浏览器确认queued且数据库无attempt后才启动真实Worker。查询503另由浏览器路由注入，不冒充真实数据库故障。回退关闭开关或回退本模块即可，无迁移；已接受任务仍按原Worker协议处理。
 
 ### 沙箱资源预算专项
 

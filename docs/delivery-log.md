@@ -1,5 +1,28 @@
 # 工程交付记录
 
+## 2026-11-03：M0 固定合成题最小浏览器闭环
+
+成功fetch后从 `origin/main ff94039` 建立独立 `codex/m0-browser-loop` worktree。新增默认关闭的 `/m0` 固定示例页及三条小型JSON路径；API须另设 `OJ_EXPERIMENT_BROWSER=1`、私有Bearer实验配置、显式127.0.0.1监听和v3材料，实际随机监听后再构造严格Host边界；冲突配置在读取私有文件前拒绝。独立 `m0-browser-operator/m0-browser-training`，服务端仅选择仓库AC/WA源码，不接任意源码/身份/语言，不在API执行程序；原Bearer接口仍拒绝Origin。nonce用于CSRF而非账号身份，同源脚本不在隔离保证内；数据GET需nonce，POST另验单一Origin/Fetch Metadata及标准库防护。页面不使用/设置会话Cookie，不开放CORS，带CSP/no-store/nosniff。
+
+页面沿用现有系统字体/橙色操作和浅色分隔，不新增框架/依赖。sessionStorage仅保存原键/预设/版本及unverified/confirmed/conflict状态；每次POST前先保存未确认，合法POST回执才确认，GET不升级绑定，刷新只重新bootstrap并核验原键。404/503/超时不等于回滚，不自动换键；409后既有结果不能归为当前示例，冲突/未知刷新后保留。终态后显式核验仍发GET，有限轮询可停止但不取消任务；BFCache返回重新加载，存储失败不发送POST。
+
+修正候选的 `browser-loop` **10.42秒**通过（`/private/tmp/oj-m0-browser-scan-fix.log`、产物 `/private/tmp/oj-m0-browser-scan-fix`）：现有Playwright1.57.0、Node22.17.1、实际Chromium145.0.7632.6，桌面1280×960/390×844，12项交互/视觉断言。真实POST已接收后 `route.fetch` 再丢弃响应，页面未知；刷新仅GET，再以原键/原示例POST回原ID。浏览器确认queued后以原子marker通知，SQL旁证两任务/零attempt，才启动真实mTLS控制端和Worker。随后浏览器观察AC/WA；含原Bearer隔离夹具共三任务均finished、各一次completed attempt/双代次1，原始固定源码/独立归属未变，负面请求及重试不产生额外任务。Worker显式排空exit0及槽停止，未独立观察选手PID。
+
+另验真实Host/Origin/额外source/nonce拒绝、已有Bearer行对浏览器404、终态再查询、409→查询→刷新区别、后退恢复、真实原键404、注入查询503恢复、存储写失败及无Bearer/Cookie/外部请求。5条资源错误仅出现在明确的丢回执/409/404/503测试路径，其他console/pageerror零；注入GET 503不冒充真实数据库故障。实际computed字号15/32/21px、正文/辅助字与按钮对比度均≥4.5、控件49px；桌面/窄屏截图经代理目视核对，无横向溢出。离线Impeccable检测器无法映射API绝对assets路径，字体/层级推断不完整；既有sidecar漂移未擅自修复，以实际CSS/渲染交叉核验。
+
+原 `http-loop` 因共用启动/排空helper回归 **3.43秒**通过（`oj-m0-browser-http-regression.log`）。最终离线Docker后端格式/模块/vet、四检测器正负夹具、主模块/sandbox/独立会话模块静态各零、root race及五命令构建通过（`oj-m0-browser-backend-verified.log`）；19项配置、32项拒绝零Store调用及错误/nonce/静态隐私边界均覆盖。治理66项 **11.742秒**通过（`oj-m0-browser-governance.log`），467文件策略、OpenAPI YAML及53个引用核对通过。首次局部测试因未用导入失败、首次完整静态提示路由条件简化，均修正后完整重验，未降低门禁。
+
+Astra设计/完整实现及最终增量复核发现并修复终态零请求、冲突归属丢失、BFCache中止器失效及marker半写竞态；不是独立人工审批。首次真实浏览器12.05秒，排版/中文状态后10.01秒，原子发布/内容绑定/诊断后10.55秒，新增computed视觉证据9.98秒，公开命名常量的变量改名候选取得上述10.42秒；不把较早运行冒充修正快照。契约、README、架构、前端边界、CI与M0进度已同步。无预算、材料版本、SQL/schema、迁移或依赖变更；关闭开关/回退模块即可，已接受任务不删除。普通CI及 `all` 不执行此依赖已有浏览器的特权专项；未重跑全部Worker、账号浏览器或其他浏览器矩阵。M0最小合成页面补证不代表M1训练、完整M0或生产准入通过，未部署。
+
+初始PR #89的head `fed0592` 在CI秘密步骤失败：固定gitleaks8.30.1的generic-api-key规则将页面与测试中同一sessionStorage公开命名常量误报，共2项。禁网完整可达历史扫描复现并100%脱敏定位；该名称不是认证凭据，也未泄漏随机nonce/Bearer。修正只将变量改为明确的存储命名标识，保留实际存储字符串与数据兼容，不添加忽略或改扫描规则。隔离容器内从完整main历史加修正补丁构造候选，89提交扫描零命中（`oj-m0-browser-candidate-scan.log`），扫描器自测仍拒绝合成令牌并脱敏；旧head仍有历史命中，不能以追加修复或其他CI成功冒充安全门禁通过。最终交付须重新核验修正head的完整CI与Git授权边界。
+
+
+在 #90/#91 合并后，将修正补丁整合到 `7e59f6a49425f2bf80d5d0eae4ca502c60d2cfb4` 的仓库外普通副本 `/private/tmp/oj-m0-browser-integrated-pg9234w7`；准备阶段没有建立替代项目分支或改写已推送历史。仅两份文档上下文需手工合并，18份运行代码/测试/契约与已复核修正候选逐字相同，所有其他主线文件及 #91 联合记录/历史段落保留。用户于2026-11-03明确选择“新分支替换PR，保留旧分支”，随后成功fetch并从同一最新main建立 `codex/m0-browser-delivery`，应用整合补丁后、追加本交付记录前，468份源码哈希全部匹配。旧 `codex/m0-browser-loop` 及工作区保留，替代PR建立后关闭 #89；不重写历史、不改变main或扫描规则。本地候选证据不代替替代PR精确head的远端CI与合并门禁。
+
+整合后完整禁网Docker后端格式/模块/vet、检测器自测与三组静态零问题、root race/五命令构建通过（`/private/tmp/oj-m0-browser-integrated-backend.log`）。治理66项13.466秒通过（`oj-m0-browser-integrated-governance-verified.log`）；首次未提升工具权限时两项因沙箱禁止回环监听失败，获准原样复验，未改断言。468文件仓库策略及25文件差异/277个本地Markdown链接锚点通过。现有Playwright1.62.1、Node22.17.1与Chromium145.0.7632.6的真实专项 **11.95秒**、12项检查通过（`oj-m0-browser-integrated-browser.log`、产物 `/private/tmp/oj-m0-browser-integrated-qa`），桌面/390px的AC/WA及未知回执恢复继续通过；这是新工具版本的独立读数，不替换此前1.57.0的10.42秒证据。未重跑完整账号浏览器矩阵，未宣布完整M0通过。
+
+最新main完整历史加整合补丁在禁网固定gitleaks镜像中零命中（`/private/tmp/oj-m0-browser-integrated-scan.log`）；隔离验证夹具的 `git rev-list` 为92个可达提交，检测器原始报告91个commits scanned，两项计数分别记录。此临时容器提交不是项目交付head；最终新分支还须接受普通CI的完整历史扫描及检测器自测，未添加ignore。
+
 ## 2026-11-03：M0 Worker联合复验及组件证据核对
 
 独立文档目标从成功fetch后的 `origin/main f7f7871` 开始，不依赖尚未合并的浏览器候选。#90 的精确head `742d77f23c3d6120e3499f98943b875b4c9ec165` 经 [CI 41520823800](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/actions/runs/41520823800) 8项成功，frontend-tests按后端范围明确跳过，完整差异/反馈/规则核对后squash合并为 `f7f7871b39568c1059e5e781bc63e6a68eea2aa2`；已证明树一致并归档5个任务二进制，清理仅该已结束worktree/本地分支。

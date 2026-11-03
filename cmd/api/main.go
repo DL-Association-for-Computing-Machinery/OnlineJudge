@@ -17,7 +17,9 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/db"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/httpapi"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/m0browser"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/apiapp"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
 )
 
@@ -33,6 +35,10 @@ func run(logger *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	addr := os.Getenv("OJ_API_ADDR")
+	browser, err := m0browser.Enabled(os.Getenv("OJ_EXPERIMENT_BROWSER"), addr, os.Getenv("OJ_EXPERIMENT_TOKEN_FILE"), os.Getenv("OJ_SESSION_CONFIG_FILE"), os.Getenv("OJ_EXPERIMENT_MATERIAL_VERSION"))
+	if err != nil {
+		return err
+	}
 	if path := os.Getenv("OJ_SESSION_CONFIG_FILE"); path != "" {
 		if addr == "" || os.Getenv("OJ_EXPERIMENT_TOKEN_FILE") != "" {
 			return apiapp.ErrConfiguration
@@ -50,6 +56,7 @@ func run(logger *slog.Logger) error {
 	}
 	gin.SetMode(gin.ReleaseMode)
 	handler := httpapi.NewHandler()
+	var browserStore submission.Store
 	scope := "bootstrap-only"
 	if tokenFile := os.Getenv("OJ_EXPERIMENT_TOKEN_FILE"); tokenFile != "" {
 		token, err := experiment.LoadToken(addr, tokenFile)
@@ -79,6 +86,7 @@ func run(logger *slog.Logger) error {
 			return err
 		}
 		handler = httpapi.NewHandler(httpapi.Experiment{Store: store, Token: token})
+		browserStore = store
 		scope = "m0-acceptance-only"
 	}
 	server := &http.Server{
@@ -91,6 +99,13 @@ func run(logger *slog.Logger) error {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
+	}
+	if browser {
+		server.Handler, err = m0browser.NewHandler(handler, browserStore, listener.Addr().String())
+		if err != nil {
+			_ = listener.Close()
+			return err
+		}
 	}
 	go func() { result <- server.Serve(listener) }()
 	logger.Info("API starting", "address", listener.Addr().String(), "scope", scope)

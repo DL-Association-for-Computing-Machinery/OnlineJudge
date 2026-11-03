@@ -4,7 +4,8 @@ info:
   version: 0.3.0
   description: >-
     默认关闭、仅本机受控客户端使用。静态实验主体 m0-operator、上下文 m0-training，
-    不是正式账号 API。接收成功不代表执行完成；独立 worker.openapi.yaml 定义 mTLS 租约接口，沙箱尚未接入闭环。
+    不是正式账号 API。接收成功不代表执行完成；独立 worker.openapi.yaml 定义 mTLS 租约接口。
+    该Bearer接口仍拒绝Origin；额外显式启用的固定示例浏览器路径由m0-browser.openapi.yaml定义，归属独立且不下放Bearer。
     必须使用原 Idempotency-Key 核验未知回执，不得换键盲目重发。
 servers:
   - url: http://127.0.0.1:8080

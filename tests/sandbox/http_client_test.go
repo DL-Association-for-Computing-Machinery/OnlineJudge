@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 
@@ -69,10 +70,11 @@ func migrateHTTPLoop(t *testing.T, ctx context.Context, dsn, root string) {
 	}
 }
 
-func startHTTPLoopAPI(t *testing.T, ctx context.Context, client *http.Client, dsn, tokenFile string) loopAPI {
+func startHTTPLoopAPI(t *testing.T, ctx context.Context, client *http.Client, dsn, tokenFile string, options ...string) loopAPI {
 	t.Helper()
-	p := startDualProcess(t, "api", httpLoopEnvironment("OJ_API_ADDR=127.0.0.1:0", "OJ_DATABASE_URL="+dsn,
-		"OJ_EXPERIMENT_TOKEN_FILE="+tokenFile, "OJ_EXPERIMENT_MATERIAL_VERSION="+experiment.PinnedVersion))
+	env := httpLoopEnvironment("OJ_API_ADDR=127.0.0.1:0", "OJ_DATABASE_URL="+dsn,
+		"OJ_EXPERIMENT_TOKEN_FILE="+tokenFile, "OJ_EXPERIMENT_MATERIAL_VERSION="+experiment.PinnedVersion)
+	p := startDualProcess(t, "api", append(env, options...))
 	log, ok := p.cmd.Stdout.(*os.File)
 	if !ok {
 		t.Fatal("API process does not own a private log")
@@ -188,4 +190,29 @@ func loopProblem(t *testing.T, response loopResponse, status int, code string) {
 	if err := json.Unmarshal(response.body, &got); err != nil || got.Status != status || got.Code != code || response.location != "" {
 		t.Fatal("unexpected controlled API error")
 	}
+}
+
+func drainHTTPLoopWorker(t *testing.T, w *dualProcess, id string) {
+	t.Helper()
+	w.alive(t)
+	if err := w.cmd.Process.Signal(syscall.SIGUSR1); err != nil {
+		t.Fatal("cannot request Worker drain")
+	}
+	select {
+	case err := <-w.done:
+		w.stopped = true
+		if err != nil {
+			t.Fatal("HTTP loop Worker did not exit normally")
+		}
+	case <-time.After(15 * time.Second):
+		_ = w.cmd.Process.Kill()
+		select {
+		case exitErr := <-w.done:
+			w.stopped = true
+			t.Fatalf("Worker missed drain deadline; kill exit error present=%t", exitErr != nil)
+		case <-time.After(5 * time.Second):
+			t.Fatal("Worker exit remains unconfirmed after kill")
+		}
+	}
+	dualStopped(t, id, "")
 }
