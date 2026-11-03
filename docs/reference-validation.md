@@ -77,6 +77,8 @@ unionfind运行输出的正常collector溢出按固定协议作窄适配：[v1.1
 
 ## 执行失败诊断
 
+2026-11-04的[停止故障调查](reference-validation-investigation.md)记录新主线独立50点及一次预注册前置序列均未复现，以及旧stdout删除访问日志的异常记录时间差。旧根因仍未确定，HTTP200/新通过不能证明旧客户端成功或解除#114；后续按该页的狭窄假设继续收集证据。
+
 可选`execution_diagnostic`包含`entries`与可选`truncated`，跨所有调用最多八条；第九条或诊断遍历遗漏才标记截断。成功省略字段，原成功JSON、profile/plan及schema保持。每条有固定`operation`（verify、compile、run、cleanup、snapshot_close、validation或unknown）、`point`（run从1开始，非逐点为0并省略）、`phase`、`role`和`code`。
 
 phase为verify、upload、readback、control、stdout_read、validate、delete或unknown；role为source、input、executable、stdout、environment或unknown，来自可信调用位置和私有对象账本，不根据错误文本猜测。delete映射到cleanup，保留触发清理的点号；最终制品清理point为0。code只接收deadline、canceled、budget、integrity、ownership、invalid_evidence、http_rejected、decode、command_exit、launch_failed、output_limit、wait_delay或unknown。材料、文件ID、命令、stdout/stderr和原错误均不进入诊断。
