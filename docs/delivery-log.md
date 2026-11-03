@@ -1,5 +1,17 @@
 # 工程交付记录
 
+## 2026-11-04：static_range_sum完整11点候选（尚未实测）
+
+成功fetch后从`origin/main 8e5001063001d670e69e8ebb0a964b0adaab87bc`建立独立`codex/static-range-sum-reference`，不依赖仍为草稿的#114/#119。固定来源328B、仅两个标准头；source/catalog及完整11组材料25对象149774419B逐哈希一致，证据`/private/tmp/oj-static-range-sum-complete-material-evidence-20261104.json` SHA `3f96c296b7d9b04518897134bd8fd59b77d8239c57a91a11bcaf7a49ab3282bb`。input总91745127/最大11722894B，answer总58026619/最大7636751B；最大答案大小不替代实际stdout或资源证据。
+
+唯一目标是该来源完整参考验证：独立tier6/Runtime/Files/profile，快照256MiB/input16MiB/answer及raw stdout/checker8MiB、payload512MiB，最坏275765609B/73 execution逻辑操作；旧五来源摘要、未准入3/5、执行CPU/wall/memory、文件/Stop期限及零重试保持。复用原medium完整配置、owner及canonical锁，不创建/替换槽。上游固定v1.13.3的Output→RLIMIT_FSIZE及非pipe独立文件collector已分别从官方源码页面/只读API核实；8MiB stdout+4KiB stderr不因合计超过8MiB自动超限，真实边界尚需验证，不据静态分析宣布容量成立。完整合同归[候选说明](reference-validation.md#static_range_sum候选)。
+
+现有离线Docker Go1.26.10六包race基线/定向race-vet、完整backend模块/格式/vet/静态/root race/七Linux命令构建、sandbox vet及独立Darwin驱动构建通过。测试实际冻结超过128MiB、256MiB再加catalog拒绝、共享quota释放、input16MiB/answer8MiB精确/+1，验证11点最坏载荷/512MiB账本注入边界、25MiB+1字节峰值预留和逐点/最终清理。注入账本不等于真实搬运512MiB或实际内存峰值。旧五profile/来源及Runtime互斥、未知档位零派发、第六来源Stop/dirty矩阵保持。
+
+新增负例初稿在裸observation要求额外空角色拒绝，但实际合同在更早Cached.Run wire ownership检查；Astra核对后将断言移至真实适配器入口，验证零stdout下载、已知input清理、后续fenced、已知exe可删及未知stdout预留保持，未修改生产分类。一次测试API签名编译错误修正后execution race/vet通过。驱动复核还要求预期stderr4097拒绝不得掩盖cleanup join；现仅接受一条未截断`validate/stdout/invalid_evidence`，注入stdout/input DELETE失败、取消和截断诊断均拒绝。对应普通race及sandbox标签合成回归通过，原失败日志保留，不计为通过。
+
+主要日志`/private/tmp/oj-static-range-sum-{baseline,first-targeted,targeted,output-evidence,output-evidence-fixed,output-evidence-verified,sandbox-build-check,probe-cleanup-regression,backend}.log`区分失败与最终通过；Linux与Darwin制品分目录。policy689、完整diff/链接与离线Gitleaks通过，Astra针对性设计/实现/驱动门禁及最终文档复核无剩余阻断，AI不代替人工审批。专用驱动计划先验证真实16MiB输入与8MiB stdout/4KiB stderr，再核对cap+1的完整SIGXFSZ/OLE及stderr4097固定collector拒绝，首组/清理/Stop任何失败均不进入完整11点CLI。当前尚未执行这两组或旧五来源实际回归，也未本地重跑PG/Redis、前端/浏览器或完整M0。本候选未准入，主线仍五来源；#114/#119旧失败/草稿、not-run/生产null/publication blocked保持，整体P4未完成，未部署。
+
 ## 2026-11-04：Host控制失败的阶段与本地启动证据
 
 成功fetch后从`origin/main 31474f2a19280f7b9d53a64ca6987cb0ba5af6dc`建立独立`codex/host-control-evidence`。唯一目标为Host.RoundTrip失败证据：既有execution条目可选`host_trace`记录admission/prepare/inspect/command/response_validation固定前缀、失败/最后完成位置、单调耗时、进入时context与剩余期限，以及直接本地命令启动证据；原顺序、错误/取消、预算、清理、Stop及零重试语义保持。它不修改来源准入、Runtime/Profile/Plan、数据库或发布状态，也不修复/解释#114/#119旧故障。完整字段及缺失语义归[参考验证](reference-validation.md#执行失败诊断)。

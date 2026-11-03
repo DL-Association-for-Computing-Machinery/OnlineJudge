@@ -10,7 +10,7 @@ import (
 )
 
 func TestMediumSourceRunnerAllAnswersPrecedeExecution(t *testing.T) {
-	for _, source := range []string{"library-checker:zalgorithm", "library-checker:suffixarray"} {
+	for _, source := range []string{"library-checker:zalgorithm", "library-checker:suffixarray", "library-checker:static_range_sum"} {
 		t.Run(source, func(t *testing.T) { testMediumSourceRunner(t, source) })
 	}
 }
@@ -24,6 +24,9 @@ func testMediumSourceRunner(t *testing.T, source string) {
 		b := problemfixture.NewZAlgorithm(t)
 		if source == "library-checker:suffixarray" {
 			b = problemfixture.NewSuffixArray(t)
+		}
+		if source == "library-checker:static_range_sum" {
+			b = problemfixture.NewStaticRangeSum(t)
 		}
 		_, p := referenceRunnerFixture(t, b, answer)
 		profile, _, err := problemvalidation.ResolveSource(source)
