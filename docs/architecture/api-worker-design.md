@@ -6,7 +6,9 @@
 
 ## 1. 契约与错误
 
-采用 REST＋JSON＋OpenAPI 3.1 契约优先，前端类型优先验证 openapi-typescript；生成类型不代替运行时输入验证。接口按 `/api/v1` 分组，DTO 与数据库模型分离。当前 [健康契约](../../api/openapi.yaml)及默认关闭的 [M0 实验契约](../../api/experiment.openapi.yaml)已实现，实验凭据仅供受控本机客户端，前端仍只有健康响应检查；业务前端与生成类型待接入。
+采用 REST＋JSON＋OpenAPI 3.1 契约优先，前端类型优先验证 openapi-typescript；生成类型不代替运行时输入验证。业务接口按 `/api/v1` 分组，DTO 与数据库模型分离。当前[健康契约](../../api/openapi.yaml)、默认关闭的[Bearer实验契约](../../api/experiment.openapi.yaml)及独立opt-in的[M0浏览器实验](../../api/m0-browser.openapi.yaml)已实现；账号浏览器另见会话契约，完整训练业务前端与生成类型仍待接入。
+
+`internal/m0browser` 只在实际127.0.0.1监听及双重显式实验配置下包装 `/m0` 路由，复用submission.Store，不创建沙箱或执行程序。服务端固定AC/WA源码与v3材料，独立固定 `m0-browser-operator/m0-browser-training` 归属；不接收客户端任意源码/身份，也不能读取Bearer的 `m0-operator/m0-training`。随机进程nonce用于CSRF而非身份，数据GET需nonce，POST另严格单一Origin/Host/Fetch Metadata与标准库CrossOriginProtection，原Bearer接口仍拒绝Origin。只读bootstrap下发nonce和固定示例，不下放Bearer。嵌入的小型页面沿用现有视觉token，不引第二个应用框架；只记录标签页原键/预设/核验状态，未知回执不自动换键，刷新只查询，冲突记录不归作当前示例结果。使用及回退归README，实测与准入边界归M0/交付记录。
 
 - 错误采用 RFC 9457 Problem Details 结构，保留稳定业务错误码、请求编号和适用字段错误；HTTP 状态表达认证、授权、冲突、限额等语义，内部根因只进受控诊断。
 - ID 用字符串，时间以 UTC 传输并在界面按时区展示；列表分页及响应大小有界，增长列表优先游标，榜单分页绑定同一结果版本/快照。
