@@ -1,6 +1,6 @@
 # 首批 Library Checker 文本检查器组件准入
 
-本页记录 P4 独立受限验证前的文本语义组件。`internal/judging.CompareLibraryCheckerText` 使用独立版本 `lc-wcmp-tokens-v1`；现有 M0 `CompareText`、Worker 固定材料门禁和草稿格式不变。该函数尚未接入生产 Worker 或草稿验证流程，不执行 Testlib，不解除任何发布阻断。
+本页记录 P4 的文本语义组件。`internal/judging.CompareLibraryCheckerText` 使用独立版本 `lc-wcmp-tokens-v1`；现有 M0 `CompareText`、Worker 固定材料门禁和草稿格式不变。该函数已供[首份草稿的独立参考验证](reference-validation.md)使用，尚未接入生产Worker或数据库验证任务；不执行Testlib，不解除任何发布阻断。
 
 ## 支持域与错误
 

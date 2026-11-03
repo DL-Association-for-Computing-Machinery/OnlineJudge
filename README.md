@@ -72,6 +72,41 @@ docker --context desktop-linux run --rm --network none --read-only \
 
 镜像须无声明式 VOLUME，运行用户必须非 root 且可读取私有候选；在 root 环境须另配明确非 root UID/GID，不直接复制执行上述用户参数。所有写入仅在临时内存盘，编译/检查子进程各限120秒/5秒。模式 `lc-wcmp-tokens-v1` 保留 M0 规则，区别 VT/FF 并显式约束字节/token；[支持域与限制](docs/checker-admission.md)不等于完整题目验证或生产预算准入，草稿继续 `not-run`。
 
+### 私有草稿参考验证
+
+首个维护执行入口仅验证固定Library Checker A+B的完整12点，不写数据库验证状态或发布。需要已配置且停止的专用M0槽、已有固定镜像与Docker Desktop、macOS arm64；不会自动创建、替换或恢复槽。使用已有Go1.26.10工具链镜像构建独立宿主产物（不与Linux检查共用输出）：
+
+```sh
+REFERENCE_TOOLCHAIN_IMAGE=YOUR_EXISTING_LOCAL_GO_TOOLCHAIN_IMAGE
+docker --context desktop-linux run --rm --network none --cap-drop ALL \
+  --security-opt no-new-privileges:true \
+  --mount "type=bind,src=$PWD,dst=/src" --workdir /src \
+  --entrypoint /bin/sh "$REFERENCE_TOOLCHAIN_IMAGE" -ec '
+    export GOPROXY=off GOSUMDB=off CGO_ENABLED=0 GOOS=darwin GOARCH=arm64
+    mkdir -p .local/validation-host
+    go build -trimpath -o .local/validation-host/worker ./cmd/worker
+    go test -c -tags=sandbox -o .local/validation-host/worker-validation.test ./cmd/worker
+  '
+OJ_SANDBOX_EXPERIMENT=1 OJ_WORKER_M0_SLOT=secondary \
+  .local/validation-host/worker validate-reference \
+  --bundle /private/tmp/oj-library-checker-drafts/bundle \
+  --source-lock "$PWD/config/problem-sources/library-checker.json" \
+  --output /private/tmp/oj-reference-report \
+  --start-stopped-slot
+```
+
+路径替换为已有完整私有bundle和新的报告目录。`--start-stopped-slot`在持锁/同步dirty后仅启动预存在、固定owner/配置匹配的停止槽；省略则要求槽已由维护者启动。启动回执未知时仍确认原生命周期停止；不能确认停止或清标记失败才保持quarantine，即使随后安全解封，本次报告仍失败。禁止自动重试、换槽掩盖失败或手工清标记。成功也会停止该槽。`report.json`私有保存逐点结果、完整plan/profile及容器生命周期，`publication`始终blocked；失败输出与支持域见[受限参考验证](docs/reference-validation.md)。
+
+真实专项另覆盖固定12点CLI、合成正确/错误/编译错误/RE/TLE/OLE和取消后的停止确认。它不需要PG/Redis或控制端，不进入普通CI：
+
+```sh
+OJ_SANDBOX_EXPERIMENT=1 OJ_WORKER_M0_SLOT=secondary OJ_REFERENCE_VALIDATION=1 \
+  OJ_REFERENCE_BUNDLE=/private/tmp/oj-library-checker-drafts/bundle \
+  OJ_REFERENCE_OUTPUT=/private/tmp/oj-reference-suite-report \
+  .local/validation-host/worker-validation.test \
+  -test.v -test.count=1 -test.run='^TestPrivateDraftReferenceSandbox$' -test.timeout=5m
+```
+
 ### 转换为统一私有草稿
 
 已有完整私有候选后，用 Python 3.11+ 在宿主进行静态适配；不执行题源程序、不联网或安装依赖：

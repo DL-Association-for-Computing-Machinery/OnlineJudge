@@ -1,5 +1,17 @@
 # 工程交付记录
 
+## 2026-11-03：首份完整私有草稿的受限参考验证
+
+从成功fetch的`origin/main 5f71597b5a7a74dd5ea517391402ee4591eed57c`建立`codex/private-draft-reference-validation`。新增维护命令`worker validate-reference`：只接收固定锁A+B完整12点，冻结独立plan/profile，编译一次、逐点运行及比较，记录资源和完整容器生命周期，制品清理、停止及marker同步均确认才通过。报告始终publication blocked，不连接控制端/PG/Redis，不写草稿not-run或生产配置；其余九题的大材料/依赖、持久化任务、完整质量、审核发布继续待完成。原M0分类、profile和Stop门禁不放宽；仅提升已锁定MIT许可go-toml/v2 v2.2.4为直接依赖，无版本/go.sum变化或新下载。
+
+实际复现并修复两项准入缺陷：删点后重算合法草稿/index仍曾被接受，现独立核验锁定info.toml组序、完整点集、sample和hash.json精确配对，遗漏/顺序/重复键等在Compile前拒绝；macOS大小写别名曾绕过输出目录隔离，现按真实目录身份检查祖先，原生文件系统回归通过。固定快照与全部参考答案先验、错误/取消后NOT_RUN、启动owner/生命周期、Stop/清理失败不通过均有行为回归。针对性Astra设计及实现复核不代替人工approval。
+
+Docker离线Go1.26.10/linux arm64的模块验证、格式、vet、三范围静态、完整root race及七命令构建通过（`/private/tmp/oj-reference-catalog-backend.log`）；目录修复后cmd/worker race及sandbox标签静态检查通过（`oj-reference-path-verified.log`），原生大小写回归通过（`oj-reference-case-verified.log`）。首轮冷并发构建时已有workerclient的300ms成功边界测试超时，未改断言/阈值，原样完整重跑通过。未本地重跑PG/Redis/浏览器或完整M0套件，无对应业务/schema/frontend改动；普通远端CI另按精确head核验。
+
+固定Docker Desktop LinuxKit7.0.14/arm64、go-judge v1.13.3、GCC15.3.0镜像`sha256:cd40ffdb32619806a8d97e59fe03e890fe4066835f57efa6ae13f919ef3262c5`中，源集合修复后的完整真实专项97.95秒通过：真实12点CLI，以及合成AC/WA/CE/RE/TLE/OLE和取消共八组，全部停止确认。报告`/private/tmp/oj-reference-catalog-20261103/report.json`的SHA-256为`57ab672771a35ae732d865be8c582788c0c956c10f3c3a0ce74183933086d154`，plan为`12e87eb8d0771e34a8d187cb2bfc3b5cbf266a3d09768fc20194cfa4927f1325`，profile为`68557a3c0a3bdc8dc1afe488c1edaf9d4c0f08d425d962c2e45764c05d50fb13`；日志`oj-reference-catalog-real.log`。私有报告0700/0600，含全部身份和用量，不含源码/输入/答案/实际输出。
+
+必须保留的失败：首轮驱动曾因cwd推导找不到宿主CLI，修正为独立产物路径；同轮WA停止确认失败并隔离，随后已有recover确认安全。最终目录修复后的额外12点CLI补跑21.60秒中全部点AC，但Stop未确认，最终报告正确为SE/failed、stop_confirmed=false并保留dirty（`oj-reference-shipping-real.log`及`oj-reference-shipping-20261103/report.json`）。之后同full ID的Docker回读为停止/PID0/Exit137，已有受控recover成功（`oj-reference-shipping-recovery.log`），没有手工清marker、重建容器或再跑至绿；后续恢复不追认旧报告通过。两次停止确认间歇失败的根因尚未定位，不能归因于负载，也不能以早先通过掩盖；这是当前实验入口的已知可用性限制，不作为生产或完整P4验收。临时证据不是备份。
+
 ## 2026-11-03：首批 Library Checker 文本语义组件
 
 成功fetch后从`origin/main ebcca026ac71fc5dc13a9b9bc8445eb3623ac650`建立`codex/library-checker-text-admission`。P4独立受限验证前置新增`CompareLibraryCheckerText`与独立`lc-wcmp-tokens-v1`，显式每文件/每token预算，仅SP/TAB/LF/CR分隔、大小写/数字逐字节比较；配置错误、完整参考异常、输出超限分别返回。原M0空白、预算和错误优先级保留。支持域为UTF-8、单token至多64KiB、单文件配置上限128MiB；不是Testlib全域等价、已分配内存隔离或生产资源准入。草稿/Worker未接线，原版本、null生产配置、not-run及发布阻断不变。无依赖、SQL/schema或HTTP变化。

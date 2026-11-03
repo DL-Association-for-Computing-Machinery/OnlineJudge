@@ -6,11 +6,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -20,6 +22,68 @@ type Bundle struct {
 	Lock      []byte
 	Document  map[string]any
 	Files     map[string][]byte
+}
+
+// BindReferenceCases pins an independent synthetic source catalog/hash list.
+// Mutate a draft AFTER this call to test omissions against unchanged provenance.
+func (b *Bundle) BindReferenceCases(t *testing.T) {
+	t.Helper()
+	type group struct {
+		name  string
+		count int
+	}
+	var groups []group
+	hashes := map[string]string{}
+	cases := b.Document["test_cases"].([]any)
+	mapping := b.Document["provenance"].(map[string]any)["source_case_mapping"].([]any)
+	for i, value := range cases {
+		c := value.(map[string]any)
+		name := mapping[i].(map[string]any)["upstream_case"].(string)
+		at := strings.LastIndexByte(name, '_')
+		if at < 1 {
+			t.Fatal("invalid synthetic source case")
+		}
+		base := name[:at]
+		file := base + ".cpp"
+		if c["sample"].(bool) {
+			file = base + ".in"
+		}
+		if len(groups) == 0 || groups[len(groups)-1].name != file {
+			groups = append(groups, group{name: file})
+		}
+		g := &groups[len(groups)-1]
+		if name != fmt.Sprintf("%s_%02d", base, g.count) {
+			t.Fatal("invalid synthetic source order")
+		}
+		g.count++
+		hashes[name+".in"] = c["input"].(map[string]any)["sha256"].(string)
+		hashes[name+".out"] = c["answer"].(map[string]any)["sha256"].(string)
+	}
+	var info strings.Builder
+	for _, g := range groups {
+		fmt.Fprintf(&info, "[[tests]]\nname = %q\nnumber = %d\n", g.name, g.count)
+	}
+	b.AddOriginal(t, "sample/aplusb/info.toml", []byte(info.String()))
+	b.AddOriginal(t, "sample/aplusb/hash.json", JSON(t, hashes))
+}
+
+// AddOriginal adds an explicitly source-locked private program or dependency.
+// Call Write after all mutations to recompute document and inventory identities.
+func (b *Bundle) AddOriginal(t *testing.T, relative string, raw []byte) {
+	t.Helper()
+	var lock map[string]any
+	if err := json.Unmarshal(b.Lock, &lock); err != nil {
+		t.Fatal(err)
+	}
+	lock["files"].(map[string]any)[relative] = identity(raw)
+	b.Lock = JSON(t, lock)
+	b.Files["provenance/source-lock.json"] = b.Lock
+	p := b.Document["provenance"].(map[string]any)
+	p["source_lock_sha256"] = Hash(b.Lock)
+	ref := identity(raw)
+	ref["path"] = "objects/sha256/" + Hash(raw)
+	b.Files[ref["path"].(string)] = append([]byte(nil), raw...)
+	p["original_files"].(map[string]any)["source/"+relative] = ref
 }
 
 // AddStatementImage explicitly designates a source-locked synthetic image.
