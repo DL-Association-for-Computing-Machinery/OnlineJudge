@@ -1,5 +1,6 @@
 import { AccountError, accountRequest } from '../services/session'
 import type { AccountInput, SessionView } from '../services/session'
+import { invalidatePrivateContent } from './privateInvalidation'
 
 export type AccountAction = 'check' | 'login' | 'local-login' | 'complete' | 'abandon' | 'activity' | 'logout' | 'password'
 type SessionStatus = 'checking' | 'authenticated' | 'anonymous' | 'unknown' | 'unavailable' | 'insecure'
@@ -68,6 +69,8 @@ export class AccountController {
     this.action = action
     const current = () => this.connected && this.generation === generation
     this.publish({ busy: true, notice: { tone: 'neutral', text: '正在处理，请稍候…' } })
+    const changesCredentials = !['check', 'activity'].includes(action)
+    if (changesCredentials) invalidatePrivateContent()
     let issued = false
     try {
       switch (action) {
@@ -131,6 +134,7 @@ export class AccountController {
         ...(action === 'password' && error.code === 'NOT_FOUND' ? { passwordAvailable: false } : {}),
       })
     } finally {
+      if (changesCredentials) invalidatePrivateContent()
       if (current()) {
         this.running = false
         this.abort = null

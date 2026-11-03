@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AccountController } from './controller'
+import * as privateInvalidation from './privateInvalidation'
 
 const view = { subject_id: 'a'.repeat(32), created_at: '2026-11-01T00:00:00Z', idle_expires_at: '2026-11-01T02:00:00Z', absolute_deadline: '2026-11-01T12:00:00Z' }
 const problem = (status: number, code: string) => Response.json({ type: 'about:blank', status, code }, { status, headers: { 'Content-Type': 'application/problem+json' } })
@@ -23,9 +24,22 @@ async function ready(response: Response) {
 }
 
 beforeEach(() => vi.stubGlobal('location', { protocol: 'https:' }))
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
 describe('browser account lifecycle', () => {
+  it('invalidates before a credential write and again after an unknown result; reads never broadcast', async () => {
+    const notify = vi.spyOn(privateInvalidation, 'invalidatePrivateContent')
+    const { controller, fetch } = await ready(Response.json(view))
+    expect(notify).not.toHaveBeenCalled()
+    let release!: (response: Response) => void
+    fetch.mockImplementationOnce(() => new Promise(resolve => { release = resolve }))
+    const operation = controller.run('logout')
+    expect(notify).toHaveBeenCalledOnce()
+    release(problem(503, 'LOGOUT_UNAVAILABLE')); await operation
+    expect(notify).toHaveBeenCalledTimes(2)
+    expect(controller.getSnapshot().status).toBe('unknown')
+    controller.disconnect()
+  })
   it('local shortcut uses the normal dependent chain without a browser password', async () => {
     const { controller, fetch } = await ready(problem(401, 'SESSION_REQUIRED'))
     fetch.mockResolvedValueOnce(empty(202)).mockResolvedValueOnce(empty()).mockResolvedValueOnce(Response.json(view))

@@ -1,5 +1,21 @@
 # 工程交付记录
 
+## 2026-11-03：共享题面渲染与本人私有预览页
+
+成功fetch后从`origin/main 3c5b1a37457a1974f953625e03f78161ae862153`建立独立`codex/private-draft-rendering`。增加`/author/drafts`及`/author/drafts/:id`，显式检查普通会话后读取现有本人预览API；与示例做题页共用Markdown/GFM/数学组件和原文样例复制。只按已入库ID打开，不提供列表、导入表单、编辑、审核或发布；服务端当前角色/owner检查不变，无schema、API或后端授权规则变化。
+
+渲染按路由懒加载，本地CSS/字体、跳过原始HTML、源图片零请求占位、受控链接及no-referrer；逐公式独立KaTeX配置和局部转义源码降级。固定KaTeX0.19.1及两个精确父依赖覆盖，避免上游旧0.16安全问题；生产依赖许可及字体许可保留随静态资源分发。题面128KiB、输入/输出AST20000节点/深度64、数学4096字节/128条/累计32768字节；包含math围栏。整题超限提供原文或有限节选，字体失败有可见原文入口。预算限制准入和输出，主线程解析不具有硬CPU隔离；完整图片/题面质量及生产低端设备性能另验。
+
+私有数据仅在页面内存，7MiB流式响应/严格UTF-8及完整JSON字符串、精确字段/ID/内容版本/样例和1MiB原文预算，15秒超时且无自动重试。账号同步发布、凭据操作开始/finally、页面隐藏/恢复/focus及期限到达清除并取消，独立intent/generation防止会话检查与GET迟到复活，发布前再查deadline。跨标签只通知失效、不发送身份/正文、不自动重新读取；再次显示必须显式检查。BroadcastChannel为异步补充，不能瞬时撤回其他标签或已复制内容。
+
+实测：Docker Node24.19/pnpm11.25的lint（含7项检测器控制）、类型、84项前端测试及构建通过；独立pnpm audit全部级别零漏洞，锁文件仅有KaTeX0.19.1。Docker Go1.26.10/linux arm64模块校验、格式/vet/三范围静态/root race/七命令和sqlc无漂移通过。100治理14.389秒、repository策略与完整候选补丁Gitleaks/合成拒绝脱敏通过。Astra针对性复核发现并修复延迟timer下到期成功发布、整题原文降级缺失和跨标签测试被焦点清理掩盖，最终无代码阻断；AI复核不代替人工审批。
+
+最终浏览器专项在已有Playwright1.64.1/Chromium141.0.7390.37、1280×960及390×844运行：13组全部通过；真实HTTPS→pinned mTLS race API/PG/Redis夹具35.338秒通过，浏览器/夹具/容器/Redis/资源清理结果均为true。覆盖正常账号及未知回执原流程、本人工程草稿导入/GET、GFM/行内/块级/围栏数学、错误后正确公式、HTML/危险链接/外部图片零请求、冷context本地字体、逐字末尾换行复制、迟到响应、无焦点切换的跨标签退出清除且不自动Read/GET、字体阻断的可见转义原文、桌面/窄屏布局与无意外console/pageerror。
+
+另对已准备的实际十题Markdown及六类恶意边界做renderer-only响应替换：16例最大打开耗时897ms（含Playwright操作/会话Read/模拟GET/页面提交，不是纯CPU），观测最大longtask76ms、题面DOM最多1410元素；十题均无公式错误。该语料不是十题真实API/身份/完整人工质量验收，真实owner/API由小型夹具独立证明。测量只代表本机Chromium，未宣称浏览器矩阵或硬时间上限。证据位于仓库外`/private/tmp/oj-render-browser-qa-final`（结构化结果、逐例测量、桌面/移动/字体失败截图）、`oj-render-frontend-verified.log`、`oj-render-backend-final.log`及`oj-render-governance-final.log`；临时产物不是备份。
+
+环境修正：Playwright默认期望的Chromium1248未安装，明确选择已有1194/Chromium141，无下载；旧筛选断言补等待实际DOM提交，不降低内容断言；浏览器夹具增加新SPA路由回退，生产Nginx现有回退已支持；本轮生成pnpm缓存移到仓库外，不提交依赖/产物。P4仍需导入管理、图片授权、本站受限验证、非作者终审及原子发布；未部署、未解除not-run发布阻断，未声明P4/M1整体完成。
+
 ## 2026-11-03：本人草稿的固定版本题面与样例预览
 
 成功fetch后从`origin/main b68a90f06a8be8104d5b5fc93d3b28104f9a1cd9`建立独立`codex/private-draft-preview`。唯一目标为P4管理页所需的[本人题面/样例数据入口](problem-drafts.md#本人题面与样例预览)：GET私有草稿`/{id}/preview`，沿普通TLS/pinned代理/Cookie/当前出题角色和owner边界；只选已入库statement及sample=true点，全部文档/逻辑引用与1MiB原文预算先验，再逐个匿名快照验证/读取/关闭，最后重新观察同一会话并同事务复核授权和固定元数据。只返回完整JSON，不替换/截断非法或超限材料，不执行或渲染HTML。
