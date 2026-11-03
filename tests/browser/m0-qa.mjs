@@ -212,6 +212,26 @@ try {
   await page.getByRole('button', { name: '核验原键回执', exact: true }).click()
   await text('暂未查到原键回执，这不表示提交已回滚')
   passed('404 and injected 503 retain original operation without a false verdict')
+  phase = 'injected known submission admission'
+  result.injected_admission_errors = []
+  for (const failure of [
+    { status: 429, code: 'BACKLOG_LIMIT', text: '未完成提交已达额度，本次未新增任务' },
+    { status: 503, code: 'ADMISSION_UNAVAILABLE', text: '提交准入尚未配置，本次未新增任务' },
+  ]) {
+    const rejected = safeRoute(route => route.fulfill({ status: failure.status, contentType: 'application/problem+json',
+      body: JSON.stringify({ type: 'about:blank', status: failure.status, code: failure.code, title: 'synthetic admission response' }) }))
+    await page.route('**/m0/api/submissions', rejected)
+    const before = postCount
+    await page.getByRole('button', { name: '原样重试', exact: true }).click()
+    await text(failure.text)
+    assert.equal(postCount, before + 1)
+    assert.equal((await operation()).key, unknown.key)
+    assert.equal((await operation()).binding, 'unverified')
+    assert.equal(await page.locator('#verdict').innerText(), '尚无判定')
+    await page.unroute('**/m0/api/submissions', rejected)
+    result.injected_admission_errors.push({ status: failure.status, code: failure.code })
+    passed('injected ' + failure.code + ' preserves original operation without false receipt/verdict')
+  }
   await context.close()
   context = oldContext
 
@@ -239,7 +259,7 @@ try {
   assert.deepEqual(destinations, [])
   assert.deepEqual(routeErrors, [])
   assert.deepEqual(errors, [])
-  const expectedPhases = ['actual lost acceptance response', 'conflict survives receipt and refresh', 'not found and unavailable', 'history navigation recovery']
+  const expectedPhases = ['actual lost acceptance response', 'conflict survives receipt and refresh', 'not found and unavailable', 'history navigation recovery', 'injected known submission admission']
   assert(resourceDiagnostics.every(d => ['/m0/api/submissions', '/m0/api/receipt'].includes(d.path) && expectedPhases.includes(d.phase)), 'Every resource error must belong to an explicit failure test')
   result.expected_resource_diagnostics = resourceDiagnostics
   passed('no Bearer, cookies, external destinations, runtime errors or unexpected console errors')

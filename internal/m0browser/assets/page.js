@@ -125,6 +125,8 @@ function rejected(result, submitting) {
   }
   else if (result.status === 404) message('暂未查到原键回执，这不表示提交已回滚。请继续核验，或使用原键和原示例重试。');
   else if (result.status === 403) message('本机实验入口校验失败。已保留原键，请刷新入口后继续核验。');
+  else if (submitting && result.status === 429 && result.data?.code === 'BACKLOG_LIMIT') message('未完成提交已达额度，本次未新增任务。已保留原键和示例，可在容量释放后原样重试。');
+  else if (submitting && result.status === 503 && result.data?.code === 'ADMISSION_UNAVAILABLE') message('提交准入尚未配置，本次未新增任务。已保留原键，请联系本机实验管理员。');
   else message(submitting ? '接收状态未知。已保留原键和原示例，请核验回执后再决定是否原样重试。' : '查询暂时失败，未改变判题结果。请使用原键继续核验。');
 }
 

@@ -122,6 +122,10 @@ func submissionError(c *gin.Context, err error) {
 		problem(c, 404, "NOT_FOUND", "尚未查到已接收提交，请保留原幂等键核验")
 	case errors.Is(err, submission.ErrMaterial):
 		problem(c, 503, "MATERIAL_UNAVAILABLE", "实验材料不可用")
+	case errors.Is(err, submission.ErrBacklog):
+		problem(c, 429, "BACKLOG_LIMIT", "未完成提交已达额度；请保留原操作稍后重试")
+	case errors.Is(err, submission.ErrAdmissionPolicy):
+		problem(c, 503, "ADMISSION_UNAVAILABLE", "提交准入尚未配置；请保留原操作")
 	default:
 		problem(c, 503, "ACCEPTANCE_UNKNOWN", "服务暂时不可用；请使用原幂等键核验接收状态")
 	}

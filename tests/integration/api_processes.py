@@ -30,6 +30,9 @@ def main():
     env = dict(os.environ, OJ_DATABASE_URL=dsn)
     for command in ("up", "up", "fixture", "fixture"):
         subprocess.run([str(root / ".local/bin/migrate"), command], env=env, check=True)
+    for arguments in (("0", "1"), ("1", "2"), ("no-number", "1"), ("9223372036854775808", "1")):
+        assert subprocess.run([str(root / ".local/bin/migrate"), "backlog", *arguments], env=env,
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0
 
     with tempfile.TemporaryDirectory(prefix="oj-api-processes-") as temp:
         material_root = Path(temp) / "materials"
@@ -63,8 +66,14 @@ def main():
                 headers={"Authorization": f"Bearer {token}",
                          "Content-Type": "application/json", "Idempotency-Key": key},
             )
-            with urllib.request.urlopen(req, timeout=10) as response:
+            try:
+                response = urllib.request.urlopen(req, timeout=10)
+            except urllib.error.HTTPError as failure:
+                response = failure
+            with response:
                 assert response.headers["Cache-Control"] == "no-store"
+                if response.status == 429:
+                    assert "Retry-After" not in response.headers
                 return response.status, json.load(response)
 
         def start(index, version=""):
@@ -92,12 +101,34 @@ def main():
             second = start(1)
             data = json.dumps({"material_version": "m0-sum-v1", "language": "gnu++17",
                                "source": "// synthetic process test; never executed\n"}).encode()
+            operation_name = "backlog-policy-missing-01"
+            status, missing_policy = request(0, "/submissions", data, operation_name)
+            assert status == 503 and missing_policy["code"] == "ADMISSION_UNAVAILABLE"
+            status, _ = request(1, "/submission-receipt", key=operation_name)
+            assert status == 404
+            # APIs never initialize/override the policy; one explicit admin operation enables both.
+            subprocess.run([str(root / ".local/bin/migrate"), "backlog", "10000", "10000"], env=env, check=True)
             with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
                 results = list(executor.map(lambda i: request(i % 2, "/submissions", data), range(24)))
             assert sum(status == 202 for status, _ in results) == 1
             ids = {body["id"] for _, body in results}
             assert len(ids) == 1
             assert all(body["state"] == "queued" and body["verdict"] is None for _, body in results)
+            subprocess.run([str(root / ".local/bin/migrate"), "backlog", "2", "2"], env=env, check=True)
+            operations = ["backlog-process-race-01", "backlog-process-race-02"]
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                race = list(executor.map(lambda i: request(i, "/submissions", data, operations[i]), range(2)))
+            assert sorted(status for status, _ in race) == [202, 429]
+            assert next(body for status, body in race if status == 429)["code"] == "BACKLOG_LIMIT"
+            winner = next(i for i, (status, _) in enumerate(race) if status == 202)
+            status, repeated = request(1 - winner, "/submissions", data, operations[winner])
+            assert status == 200 and repeated["id"] == race[winner][1]["id"]
+            changed = json.loads(data)
+            changed["source"] += "// changed"
+            status, _ = request(1 - winner, "/submissions", json.dumps(changed).encode(), operations[winner])
+            assert status == 409
+            subprocess.run([str(root / ".local/bin/migrate"), "backlog", "10000", "10000"], env=env, check=True)
+            print("PASS: two actual API processes share the last backlog slot; full-queue retry/conflict preserve original semantics")
             second.terminate()
             assert second.wait(timeout=10) == 0
             restarted = start(1)

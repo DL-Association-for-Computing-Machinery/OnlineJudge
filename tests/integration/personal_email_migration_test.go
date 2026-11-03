@@ -28,6 +28,9 @@ func personalEmail(t *testing.T, raw string) identity.Email {
 }
 
 func testPersonalEmailMigrations(t *testing.T, ctx context.Context, a, b *pgxpool.Pool, provider *goose.Provider, submissions *submissionpg.Store, h *password.Hasher) {
+	_, err := provider.DownTo(ctx, 5)
+	must(t, err)
+	defer func() { _, err := provider.Up(ctx); must(t, err) }()
 	store, err := identitypg.New(a, h)
 	must(t, err)
 	r := identityRecord(t, h, "synthetic personal migration")
@@ -37,7 +40,7 @@ func testPersonalEmailMigrations(t *testing.T, ctx context.Context, a, b *pgxpoo
 		requireRecoverySchemaFour(t, ctx, a)
 		account, err := store.Initialize(ctx, identityID(800), false, r)
 		must(t, err)
-		work, _, err := submissions.Accept(ctx, "synthetic-pre-email", "training", "personal-upgrade-existing-01", submission.Request{
+		work, _, err := acceptLegacySubmission(ctx, a, "synthetic-pre-email", "training", "personal-upgrade-existing-01", submission.Request{
 			MaterialVersion: experiment.Version, Language: "gnu++17", Source: "// synthetic retained email migration source"})
 		must(t, err)
 		capture := func() string {
@@ -48,9 +51,9 @@ func testPersonalEmailMigrations(t *testing.T, ctx context.Context, a, b *pgxpoo
 			return snapshot
 		}
 		before := capture()
-		_, err = provider.Up(ctx)
+		_, err = provider.UpTo(ctx, 5)
 		must(t, err)
-		must(t, db.CheckSchema(ctx, a))
+		requirePersonalSchemaFive(t, ctx, a)
 		if capture() != before {
 			t.Fatal("email migration changed existing business or recovery state")
 		}
@@ -68,14 +71,14 @@ func testPersonalEmailMigrations(t *testing.T, ctx context.Context, a, b *pgxpoo
 		if !absent {
 			t.Fatal("mapping table survived rollback")
 		}
-		_, err = provider.Up(ctx)
+		_, err = provider.UpTo(ctx, 5)
 		must(t, err)
 		row, err := store.InitializePersonal(ctx, identityID(801), personalEmail(t, "Original@Example.invalid"), false, r)
 		must(t, err)
 		if _, err := provider.Down(ctx); err == nil {
 			t.Fatal("rollback discarded an unverified, disabled email mapping")
 		}
-		must(t, db.CheckSchema(ctx, a))
+		requirePersonalSchemaFive(t, ctx, a)
 		got, err := store.PersonalByID(ctx, row.ID)
 		must(t, err)
 		if got != row || capture() != before {
@@ -136,7 +139,7 @@ func testPersonalEmailMigrations(t *testing.T, ctx context.Context, a, b *pgxpoo
 						if !errors.As(downErr, &cause) || cause.Code != "P0001" {
 							t.Fatalf("rollback did not refuse retained email: %v", downErr)
 						}
-						must(t, db.CheckSchema(ctx, a))
+						requirePersonalSchemaFive(t, ctx, a)
 						_, err = a.Exec(ctx, `DROP TRIGGER wait_personal ON `+table)
 						must(t, err)
 						_, err = a.Exec(ctx, `DELETE FROM identity_personal_emails WHERE subject_id=$1`, identityID(802))
@@ -154,7 +157,7 @@ func testPersonalEmailMigrations(t *testing.T, ctx context.Context, a, b *pgxpoo
 							_, err = a.Exec(ctx, `DROP TRIGGER wait_personal ON identity_credentials`)
 							must(t, err)
 						}
-						_, err = provider.Up(ctx)
+						_, err = provider.UpTo(ctx, 5)
 						must(t, err)
 					}
 					_, err = a.Exec(ctx, `DELETE FROM identity_credentials WHERE id=$1`, identityID(802))
@@ -163,4 +166,13 @@ func testPersonalEmailMigrations(t *testing.T, ctx context.Context, a, b *pgxpoo
 			}
 		}
 	})
+}
+
+func requirePersonalSchemaFive(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	var version int64
+	must(t, pool.QueryRow(ctx, `SELECT version_id FROM goose_db_version ORDER BY id DESC LIMIT 1`).Scan(&version))
+	if version != 5 || db.CheckSchema(ctx, pool) == nil {
+		t.Fatal("expected schema five, rejected by the current API")
+	}
 }

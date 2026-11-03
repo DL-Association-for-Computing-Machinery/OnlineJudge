@@ -85,6 +85,7 @@ func testDualWorkerRecovery(t *testing.T, crash bool) {
 	if err := store.RegisterFixture(ctx); err != nil {
 		t.Fatal(err)
 	}
+	configureSandboxBacklog(t, ctx, pool)
 	if _, err := pool.Exec(ctx, `INSERT INTO worker_nodes(id,credential_version) VALUES('dual-primary',1),('dual-secondary',1)`); err != nil {
 		t.Fatal(err)
 	}

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OnlineJudge M0 Submission Experiment
-  version: 0.3.0
+  version: 0.4.0
   description: >-
     默认关闭、仅本机受控客户端使用。静态实验主体 m0-operator、上下文 m0-training，
     不是正式账号 API。接收成功不代表执行完成；独立 worker.openapi.yaml 定义 mTLS 租约接口。
@@ -55,6 +55,7 @@ paths:
           content:
             application/problem+json:
               schema: {$ref: './openapi.yaml#/components/schemas/Problem'}
+        '429': {$ref: '#/components/responses/Backlog'}
         '503': {$ref: '#/components/responses/Unavailable'}
   /api/v1/experiments/submission-receipt:
     get:
@@ -151,8 +152,13 @@ components:
       content:
         application/problem+json:
           schema: {$ref: './openapi.yaml#/components/schemas/Problem'}
+    Backlog:
+      description: BACKLOG_LIMIT，本次请求因共享未终结积压额度被拒绝，未新建任务；不承诺释放时间，无Retry-After。保留原键；先前未知请求仍须核验。
+      content:
+        application/problem+json:
+          schema: {$ref: './openapi.yaml#/components/schemas/Problem'}
     Unavailable:
-      description: MATERIAL_UNAVAILABLE 或 ACCEPTANCE_UNKNOWN；保留原幂等键查询，503 不证明事务未提交
+      description: POST可返回ADMISSION_UNAVAILABLE（共享策略未配置，本次未新建任务）、MATERIAL_UNAVAILABLE或ACCEPTANCE_UNKNOWN；后两者及GET失败不能证明先前事务未提交，保留原幂等键核验。无Retry-After。
       content:
         application/problem+json:
           schema: {$ref: './openapi.yaml#/components/schemas/Problem'}
