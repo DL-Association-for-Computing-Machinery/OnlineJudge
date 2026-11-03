@@ -6,6 +6,7 @@ import (
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/tests/problemfixture"
 )
 
 func TestSourceProfilesPreserveOldDigestsAndRejectBorrowing(t *testing.T) {
@@ -15,6 +16,13 @@ func TestSourceProfilesPreserveOldDigestsAndRejectBorrowing(t *testing.T) {
 	p, tier, err := problemvalidation.ResolveSource("library-checker:zalgorithm")
 	if err != nil || tier != experiment.ReferenceMedium || p.Text.Bytes != 4<<20 || p.Diagnostics != 4096 {
 		t.Fatal("medium source admission", err)
+	}
+	if p.Digest() != "32aa64eb913108ccc089a0548a98cb777f019f37cd4bc349ab87ff0ddd1a515d" {
+		t.Fatal("zalgorithm profile changed")
+	}
+	suffix, suffixTier, err := problemvalidation.ResolveSource("library-checker:suffixarray")
+	if err != nil || suffixTier != tier || suffix.Materials.TotalBytes != 128<<20 || p.Materials.TotalBytes != 64<<20 || suffix.Digest() == p.Digest() {
+		t.Fatal("source-specific snapshot admission", err)
 	}
 	if _, _, err := problemvalidation.ResolveSource("library-checker:unknown"); err == nil {
 		t.Fatal("unknown source accepted")
@@ -26,5 +34,9 @@ func TestSourceProfilesPreserveOldDigestsAndRejectBorrowing(t *testing.T) {
 	}
 	if _, err := problemvalidation.New(s).ValidateUnionFind(context.Background(), prepared, p); err == nil || len(s.calls) != 0 {
 		t.Fatal("old entry widened")
+	}
+	_, zalg := referenceRunnerFixture(t, problemfixture.NewZAlgorithm(t), []byte("5\n"))
+	if _, err := problemvalidation.New(s).ValidateSource(context.Background(), zalg, "library-checker:suffixarray"); err == nil || len(s.calls) != 0 {
+		t.Fatal("zalgorithm borrowed larger snapshot profile")
 	}
 }

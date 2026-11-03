@@ -6,19 +6,14 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/json"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strconv"
-	"syscall"
 	"testing"
 	"time"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/execution"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
-	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/workerhost"
 )
 
@@ -27,65 +22,7 @@ func TestMediumReferenceSandbox(t *testing.T) {
 		t.Fatal("explicit independent Desktop medium reference experiment required")
 	}
 	t.Run("complete-twenty-nine-point-cli", func(t *testing.T) {
-		bundle, output := os.Getenv("OJ_REFERENCE_BUNDLE"), os.Getenv("OJ_MEDIUM_OUTPUT")
-		if !canonicalAbsolute(bundle) || !canonicalAbsolute(output) {
-			t.Fatal("explicit complete bundle/new report directory required")
-		}
-		binary, err := os.Executable()
-		if err != nil {
-			t.Fatal(err)
-		}
-		binary, err = filepath.EvalSymlinks(binary)
-		if err != nil {
-			t.Fatal(err)
-		}
-		root := filepath.Clean(filepath.Join(filepath.Dir(binary), "../.."))
-		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
-		defer cancel()
-		cmd := exec.CommandContext(ctx, filepath.Join(root, ".local/validation-host/worker"), "validate-reference", "--source-id", "library-checker:zalgorithm", "--bundle", bundle, "--source-lock", filepath.Join(root, "config/problem-sources/library-checker.json"), "--output", output, "--start-stopped-slot")
-		raw, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("real medium CLI: %v: %s", err, raw)
-		}
-		raw, err = os.ReadFile(filepath.Join(output, "report.json"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		var r problemvalidation.Report
-		if err := json.Unmarshal(raw, &r); err != nil {
-			t.Fatal(err)
-		}
-		profile, tier, err := problemvalidation.ResolveSource("library-checker:zalgorithm")
-		if err != nil {
-			t.Fatal(err)
-		}
-		slot, err := workerhost.ReferenceSlotForTier(tier)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if r.Status != "reference-validation-passed" || r.Verdict != "AC" || !r.StopConfirmed || r.Publication != "blocked" || r.Slot != slot.ContainerName() || r.Plan.SourceID != "library-checker:zalgorithm" || r.Plan.SourceLockSHA256 != problemvalidation.SourceLockSHA256 || len(r.Points) != 29 || len(r.Plan.Cases) != 29 || r.ProfileSHA256 != profile.Digest() || r.PlanSHA256 != r.Plan.Digest() {
-			t.Fatal("incomplete medium report identity/profile/execution")
-		}
-		for _, p := range r.Points {
-			if p.Verdict != "AC" || p.Usage == nil {
-				t.Fatal("unexecuted medium point")
-			}
-		}
-		if _, err := os.Stat(filepath.Join(output, "INCOMPLETE")); !os.IsNotExist(err) {
-			t.Fatal("incomplete report marker")
-		}
-		lock, err := lockSlotMode(slot.LockName(), false)
-		if err != nil {
-			t.Fatal("medium lock not clean", err)
-		}
-		lock.Close()
-		usage, ok := cmd.ProcessState.SysUsage().(*syscall.Rusage)
-		if !ok || usage.Maxrss <= 0 {
-			t.Fatal("native CLI memory counter unavailable")
-		}
-		// Darwin uses bytes. This wait4 counter is not Go heap allocation or a
-		// concurrent sum of CLI, Docker subprocess and sandbox resident memory.
-		t.Logf("complete zalgorithm draft=%s import=%s plan=%s profile=%s 29 AC/stop confirmed; CLI wait4-maxrss-bytes=%d", r.Plan.Version, r.Plan.ImportRevision, r.PlanSHA256, r.ProfileSHA256, usage.Maxrss)
+		referenceSourceCLI(t, "library-checker:zalgorithm", "OJ_MEDIUM_OUTPUT", 29)
 	})
 	t.Run("raw-four-MiB-collector", func(t *testing.T) {
 		h := mediumSandboxHost(t)
