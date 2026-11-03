@@ -74,7 +74,7 @@ docker --context desktop-linux run --rm --network none --read-only \
 
 ### 私有草稿参考验证
 
-主线已验证固定Library Checker A+B完整12点、unionfind完整18点、zalgorithm完整29点、suffixarray完整50点及primality_test固定依赖/完整13点。本分支新增staticrmq候选入口，但真实27点第9点SE、后18点未运行，尚未完成准入，不能据构建/CI或16MiB通路通过宣称支持；证据归[交付记录](docs/delivery-log.md)。维护入口不写数据库验证状态或发布。需要已配置且停止的专用槽、已有固定镜像与Docker Desktop、macOS arm64；命令不会自动创建、替换或恢复槽。使用已有Go1.26.10工具链镜像构建独立宿主产物（不与Linux检查共用输出）：
+主线已验证固定Library Checker A+B完整12点、unionfind完整18点、zalgorithm完整29点、suffixarray完整50点及primality_test固定依赖/完整13点。本分支staticrmq候选原27点试验第9点SE、后18点未运行；合入Host诊断后，一次预注册观测完整27点AC/Stop，仅说明该条件下未复现，旧失败与准入阻断保持。证据归[调查](docs/reference-validation-investigation.md#staticrmq单次host边界观测)与[交付记录](docs/delivery-log.md)。维护入口不写数据库验证状态或发布。需要已配置且停止的专用槽、已有固定镜像与Docker Desktop、macOS arm64；命令不会自动创建、替换或恢复槽。使用已有Go1.26.10工具链镜像构建独立宿主产物（不与Linux检查共用输出）：
 
 ```sh
 REFERENCE_TOOLCHAIN_IMAGE=YOUR_EXISTING_LOCAL_GO_TOOLCHAIN_IMAGE
@@ -121,7 +121,7 @@ Host控制失败时，执行诊断条目可附带有界`host_trace`，区分入�
   -test.run='^(TestControlTrace.*|TestHostTraceCrossesExecutionTransportWithoutOldCause|TestSuccessfulHostThenDecodeFailureHasNoHostTrace)$' -test.timeout=1m
 ```
 
-维护入口使用独立缓存文件通路：源码/输入上传后回读核对SHA-256，输出原始字节拉取，参考答案留在宿主。默认A+B保留2MiB材料/4KiB输出，unionfind使用64MiB匿名磁盘快照与256KiB运行stdout。zalgorithm使用64MiB快照，suffixarray独立准入128MiB快照；两者共用4MiB stdout及256MiB累计传输档位。primality_test独立冻结32MiB以内材料及固定4个头文件，stdout512KiB、6个缓存对象。staticrmq候选配置为256MiB以内完整材料、单input16MiB、stdout4MiB、累计传输512MiB，完整验证尚未通过。后四者共用medium槽锁。所有磁盘来源共用进程内一份快照额度，两端账本均按档位计量。编译双流/运行stderr仍各4KiB，磁盘来源的CPU1秒/wall5秒/memory128MiB只作参考试验；其余五题（含staticrmq和#114）仍待完整准入，生产配置不变。
+维护入口使用独立缓存文件通路：源码/输入上传后回读核对SHA-256，输出原始字节拉取，参考答案留在宿主。默认A+B保留2MiB材料/4KiB输出，unionfind使用64MiB匿名磁盘快照与256KiB运行stdout。zalgorithm使用64MiB快照，suffixarray独立准入128MiB快照；两者共用4MiB stdout及256MiB累计传输档位。primality_test独立冻结32MiB以内材料及固定4个头文件，stdout512KiB、6个缓存对象。staticrmq候选配置为256MiB以内完整材料、单input16MiB、stdout4MiB、累计传输512MiB，原失败的准入阻断保持。后四者共用medium槽锁。所有磁盘来源共用进程内一份快照额度，两端账本均按档位计量。编译双流/运行stderr仍各4KiB，磁盘来源的CPU1秒/wall5秒/memory128MiB只作参考试验；其余五题（含staticrmq和#114）仍待完整准入，生产配置不变。
 
 unionfind使用独立固定`oj-reference-sandbox`及`slot-reference.lock`，拒非空`OJ_WORKER_M0_SLOT`。维护者确认容器不存在后，可用已有固定镜像显式创建停止槽；已有槽不能替换，须核验owner/配置和停止状态：
 
@@ -211,7 +211,7 @@ env -u OJ_WORKER_M0_SLOT OJ_SANDBOX_EXPERIMENT=1 OJ_PRIMALITY_REFERENCE=1 \
   -test.v -test.count=1 -test.run='^TestPrimalityReferenceSandbox$' -test.timeout=5m
 ```
 
-staticrmq候选也复用同一槽；维护命令指定`--source-id library-checker:staticrmq`及新报告目录。以下为显式专项入口，本轮失败后没有重跑：先验证可信16MiB缓存stdin全字节及长度，再运行完整27点CLI；前组或停止失败即中止，不扩大原执行/文件/Stop期限：
+staticrmq候选也复用同一槽；维护命令指定`--source-id library-checker:staticrmq`及新报告目录。以下为显式专项入口，已有原失败及一次预注册未复现观测；后续运行仍需独立明确目标和新目录。先验证可信16MiB缓存stdin全字节及长度，再运行完整27点CLI；前组或停止失败即中止，不扩大原执行/文件/Stop期限：
 
 ```sh
 env -u OJ_WORKER_M0_SLOT OJ_SANDBOX_EXPERIMENT=1 OJ_STATICRMQ_REFERENCE=1 \

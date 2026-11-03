@@ -47,6 +47,20 @@
 
 现有[Host分段失败证据](reference-validation.md#执行失败诊断)补充RoundTrip的admission/prepare/inspect/command/response_validation、最后完成位置、阶段及整体耗时、context/剩余期限与本地CLI启动证据。确定性单测区分命令未启动/启动后超时、阶段冻结与收尾等待，并验证跨层独立错误归属；不据此断定旧根因。本次只执行受信本地命令及一次既有A+B兼容回归，没有重跑suffixarray或staticrmq。后续若调查#119，应另行登记可检验假设与一次执行条件，再结合具体point/role/host_trace和同窗口脱敏服务日志判断，不把新增诊断或新通过当作自动解除草稿的依据。
 
+## staticrmq单次Host边界观测
+
+在主线Host诊断经[PR #120](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/120)交付后，复用#119原分支普通merge为`a8aa5fc135b345d35658ce88866ccad93b7a41fa`，没有改写推送历史或修改候选执行代码。旧19文件中的Go源码仅接受主线测试keyed literal转换，新增Host代码与main逐字节一致。完整离线backend/race/静态/七Linux命令、sandbox vet及独立Darwin构建通过；原失败制品和报告先逐哈希复核，完整57对象200820493B仍与旧材料身份一致。
+
+本次先登记狭窄H1：“同类control/stdout/deadline有真实CLI启动证据，Host在command返回失败，未进入response_validation；进入该阶段采样时context active且剩余期限为正。”采样和实际调用/启动不是原子事件，`completed=false`不重建deadline到达瞬间；即使支持，也不证明daemon收件、沙箱开始执行或服务端根因。其他明确失败阶段/未启动不支持，未知或受限trace不猜测。全通过只记未复现，不追加次数、不解除旧草稿。
+
+协议保留原完整顶层两组与所有预算/期限，精确test清单先验。外置编排复核发现日志创建在启动之后、收尾失败可返回0及旧Docker命令检查缺口，均在执行前修正；原v1登记未执行并保留，v2于`2026-11-03T20:42:32.637157Z`登记，SHA `1b5995a1274ea83762a45ec0df954d17ebb7759df1f8a410027309df343c2293`。必要新日志/结果文件在进程前独占创建，日志写失败继续drain，收尾或证据失败非零退出；一次性标记和新输出目录阻止重复启动。Astra针对性复核修正后无阻断，AI不替代人工审批。
+
+固定原medium CID/镜像/owner/完整配置、三槽停止/PID0、私有空锁无占用、无旧native及固定槽Docker控制进程均通过前置核验。一次双组19.83秒通过：可信16MiB stdin2.57秒全字节/长度核验，完整27点CLI17.25秒全AC/Stop。新报告`/private/tmp/oj-staticrmq-host-observation-report-20261104/report.json` SHA `3d248ead0bd03e47853c7d53fae6a9ceb5d7fd4c73491349875c913fd012b55c`；完整plan/profile与旧失败报告逐字段相等，摘要仍为`0d2beed5a725d367ebcd464591e83690e74e1e2371b6702a1a03dafd4196adf7`及`f6e3875942ca1b4b57a17124ef758cb9ed922e715a624336b6d19191e8e6d946`。0700/0600、无INCOMPLETE、成功两类诊断省略，publication仍blocked。结束时三原槽停止/PID0、私有空锁无占用，无额外尝试、恢复或手清marker。
+
+两生命周期分别投影日志：前置窗口从宿主运行开始UTC至目标StartedAt，前置实际StartedAt未知；目标使用收尾inspect的StartedAt `20:43:19.412924422Z`至FinishedAt `20:43:35.72820843Z`。`===RUN`时间只是宿主观察到行的时刻，不能当精确子组开始时间。每窗口一次15秒/256KiB/1000行封顶，实际前置6296B/13条HTTP、目标46096B/169条HTTP，均200且未达到采集上限；最大service/Docker时间差约0.293ms/0.335ms，目标最大handler计时0.211944秒。只保存归一化投影与流哈希，不保留raw日志/缓存ID；前置窗口不证明准确生命周期边界，HTTP200也不代替客户端结果。
+
+本条件下没有失败条目，H1既未获得支持也未被反驳；成功省略Host trace符合合同。原`ee524a…`报告保持，旧失败没有被解释，新成功不构成故障修复或稳定性证明。#119与#114继续草稿，旧五来源真实回归未启动，没有新增准入；后续不为获得失败或绿色追加相同试验，有新的独立触发和可检验假设再登记。临时证据前缀`/private/tmp/oj-staticrmq-host-observation-`包含协议/前后置/运行/报告证明及两窗口投影，临时归档不是独立备份。
+
 ## 证据索引
 
 - 独立报告`/private/tmp/oj-suffixarray-diagnostic-report-20261104/report.json`，SHA-256 `3671e312db6e664e5fe474469964e8b07abd3c3c252f8e32f937211090a4bb20`。

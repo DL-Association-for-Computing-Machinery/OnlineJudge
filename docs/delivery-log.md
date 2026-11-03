@@ -1,5 +1,17 @@
 # 工程交付记录
 
+## 2026-11-04：staticrmq单次Host边界观测未复现（仍为草稿）
+
+主线[PR #120](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/120)已交付Host失败诊断。本任务从成功fetch的`origin/main 8e5001063001d670e69e8ebb0a964b0adaab87bc`普通合入原#119分支为`a8aa5fc135b345d35658ce88866ccad93b7a41fa`，只解决README与本页相邻说明冲突，保留双方有效记录，不重写历史。旧候选生产代码未改，主线Host Go文件逐字节一致；完整离线backend模块/格式/vet/静态/root race/七Linux构建、sandbox vet及独立Darwin构建通过，精确顶层测试清单核验，policy688通过。日志`/private/tmp/oj-staticrmq-host-observation-merge-backend.log`；Astra窄整合复核无新增阻断。
+
+原失败16工件/19源码与两宿主制品先哈希核验，旧Go仅接受主线测试keyed literal转换；完整57对象200820493B仍与旧材料证据一致。单次观测先登记H1与支持/不支持/未知条件：只区分Host失败边界和真实CLI启动，不推断daemon派发或根因；进入阶段context/期限不是实际调用瞬间保证。编排日志创建/失败退出和在途Docker命令检查在执行前修正，原v1未执行，修正后经Astra复核。v2协议SHA `1b5995a1274ea83762a45ec0df954d17ebb7759df1f8a410027309df343c2293`，绑定head、两制品及脚本/材料身份，所有预算/期限和原两组顺序保持；一次性标记、新报告目录与首组失败中止生效。
+
+一次双组19.83秒通过：可信16MiB输入2.57秒逐字节/长度核验，CPU4548000ns/Memory1306624B；shm活跃16850944B后0、tmp观测0、outer memory.peak阶段最大111353856B，不等于连续总RSS。完整27点CLI17.25秒全部AC并确认Stop，编译CPU193032000ns/Memory77352960B、逐点最大CPU148162000ns/Memory44752896B、Darwin CLI wait4 maxrss100564992B。新报告`/private/tmp/oj-staticrmq-host-observation-report-20261104/report.json` SHA `3d248ead0bd03e47853c7d53fae6a9ceb5d7fd4c73491349875c913fd012b55c`，完整plan/profile与原失败报告逐字段一致，旧摘要保持；0700/0600、无INCOMPLETE、成功execution/stop诊断省略，publication仍blocked。结束时三原CID均停止/PID0、私有空锁无占用，无重试、恢复或手清marker。
+
+原CID两个固定窗口的有界脱敏日志分别13/169条HTTP全200，无采集截断；最大service/Docker时间差约0.293/0.335ms。前置StartedAt未知，窗口只是从宿主运行开始到目标StartedAt的采集范围；目标使用收尾inspect生命周期，观察到`===RUN`的UTC不是精确子组起点。无失败条目，H1未获支持也未被反驳，仅本条件下未复现；旧报告/失败和根因未知保持。完整协议/窗口/证据限制见[调查](reference-validation-investigation.md#staticrmq单次host边界观测)，工件前缀`/private/tmp/oj-staticrmq-host-observation-`。
+
+#119仍草稿，#114保持；旧五来源真实回归未启动，不追加相同试验或自动解除准入阻断。没有新依赖、SQL/schema、HTTP/UI、预算、数据库验证状态或发布变化；主线仍五来源，P4与开发目标未完成，未部署。此次新应用代码仅来自已交付主线；本地未重跑PG/Redis、前端/浏览器或完整M0，更新后精确head远端CI另核验。以下保留此前各阶段记录。
+
 ## 2026-11-04：staticrmq候选与第9点控制期限失败（未交付）
 
 成功fetch后从`origin/main 31474f2a19280f7b9d53a64ca6987cb0ba5af6dc`建立`codex/staticrmq-reference`，目标为固定staticrmq完整27点，独立于草稿#114。本候选真实验证失败，保持草稿、不合并；主线仍仅五来源。没有新依赖、SQL/schema、HTTP/UI、生产预算、数据库验证状态或发布变化。

@@ -4,7 +4,7 @@ P4 的首个执行入口是维护者显式调用 `worker validate-reference`。�
 
 ## 当前支持范围
 
-只接收固定来源锁 SHA-256 `fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617`。`--source-id`默认A+B；前五项已完成真实参考验证，最后一项为本分支尚未通过的候选试验，不能视为主线支持。路径均相对上游源目录：
+只接收固定来源锁 SHA-256 `fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617`。`--source-id`默认A+B；前五项已完成真实参考验证，最后一项为本分支尚未完成准入的候选试验，不能视为主线支持。路径均相对上游源目录：
 
 | source-id | 固定参考源码 | 完整点数 |
 | --- | --- | --- |
@@ -13,7 +13,7 @@ P4 的首个执行入口是维护者显式调用 `worker validate-reference`。�
 | `library-checker:zalgorithm` | `string/zalgorithm/sol/correct.cpp` | 29 |
 | `library-checker:suffixarray` | `string/suffixarray/sol/correct.cpp` | 50 |
 | `library-checker:primality_test` | `number_theory/primality_test/sol/correct.cpp`及固定4个头文件 | 13 |
-| `library-checker:staticrmq`（候选） | `data_structure/staticrmq/sol/correct.cpp` | 27；第9点SE，后18未运行 |
+| `library-checker:staticrmq`（候选） | `data_structure/staticrmq/sol/correct.cpp` | 27；原第9点SE，一次新观测全AC但未解除草稿 |
 
 各来源绑定独立profile及固定槽；后四者共用medium槽及同一canonical锁。不接收参考程序替换、任意脚本或路径布局。来源锁变更需要重新审查准入。其余五题（含候选staticrmq）尚未完成准入，不截取样例或部分测试点来制造通过。
 
@@ -70,7 +70,7 @@ suffixarray仅扩大该固定来源的完整快照总量，Runtime、文件协�
 
 各材料上传后回读哈希，最多5份源码与exe预留同时存活；所有已知材料共享原独立5秒清理期限。未知上传回执继续fence，清理失败保留已知exe制品供最终清理，并使验证失败。诊断只新增封闭`dependency`角色，不记录头文件名或内容。13点最坏累计载荷为32521421字节、97次逻辑操作（含全部材料双传、stdout按请求上限收费及删除），不以实际小输出退款。嵌套目标目录依据固定[go-judge v1.13.3 copyIn](https://github.com/criyle/go-judge/blob/v1.13.3/envexec/file_copyin.go)的`MkdirAll`语义，另以可信固定嵌套include专项验证。
 
-staticrmq候选使用独立`ReferenceStaticRMQ`档位（枚举5）、profile `p4-lc-staticrmq-reference-desktop-arm64-v1`、Runtime `p4-staticrmq-gnu17-desktop-arm64-v1`和文件协议`p4-gojudge-cached-staticrmq-v1`。它仅扩大该来源完整快照至256 MiB、单input至16 MiB、累计payload至512 MiB；source64 KiB、answer/stdout/checker4 MiB、最多64点、原编译参数/执行资源/诊断/期限、48 MiB单file/64 MiB存活/4对象/512操作均保持。无私有编译依赖，沿用单文件入口；旧五来源摘要及预算不变，枚举3仍未准入。复用原medium容器及同一锁，Host与Cached保留tier5且拒绝其他Runtime身份。真实完整验证未通过，不能由这些候选配置推断容量/性能成立。
+staticrmq候选使用独立`ReferenceStaticRMQ`档位（枚举5）、profile `p4-lc-staticrmq-reference-desktop-arm64-v1`、Runtime `p4-staticrmq-gnu17-desktop-arm64-v1`和文件协议`p4-gojudge-cached-staticrmq-v1`。它仅扩大该来源完整快照至256 MiB、单input至16 MiB、累计payload至512 MiB；source64 KiB、answer/stdout/checker4 MiB、最多64点、原编译参数/执行资源/诊断/期限、48 MiB单file/64 MiB存活/4对象/512操作均保持。无私有编译依赖，沿用单文件入口；旧五来源摘要及预算不变，枚举3仍未准入。复用原medium容器及同一锁，Host与Cached保留tier5且拒绝其他Runtime身份。原完整试验第9点SE；一次合入Host诊断后的[完整27点观测](reference-validation-investigation.md#staticrmq单次host边界观测)通过，但失败未复现、旧五来源回归未启动，候选仍未准入，不能据此认定根因已修复或稳定性成立。
 
 真实完整27点材料共200820493B（含catalog），需要超过旧128 MiB快照；最坏累计载荷`2*1890 + 2*158223359 + 27*(4194304+1) = 429696733`B，需要超过旧256 MiB传输额度。169为execution逻辑操作数，Host仅计自身文件操作，口径不等同。每次下载按请求cap计费，失败不退款；512 MiB精确边界测试通过账本注入证明，不是实际传输512 MiB。超过128 MiB冻结/末点读取使用合成集合；256 MiB材料再加catalog拒绝不等于精确256 MiB成功。真实完整集合另由CLI核验，最大参考答案距4 MiB仅3135B，不能用答案大小代替实际stdout/资源证据。
 
@@ -132,7 +132,7 @@ inspect/command的`call_attempted`只证明调用该函数；`local_process_star
 
 新增数据不进入Profile/Plan；成功JSON/schema和既有错误`Is/As`语义保持。元数据检索与公开投影分别有64槽界限；公开投影在provider终止节点只读其自身类别，裸provider未声明类别时可为unknown，不重开嵌套遍历。总条目仍最多八条，字段不含命令/路径/缓存ID/材料/原错误；外来getter、Unwrap或类别方法自身成本不由槽计数保证。缺少`host_trace`可表示能力不适用、数据无效/歧义或检索受限，不能证明没有Host调用。
 
-范围只覆盖RoundTrip控制请求（GET元数据、POST/run、DELETE），不覆盖Host.Start/Stop/Verify或独立文件传输，也不能回溯已成功返回的输入回读内部耗时。Host成功返回、随后GoJudge JSON decode失败时没有Host trace，不通过成功响应侧通道补造证据。新增字段不是故障修复、题源准入或自动重试授权；#114及staticrmq草稿#119的原失败保持，后续须另行预注册有可检验假设的调查。
+范围只覆盖RoundTrip控制请求（GET元数据、POST/run、DELETE），不覆盖Host.Start/Stop/Verify或独立文件传输，也不能回溯已成功返回的输入回读内部耗时。Host成功返回、随后GoJudge JSON decode失败时没有Host trace，不通过成功响应侧通道补造证据。新增字段不是故障修复、题源准入或自动重试授权；#114及staticrmq草稿#119的原失败保持，后续调查须有独立预注册假设。已执行的一次staticrmq观测全AC且成功省略诊断，不能支持或反驳原失败位置假设。
 
 ## 槽所有权与停止
 
