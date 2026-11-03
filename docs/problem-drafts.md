@@ -31,11 +31,15 @@
 
 原子创建新输出后先写`INCOMPLETE`，只在全部文件、草稿版本和引用独立复验通过后，将`bundle.partial`改名为`bundle`并移除标记。磁盘错误、中断或校验失败保留标记及部分成果，不修改输入；不保证掉电持久性或自动清理部分文件。命令行复验拒绝带未完成标记的输出，可独立检查搬迁后的bundle；校验成功始终返回publication blocked。
 
-源报告仅记录题源准备阶段已执行的验证，不将其当作本站运行证据。草稿的本站验证固定`not-run`，发布继续阻断于题面/公式渲染、生产检查器与资源准入、本站独立受限验证、获授权非作者终审及原子发布。下方应用服务已接入[本地材料存储](material-store.md)、数据库固定引用和最小出题权限；后续仍须完成HTTP/管理页面、受限验证和审核发布。P3/P5接入真实训练授权及页面，当前Worker的固定M0材料门禁保持。
+源报告仅记录题源准备阶段已执行的验证，不将其当作本站运行证据。草稿的本站验证固定`not-run`，发布继续阻断于题面/公式渲染、生产检查器与资源准入、本站独立受限验证、获授权非作者终审及原子发布。下方应用服务及可选HTTP已接入[本地材料存储](material-store.md)、数据库固定引用和最小出题权限；后续仍须完成管理页面、受限验证和审核发布。P3/P5接入真实训练授权及页面，当前Worker的固定M0材料门禁保持。
 
 ## 私有草稿入库与本人读取
 
-`internal/problem.Service`仅提供`Create`和`GetOwn`。创建接收普通`redisstore.Credential`、owner范围的16—128位ASCII请求键及已准备草稿；不接收客户端指定的主体、认证代次、恢复代次或权限。登录和账号启用不自动赋予出题权；identity拥有独立默认缺省的`problem_author`状态、修订与维护审计。现有/本地开发账号均不自动授予，维护CAS及命令归README。作者撤权后，读取本人旧草稿及恢复原回执也拒绝；其他作者与未知ID均为同一`ErrNotFound`。
+`internal/problem.Service`提供`Create`和`GetOwn`，`Importer`在相同授权预检后从冻结候选目录选择Prepared。创建接收普通`redisstore.Credential`、owner范围的16—128位ASCII请求键及已准备草稿；不接收客户端指定的主体、认证代次、恢复代次或权限。登录和账号启用不自动赋予出题权；identity拥有独立默认缺省的`problem_author`状态、修订与维护审计。现有/本地开发账号均不自动授予，维护CAS及命令归README。作者撤权后，读取本人旧草稿及恢复原回执也拒绝；其他作者与未知ID均为同一`ErrNotFound`。
+
+可选[HTTP合同](../api/problem-drafts.openapi.yaml)只提供POST导入与GET本人读取，启用方式归[README](../README.md#显式启用私有草稿-http)。沿用普通会话TLS/Host、固定单跳mTLS代理、严格Cookie及POST正向同源检查，所有响应no-store/nosniff，不续期或写Cookie。POST只接受source_id/request_key两个精确字段，最多1024字节，拒绝重复/未知/null/大小写别名/坏Unicode/尾随数据；不接受路径、客户端材料或主体。候选存在性只在会话和角色预检通过后可观察。返回独立JSON DTO，document为JSON对象而非base64；逻辑引用不是材料下载授权。
+
+每实例显式导入活动预算无等待，作用于授权且选中候选后的复制/最终写入段；不限制预检或GET，不代替共享频率/磁盘额度。材料异常、容量不足、未知提交、取消和存储失败统一503；不能将Prepared文件异常的ErrInvalid变为400或选手错误。服务调用成功后仍检查请求取消。未知回执用原键和精确候选版本核验；相同source_id的新内容为409，维护变更须保留旧快照处理未确认操作。Runtime跟踪整个同步调用，排空后才关闭全部Prepared、Local及PG/Redis；启动部分失败也释放已打开资源。HTTP关闭不删除已有数据；不新增schema或依赖。
 
 创建顺序为：新鲜会话读取→短出题授权预检→逐项持久化材料→再次读取同一实际凭据→同一READ COMMITTED事务核对恢复、账号及当前角色并写入草稿。全流程锁序为恢复→账号→角色→草稿，identity公开窄事务适配器，problem不读取identity私有SQL。材料复制/哈希和Redis读取均不在PG锁内。最终Read之前退出、过期或存储故障拒绝写入；Read之后的单token退出遵循普通会话“已接受在途工作不追溯撤销”合同，不宣称Redis与PG跨库原子退出。
 

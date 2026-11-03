@@ -239,6 +239,10 @@ func entryConfig(t *testing.T, c sessionruntime.Config, ca *testpki.Authority, s
 	} else if len(blocklist) != 0 {
 		t.Fatal("rule file supplied without enabled capability")
 	}
+	if d := c.PrivateDrafts; d != nil {
+		doc["private_drafts"] = map[string]any{"material_root": d.MaterialRoot, "bundle_directory": d.BundleDirectory,
+			"source_lock_file": d.SourceLockFile, "source_ids": d.SourceIDs, "timeout": d.Timeout.String(), "max_in_flight": d.MaxInFlight}
+	}
 	body, err := json.Marshal(doc)
 	must(t, err)
 	path := filepath.Join(t.TempDir(), "entry.json")
