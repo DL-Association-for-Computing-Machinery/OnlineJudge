@@ -100,6 +100,8 @@ OJ_SANDBOX_EXPERIMENT=1 OJ_WORKER_M0_SLOT=secondary \
 
 停止失败报告的可选`stop_diagnostic`提供固定阶段/错误类别、有界计数和最多六步的耗时记录，不含PID、命令参数或原始错误。`elapsed_ms`超过60000时截断并标记`elapsed_capped`，不是停止时限；原共享10秒Stop预算保持。kill步骤记录调用前context、调用尝试及本地CLI启动证据，`local_process_start`不证明Docker daemon收到kill或容器收到信号，`unknown`不表示未启动。`pid_present`仅表示探测时路径存在，可能发生PID复用；`deadline`不证明进程仍在或已退出。诊断不授予清理隔离标记的权限，旧失败报告不追认通过；字段与证据限制见[受限参考验证](docs/reference-validation.md)。
 
+执行适配器失败时，可选`execution_diagnostic`按观察顺序保存最多八条固定operation/point/phase/role/code，保留主错误、清理错误和独立取消原因，超出标记`truncated`。角色来自本次缓存账本，不含材料、ID或原始错误。它可与停止诊断并存，不改变SE/隔离结论或追认旧失败；成功报告不增加字段。具体范围见[执行失败诊断](docs/reference-validation.md#执行失败诊断)。
+
 停止诊断的受信命令单测随普通Docker backend运行；在Darwin核对本地执行器时，使用上面单独构建的workerhost测试包，先确认列表恰含下列三项，再选择执行。`cmd/worker`驱动不包含依赖包的单测，空匹配的PASS不能算验证。此处仅运行固定受信shell及测试替身，不启动沙箱槽或执行题源：
 
 ```sh

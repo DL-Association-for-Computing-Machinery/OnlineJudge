@@ -64,20 +64,20 @@ func NewReferenceGoJudgeForTier(transport http.RoundTripper, verify func(context
 // Verify admits one fixed runtime and probes the actual trusted host/executor.
 func (g *CachedGoJudge) Verify(ctx context.Context, p experiment.ExecutionProfile) (err error) {
 	if err = g.acquire(ctx, false); err != nil {
-		return err
+		return tagFailure(err, "verify", "environment", "")
 	}
 	defer func() { err = g.finish(ctx, err) }()
 	if g.verified || g.files == nil || !reflect.DeepEqual(p, g.runtime) {
-		return errors.New("unsupported cached sandbox profile")
+		return failureError("verify", "environment", "invalid_evidence", "unsupported cached sandbox profile")
 	}
 	if err = g.step(0, false); err != nil {
-		return err
+		return tagFailure(err, "verify", "environment", "")
 	}
 	if err = g.step(0, false); err != nil {
-		return err
+		return tagFailure(err, "verify", "environment", "")
 	}
 	if err = g.control.Verify(ctx, p); err != nil {
-		return cachedError(ctx, "cached sandbox verification failed", err)
+		return tagFailure(cachedError(ctx, "cached sandbox verification failed", err), "verify", "environment", "")
 	}
 	g.verified = true
 	return nil
@@ -87,11 +87,11 @@ func (g *CachedGoJudge) Verify(ctx context.Context, p experiment.ExecutionProfil
 // owned executable. Source deletion is independently bounded even on failure.
 func (g *CachedGoJudge) Compile(ctx context.Context, p experiment.ExecutionProfile, source string) (o Observation, err error) {
 	if err = g.acquire(ctx, false); err != nil {
-		return o, err
+		return o, tagFailure(err, "validate", "source", "")
 	}
 	defer func() { err = g.finish(ctx, err) }()
 	if !g.verified || g.compiled || !reflect.DeepEqual(p, g.runtime) || int64(len(source)) > g.limits.SourceBytes {
-		return o, errors.New("cached compilation rejected")
+		return o, failureError("validate", "source", "invalid_evidence", "cached compilation rejected")
 	}
 	g.compiled = true
 	src, err := g.upload(ctx, []byte(source), "source")
@@ -101,11 +101,11 @@ func (g *CachedGoJudge) Compile(ctx context.Context, p experiment.ExecutionProfi
 	}
 	exe, err := g.reserve(int64(p.ExecutableBytes), "executable")
 	if err != nil {
-		return o, err
+		return o, tagFailure(err, "control", "executable", "")
 	}
 	if err = g.step(0, false); err != nil {
 		g.release(exe)
-		return o, err
+		return o, tagFailure(err, "control", "executable", "")
 	}
 	c := command(p, p.CompileArgs, p.Compile, nil)
 	g.boundDiagnostics(c, true)
@@ -114,14 +114,14 @@ func (g *CachedGoJudge) Compile(ctx context.Context, p experiment.ExecutionProfi
 	c["copyOutMax"] = p.ExecutableBytes
 	r, err := g.control.result(ctx, c)
 	if err != nil {
-		return o, cachedError(ctx, "cached compile receipt unavailable", err)
+		return o, tagFailure(cachedError(ctx, "cached compile receipt unavailable", err), "control", "executable", "")
 	}
 	if len(r.IDs) != 0 {
 		if len(r.IDs) != 1 || r.IDs["main"] == "" {
-			return o, errors.New("unexpected cached compile identities")
+			return o, failureError("validate", "executable", "ownership", "unexpected cached compile identities")
 		}
 		if err = g.adopt(exe, r.IDs["main"]); err != nil {
-			return o, err
+			return o, tagFailure(err, "validate", "executable", "")
 		}
 	} else if r.Status != "Accepted" {
 		g.release(exe)
@@ -136,18 +136,18 @@ func (g *CachedGoJudge) Compile(ctx context.Context, p experiment.ExecutionProfi
 	if exe.id != "" {
 		g.executable = exe.id
 	}
-	return o, err
+	return o, tagFailure(err, "validate", "executable", "invalid_evidence")
 }
 
 // Run uses only its compiled executable, a verified cached input and one raw
 // stdout object. Both point objects are deleted before this method completes.
 func (g *CachedGoJudge) Run(ctx context.Context, p experiment.ExecutionProfile, id string, input []byte) (o Observation, err error) {
 	if err = g.acquire(ctx, false); err != nil {
-		return o, err
+		return o, tagFailure(err, "validate", "executable", "")
 	}
 	defer func() { err = g.finish(ctx, err) }()
 	if !g.verified || !g.compiled || id != g.executable || g.objects[id] == nil || !reflect.DeepEqual(p, g.runtime) {
-		return o, errors.New("cached execution rejected")
+		return o, failureError("validate", "executable", "ownership", "cached execution rejected")
 	}
 	in, err := g.upload(ctx, input, "input")
 	var out *cachedObject
@@ -157,12 +157,12 @@ func (g *CachedGoJudge) Run(ctx context.Context, p experiment.ExecutionProfile, 
 	}
 	out, err = g.reserve(int64(p.OutputBytes+1), "stdout")
 	if err != nil {
-		return o, err
+		return o, tagFailure(err, "control", "stdout", "")
 	}
 	if err = g.step(0, false); err != nil {
 		g.release(out)
 		out = nil
-		return o, err
+		return o, tagFailure(err, "control", "stdout", "")
 	}
 	c := command(p, p.RunArgs, p.Run, nil)
 	g.boundDiagnostics(c, false)
@@ -172,13 +172,13 @@ func (g *CachedGoJudge) Run(ctx context.Context, p experiment.ExecutionProfile, 
 	c["copyOutMax"] = p.OutputBytes + 1
 	r, err := g.control.result(ctx, c)
 	if err != nil {
-		return o, cachedError(ctx, "cached run receipt unavailable", err)
+		return o, tagFailure(cachedError(ctx, "cached run receipt unavailable", err), "control", "stdout", "")
 	}
 	if len(r.IDs) != 1 || r.IDs["stdout"] == "" || len(r.Files) != 1 || r.Files["stderr"] == nil {
-		return o, errors.New("unexpected cached output roles")
+		return o, failureError("validate", "stdout", "ownership", "unexpected cached output roles")
 	}
 	if err = g.adopt(out, r.IDs["stdout"]); err != nil {
-		return o, err
+		return o, tagFailure(err, "validate", "stdout", "")
 	}
 	raw, err := g.read(ctx, out, int64(p.OutputBytes+1))
 	if err != nil {
@@ -192,7 +192,7 @@ func (g *CachedGoJudge) Run(ctx context.Context, p experiment.ExecutionProfile, 
 			}
 		}
 		if !truncated {
-			return o, errors.New("cached output exceeds execution budget")
+			return o, failureError("validate", "stdout", "invalid_evidence", "cached output exceeds execution budget")
 		}
 	}
 	// Validate the cache representation first, then normalize raw bytes solely
@@ -204,18 +204,18 @@ func (g *CachedGoJudge) Run(ctx context.Context, p experiment.ExecutionProfile, 
 	if err == nil {
 		_, err = Classify(o, false)
 	}
-	return o, err
+	return o, tagFailure(err, "validate", "stdout", "invalid_evidence")
 }
 
 // Remove accepts only this operation's owned executable, including after error.
 func (g *CachedGoJudge) Remove(ctx context.Context, id string) (err error) {
 	if err = g.acquire(ctx, true); err != nil {
-		return err
+		return tagFailure(err, "delete", "executable", "")
 	}
 	defer func() { err = g.finish(ctx, err) }()
 	object := g.objects[id]
 	if object == nil || object.role != "executable" || id != g.executable {
-		return errors.New("cached artifact is not owned")
+		return failureError("delete", "executable", "ownership", "cached artifact is not owned")
 	}
 	return g.remove(ctx, object)
 }

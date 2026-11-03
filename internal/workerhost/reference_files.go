@@ -39,8 +39,11 @@ func (h *Host) UploadFile(parent context.Context, data []byte) (string, error) {
 		return "", err
 	}
 	var id string
-	if json.Unmarshal(out.Bytes(), &id) != nil || !filePath.MatchString("/file/"+id) {
-		return "", errors.New("file upload receipt unavailable")
+	if json.Unmarshal(out.Bytes(), &id) != nil {
+		return "", fileError("file upload receipt unavailable", "decode")
+	}
+	if !filePath.MatchString("/file/" + id) {
+		return "", fileError("file upload receipt unavailable", "ownership")
 	}
 	return id, nil
 }
@@ -49,7 +52,7 @@ func (h *Host) UploadFile(parent context.Context, data []byte) (string, error) {
 // The trusted execution adapter must reject IDs outside its own role ledger.
 func (h *Host) ReadFile(parent context.Context, id string, maximum int64) ([]byte, error) {
 	if !filePath.MatchString("/file/" + id) {
-		return nil, errors.New("invalid cached file identity")
+		return nil, fileError("invalid cached file identity", "ownership")
 	}
 	ctx, done, err := h.fileContext(parent, maximum)
 	if err != nil {
@@ -69,10 +72,10 @@ func (h *Host) fileContext(parent context.Context, maximum int64) (context.Conte
 		return nil, nil, configErr
 	}
 	if parent == nil || maximum < 0 || maximum > p.FileBytes {
-		return nil, nil, errors.New("reference file budget rejected")
+		return nil, nil, fileError("reference file budget rejected", "budget")
 	}
 	if !h.fileBusy.CompareAndSwap(false, true) {
-		return nil, nil, errors.New("reference file transfer occupied")
+		return nil, nil, fileError("reference file transfer occupied", "ownership")
 	}
 	ctx, finish, err := h.begin(parent)
 	if err != nil {
@@ -81,7 +84,7 @@ func (h *Host) fileContext(parent context.Context, maximum int64) (context.Conte
 	}
 	h.mu.Lock()
 	if h.fileOps >= p.Operations || maximum > p.PayloadBytes-h.filePayload {
-		err = errors.New("reference file operation budget exhausted")
+		err = fileError("reference file operation budget exhausted", "budget")
 	} else {
 		h.fileOps++
 		h.filePayload += maximum
@@ -107,7 +110,7 @@ func (h *Host) fileExchange(ctx context.Context, input io.Reader, output io.Writ
 	}
 	s, err := h.inspect(ctx, h.id)
 	if err != nil {
-		return errors.New("reference file host inspection failed")
+		return fileError("reference file host inspection failed", failureCode(err))
 	}
 	if err := h.validate(s, p); err != nil {
 		return err
@@ -119,10 +122,11 @@ func (h *Host) fileExchange(ctx context.Context, input io.Reader, output io.Writ
 	response := &fileResponse{target: &commandSink{target: output, maximum: maximum}}
 	err = run(ctx, input, response, maximum+4, "docker", append([]string{"--context", "desktop-linux"}, args...)...)
 	if err != nil || ctx.Err() != nil {
-		return errors.Join(errors.New("reference file transfer failed"), contextCause(errors.Join(err, ctx.Err())))
+		cause := errors.Join(err, ctx.Err())
+		return errors.Join(fileError("reference file transfer failed", failureCode(cause)), contextCause(cause))
 	}
 	if !response.accepted() {
-		return errors.New("reference file HTTP response rejected")
+		return fileError("reference file HTTP response rejected", "http_rejected")
 	}
 	return nil
 }

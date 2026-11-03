@@ -72,6 +72,8 @@ unionfind完整磁盘快照、Read/Close竞争/配额释放、坏末点零执行
 
 SIGXFSZ/OLE的纯响应、分类和冻结摘要回归随普通root后端race执行；真实单文件写入、同一Worker/LeasedRunner及容器生命周期继续AC、持久结果和双控制端回放由显式 `report` 专项执行，普通CI不运行该沙箱程序。准确Run-only支持边界见[判题设计](architecture/judging-design.md#53-统一结果分类与单点异常归因)。
 
+执行诊断的阶段/角色/安全类别、主错及多清理错误、独立context、64槽宽/深/循环/空分支、8/9条全局上限、并发副本和成功JSON兼容回归随backend运行。控制transport/body/decode与宿主inspect/file transfer分别验证既有context及错误接口契约；owner验证执行与停止诊断同时失败的Finalize、报告持久化和quarantine。测试使用替身，不制造真实Docker停止失败；普通CI不据此解释#114的旧故障。
+
 ### 当前治理流水线
 
 对 PR、main/master 推送及人工触发保留工作流入口，不使用 workflow 级 `paths-ignore`，避免必需检查悬空。2026-10-28 起按完整变更范围选择应用测试，保留四个稳定必需检查名称，不修改远端保护。
