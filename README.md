@@ -26,6 +26,28 @@
 - [已登录改密](docs/architecture/session-design.md#718-已登录用户修改密码)：显式能力、独立三维额度和弱密码规则，核验当前密码后原子换代并撤销旧会话；[接口契约](api/account.openapi.yaml)。
 - [浏览器账号面板](docs/account-browser.md)：已有账号登录、原尝试恢复、检查/主动续期/退出和改密；[六路径契约](api/session.openapi.yaml)。默认 HTTP 预览阻止密码操作，不代表注册、训练或完整权限已开放。
 - [Web 界面](docs/frontend-design.md)：简洁题库首页、独立登录页和双栏做题预览；示例可搜索、筛选、编辑和导入导出，正式提交尚未开放。
+- [首批题源](docs/problem-sources.md)：固定 Library Checker 10 题的断网数据准备与私有候选验证，尚未接入正式题库或发布。
+
+## Library Checker 首批题源准备
+
+需要已有官方源码副本及本地 Docker 镜像（Python 3.11+、`g++` C++17、GNU tar、`/bin/sleep`、`/usr/bin/env`）。工具只使用已有镜像，不自动下载或安装依赖；镜像须无声明式 `VOLUME`。本次本机实测镜像和精确结果见[题源交付记录](docs/delivery-log.md)，其他环境须重新验证。
+
+首次准备源码时下载官方仓库并固定提交；目标目录须为新目录：
+
+```sh
+git clone https://github.com/yosupo06/library-checker-problems.git /private/tmp/library-checker-problems
+git -C /private/tmp/library-checker-problems checkout --detach 73876f1cbcf082d2b22722924b924d3d65a2f00e
+python3 -B scripts/prepare-library-checker.py \
+  --source /private/tmp/library-checker-problems \
+  --image YOUR_EXISTING_LOCAL_IMAGE \
+  --output /private/tmp/oj-library-checker-corpus
+```
+
+`--output` 必须为仓库外的新目录。成功生成 `materials/catalog.json`、来源/许可、全部数据及验证记录；失败保留 `INCOMPLETE`，重试使用新目录。私有候选不会自动进入数据库、Web 题库或 Worker；题面转换、审核发布和生产资源/检查器适配仍待实现。工具行为回归：
+
+```sh
+python3 -B -m unittest discover -s tests/governance -p test_problem_sources.py -v
+```
 
 ## 运行环境
 

@@ -1,5 +1,17 @@
 # 工程交付记录
 
+## 2026-11-03：首批 Library Checker 离线题源准备
+
+用户确认“Library Checker 起步＋官方 ICPC 赛事包扩充＋爬虫补充”。成功 fetch 后从 `origin/main 182b9700621d359f8a2b1e3a62ff81ab113f0285` 建立独立 `codex/library-checker-source`。唯一目标为[十题离线私有候选准备](problem-sources.md)：锁定官方提交 `73876f1cbcf082d2b22722924b924d3d65a2f00e` 的162份必要原始文件，以非root/断网/只读/有界Docker执行生成器、标程、validator和原checker，完整保留来源及Apache/MIT/Testlib原notice；不新增依赖、数据库、公开接口或任意上传执行服务。
+
+最终脚本实测：现有本地镜像 `sha256:fbfd84489b660f3cacaa8b211999116291589211abbacdf6f7d894f53f013afa`、arm64、Python3.11.2、g++12.2.0，**10题/254点**原始生成数据哈希全部匹配、全部输入validator及参考答案checker通过，十个错误token控制均返回WA/1；生成与验证 **109.102秒**。静态归档独立精确集合/哈希检查通过，来源/数据及执行记录 **1,561,110,540字节**，另附宿主目录文件，输出 `/private/tmp/oj-library-checker-corpus-delivered-20261103/materials`（共672个文件），0700目录/0600文件，状态 `private-unpublished`。十题源内Testlib是 `0.9.40-SNAPSHOT`、checker大小写敏感，不替换本站默认比较器或视作生产SPJ准入。
+
+最终17项来源/提取/驱动回归和完整83项治理（11.516秒）通过，覆盖来源损坏/遗漏/额外材料、路径/链接/重复/大小写冲突、文件与metadata读取预算、已有目录保护、实际日志文件上限、导出/清理失败和完成顺序。真实SIGINT专项退出-2，仅清理该轮容器，保留INCOMPLETE且没有完成包，另一轮实测继续运行；正常结束已回读无本轮容器残留。CI不运行外部题源程序；本轮未改变业务路径，应用/集成/容器与安全检查以PR精确head的普通CI结果为准。复现命令归README，日志、制品和运行脚本哈希归[机器证据](evidence/library-checker-20261103.json)。
+
+失败与修正：首轮254点已通过，但Docker cp无法读取tmpfs的导出目录，两次小容器探针复现（含确保文件创建后的对照）。改为受限exec USTAR流，终止并回读容器后才在宿主校验，最后完成候选；无宿主输出写挂载或权限扩大。初次治理因本驱动生成的两份pyc残留失败，显式关闭本地字节码并仅清理本任务两份残留后原样重验通过，未放宽策略。针对性Astra复核要求的锁快照一致性、日志硬上限及完成前清理均已落实；AI复核不充当人工审批。
+
+同步计划、题包设计、M0当前题源口径、CI边界和README。P4正式适配/私有草稿/权限/审核/发布、题面模板转换/渲染、生产检查器与资源准入、训练页面及NWERC/BAPC真实包矩阵继续后续；当前Worker固定M0门禁保持，未部署。远端状态以最新head的CI与合并回读为准。
+
 ## 2026-11-03：P1跨API共享未终结积压准入
 
 成功fetch后从 `origin/main 37cf338021f5840843e6979fa013d6bacce0735f` 建立独立 `codex/shared-submission-backlog`。唯一目标是[共享积压准入](submission-backlog.md)：schema6单一显式策略、全局/主体跨上下文queued＋running权威计数，事务内锁后使用新语句快照，再同事务写提交/任务。满额或缺策略仍优先返回原回执/409，降低限额不删除已接受任务；没有冗余计数器、生产默认数值、公开管理接口或频率限流/公平调度变化。新增独立 `migrate backlog GLOBAL SUBJECT`，原fixture不暗设额度，升级必须停全部旧写API后迁移/配置/启动同版；已配置或含任何提交的schema6拒绝Down，须向前修复。跨上下文计量是已落实验证的工程选择，尚未作为用户确认的产品口径。

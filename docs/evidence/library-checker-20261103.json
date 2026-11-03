@@ -1,0 +1,132 @@
+{
+  "schema": "oj.problem-source-evidence.v1",
+  "date": "2026-11-03",
+  "scope": "Library Checker offline private corpus; no P4 import, publishing or production judging",
+  "base_commit": "182b9700621d359f8a2b1e3a62ff81ab113f0285",
+  "upstream_commit": "73876f1cbcf082d2b22722924b924d3d65a2f00e",
+  "source_files": 162,
+  "problems": 10,
+  "cases": 254,
+  "bytes": 1561110540,
+  "bytes_scope": "source files, generated data and validation.json; excludes host catalog.json",
+  "image_id": "sha256:fbfd84489b660f3cacaa8b211999116291589211abbacdf6f7d894f53f013afa",
+  "architecture": "arm64",
+  "compiler": "g++ (Debian 12.2.0-14+deb12u1) 12.2.0",
+  "python": "3.11.2",
+  "generation_validation_seconds": 109.102,
+  "command": "python3 -B scripts/prepare-library-checker.py --source /private/tmp/oj-library-checker-upstream --image oj-slot-recovery-source:latest --output /private/tmp/oj-library-checker-corpus-delivered-20261103",
+  "artifact_directory": "/private/tmp/oj-library-checker-corpus-delivered-20261103/materials",
+  "artifacts": {
+    "catalog.json": "697a624c4f910e97fb3fe8b4ab446aee5eaf7e224cbc08a4148b0c31a31e234a",
+    "validation.json": "d7bee43e2ff596ebfec428fb9e51383dbc4e00d4f75114eea401ed81dc205a6c"
+  },
+  "runtime_sources": {
+    "scripts/prepare-library-checker.py": "c176f22d3484000f8f93d78153fce308274a79b7b730fed11a5ee438b174c362",
+    "scripts/problem_source_common.py": "fe90c3672bcf3c43bc10ec1392842209a14e1fb31ec0f770586bb3c79fad0e40",
+    "scripts/problem_source_export.py": "f02739d318f8ebcb4ac46e114e770ce5eba84e3add7a280610126f15097e078c",
+    "scripts/validate_library_checker.py": "08be95ba1fcb4403075c279f7646c6738844b2121b21a4c487bec78063df6882",
+    "config/problem-sources/library-checker.json": "fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617"
+  },
+  "validation": [
+    {
+      "source_id": "library-checker:aplusb",
+      "cases": 12,
+      "input_validator": "passed-all",
+      "reference_checker": "passed-all",
+      "invalid_output_checker_exit": 1
+    },
+    {
+      "source_id": "library-checker:unionfind",
+      "cases": 18,
+      "input_validator": "passed-all",
+      "reference_checker": "passed-all",
+      "invalid_output_checker_exit": 1
+    },
+    {
+      "source_id": "library-checker:associative_array",
+      "cases": 20,
+      "input_validator": "passed-all",
+      "reference_checker": "passed-all",
+      "invalid_output_checker_exit": 1
+    },
+    {
+      "source_id": "library-checker:static_range_sum",
+      "cases": 11,
+      "input_validator": "passed-all",
+      "reference_checker": "passed-all",
+      "invalid_output_checker_exit": 1
+    },
+    {
+      "source_id": "library-checker:point_add_range_sum",
+      "cases": 21,
+      "input_validator": "passed-all",
+      "reference_checker": "passed-all",
+      "invalid_output_checker_exit": 1
+    },
+    {
+      "source_id": "library-checker:staticrmq",
+      "cases": 27,
+      "input_validator": "passed-all",
+      "reference_checker": "passed-all",
+      "invalid_output_checker_exit": 1
+    },
+    {
+      "source_id": "library-checker:zalgorithm",
+      "cases": 29,
+      "input_validator": "passed-all",
+      "reference_checker": "passed-all",
+      "invalid_output_checker_exit": 1
+    },
+    {
+      "source_id": "library-checker:suffixarray",
+      "cases": 50,
+      "input_validator": "passed-all",
+      "reference_checker": "passed-all",
+      "invalid_output_checker_exit": 1
+    },
+    {
+      "source_id": "library-checker:primality_test",
+      "cases": 13,
+      "input_validator": "passed-all",
+      "reference_checker": "passed-all",
+      "invalid_output_checker_exit": 1
+    },
+    {
+      "source_id": "library-checker:convolution_mod",
+      "cases": 53,
+      "input_validator": "passed-all",
+      "reference_checker": "passed-all",
+      "invalid_output_checker_exit": 1
+    }
+  ],
+  "local_checks": {
+    "governance": {
+      "count": 83,
+      "seconds": 11.516,
+      "result": "passed"
+    },
+    "source_regressions": {
+      "count": 17,
+      "result": "passed"
+    },
+    "SIGINT": {
+      "signal": "SIGINT",
+      "returncode": -2,
+      "task_container_removed": true,
+      "incomplete_marker": true,
+      "completed_candidate": false,
+      "log_sha256": "2b11ec410876d83faee6d2e3326479dfd992263f20d72de327ec386b699a1666"
+    }
+  },
+  "logs": {
+    "/private/tmp/oj-library-checker-source-delivered.log": "dd7b872788cad19c3337ec0a5d4415851a2cf87cee819d34a4c35acbd3838c0b",
+    "/private/tmp/oj-library-checker-governance-final.log": "6d3f7092341a4691df198a36a2d9c0d0e5b0249171bb835ffa8ff16c80d4dd31",
+    "/private/tmp/oj-library-checker-unit-final.log": "e5161cc79a028bc362674f17c443876a2087138519a574adedca23df5108a564"
+  },
+  "limitations": [
+    "native statement templates not rendered or translated",
+    "production checker/resource admission not performed",
+    "official ICPC contest packages not downloaded or tested",
+    "no database import, authorization, review or publication"
+  ]
+}
