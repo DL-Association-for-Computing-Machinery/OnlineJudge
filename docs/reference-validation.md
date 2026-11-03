@@ -1,6 +1,6 @@
 # 私有草稿的受限参考程序验证
 
-P4 的首个执行入口是维护者显式调用 `worker validate-reference`。它从完整私有 bundle 冻结参考源码和全部有序测试材料，编译一次、逐点使用 go-judge 新隔离环境运行，再用 `lc-wcmp-tokens-v1` 比较实际输出。该命令不连接控制端、认领任务、读取 PG/Redis、写数据库验证状态或发布题目。命令与专用真实专项归 [README](../README.md#私有草稿参考验证)。
+P4 的首个执行入口是维护者显式调用 `worker validate-reference`。它从完整私有 bundle 冻结参考源码和全部有序测试材料，通过独立文件缓存通路编译一次、逐点使用 go-judge 新隔离环境运行，再用 `lc-wcmp-tokens-v1` 比较实际输出。该命令不连接控制端、认领任务、读取 PG/Redis、写数据库验证状态或发布题目。命令与专用真实专项归 [README](../README.md#私有草稿参考验证)。
 
 ## 当前支持范围
 
@@ -12,12 +12,17 @@ P4 的首个执行入口是维护者显式调用 `worker validate-reference`。�
 | --- | --- |
 | 冻结材料 | 源码64 KiB、每点输入16 KiB、每点答案4 KiB、最多64点、总量2 MiB |
 | 来源定义与哈希 | `info.toml` / `hash.json`各64 KiB以内，同时计入总量与plan身份 |
-| 编码 | 源码、输入、答案及两份来源元数据全部ASCII；所有参考答案先验证再编译 |
+| 字节与检查域 | 源码/输入/输出按原始字节传输；所有参考答案在编译前按检查器UTF-8/token域先验 |
 | 检查器 | `lc-wcmp-tokens-v1`，每文件及单token均4 KiB，大小写/数字精确比较 |
 | 执行 | 原样绑定 `experiment.PinnedEnvironment()` 的镜像、内核、编译器、命令及资源；不改 M0 profile |
 | 阶段墙钟 | 验证阶段2分钟；启动预检20秒；制品清理/停止另用独立5秒/15秒预算，不能以取消证明停止 |
+| 文件协议 | `p4-gojudge-cached-files-v1`；单文件48 MiB、存活缓存64 MiB、任务载荷128 MiB、最多4个活动缓存对象/512次操作，文件IO并发1 |
 
-ASCII约束同时保护JSON stdin和stdout：当前内联协议会替换非法UTF-8，ASCII答案不可能与替换字符匹配。一般UTF-8/二进制或大材料须先接通有界原始字节上传/拉取；不得仅放大JSON响应缓冲。其他题还需要更大的临时盘/输出预算及显式依赖布局，例如 `primality_test` 的私有头文件。生产配置仍为null，不能从本表推导训练执行准入。
+独立profile为`p4-lc-reference-files-small-desktop-arm64-v1`，绑定文件协议预算和原Runtime，区别历史内联profile。源码和输入上传后回读核对SHA-256；stdin使用缓存fileId，stdout缓存后按原始字节拉取，不经过JSON字符串转换。参考答案始终留在宿主；参考答案编码不符合检查域时在任何编译/沙箱调用前拒绝，源码和输入允许原始字节。其他九题仍超过当前完整冻结材料的大小限制，或需要更大的临时盘/输出预算及显式依赖布局，例如`primality_test`的私有头文件。48 MiB协议cap不授予大题准入；当前每次运行stdout仍限4 KiB，不能据此宣称支持10.4 MB判题输出。生产配置仍为null。
+
+文件入口cap结合固定tmpfs/cgroup边界，内部账本计量存活缓存、总传输载荷与操作数；没有独立multipart暂存或其峰值计数器，64 MiB存活缓存不等于全部存储/内存峰值。创建前为源码/输入预留实际大小，为未知大小的exe/stdout按上限预留；最多一个大输入。上传和校验回读分别计费，下载按请求上限保守计费，失败不退额度；固定MIME/trailer及控制JSON各自有界。累计操作数限制零字节操作与已删除ID历史，并为已存在对象保留DELETE额度。固定挂载、collector和cgroup的真实容量证据另见交付记录。
+
+协议依据固定v1.13.3的[文件handler](https://github.com/criyle/go-judge/blob/v1.13.3/cmd/go-judge/rest_executor/file_handler.go)与[缓存输出转换](https://github.com/criyle/go-judge/blob/v1.13.3/worker/worker.go)：multipart字段file返回JSON ID、按ID取原始文件、copyOutCached返回fileIds。handler未提供本项目所需的总量边界，下载有整文件读取fallback；[缓存Get会刷新TTL](https://github.com/criyle/go-judge/blob/v1.13.3/filestore/timeout.go)，因此限额、对象所有权和显式清理由本适配器负责，不能以TTL当清理证明。
 
 ## 固定快照与失败报告
 
@@ -31,6 +36,8 @@ ASCII约束同时保护JSON stdin和stdout：当前内联协议会替换非法UT
 
 只有制品清理、停止确认、槽标记清理和最终报告写入均成功，命令才可宣布`reference-validation-passed`。该状态仅证明本次固定参考程序与完整点集在指定试验预算下通过；`publication`始终为`blocked`。报告不是可信签名或非作者审核，也不是全部题面/数据质量、完整P4或生产资源准入证明。
 
+缓存账本只接受本次操作创建的source/exe/input/stdout身份，拒绝外来、重复或角色冲突的ID。每点独立限时清理input/stdout，最终清理exe；未知上传回执不重传、不猜ID删除，任何协议/清理错误封闭适配器，由整槽Stop收束。源码/参考答案不会进入报告。清理期间父context失效也必须返回失败；全部原始参考答案仍在编译前先验。旧报告保留其原profile身份，不升级或追认。
+
 输出目录必须是新的绝对路径。解析已有父目录链接后，按目录实际身份检查祖先，拒绝输入bundle内的符号链接及大小写别名路径。目录0700、文件0600；先放置`INCOMPLETE`，最终报告使用排他创建并同步，再移除标记和同步目录。失败/中断保留已有成果，不覆盖、修复或自动删除；写入/同步失败属于未知报告完成状态，须检查命令退出结果和标记，不仅凭JSON中出现passed决定接纳。依赖可信稳定的父目录，不承诺文件系统硬时限、掉电恢复或独立备份。
 
 ## 槽所有权与停止
@@ -38,6 +45,8 @@ ASCII约束同时保护JSON stdin和stdout：当前内联协议会替换非法UT
 显式`OJ_SANDBOX_EXPERIMENT=1`、固定primary/secondary槽和现有跨checkout文件锁仍是前置条件；quarantine不自动恢复。命令先持锁并同步dirty标记，再接触沙箱。`--start-stopped-slot`只启动预存在、停止/PID0、固定owner及完整隔离配置匹配的槽，使用原full ID，不创建、替换、重启运行中容器或接管其他项目。返回Host绑定该ID与新StartedAt；运行中每次请求继续校验同一生命周期。
 
 正常退出和失败均在独立context中停止并排空Host，核验容器停止及已观察PID消失；只有确认后才清理marker。启动回执未知时仍尝试确认原生命周期停止；拿不到绑定Host、停止未确认或marker同步失败则保留隔离。启动/验证报错后若已确认停止且清标记成功，可以解除marker，但本次报告仍失败。原[受控恢复](../README.md#worker-异常后的受控解封)步骤继续适用。取消发生在Run、制品清理或Stop期间都不得生成通过状态。不会为了保存报告恢复旧槽或再次执行未知操作。
+
+Host的文件能力与原M0 RoundTrip分开：仅固定loopback文件路由、有限私有bytes reader、随机MIME boundary及有界sink；不接受任意URL、主机路径或流式Body提前交还。HTTP状态使用固定四字节trailer与二进制正文分开校验，子进程和全部IO结束后才释放active登记；取消不证明远端文件或进程已清除。M0默认入口、原JSON预算与Runtime保持。
 
 Stop内部仍为10秒总预算，保持原调用顺序和零重试。枚举/解析失败仍尝试kill；同时失败时优先记录kill诊断，不能由此推定枚举成功。每次探针成功后才递增confirmed，首个失败立即结束。`pid_probe/pid_present`仅表示该时刻PID路径存在，可能是PID复用，不证明原进程仍活着；`proc_unavailable`表示无法建立procfs前提。探针唯有明确“不存在”才成功，表达式/命令异常仍失败；超时不能被当作PID存在或退出证明。宿主命令的既有128KiB＋1字节输出界限由显式组合缓冲执行，避免标准库ReadFrom绕过限长Write。
 

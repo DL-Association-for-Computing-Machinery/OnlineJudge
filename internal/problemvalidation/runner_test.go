@@ -194,3 +194,33 @@ func TestAllReferencesPrecedeSandboxAndProfileBinding(t *testing.T) {
 		}
 	}
 }
+
+func TestRawReferenceEncodingCheckedBeforeSandbox(t *testing.T) {
+	b := problemfixture.New(t)
+	b.AddOriginal(t, "sample/aplusb/sol/correct.cpp", []byte("int main(){}"))
+	raw := []byte{255, '\n'}
+	sha := problemfixture.Hash(raw)
+	b.Document["test_cases"].([]any)[0].(map[string]any)["answer"] = map[string]any{"path": "objects/sha256/" + sha, "sha256": sha, "size": len(raw)}
+	b.Files["objects/sha256/"+sha] = raw
+	b.BindReferenceCases(t)
+	b.Write(t)
+	p, err := problem.LoadBundle(b.Directory, "library-checker:aplusb", b.Lock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = p.Close() }()
+	s := &sandbox{}
+	r, err := problemvalidation.New(s).Validate(context.Background(), p, problemvalidation.PinnedProfile())
+	if err == nil || len(s.calls) != 0 || r.PlanSHA256 == "" {
+		t.Fatal("invalid UTF8 reference reached sandbox")
+	}
+	profile := problemvalidation.PinnedProfile()
+	before := profile.Digest()
+	profile.Files.FileBytes--
+	if before == profile.Digest() {
+		t.Fatal("file budgets not bound by profile digest")
+	}
+	if _, err := problemvalidation.New(s).Validate(context.Background(), p, profile); err == nil || len(s.calls) != 0 {
+		t.Fatal("unadmitted file profile reached sandbox")
+	}
+}

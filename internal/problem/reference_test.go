@@ -71,7 +71,7 @@ func TestReferenceSnapshotAndLimits(t *testing.T) {
 	}
 }
 
-func TestReferenceRejectsNonASCIIAndMissingSource(t *testing.T) {
+func TestReferencePreservesRawBytesAndRequiresSource(t *testing.T) {
 	for _, role := range []string{"source", "input", "answer", "missing"} {
 		t.Run(role, func(t *testing.T) {
 			b := problemfixture.New(t)
@@ -95,8 +95,18 @@ func TestReferenceRejectsNonASCIIAndMissingSource(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer func() { _ = p.Close() }()
-			if _, err := p.PrepareReference(context.Background(), problemvalidation.PinnedProfile().Materials); !errors.Is(err, problem.ErrReferenceUnsupported) {
-				t.Fatalf("%s admitted: %v", role, err)
+			plan, err := p.PrepareReference(context.Background(), problemvalidation.PinnedProfile().Materials)
+			if role == "missing" {
+				if !errors.Is(err, problem.ErrReferenceUnsupported) {
+					t.Fatal("missing source admitted")
+				}
+			} else {
+				if err != nil {
+					t.Fatal("raw material rejected", err)
+				}
+				if role == "source" && string(plan.SourceData) != "//中文" || role == "input" && string(plan.Cases[0].InputData) != string([]byte{255, '\n'}) || role == "answer" && string(plan.Cases[0].AnswerData) != string([]byte{255, '\n'}) {
+					t.Fatal("raw snapshot changed bytes")
+				}
 			}
 		})
 	}

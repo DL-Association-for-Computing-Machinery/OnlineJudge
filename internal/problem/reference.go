@@ -143,13 +143,6 @@ func (p *Prepared) readReference(ctx context.Context, ref fileReference) ([]byte
 	if readErr != nil || closeErr != nil || int64(len(raw)) != ref.Size || hash(raw) != ref.SHA256 {
 		return nil, materialstore.ErrIntegrity
 	}
-	// The existing inline JSON sandbox protocol cannot preserve arbitrary input
-	// bytes. Restrict all three roles, not just answers, before any execution.
-	for _, b := range raw {
-		if b > 127 {
-			return nil, ErrReferenceUnsupported
-		}
-	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

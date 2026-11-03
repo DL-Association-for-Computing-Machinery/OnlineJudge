@@ -99,7 +99,9 @@ OJ_SANDBOX_EXPERIMENT=1 OJ_WORKER_M0_SLOT=secondary \
 
 停止失败报告的可选`stop_diagnostic`提供固定阶段/错误类别与有界计数，不含PID、命令参数或原始错误。`pid_present`仅表示探测时路径存在，可能发生PID复用；`deadline`不证明进程仍在或已退出。诊断不授予清理隔离标记的权限，旧失败报告不追认通过。
 
-真实专项另覆盖固定12点CLI、合成正确/错误/编译错误/RE/TLE/OLE和取消后的停止确认。它不需要PG/Redis或控制端，不进入普通CI：
+维护入口现使用独立缓存文件通路：源码/输入上传后回读核对SHA-256，输出原始字节拉取，参考答案留在宿主。新profile记录单文件48MiB、存活缓存64MiB、任务载荷128MiB和对象/操作预算；这不扩大草稿材料或每次运行4KiB输出限制，不是其余九题或生产准入。
+
+真实专项另覆盖固定12点CLI、合成正确/错误/编译错误/RE/TLE/MLE/OLE和取消后的停止确认。它不需要PG/Redis或控制端，不进入普通CI：
 
 ```sh
 OJ_SANDBOX_EXPERIMENT=1 OJ_WORKER_M0_SLOT=secondary OJ_REFERENCE_VALIDATION=1 \
@@ -107,6 +109,14 @@ OJ_SANDBOX_EXPERIMENT=1 OJ_WORKER_M0_SLOT=secondary OJ_REFERENCE_VALIDATION=1 \
   OJ_REFERENCE_OUTPUT=/private/tmp/oj-reference-suite-report \
   .local/validation-host/worker-validation.test \
   -test.v -test.count=1 -test.run='^TestPrivateDraftReferenceSandbox$' -test.timeout=5m
+```
+
+原始字节与容量专项另外使用同一已停止的专用槽，覆盖48MiB边界/超限、空输入、全部字节值、缓存stdin→小输出、清理及数值资源采样；它不更新草稿状态或生产限额：
+
+```sh
+OJ_SANDBOX_EXPERIMENT=1 OJ_WORKER_M0_SLOT=secondary OJ_REFERENCE_BYTES=1 \
+  .local/validation-host/worker-validation.test \
+  -test.v -test.count=1 -test.run='^TestReferenceBytesSandbox$' -test.timeout=5m
 ```
 
 ### 转换为统一私有草稿

@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 )
@@ -22,6 +23,10 @@ const container = "oj-m0-sandbox"
 // After Stop, even a failed stop, the object permanently rejects new operations.
 type Host struct {
 	run         command
+	stream      streamCommand
+	fileBusy    atomic.Bool
+	filePayload int64 // guarded by mu; charges are not refunded after ambiguity
+	fileOps     int   // guarded by mu; bounds even empty transfers
 	id, started string
 	mu          sync.Mutex
 	closed      bool

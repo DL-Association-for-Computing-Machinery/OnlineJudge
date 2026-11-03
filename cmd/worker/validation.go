@@ -22,6 +22,7 @@ import (
 
 type validationHost interface {
 	sandboxHost
+	execution.FileTransport
 	Identity() (string, string)
 }
 
@@ -156,7 +157,7 @@ func runReferenceLocked(ctx context.Context, prepared *problem.Prepared, lock *s
 		return report, errors.New("reference sandbox preflight failed; slot remains quarantined")
 	}
 	if openErr == nil {
-		report, openErr = problemvalidation.New(execution.NewGoJudge(host, host.Verify)).Validate(ctx, prepared, problemvalidation.PinnedProfile())
+		report, openErr = problemvalidation.New(execution.NewCachedGoJudge(host, host.Verify, host)).Validate(ctx, prepared, problemvalidation.PinnedProfile())
 	} else {
 		p := problemvalidation.PinnedProfile()
 		report = problemvalidation.Report{Schema: "oj.reference-validation.v1", Status: "reference-validation-failed", Publication: "blocked", Profile: p, ProfileSHA256: p.Digest(), Verdict: "SE", Points: []problemvalidation.Point{}}
