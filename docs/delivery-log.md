@@ -1,5 +1,15 @@
 # 工程交付记录
 
+## 2026-11-04：suffixarray 故障窗口与顺序对照调查
+
+成功fetch后从`origin/main 61aaa4bb44889d1c0f5e8d20c7fda2048011f72f`建立独立调查分支。原medium完整CID/镜像/owner/配置、停止PID0、canonical私有空锁与无旧控制操作先核验；原固定镜像/Go1.26.10离线四包race基线与独立Darwin构建、精确测试清单通过。只新增[调查记录](reference-validation-investigation.md)并同步维护入口，没有应用代码、依赖、预算、来源或停止门禁变更。
+
+新主线一次完整suffixarray50点25.27秒全AC并停止/清锁。随后预注册单次顺序对照：原#114 worker/driver与旧故障留存哈希成对匹配，原工作区未改；旧point_add完整21点及大stdin两组15.60秒通过，确认停止/清锁/排空后再运行新主线suffixarray，24.69秒全50点AC并停止。前置进程结束至目标启动约0.058707秒（含安全核验），未宣称与旧间隔相等。任一前置失败即终止、不恢复后续跑的协议保持；没有额外尝试、手清marker或解除#114。两目标报告与旧plan/profile逐字段一致，0700/0600、无INCOMPLETE、成功两诊断均省略；三个新报告SHA及全部证据见调查页。
+
+原旧suffixarray故障窗口的有界脱敏服务日志提供新证据：72条HTTP记录；第11点stdout GET后的同对象DELETE，其handler latency为0.000252秒，但服务端ts与Docker记录时间相差23.787307秒。两次成功目标各307条记录，最大时间差约0.000446/0.000509秒。固定二进制依赖版本与官方ginzap/Zap源码核对后，明确handler计时不覆盖后续日志调用/客户端等待；不据HTTP200判AC，也不把时间差定性为日志背压、VM暂停或kill已派发。更早A+B窗口空日志不作原因证据。采集不保留原日志、缓存ID、参数/材料/原始错误。
+
+Astra/high对方案、既有差异及证据判读复核：可把调查重点收窄到stdout清理附近/handler计时之外，不能确定旧主错误；完整新文档另复核。原`19513bf8…`失败报告及18项哈希保持，#114仍草稿。后续有明确触发时按预注册狭窄假设关联执行诊断/Stop trace和服务日志，不继续盲目重复。本地未重跑完整backend、PG/Redis、前端/浏览器或完整M0；本次文档差异按CI范围另核验，不把应用跳过称为通过。原草稿not-run/生产null/publication blocked保持，其余六题及持久化验证任务/权限接纳、完整质量/终审发布与整体P4仍待完成，未部署。
+
 ## 2026-11-04：执行阶段与独立清理失败诊断
 
 成功fetch后从`origin/main baae5d5ec840f83db222e938c5142990b1f4fb93`建立`codex/reference-execution-evidence`。将此前九个自有WIP文件按哈希核对后适配当前Stop字段，不覆盖已合并实现。维护报告新增可选`execution_diagnostic`：可信缓存调用位置/角色账本提供phase/role/code，Runner添加operation与逐点序号。按观察顺序保留主错、各清理错误和独立父context，跨调用最多八条，遗漏标记truncated；已标记分支内同cause不重复展开。只记录封闭类别，不保留外来原错误文本/材料/ID；控制metadata与既有context unwrap语义分别验证，宿主文件context原因及Stop窄类别保持。
