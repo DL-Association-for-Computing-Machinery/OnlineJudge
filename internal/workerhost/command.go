@@ -11,6 +11,27 @@ import (
 
 type command func(context.Context, io.Reader, string, ...string) ([]byte, error)
 
+// Only these locally produced failures retain an exit code. Neither an exec
+// error nor its command/path/stderr is retained across the host boundary.
+type commandFailure struct {
+	code  string
+	exit  int
+	cause error
+}
+
+func (e *commandFailure) Error() string { return "host command " + e.code }
+func (e *commandFailure) Unwrap() error { return e.cause }
+
+func contextCause(err error) error {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return context.DeadlineExceeded
+	}
+	if errors.Is(err, context.Canceled) {
+		return context.Canceled
+	}
+	return nil
+}
+
 // Output and runtime are bounded before buffering. Never propagate stderr or
 // command arguments: requests may contain private source and test input.
 func runCommand(ctx context.Context, input io.Reader, name string, args ...string) ([]byte, error) {
@@ -23,16 +44,43 @@ func runCommand(ctx context.Context, input io.Reader, name string, args ...strin
 	cmd.Stdout = &out
 	cmd.WaitDelay = time.Second
 	if err := cmd.Run(); err != nil {
-		return nil, errors.Join(errors.New("host command failed"), ctx.Err())
+		failure := &commandFailure{code: "unknown", exit: -1}
+		if cause := ctx.Err(); cause != nil {
+			failure.cause = cause
+			failure.code = "canceled"
+			if errors.Is(cause, context.DeadlineExceeded) {
+				failure.code = "deadline"
+			}
+		} else if out.exceeded {
+			failure.code = "output_limit"
+		} else {
+			var exit *exec.ExitError
+			if errors.As(err, &exit) {
+				failure.code, failure.exit = "command_exit", exit.ExitCode()
+			} else if errors.Is(err, exec.ErrWaitDelay) {
+				failure.code = "wait_delay"
+			} else if cmd.Process == nil {
+				failure.code = "launch_failed"
+			}
+		}
+		return nil, failure
 	}
 	return out.Bytes(), nil
 }
 
-type limitedBuffer struct{ bytes.Buffer }
+// Embedding bytes.Buffer would promote ReadFrom and let io.Copy bypass Write.
+type limitedBuffer struct {
+	buffer   bytes.Buffer
+	exceeded bool
+}
+
+func (b *limitedBuffer) Len() int      { return b.buffer.Len() }
+func (b *limitedBuffer) Bytes() []byte { return b.buffer.Bytes() }
 
 func (b *limitedBuffer) Write(p []byte) (int, error) {
 	if len(p) > 128*1024+1-b.Len() {
+		b.exceeded = true
 		return 0, errors.New("host output exceeds budget")
 	}
-	return b.Buffer.Write(p)
+	return b.buffer.Write(p)
 }

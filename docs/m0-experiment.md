@@ -429,6 +429,8 @@ P2、AC28/29 的独立前置功能：`workerhost.OpenM0`（原默认槽）、`Op
 
 Stop 先永久关闭请求入口，取消并排空本地命令，然后仅针对绑定的原生命周期发送 KILL。检查 Running=false、Pid=0、Restarting=false，并通过 VM `/proc` 检查停止前观察到的 PID 均消失；进程证据缺失、PID 复用或任何未知状态均失败。枚举失败仍尝试终止已核实的容器，但不能报告成功。独立 10 秒停止预算，失败仍封锁实例；不自动启动/恢复容器。CLI 语义依据 [Docker kill](https://docs.docker.com/reference/cli/docker/container/kill/) 与 [inspect](https://docs.docker.com/reference/cli/docker/container/inspect/)，停止事实由测试核验。
 
+当前适配器另提供脱敏的Stop阶段/类别与有界进程计数；私有参考验证报告按[诊断合同](reference-validation.md#固定快照与失败报告)投影，不含PID或原始错误，也不改变停止事实、隔离和原预算。宿主输出缓冲已显式组合，真实子进程131073字节成功/131074字节拒绝，避免嵌入bytes.Buffer的ReadFrom绕过Write限长；这不是生产节点停止或完整M0复验声明。
+
 2026-10-28：新增单元/race 覆盖环境漂移、生命周期变化、请求/响应边界、合法最大转义源码、取消排空、停止错误及永久封锁。真实 `TestWorkerHostExecution` 完成 AC/WA 与制品清理；`TestLeasedExecutionConfirmsHostStop` 改用该适配器，独立观察选手 PID 后取消，确认 PID 消失、后续点 NOT_RUN 和旧实例拒绝。另重跑原 10 项受限编排、12 项隔离测试通过。续租在停止专项中仍注入成功；数据库撤销到真实停止、命令进程信号、双 Worker 未验证。本次未改数据库/协议/依赖，回退模块及其测试即可，无迁移；完整复现命令见交付记录。
 
 ## 数据模型、边界与预算

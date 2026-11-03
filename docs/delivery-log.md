@@ -1,5 +1,15 @@
 # 工程交付记录
 
+## 2026-11-03：停止失败的脱敏诊断与真实输出界限
+
+成功fetch后从`origin/main c9cf31c8c4f8f713bd79b8219237e79bcb6f3000`建立`codex/sandbox-stop-diagnostics`，承接上一阶段两次原因未知的停止确认失败。宿主命令错误只保留固定类别及context判等，原始命令/路径/stderr/Reader错误和退出码不外传；Stop各失败出口增加阶段及0—128进程计数，私有参考报告以可选stop_diagnostic投影，核心不依赖Docker适配器。枚举失败仍kill、多失败kill优先、首探针失败即停、最终context检查、10秒总预算及隔离/确认规则保持；清marker失败不能伪装成Stop失败或通过。
+
+新增真实子进程输出回归首先失败：原limitedBuffer嵌入bytes.Buffer，提升的ReadFrom使io.Copy绕过限长Write，131074字节未拒绝。现改显式组合，实际131073字节成功/131074字节output_limit；原预算不放大。探针只把明确不存在当成功，proc不可用/目标路径存在使用不同非零码，异常表达式仍非零且不冒充PID存在；PID复用不能据此认定原进程存活。Astra复核发现初稿if-test把异常退出2误当不存在，已修正并补真实shell注入回归；二次复核无阻断。AI复核不代替人工approval。
+
+已有离线Docker Go1.26.10/linux arm64基线通过。最终模块校验/格式/vet/三范围静态/root race/七命令构建、sandbox标签静态全部通过（`/private/tmp/oj-stop-diagnostics-backend-final.log`）；定向回归覆盖退出/启动/输入复制/输出/超时/取消分类、全部停止阶段、双失败仍kill、探针计数/首失败停止、末次context过期、procfs/存在/异常shell状态及报告脱敏。原输出缺陷首败保存在`oj-stop-diagnostics-output-repro.log`，没有削弱测试或延长预算。无新依赖、SQL/schema/API/UI变化；本地未重跑PG/Redis、浏览器或完整M0套件，通用远端回归仍按精确head CI核验。
+
+所有重构建结束后仅运行一次既有真实专项：固定Desktop LinuxKit7.0.14/arm64、go-judge v1.13.3、GCC15.3.0与原镜像，八组98.71秒全部通过，含真实12点CLI22.35秒、合成AC/WA/CE/RE/TLE/OLE和取消；全部停止确认，无恢复/再跑至绿。私有报告`/private/tmp/oj-stop-diagnostics-real-20261103/report.json`的SHA-256为`7c73896caa55a96ea706a1f56f779bb76f26457aaac04d9b623b26bb5eca5125`，plan/profile与上一阶段相同，0700/0600；成功不含stop_diagnostic。日志`oj-stop-diagnostics-real.log`。本轮未复现旧停止问题，历史失败没有新字段，不能反推旧根因或宣称入口稳定；本次没有解决其余九题/持久化验证任务/完整质量/审核发布，也不改not-run或生产null配置，未部署。临时日志和制品不是备份。
+
 ## 2026-11-03：首份完整私有草稿的受限参考验证
 
 从成功fetch的`origin/main 5f71597b5a7a74dd5ea517391402ee4591eed57c`建立`codex/private-draft-reference-validation`。新增维护命令`worker validate-reference`：只接收固定锁A+B完整12点，冻结独立plan/profile，编译一次、逐点运行及比较，记录资源和完整容器生命周期，制品清理、停止及marker同步均确认才通过。报告始终publication blocked，不连接控制端/PG/Redis，不写草稿not-run或生产配置；其余九题的大材料/依赖、持久化任务、完整质量、审核发布继续待完成。原M0分类、profile和Stop门禁不放宽；仅提升已锁定MIT许可go-toml/v2 v2.2.4为直接依赖，无版本/go.sum变化或新下载。

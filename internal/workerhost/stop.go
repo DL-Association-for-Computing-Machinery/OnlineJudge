@@ -16,7 +16,7 @@ func (h *Host) Stop(ctx context.Context) error {
 	h.mu.Lock()
 	if h.closed {
 		h.mu.Unlock()
-		return errors.New("sandbox already fenced")
+		return stopError("fence", "already_fenced", 0, 0, 0, nil)
 	}
 	h.closed = true
 	for _, cancel := range h.active {
@@ -33,37 +33,61 @@ func (h *Host) Stop(ctx context.Context) error {
 	select {
 	case <-h.drained:
 	case <-ctx.Done():
-		return ctx.Err()
+		return stopError("drain", failureCode(ctx.Err()), 0, 0, 0, ctx.Err())
 	}
 	s, err := h.inspect(ctx, h.id)
 	if err != nil {
-		return err
+		return stopError("inspect_before", failureCode(err), 0, 0, 0, err)
 	}
 	if s.ID != h.id || s.Started != h.started || s.Restart != "no" || s.Restarting {
-		return errors.New("sandbox lifetime changed; stop unconfirmed")
+		return stopError("inspect_before", "lifetime_changed", 0, 0, 0, nil)
 	}
 	if !s.Running || s.PID <= 1 {
-		return errors.New("sandbox process evidence unavailable")
+		return stopError("inspect_before", "evidence_unavailable", 0, 0, 0, nil)
 	}
 	out, topErr := h.docker(ctx, nil, "top", h.id, "-eo", "pid")
 	pids, parseErr := parsePIDs(string(out), s.PID)
 	// Even if process enumeration fails, kill the verified owned lifetime. Missing
 	// evidence must never become success, but should not leave known work running.
 	_, killErr := h.docker(ctx, nil, "kill", "--signal", "KILL", h.id)
-	if err := errors.Join(topErr, parseErr, killErr); err != nil {
-		return err
+	// A failed kill takes diagnostic precedence over missing enumeration; neither
+	// outcome can become a stop acknowledgement. Enumeration always precedes kill.
+	if killErr != nil {
+		return stopError("kill", failureCode(killErr), len(pids), 0, 0, errors.Join(topErr, killErr))
+	}
+	if topErr != nil {
+		return stopError("enumerate", failureCode(topErr), 0, 0, 0, topErr)
+	}
+	if parseErr != nil {
+		return stopError("enumerate", "invalid_evidence", 0, 0, 0, nil)
 	}
 	s, err = h.inspect(ctx, h.id)
-	if err != nil || s.ID != h.id || s.Started != h.started || s.Running || s.PID != 0 || s.Restarting {
-		return errors.New("sandbox stopped state unconfirmed")
+	if err != nil {
+		return stopError("inspect_after", failureCode(err), len(pids), 0, 0, err)
 	}
-	for _, pid := range pids {
+	if s.ID != h.id || s.Started != h.started || s.Running || s.PID != 0 || s.Restarting {
+		return stopError("inspect_after", "state_unconfirmed", len(pids), 0, 0, nil)
+	}
+	for i, pid := range pids {
 		_, err := h.run(ctx, nil, "docker", PIDProbeArgs(strconv.Itoa(pid))...)
 		if err != nil {
-			return errors.New("sandbox process exit unconfirmed")
+			code := failureCode(err)
+			var command *commandFailure
+			if code == "command_exit" && errors.As(err, &command) {
+				switch command.exit {
+				case probeProcUnavailable:
+					code = "proc_unavailable"
+				case probePIDPresent:
+					code = "pid_present"
+				}
+			}
+			return stopError("pid_probe", code, len(pids), i, i+1, err)
 		}
 	}
-	return ctx.Err()
+	if err := ctx.Err(); err != nil {
+		return stopError("complete", failureCode(err), len(pids), len(pids), 0, err)
+	}
+	return nil
 }
 
 func parsePIDs(out string, initPID int) ([]int, error) {
