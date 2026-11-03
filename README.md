@@ -74,7 +74,7 @@ docker --context desktop-linux run --rm --network none --read-only \
 
 ### 私有草稿参考验证
 
-主线维护入口已验证固定Library Checker A+B完整12点、unionfind完整18点、zalgorithm完整29点、suffixarray完整50点及primality_test固定依赖/完整13点。本分支另有static_range_sum完整11点候选配置，真实边界与完整CLI尚未执行，不能据本地替身测试认定准入。入口不写数据库验证状态或发布。需要已配置且停止的专用槽、已有固定镜像与Docker Desktop、macOS arm64；命令不会自动创建、替换或恢复槽。使用已有Go1.26.10工具链镜像构建独立宿主产物（不与Linux检查共用输出）：
+主线维护入口已验证固定Library Checker A+B完整12点、unionfind完整18点、zalgorithm完整29点、suffixarray完整50点及primality_test固定依赖/完整13点。本分支另有static_range_sum完整11点候选配置，首次在槽启动确认阶段失败；受控恢复已确认当前停止/清锁，但不追认试验。真实字节边界与完整CLI尚未执行，候选仍未准入，证据归[交付记录](docs/delivery-log.md)。入口不写数据库验证状态或发布。需要已配置且停止的专用槽、已有固定镜像与Docker Desktop、macOS arm64；命令不会自动创建、替换或恢复槽。使用已有Go1.26.10工具链镜像构建独立宿主产物（不与Linux检查共用输出）：
 
 ```sh
 REFERENCE_TOOLCHAIN_IMAGE=YOUR_EXISTING_LOCAL_GO_TOOLCHAIN_IMAGE
@@ -211,7 +211,7 @@ env -u OJ_WORKER_M0_SLOT OJ_SANDBOX_EXPERIMENT=1 OJ_PRIMALITY_REFERENCE=1 \
   -test.v -test.count=1 -test.run='^TestPrimalityReferenceSandbox$' -test.timeout=5m
 ```
 
-static_range_sum候选的维护命令选择`--source-id library-checker:static_range_sum`和新报告目录。以下显式专项先验证完整16MiB输入与8MiB stdout/4KiB stderr、stdout超限的窄SIGXFSZ证据及stderr4097拒绝，再运行完整11点CLI。预期负例只接受一条明确验证错误；任何额外清理/取消/截断错误或Stop失败均中止后组。当前尚未执行，固定文件限制/collector区分见[候选合同](docs/reference-validation.md#static_range_sum候选)：
+static_range_sum候选的维护命令选择`--source-id library-checker:static_range_sum`和新报告目录。以下显式专项先验证完整16MiB输入与8MiB stdout/4KiB stderr、stdout超限的窄SIGXFSZ证据及stderr4097拒绝，再运行完整11点CLI。预期负例只接受一条明确验证错误；任何额外清理/取消/截断错误或Stop失败均中止后组。首轮启动阶段失败，未到可信探针或真实题源，后续不得沿用已消耗的一次协议重试；固定文件限制/collector区分见[候选合同](docs/reference-validation.md#static_range_sum候选)：
 
 ```sh
 env -u OJ_WORKER_M0_SLOT OJ_SANDBOX_EXPERIMENT=1 OJ_STATIC_RANGE_SUM_REFERENCE=1 \
