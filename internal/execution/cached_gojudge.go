@@ -29,6 +29,7 @@ type CachedGoJudge struct {
 	busy                       atomic.Bool
 	verified, compiled, failed bool
 	executable                 string
+	compilationEntry           string // empty for the unchanged single-source protocol
 	objects                    map[string]*cachedObject
 	seen                       map[string]bool
 	liveBytes, totalBytes      int64
@@ -58,6 +59,7 @@ func NewReferenceGoJudgeForTier(transport http.RoundTripper, verify func(context
 	}
 	g := NewReferenceGoJudge(transport, verify, files)
 	g.runtime, g.limits = c.Runtime, c.Files
+	g.compilationEntry = c.Entry
 	return g, nil
 }
 
@@ -86,16 +88,31 @@ func (g *CachedGoJudge) Verify(ctx context.Context, p experiment.ExecutionProfil
 // Compile verifies uploaded source bytes, compiles once, and retains only its
 // owned executable. Source deletion is independently bounded even on failure.
 func (g *CachedGoJudge) Compile(ctx context.Context, p experiment.ExecutionProfile, source string) (o Observation, err error) {
+	return g.compileSources(ctx, p, source, nil, false)
+}
+
+// CompileFiles admits dependencies only through the separately fixed runtime.
+func (g *CachedGoJudge) CompileFiles(ctx context.Context, p experiment.ExecutionProfile, files []SourceFile) (Observation, error) {
+	return g.compileSources(ctx, p, "", files, true)
+}
+
+func (g *CachedGoJudge) compileSources(ctx context.Context, p experiment.ExecutionProfile, source string, files []SourceFile, multiple bool) (o Observation, err error) {
 	if err = g.acquire(ctx, false); err != nil {
 		return o, tagFailure(err, "validate", "source", "")
 	}
 	defer func() { err = g.finish(ctx, err) }()
-	if !g.verified || g.compiled || !reflect.DeepEqual(p, g.runtime) || int64(len(source)) > g.limits.SourceBytes {
+	if !g.verified || g.compiled || !reflect.DeepEqual(p, g.runtime) {
+		return o, failureError("validate", "source", "invalid_evidence", "cached compilation rejected")
+	}
+	files, entry, valid := g.prepareCompilation(source, files, multiple)
+	if !valid {
 		return o, failureError("validate", "source", "invalid_evidence", "cached compilation rejected")
 	}
 	g.compiled = true
-	src, err := g.upload(ctx, []byte(source), "source")
-	defer func() { g.cleanup(&err, src) }()
+	var objects []*cachedObject
+	defer func() { g.cleanup(&err, objects...) }()
+	var copyIn map[string]any
+	copyIn, objects, err = g.uploadCompilation(ctx, files, entry)
 	if err != nil {
 		return o, err
 	}
@@ -109,7 +126,7 @@ func (g *CachedGoJudge) Compile(ctx context.Context, p experiment.ExecutionProfi
 	}
 	c := command(p, p.CompileArgs, p.Compile, nil)
 	g.boundDiagnostics(c, true)
-	c["copyIn"] = map[string]any{"main.cpp": map[string]any{"fileId": src.id}}
+	c["copyIn"] = copyIn
 	c["copyOutCached"] = []string{"main?"}
 	c["copyOutMax"] = p.ExecutableBytes
 	r, err := g.control.result(ctx, c)

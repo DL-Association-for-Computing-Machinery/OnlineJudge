@@ -143,8 +143,12 @@ func (f *mediumMeasuredFiles) ReadFile(ctx context.Context, id string, maximum i
 }
 
 func mediumSandboxHost(t *testing.T) *workerhost.Host {
+	return referenceTierSandboxHost(t, experiment.ReferenceMedium)
+}
+
+func referenceTierSandboxHost(t *testing.T, tier experiment.ReferenceTier) *workerhost.Host {
 	t.Helper()
-	slot, err := workerhost.ReferenceSlotForTier(experiment.ReferenceMedium)
+	slot, err := workerhost.ReferenceSlotForTier(tier)
 	if err != nil {
 		t.Fatal(err)
 	}

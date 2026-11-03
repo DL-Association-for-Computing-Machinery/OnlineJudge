@@ -125,6 +125,14 @@ func (r *Runner) validate(ctx context.Context, prepared *problem.Prepared, profi
 		return report, errors.New("frozen reference source identity mismatch")
 	}
 	report.Plan, report.PlanSHA256 = plan, plan.Digest()
+	var compilation execution.CompilationSandbox
+	if len(plan.Dependencies) != 0 {
+		var ok bool
+		compilation, ok = r.sandbox.(execution.CompilationSandbox)
+		if !ok {
+			return report, errors.New("reference dependency compilation unavailable")
+		}
+	}
 	for i := range plan.Cases {
 		answer, err := frozen.ReadAnswer(ctx, i)
 		if err != nil {
@@ -138,6 +146,17 @@ func (r *Runner) validate(ctx context.Context, prepared *problem.Prepared, profi
 	if err != nil {
 		return report, err
 	}
+	var files []execution.SourceFile
+	if compilation != nil {
+		dependencies, e := frozen.ReadDependencies(ctx)
+		if e != nil {
+			return report, e
+		}
+		files = append(files, execution.SourceFile{Name: plan.SourcePath, Data: source})
+		for _, dependency := range dependencies {
+			files = append(files, execution.SourceFile{Name: dependency.Path, Data: dependency.Data})
+		}
+	}
 	if err := ctx.Err(); err != nil {
 		return report, err
 	}
@@ -149,7 +168,12 @@ func (r *Runner) validate(ctx context.Context, prepared *problem.Prepared, profi
 		return report, err
 	}
 	compileCtx, done := context.WithTimeout(ctx, time.Duration(profile.Runtime.Compile.Wall)+5*time.Second)
-	compiled, err := r.sandbox.Compile(compileCtx, profile.Runtime, string(source))
+	var compiled execution.Observation
+	if compilation != nil {
+		compiled, err = compilation.CompileFiles(compileCtx, profile.Runtime, files)
+	} else {
+		compiled, err = r.sandbox.Compile(compileCtx, profile.Runtime, string(source))
+	}
 	report.recordExecution("compile", 0, err)
 	done()
 	if compiled.Artifact != "" {

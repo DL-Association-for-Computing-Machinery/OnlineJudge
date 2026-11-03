@@ -36,18 +36,32 @@ type ReferenceCase struct {
 	AnswerData []byte               `json:"-"`
 }
 
+// ReferenceDependency binds a sandbox-relative name to frozen source bytes.
+type ReferenceDependency struct {
+	Path   string               `json:"path"`
+	Object materialstore.Object `json:"object"`
+}
+
+// ReferenceSourceFile contains private compilation bytes, never report data.
+type ReferenceSourceFile struct {
+	Path string `json:"path"`
+	Data []byte `json:"-"`
+}
+
 // ReferencePlan is a detached maintenance snapshot, not a permission grant or a
 // published problem version. Its JSON contains identities, never private bytes.
 type ReferencePlan struct {
-	SourceID         string               `json:"source_id"`
-	Version          string               `json:"version"`
-	ImportRevision   string               `json:"import_revision"`
-	SourceLockSHA256 string               `json:"source_lock_sha256"`
-	Source           materialstore.Object `json:"source"`
-	Definition       materialstore.Object `json:"test_definition"`
-	Hashes           materialstore.Object `json:"test_hashes"`
-	Cases            []ReferenceCase      `json:"cases"`
-	SourceData       []byte               `json:"-"`
+	SourceID         string                `json:"source_id"`
+	Version          string                `json:"version"`
+	ImportRevision   string                `json:"import_revision"`
+	SourceLockSHA256 string                `json:"source_lock_sha256"`
+	Source           materialstore.Object  `json:"source"`
+	SourcePath       string                `json:"source_path,omitempty"`
+	Dependencies     []ReferenceDependency `json:"dependencies,omitempty"`
+	Definition       materialstore.Object  `json:"test_definition"`
+	Hashes           materialstore.Object  `json:"test_hashes"`
+	Cases            []ReferenceCase       `json:"cases"`
+	SourceData       []byte                `json:"-"`
 }
 
 // Digest binds source, draft/import identities and the complete ordered case

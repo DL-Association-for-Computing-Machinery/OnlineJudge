@@ -56,6 +56,20 @@ func ResolveSource(sourceID string) (Profile, experiment.ReferenceTier, error) {
 		return PinnedProfile(), 0, nil
 	case "library-checker:unionfind":
 		return UnionFindProfile(), experiment.ReferenceSmall, nil
+	case "library-checker:primality_test":
+		c, err := experiment.ResolveReferenceTier(experiment.ReferencePrimality)
+		if err != nil {
+			return Profile{}, 0, err
+		}
+		limits, err := problem.DiskReferenceLimits(sourceID)
+		if err != nil {
+			return Profile{}, 0, err
+		}
+		p := UnionFindProfile()
+		p.ID = "p4-lc-primality-reference-desktop-arm64-v1"
+		p.Runtime, p.Files, p.Materials = c.Runtime, c.Files, limits
+		p.Text.Bytes = 512 << 10
+		return p, experiment.ReferencePrimality, nil
 	case "library-checker:zalgorithm", "library-checker:suffixarray":
 		c, err := experiment.ResolveReferenceTier(experiment.ReferenceMedium)
 		if err != nil {

@@ -11,6 +11,8 @@ const (
 	ReferenceSmall ReferenceTier = 1
 	// ReferenceMedium is the reviewed medium-material reference trial.
 	ReferenceMedium ReferenceTier = 2
+	// ReferencePrimality admits the fixed dependency-layout trial.
+	ReferencePrimality ReferenceTier = 4
 )
 
 // ReferenceConfiguration binds runtime and both file-transport budget ledgers.
@@ -18,14 +20,15 @@ const (
 type ReferenceConfiguration struct {
 	Runtime ExecutionProfile
 	Files   ReferenceFilesProfile
+	Entry   string
 }
 
 // ResolveReferenceTier accepts only the closed set of reviewed configurations.
 func ResolveReferenceTier(tier ReferenceTier) (ReferenceConfiguration, error) {
 	switch tier {
 	case ReferenceSmall:
-		return ReferenceConfiguration{PinnedReferenceEnvironment(), PinnedReferenceFiles()}, nil
-	case ReferenceMedium:
+		return ReferenceConfiguration{Runtime: PinnedReferenceEnvironment(), Files: PinnedReferenceFiles()}, nil
+	case ReferenceMedium, ReferencePrimality:
 		p := PinnedReferenceEnvironment()
 		p.ID = "p4-reference-medium-gnu17-desktop-arm64-v1"
 		p.OutputBytes = 4 << 20
@@ -41,7 +44,15 @@ func ResolveReferenceTier(tier ReferenceTier) (ReferenceConfiguration, error) {
 		f := PinnedReferenceFiles()
 		f.ID = "p4-gojudge-cached-files-medium-v1"
 		f.PayloadBytes = 256 << 20
-		return ReferenceConfiguration{p, f}, nil
+		if tier == ReferencePrimality {
+			p.ID = "p4-primality-gnu17-desktop-arm64-v1"
+			p.OutputBytes = 512 << 10
+			p.CompileArgs = []string{"/usr/local/bin/g++", "-std=gnu++17", "-O2", "-pipe", "sol/correct.cpp", "-Icommon", "-o", "main"}
+			f.ID = "p4-gojudge-cached-dependencies-v1"
+			f.Objects = 6 // five compilation files and the reserved executable
+			return ReferenceConfiguration{Runtime: p, Files: f, Entry: "sol/correct.cpp"}, nil
+		}
+		return ReferenceConfiguration{Runtime: p, Files: f}, nil
 	default:
 		return ReferenceConfiguration{}, errors.New("unsupported reference tier")
 	}
