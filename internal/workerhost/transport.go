@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"regexp"
 	"time"
-
-	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 )
 
 var filePath = regexp.MustCompile(`^/file/[A-Za-z0-9_-]{1,128}$`)
@@ -55,7 +53,7 @@ func (h *Host) RoundTrip(r *http.Request) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := h.validate(s, experiment.PinnedEnvironment()); err != nil {
+	if err := h.validate(s, h.profile()); err != nil {
 		return nil, err
 	}
 	args := []string{"exec", "-i", h.id, "curl", "--disable", "--silent", "--show-error", "--noproxy", "*", "--max-time", "20", "--max-filesize", "131072", "--proto", "=http", "--request", r.Method, "--header", "Content-Type: application/json", "--write-out", "\n%{http_code}"}

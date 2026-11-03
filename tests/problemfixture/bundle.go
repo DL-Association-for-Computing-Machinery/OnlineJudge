@@ -63,8 +63,9 @@ func (b *Bundle) BindReferenceCases(t *testing.T) {
 	for _, g := range groups {
 		fmt.Fprintf(&info, "[[tests]]\nname = %q\nnumber = %d\n", g.name, g.count)
 	}
-	b.AddOriginal(t, "sample/aplusb/info.toml", []byte(info.String()))
-	b.AddOriginal(t, "sample/aplusb/hash.json", JSON(t, hashes))
+	source := b.Document["provenance"].(map[string]any)["source_path"].(string)
+	b.AddOriginal(t, source+"/info.toml", []byte(info.String()))
+	b.AddOriginal(t, source+"/hash.json", JSON(t, hashes))
 }
 
 // AddOriginal adds an explicitly source-locked private program or dependency.
@@ -182,6 +183,22 @@ func New(t *testing.T) *Bundle {
 	return b
 }
 
+// NewUnionFind selects the second fixed reference source for synthetic tests.
+func NewUnionFind(t *testing.T) *Bundle {
+	t.Helper()
+	b := New(t)
+	var lock map[string]any
+	if err := json.Unmarshal(b.Lock, &lock); err != nil {
+		t.Fatal(err)
+	}
+	lock["problems"].([]any)[0].(map[string]any)["path"] = "data_structure/unionfind"
+	b.Lock = JSON(t, lock)
+	b.Files["provenance/source-lock.json"] = b.Lock
+	p := b.Document["provenance"].(map[string]any)
+	p["source_id"], p["source_path"], p["source_lock_sha256"] = "library-checker:unionfind", "data_structure/unionfind", Hash(b.Lock)
+	return b
+}
+
 // Write updates only this test's files and recomputes content/index identities.
 func (b *Bundle) Write(t *testing.T) {
 	t.Helper()
@@ -196,7 +213,7 @@ func (b *Bundle) Write(t *testing.T) {
 			total += len(raw)
 		}
 	}
-	b.Files["index.json"] = JSON(t, map[string]any{"schema": "oj.private-draft-bundle.v1", "state": "private-unpublished", "access": "synthetic private fixture", "copied_source_bytes": total, "files": inventory, "problems": []any{map[string]any{"draft": "drafts/aplusb.json", "source_id": "library-checker:aplusb", "version": b.Document["version"], "test_cases": len(b.Document["test_cases"].([]any)), "examples": len(b.Document["examples"].([]string))}}})
+	b.Files["index.json"] = JSON(t, map[string]any{"schema": "oj.private-draft-bundle.v1", "state": "private-unpublished", "access": "synthetic private fixture", "copied_source_bytes": total, "files": inventory, "problems": []any{map[string]any{"draft": "drafts/aplusb.json", "source_id": b.Document["provenance"].(map[string]any)["source_id"], "version": b.Document["version"], "test_cases": len(b.Document["test_cases"].([]any)), "examples": len(b.Document["examples"].([]string))}}})
 	for p, raw := range b.Files {
 		target := filepath.Join(b.Directory, filepath.FromSlash(p))
 		if err := os.MkdirAll(filepath.Dir(target), 0700); err != nil {

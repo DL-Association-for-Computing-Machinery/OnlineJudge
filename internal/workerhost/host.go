@@ -27,6 +27,7 @@ type Host struct {
 	fileBusy    atomic.Bool
 	filePayload int64 // guarded by mu; charges are not refunded after ambiguity
 	fileOps     int   // guarded by mu; bounds even empty transfers
+	reference   bool  // fixed by the constructor, never caller-selected budgets
 	id, started string
 	mu          sync.Mutex
 	closed      bool
@@ -51,8 +52,12 @@ func open(ctx context.Context, run command) (*Host, error) {
 }
 
 func openSlot(ctx context.Context, run command, slot M0Slot) (*Host, error) {
-	h := &Host{run: run, active: make(map[uint64]context.CancelFunc), drained: make(chan struct{})}
-	s, err := h.inspect(ctx, slot.ContainerName())
+	return openConfiguredSlot(ctx, run, slot.ContainerName(), false)
+}
+
+func openConfiguredSlot(ctx context.Context, run command, name string, reference bool) (*Host, error) {
+	h := &Host{run: run, reference: reference, active: make(map[uint64]context.CancelFunc), drained: make(chan struct{})}
+	s, err := h.inspect(ctx, name)
 	if err != nil {
 		return nil, err
 	}
@@ -60,10 +65,17 @@ func openSlot(ctx context.Context, run command, slot M0Slot) (*Host, error) {
 		return nil, errors.New("sandbox identity unavailable")
 	}
 	h.id, h.started = s.ID, s.Started
-	if err := h.Verify(ctx, experiment.PinnedEnvironment()); err != nil {
+	if err := h.Verify(ctx, h.profile()); err != nil {
 		return nil, err
 	}
 	return h, nil
+}
+
+func (h *Host) profile() experiment.ExecutionProfile {
+	if h.reference {
+		return experiment.PinnedReferenceEnvironment()
+	}
+	return experiment.PinnedEnvironment()
 }
 
 var containerID = regexp.MustCompile(`^[a-f0-9]{64}$`)
@@ -104,7 +116,7 @@ func (h *Host) Verify(ctx context.Context, p experiment.ExecutionProfile) error 
 		return err
 	}
 	defer done()
-	if !reflect.DeepEqual(p, experiment.PinnedEnvironment()) {
+	if !reflect.DeepEqual(p, h.profile()) {
 		return errors.New("unsupported host profile")
 	}
 	s, err := h.inspect(ctx, h.id)

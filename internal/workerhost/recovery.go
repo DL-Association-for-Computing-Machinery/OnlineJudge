@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"time"
-
-	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 )
 
 // RecoverM0Slot confirms termination of a quarantined slot. The caller must hold
@@ -20,20 +18,31 @@ func RecoverM0Slot(ctx context.Context, slot M0Slot, expectedID string) error {
 }
 
 func recoverSlot(ctx context.Context, run command, slot M0Slot, expectedID string) error {
+	return recoverConfiguredSlot(ctx, run, slot.ContainerName(), expectedID, false)
+}
+
+// RecoverReference confirms only the fixed reference slot's original lifetime.
+// It has the same external dispatch-fence prerequisites as RecoverM0Slot and
+// never starts a container or clears a marker itself.
+func RecoverReference(ctx context.Context, expectedID string) error {
+	return recoverConfiguredSlot(ctx, runCommand, ReferenceSlot{}.ContainerName(), expectedID, true)
+}
+
+func recoverConfiguredSlot(ctx context.Context, run command, name, expectedID string, reference bool) error {
 	if !containerID.MatchString(expectedID) {
 		return errors.New("original full M0 container ID required")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	h := &Host{run: run, id: expectedID, active: make(map[uint64]context.CancelFunc), drained: make(chan struct{})}
-	s, err := h.inspect(ctx, slot.ContainerName())
+	h := &Host{run: run, reference: reference, id: expectedID, active: make(map[uint64]context.CancelFunc), drained: make(chan struct{})}
+	s, err := h.inspect(ctx, name)
 	if err != nil {
 		return errors.New("recovery sandbox inspection failed")
 	}
 	if s.ID != expectedID || s.Started == "" || s.Restarting || s.Paused {
 		return errors.New("recovery sandbox identity or lifetime unavailable")
 	}
-	if err := validateIsolation(s, experiment.PinnedEnvironment()); err != nil {
+	if err := validateIsolation(s, h.profile()); err != nil {
 		return err
 	}
 	h.started = s.Started
@@ -51,7 +60,7 @@ func recoverSlot(ctx context.Context, run command, slot M0Slot, expectedID strin
 	if err != nil || s.ID != expectedID || s.Started != h.started || s.Running || s.PID != 0 || s.Restarting || s.Paused {
 		return errors.New("recovery sandbox stopped state unconfirmed")
 	}
-	if err := validateIsolation(s, experiment.PinnedEnvironment()); err != nil {
+	if err := validateIsolation(s, h.profile()); err != nil {
 		return err
 	}
 	return ctx.Err()

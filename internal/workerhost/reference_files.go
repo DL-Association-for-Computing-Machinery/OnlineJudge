@@ -104,7 +104,7 @@ func (h *Host) fileExchange(ctx context.Context, input io.Reader, output io.Writ
 	if err != nil {
 		return errors.New("reference file host inspection failed")
 	}
-	if err := h.validate(s, experiment.PinnedEnvironment()); err != nil {
+	if err := h.validate(s, h.profile()); err != nil {
 		return err
 	}
 	run := h.stream

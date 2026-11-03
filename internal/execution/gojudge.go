@@ -137,6 +137,10 @@ func (g *GoJudge) execute(ctx context.Context, c map[string]any, p experiment.Ex
 }
 
 func inlineObservation(r goJudgeResult, p experiment.ExecutionProfile, compile bool) (Observation, error) {
+	return inlineObservationBounds(r, p, compile, p.OutputBytes, p.OutputBytes)
+}
+
+func inlineObservationBounds(r goJudgeResult, p experiment.ExecutionProfile, compile bool, stdoutLimit, stderrLimit int) (Observation, error) {
 	var stdout, stderr string
 	if value := r.Files["stdout"]; value != nil {
 		stdout = *value
@@ -149,9 +153,9 @@ func inlineObservation(r goJudgeResult, p experiment.ExecutionProfile, compile b
 	// byte with a three-byte U+FFFD. The fixed numeric M0 answers cannot match that
 	// replacement; this text transport is not a general byte-preserving checker.
 	if r.Exit == nil || r.CPU == nil || r.Memory == nil || r.Error != "" ||
-		len(stdout) > 3*(p.OutputBytes+1) || len(stderr) > 3*(p.OutputBytes+1) ||
+		len(stdout) > 3*(stdoutLimit+1) || len(stderr) > 3*(stderrLimit+1) ||
 		(o.Artifact != "" && (!compile || !artifactID.MatchString(o.Artifact))) || len(r.IDs) > 1 {
-		return o, fmt.Errorf("invalid sandbox evidence (stdout=%d, stderr=%d, file_errors=%d)", len(stdout), len(stderr), len(r.FileErrors))
+		return o, fmt.Errorf("invalid sandbox evidence (stdout=%d, stderr=%d, file_errors=%d, missing_values=%t, executor_error=%t)", len(stdout), len(stderr), len(r.FileErrors), r.Exit == nil || r.CPU == nil || r.Memory == nil, r.Error != "")
 	}
 	for _, e := range r.FileErrors {
 		if r.Status != "Output Limit Exceeded" || e.Type != "CollectSizeExceeded" ||
@@ -163,7 +167,7 @@ func inlineObservation(r goJudgeResult, p experiment.ExecutionProfile, compile b
 		// The pinned Linux executor reports RLIMIT_FSIZE as SIGXFSZ (25)
 		// without a collector error. This does not mean output was truncated.
 		if compile || *r.Exit != 25 || *r.CPU < 0 || *r.Memory < 0 || r.Files["stdout"] == nil || r.Files["stderr"] == nil || len(r.IDs) != 0 ||
-			len(stdout) > 3*p.OutputBytes || len(stderr) > 3*p.OutputBytes {
+			len(stdout) > 3*stdoutLimit || len(stderr) > 3*stderrLimit {
 			return o, errors.New("missing output overflow evidence")
 		}
 	}

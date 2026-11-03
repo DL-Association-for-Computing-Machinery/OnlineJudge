@@ -74,7 +74,7 @@ docker --context desktop-linux run --rm --network none --read-only \
 
 ### 私有草稿参考验证
 
-首个维护执行入口仅验证固定Library Checker A+B的完整12点，不写数据库验证状态或发布。需要已配置且停止的专用M0槽、已有固定镜像与Docker Desktop、macOS arm64；不会自动创建、替换或恢复槽。使用已有Go1.26.10工具链镜像构建独立宿主产物（不与Linux检查共用输出）：
+维护执行入口支持固定Library Checker A+B完整12点，以及独立配置的unionfind完整18点，不写数据库验证状态或发布。需要已配置且停止的专用槽、已有固定镜像与Docker Desktop、macOS arm64；命令不会自动创建、替换或恢复槽。使用已有Go1.26.10工具链镜像构建独立宿主产物（不与Linux检查共用输出）：
 
 ```sh
 REFERENCE_TOOLCHAIN_IMAGE=YOUR_EXISTING_LOCAL_GO_TOOLCHAIN_IMAGE
@@ -99,7 +99,25 @@ OJ_SANDBOX_EXPERIMENT=1 OJ_WORKER_M0_SLOT=secondary \
 
 停止失败报告的可选`stop_diagnostic`提供固定阶段/错误类别与有界计数，不含PID、命令参数或原始错误。`pid_present`仅表示探测时路径存在，可能发生PID复用；`deadline`不证明进程仍在或已退出。诊断不授予清理隔离标记的权限，旧失败报告不追认通过。
 
-维护入口现使用独立缓存文件通路：源码/输入上传后回读核对SHA-256，输出原始字节拉取，参考答案留在宿主。新profile记录单文件48MiB、存活缓存64MiB、任务载荷128MiB和对象/操作预算；这不扩大草稿材料或每次运行4KiB输出限制，不是其余九题或生产准入。
+维护入口使用独立缓存文件通路：源码/输入上传后回读核对SHA-256，输出原始字节拉取，参考答案留在宿主。文件协议记录单文件48MiB、存活缓存64MiB、任务载荷128MiB和对象/操作预算；默认A+B保留2MiB材料/4KiB输出。unionfind单独使用64MiB匿名磁盘快照与256KiB运行stdout，编译双流/运行stderr仍各4KiB；CPU1秒/wall5秒/memory128MiB只作参考试验，不更新生产配置，其余八题仍待准入。
+
+unionfind使用独立固定`oj-reference-sandbox`及`slot-reference.lock`，拒非空`OJ_WORKER_M0_SLOT`。维护者确认容器不存在后，可用已有固定镜像显式创建停止槽；已有槽不能替换，须核验owner/配置和停止状态：
+
+```sh
+docker --context desktop-linux create --pull never --name oj-reference-sandbox \
+  --label owner=onlinejudge.desktop-test --privileged --network none --read-only \
+  --tmpfs /tmp:rw,nosuid,size=128m --shm-size=128m --memory=1g --cpus=1 \
+  --pids-limit=128 --cgroupns private \
+  sha256:cd40ffdb32619806a8d97e59fe03e890fe4066835f57efa6ae13f919ef3262c5
+env -u OJ_WORKER_M0_SLOT OJ_SANDBOX_EXPERIMENT=1 \
+  .local/validation-host/worker validate-reference \
+  --source-id library-checker:unionfind \
+  --bundle /private/tmp/oj-library-checker-drafts/bundle \
+  --source-lock "$PWD/config/problem-sources/library-checker.json" \
+  --output /private/tmp/oj-unionfind-reference-report --start-stopped-slot
+```
+
+全部材料完整哈希、所有答案检查域先验后才调用execution Verify/Compile；槽启动与Host环境探测更早发生。快照并发/关闭、失败报告和独立槽`recover-reference <original-full-container-id>`的前置要求见[受限参考验证](docs/reference-validation.md)。
 
 真实专项另覆盖固定12点CLI、合成正确/错误/编译错误/RE/TLE/MLE/OLE和取消后的停止确认。它不需要PG/Redis或控制端，不进入普通CI：
 
@@ -111,7 +129,17 @@ OJ_SANDBOX_EXPERIMENT=1 OJ_WORKER_M0_SLOT=secondary OJ_REFERENCE_VALIDATION=1 \
   -test.v -test.count=1 -test.run='^TestPrivateDraftReferenceSandbox$' -test.timeout=5m
 ```
 
-原始字节与容量专项另外使用同一已停止的专用槽，覆盖48MiB边界/超限、空输入、全部字节值、缓存stdin→小输出、清理及数值资源采样；它不更新草稿状态或生产限额：
+独立unionfind真实专项（两组：完整18点CLI与64KiB/256KiB/上限+1输出）使用新报告目录：
+
+```sh
+env -u OJ_WORKER_M0_SLOT OJ_SANDBOX_EXPERIMENT=1 OJ_UNIONFIND_VALIDATION=1 \
+  OJ_REFERENCE_BUNDLE=/private/tmp/oj-library-checker-drafts/bundle \
+  OJ_UNIONFIND_OUTPUT=/private/tmp/oj-unionfind-suite-report \
+  .local/validation-host/worker-validation.test \
+  -test.v -test.count=1 -test.run='^TestUnionFindReferenceSandbox$' -test.timeout=5m
+```
+
+原始字节与容量专项另外使用已停止的M0 secondary槽，覆盖48MiB边界/超限、空输入、全部字节值、缓存stdin→小输出、清理及数值资源采样；它不更新草稿状态或生产限额：
 
 ```sh
 OJ_SANDBOX_EXPERIMENT=1 OJ_WORKER_M0_SLOT=secondary OJ_REFERENCE_BYTES=1 \

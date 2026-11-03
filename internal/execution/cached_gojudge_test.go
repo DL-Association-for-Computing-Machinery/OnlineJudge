@@ -23,6 +23,8 @@ type cacheFixture struct {
 	deletes                       []string
 	block, entered                chan struct{}
 	cancelCleanup                 context.CancelFunc
+	reference                     bool
+	stdout                        []byte
 }
 
 func (f *cacheFixture) add(data []byte) string {
@@ -82,14 +84,28 @@ func (f *cacheFixture) RoundTrip(r *http.Request) (*http.Response, error) {
 	}
 	c := request.Cmd[0]
 	files := c["files"].([]any)
+	compile := len(c["args"].([]any)) > 1
+	if f.reference {
+		stdoutMax := 256 << 10
+		if compile {
+			stdoutMax = 4096
+		}
+		if files[1].(map[string]any)["max"] != float64(stdoutMax) || files[2].(map[string]any)["max"] != float64(4096) {
+			f.t.Fatal("reference diagnostic/run output budgets mixed")
+		}
+	}
 	copyIn := c["copyIn"].(map[string]any)
 	result := map[string]any{"status": "Accepted", "exitStatus": 0, "time": 1, "memory": 1}
-	if len(c["args"].([]any)) > 1 {
+	if compile {
 		f.compiles++
 		if _, ok := copyIn["main.cpp"].(map[string]any)["fileId"]; !ok || copyIn["main.cpp"].(map[string]any)["content"] != nil {
 			f.t.Error("source was inlined")
 		}
 		result["files"] = map[string]string{"stdout": "", "stderr": ""}
+		if f.fail == "compile-stderr" || f.fail == "compile-stdout" {
+			role := strings.TrimPrefix(f.fail, "compile-")
+			result["files"].(map[string]string)[role] = strings.Repeat("x", 3*(4096+1)+1)
+		}
 		result["fileIds"] = map[string]string{"main": f.add([]byte("executable"))}
 	} else {
 		f.runs++
@@ -106,6 +122,9 @@ func (f *cacheFixture) RoundTrip(r *http.Request) (*http.Response, error) {
 			f.t.Error("stdin was inlined")
 		}
 		raw := f.data[inputID]
+		if f.stdout != nil {
+			raw = f.stdout
+		}
 		ids := map[string]string{"stdout": f.add(raw)}
 		inline := map[string]string{"stderr": ""}
 		switch f.fail {
@@ -117,16 +136,21 @@ func (f *cacheFixture) RoundTrip(r *http.Request) (*http.Response, error) {
 		case "reuse":
 			ids["stdout"] = copyIn["main"].(map[string]any)["fileId"].(string)
 		case "over":
-			f.data[ids["stdout"]] = bytes.Repeat([]byte{'x'}, 4097)
-		case "OLE":
-			f.data[ids["stdout"]] = bytes.Repeat([]byte{'x'}, 4097)
+			f.data[ids["stdout"]] = bytes.Repeat([]byte{'x'}, int(files[1].(map[string]any)["max"].(float64))+1)
+		case "OLE", "collector-OLE":
+			f.data[ids["stdout"]] = bytes.Repeat([]byte{'x'}, int(files[1].(map[string]any)["max"].(float64))+1)
 			result["status"] = "Output Limit Exceeded"
 			result["fileError"] = []any{map[string]string{"name": "stdout", "type": "CollectSizeExceeded"}}
+			if f.fail == "collector-OLE" {
+				result["error"] = "Output Limit Exceeded"
+			}
 		case "sigxfsz":
 			result["status"] = "Output Limit Exceeded"
 			result["exitStatus"] = 25
 		case "negative":
 			result["time"] = -1
+		case "run-stderr":
+			inline["stderr"] = strings.Repeat("x", 3*(4096+1)+1)
 		}
 		result["files"], result["fileIds"] = inline, ids
 	}

@@ -18,22 +18,34 @@ func dispatch(ctx context.Context, args []string, logger *slog.Logger, drain <-c
 	if args[0] == "validate-reference" {
 		return validateReference(ctx, args[1:], logger)
 	}
-	if len(args) != 2 || args[0] != "recover" || !regexp.MustCompile(`^[a-f0-9]{64}$`).MatchString(args[1]) {
-		return errors.New("usage: worker [recover <original-full-container-id>]")
+	if len(args) != 2 || (args[0] != "recover" && args[0] != "recover-reference") || !regexp.MustCompile(`^[a-f0-9]{64}$`).MatchString(args[1]) {
+		return errors.New("usage: worker [recover|recover-reference <original-full-container-id>]")
 	}
 	if os.Getenv("OJ_SANDBOX_EXPERIMENT") != "1" {
 		return errors.New("explicit OJ_SANDBOX_EXPERIMENT=1 required")
+	}
+	reference := args[0] == "recover-reference"
+	if reference && os.Getenv("OJ_WORKER_M0_SLOT") != "" {
+		return errors.New("reference recovery has its own fixed slot")
 	}
 	slot, err := workerhost.ParseM0Slot(os.Getenv("OJ_WORKER_M0_SLOT"))
 	if err != nil {
 		return err
 	}
-	lock, err := lockM0Mode(slot, true)
+	var lock *slotLock
+	if reference {
+		lock, err = lockSlotMode(workerhost.ReferenceSlot{}.LockName(), true)
+	} else {
+		lock, err = lockM0Mode(slot, true)
+	}
 	if err != nil {
 		return err
 	}
 	defer lock.Close()
 	if err := recoverLocked(ctx, lock, func(ctx context.Context) error {
+		if reference {
+			return workerhost.RecoverReference(ctx, args[1])
+		}
 		return workerhost.RecoverM0Slot(ctx, slot, args[1])
 	}); err != nil {
 		return err
