@@ -83,6 +83,7 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	}
 	access, err := identitypg.NewProblemAccess(f.pools[0])
 	must(t, err)
+	testEntryImportPreflight(t, x, cookies)
 	_, err = access.SetAuthorRole(f.ctx, identity.ProblemRoleChange{SubjectID: subject.ID, Enabled: true, ExpectedRevision: 0, Operator: "entry-fixture", Reason: "synthetic private draft author"})
 	must(t, err)
 	loginStatus(t, loginCall(x, collection, body, cookies, func(r *http.Request) { r.Header.Set("Origin", "https://other.invalid") }), 403)
@@ -111,6 +112,10 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	if string(replayed.body) != string(created.body) {
 		t.Fatal("cross-API original-key recovery changed receipt")
 	}
+	pinnedReceipt := testEntryPinnedImport(t, x, y, cookies)
+	if pinnedReceipt.DraftID == draft.ID {
+		t.Fatal("different request keys shared a draft")
+	}
 	get := func(endpoint *loginEndpoint, id string, c []*http.Cookie) loginResponse {
 		return loginCall(endpoint, collection+"/"+id, "", c, func(r *http.Request) { r.Method = "GET" })
 	}
@@ -137,6 +142,7 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	cChanged.PrivateDrafts = &dChanged
 	third := entryStart(t, binary, entryConfig(t, cChanged, ca, 3*time.Second), "127.0.0.1:0")
 	thirdEndpoint := endpoint(third)
+	testEntryChangedImportCatalog(t, thirdEndpoint, cookies, pinnedReceipt)
 	loginStatus(t, loginCall(thirdEndpoint, collection, body, cookies, nil), 409)
 	oldVersion := get(thirdEndpoint, draft.ID+"/preview", cookies)
 	loginStatus(t, oldVersion, 200)
@@ -152,6 +158,7 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	_, err = access.SetAuthorRole(f.ctx, identity.ProblemRoleChange{SubjectID: stranger.ID, Enabled: true, ExpectedRevision: 0, Operator: "entry-fixture", Reason: "synthetic second author"})
 	must(t, err)
 	strangerCookies := []*http.Cookie{{Name: transport.CookieName, Value: strangerCredential.Value()}}
+	testEntryReceiptOwner(t, x, strangerCookies, pinnedReceipt.RequestKey)
 	foreign, missing := get(x, draft.ID, strangerCookies), get(x, strings.Repeat("f", 32), strangerCookies)
 	loginStatus(t, foreign, 404)
 	loginStatus(t, missing, 404)
@@ -169,12 +176,17 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	loginStatus(t, get(y, draft.ID, cookies), 403)
 	loginStatus(t, get(y, draft.ID+"/preview", cookies), 403)
 	loginStatus(t, loginCall(y, collection, body, cookies, nil), 403)
+	loginStatus(t, importGET(y, entrySourcesPath, cookies), 403)
+	loginStatus(t, importGET(y, entryImportsPath+"/"+pinnedReceipt.RequestKey, cookies), 403)
+	loginStatus(t, loginCall(y, entryImportsPath, pinnedBody(t, pinnedReceipt.RequestKey, pinnedReceipt.SourceID, pinnedReceipt.ImportRevision), cookies, nil), 403)
 	loginStatus(t, loginCall(x, "/api/v1/session/logout", "", cookies, nil), 204)
 	loginStatus(t, get(y, draft.ID, cookies), 401)
 	loginStatus(t, get(y, draft.ID+"/preview", cookies), 401)
+	loginStatus(t, importGET(y, entrySourcesPath, cookies), 401)
+	loginStatus(t, importGET(y, entryImportsPath+"/"+pinnedReceipt.RequestKey, cookies), 401)
 	var count, refs int
 	must(t, f.pools[0].QueryRow(f.ctx, `SELECT count(*),(SELECT count(*) FROM problem_draft_materials WHERE draft_id=$2) FROM problem_drafts WHERE owner_subject_id=$1`, subject.ID, draft.ID).Scan(&count, &refs))
-	if count != 1 || refs != 10 {
+	if count != 2 || refs != 10 {
 		t.Fatal("HTTP replay duplicated/partially wrote metadata")
 	}
 	a.signal(t)

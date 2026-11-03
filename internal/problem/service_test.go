@@ -49,11 +49,15 @@ func (r *serviceRepository) CheckAuthor(context.Context, identity.ProblemActor) 
 }
 func (r *serviceRepository) Create(_ context.Context, _ identity.ProblemActor, key string, p *Prepared) (Draft, error) {
 	r.creates++
-	return Draft{RequestKey: key, Version: p.Content().Version}, r.errorFinal
+	return Draft{RequestKey: key, SourceID: p.Content().SourceID, Version: p.Content().Version, ImportRevision: p.Content().RequestSHA256}, r.errorFinal
 }
 func (r *serviceRepository) GetOwn(context.Context, identity.ProblemActor, string) (Draft, error) {
 	r.gets++
 	return Draft{}, r.errorFinal
+}
+
+func (r *serviceRepository) Receipt(context.Context, identity.ProblemActor, string) (ImportReceipt, error) {
+	return ImportReceipt{}, r.errorFinal
 }
 
 func TestCreateFreshAuthorizationBoundaries(t *testing.T) {

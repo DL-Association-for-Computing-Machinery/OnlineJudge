@@ -180,7 +180,7 @@ func readDraft(ctx context.Context, q *problemdb.Queries, row problemdb.ProblemD
 	if !row.CreatedAt.Valid || len(refs) == 0 || row.State != "private-draft" || row.ValidationState != "not-run" {
 		return problem.Draft{}, storageError{problem.ErrInvalid}
 	}
-	d := problem.Draft{ID: row.ID, Owner: row.OwnerSubjectID, RequestKey: row.RequestKey, SourceID: row.SourceID, Version: row.ContentVersion, State: row.State, ValidationState: row.ValidationState, Document: row.Document, CreatedAt: row.CreatedAt.Time}
+	d := problem.Draft{ID: row.ID, Owner: row.OwnerSubjectID, RequestKey: row.RequestKey, SourceID: row.SourceID, Version: row.ContentVersion, ImportRevision: row.RequestSha256, State: row.State, ValidationState: row.ValidationState, Document: row.Document, CreatedAt: row.CreatedAt.Time}
 	for _, r := range refs {
 		d.References = append(d.References, problem.Reference{Name: r.LogicalName, Object: materialstore.Object{SHA256: r.Sha256, Size: r.ByteSize}})
 	}

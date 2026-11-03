@@ -3,6 +3,7 @@ package problem
 import (
 	"context"
 	"errors"
+	"sort"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/redisstore"
@@ -16,6 +17,7 @@ var ErrUnknownSource = errors.New("private draft source is not configured")
 type Importer struct {
 	service *Service
 	sources map[string]*Prepared
+	catalog []ImportSource
 	slots   chan struct{}
 }
 
@@ -28,17 +30,28 @@ func NewImporter(service *Service, sources map[string]*Prepared, maxInFlight int
 	}
 	i := &Importer{service: service, sources: make(map[string]*Prepared, len(sources)), slots: make(chan struct{}, maxInFlight)}
 	for id, p := range sources {
-		if p == nil || id == "" || p.Content().SourceID != id {
+		content := p.Content()
+		if p == nil || id == "" || len(id) > 128 || content.SourceID != id || !ValidImportRevision(content.RequestSHA256) {
+			return nil, ErrInvalid
+		}
+		doc, err := parseDocument(content.Document, id)
+		if err != nil || doc.Version != content.Version {
 			return nil, ErrInvalid
 		}
 		i.sources[id] = p
+		i.catalog = append(i.catalog, ImportSource{SourceID: id, Title: doc.Title, Version: content.Version, ImportRevision: content.RequestSHA256})
 	}
+	sort.Slice(i.catalog, func(a, b int) bool { return i.catalog[a].SourceID < i.catalog[b].SourceID })
 	return i, nil
 }
 
 // Import never accepts a filesystem path. Unknown candidates and capacity are
 // observed only by an authorized author, before any material I/O.
 func (i *Importer) Import(ctx context.Context, credential redisstore.Credential, key, source string) (Draft, error) {
+	return i.importSelected(ctx, credential, key, source, "")
+}
+
+func (i *Importer) importSelected(ctx context.Context, credential redisstore.Credential, key, source, expectedRevision string) (Draft, error) {
 	if i == nil || ctx == nil || !ValidKey(key) {
 		return Draft{}, ErrInvalid
 	}
@@ -52,6 +65,9 @@ func (i *Importer) Import(ctx context.Context, credential redisstore.Credential,
 		p, ok := i.sources[source]
 		if !ok {
 			return nil, ErrUnknownSource
+		}
+		if expectedRevision != "" && p.content.RequestSHA256 != expectedRevision {
+			return nil, ErrSourceChanged
 		}
 		if err := i.acquire(); err != nil {
 			return nil, err

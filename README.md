@@ -102,6 +102,10 @@ schema 7 默认不给任何账号授予出题角色。受信维护者先独立�
 
 已通过真实普通登录的出题账号可向`POST /api/v1/problem-drafts`发送`{"source_id":"library-checker:aplusb","request_key":"original-import-request-01"}`，需要同源证据及会话Cookie；最多1KiB JSON。成功/原回执均200，再以`GET /api/v1/problem-drafts/草稿ID`读取本人固定JSON元数据。断连/503可能已经提交，保留原键及精确候选快照核验，不自动重试或换键；配置/候选版本切换前须保留原版本供未知回执恢复。完整协议见[OpenAPI](api/problem-drafts.openapi.yaml)。默认Compose及本地测试账号均不自动开启或取得出题权。
 
+管理页导入使用新的[绑定协议](api/problem-draft-imports.openapi.yaml)：先`GET /api/v1/problem-draft-sources`取得当前授权候选的`source_id/title/version/import_revision`，再向`POST /api/v1/problem-draft-imports`提交严格三字段`source_id/request_key/expected_revision`，其中expected_revision原样取完整import_revision。它还绑定index/来源证据，不能用仅代表题目文档的version代替；修订变化在材料I/O前409拒绝。成功返回八字段最小回执，没有文档或材料引用。
+
+若响应丢失或结果未知，保留原source/key/revision，以`GET /api/v1/problem-draft-imports/原请求键`只读查询本人已提交回执，不必重传材料。该GET不依赖当前候选或材料活动槽，但整个private_drafts仍须有效配置并启动成功。404只是本次没有观察到提交，409也不证明旧请求不存在；保留原tuple，显式再次查询或用原tuple恢复，不自动POST、不换键/修订，不回退上述旧两字段接口。旧接口保持兼容但不提供客户端修订锁定；导入管理页面随后接入，当前`/author/drafts`仍只支持按已入库ID预览。细节和回退见[草稿合同](docs/problem-drafts.md#管理页导入协议)。
+
 `GET /api/v1/problem-drafts/草稿ID/preview`返回本人已入库版本的`markdown`和有序`examples`（id/input/output），不依赖当前候选版本；仍须有效普通会话和当前出题权。先核对全部题面/样例引用与总预算，再逐份验证快照，读取后复核同一凭据和PG授权，失败不返回部分文本。原始markdown/input/output总计至多1MiB，重复对象按返回次数计数；JSON转义可放大到六倍另加元数据。只接受严格UTF-8，保留空格、CRLF及末尾换行，不替换或截断。它是管理页的数据接口，不提供一般材料下载或发布；正式测试与源码不进入预览。最终会话读取之后的退出及最终PG授权之后的撤权沿已接受在途合同，不能原子撤回已经开始发送的响应。关闭整个`private_drafts`能力即可停止入口，已入库资料保留。
 
 浏览器从 `/author/drafts` 输入已导入的32位小写十六进制ID，再显式检查会话并打开本人预览。Markdown/GFM/数学公式使用共享组件和本地KaTeX字体，样例原文复制；图片仅占位，导入管理、审核和发布尚未开放。账号操作、页面恢复/隐藏或期限到达会清除结果，再次显示须重新检查；无持久缓存。预算与隐私边界见[前端设计](docs/frontend-design.md#共享题面与本人预览)。默认HTTP Compose及未启用private_drafts的账号环境不提供草稿能力。

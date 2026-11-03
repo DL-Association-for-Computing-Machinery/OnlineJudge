@@ -12,10 +12,17 @@ info:
 security:
   - ordinarySession: []
 paths:
+  /api/v1/problem-draft-sources:
+    $ref: './problem-draft-imports.openapi.yaml#/paths/~1api~1v1~1problem-draft-sources'
+  /api/v1/problem-draft-imports:
+    $ref: './problem-draft-imports.openapi.yaml#/paths/~1api~1v1~1problem-draft-imports'
+  /api/v1/problem-draft-imports/{request_key}:
+    $ref: './problem-draft-imports.openapi.yaml#/paths/~1api~1v1~1problem-draft-imports~1%7Brequest_key%7D'
   /api/v1/problem-drafts:
     post:
       operationId: importOwnPrivateDraft
       description: >-
+        此既有两字段接口保留兼容，不绑定客户端选定完整修订；管理页使用新的problem-draft-imports协议。
         Origin 或 Sec-Fetch-Site 至少一个正向同源字段，所有出现的字段均须正确且单值。
         仅从维护者预配置的固定私有候选导入，不接受客户端路径/材料/主体/代次。
         授权后复制材料，再读取同一会话，在 PG 同事务检查账号/恢复/角色并写草稿及引用。

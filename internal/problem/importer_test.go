@@ -88,6 +88,10 @@ func (importRepository) GetOwn(context.Context, identity.ProblemActor, string) (
 	return Draft{}, nil
 }
 
+func (importRepository) Receipt(context.Context, identity.ProblemActor, string) (ImportReceipt, error) {
+	return ImportReceipt{}, ErrNotFound
+}
+
 type blockedMaterial struct {
 	checkingMaterials
 	once             sync.Once

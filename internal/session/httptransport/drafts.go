@@ -34,8 +34,10 @@ func WithPrivateDrafts(base http.Handler, drafts Drafts, timeout time.Duration) 
 		passwordChange: h.passwordChange, drafts: drafts, draftTimeout: timeout}, nil
 }
 
-func draftPath(path string) bool {
-	return path == draftCollection || draftPreviewID(path) != "" || (strings.HasPrefix(path, draftCollection+"/") && identity.ValidID(strings.TrimPrefix(path, draftCollection+"/")))
+// IsPrivateDraftPath recognizes route shapes only, without granting capability
+// or authority. The outer HTTP router and this adapter share the same predicate.
+func IsPrivateDraftPath(path string) bool {
+	return draftImportPath(path) || path == draftCollection || draftPreviewID(path) != "" || (strings.HasPrefix(path, draftCollection+"/") && identity.ValidID(strings.TrimPrefix(path, draftCollection+"/")))
 }
 
 func (h *handler) serveDraft(w http.ResponseWriter, r *http.Request) {
@@ -46,6 +48,10 @@ func (h *handler) serveDraft(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), h.draftTimeout)
 	defer cancel()
+	if draftImportPath(r.URL.Path) {
+		h.serveDraftImport(w, r, ctx, credential)
+		return
+	}
 	if id := draftPreviewID(r.URL.Path); id != "" {
 		h.serveDraftPreview(w, ctx, credential, id)
 		return
@@ -117,6 +123,9 @@ func draftError(w http.ResponseWriter, err error) {
 			return
 		case errors.Is(err, draftproblem.ErrConflict):
 			problem(w, 409, "DRAFT_REQUEST_CONFLICT", "请求键已用于不同内容")
+			return
+		case errors.Is(err, draftproblem.ErrSourceChanged):
+			problem(w, 409, "DRAFT_SOURCE_CHANGED", "候选修订已变化；请保留原请求并查询回执")
 			return
 		}
 	}

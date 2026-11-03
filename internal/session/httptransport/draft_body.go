@@ -13,10 +13,20 @@ import (
 )
 
 func draftBody(w http.ResponseWriter, r *http.Request) (string, string, bool) {
+	values, ok := draftFields(w, r, false)
+	return values["request_key"], values["source_id"], ok
+}
+
+func pinnedDraftBody(w http.ResponseWriter, r *http.Request) (string, string, string, bool) {
+	values, ok := draftFields(w, r, true)
+	return values["request_key"], values["source_id"], values["expected_revision"], ok
+}
+
+func draftFields(w http.ResponseWriter, r *http.Request, pinned bool) (map[string]string, bool) {
 	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || media != "application/json" {
 		problem(w, 415, "UNSUPPORTED_MEDIA_TYPE", "请使用 JSON 提交")
-		return "", "", false
+		return nil, false
 	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1024))
 	if err != nil {
@@ -26,11 +36,11 @@ func draftBody(w http.ResponseWriter, r *http.Request) (string, string, bool) {
 		} else {
 			problem(w, 400, "INVALID_DRAFT_REQUEST", "无法读取草稿请求")
 		}
-		return "", "", false
+		return nil, false
 	}
-	invalid := func() (string, string, bool) {
+	invalid := func() (map[string]string, bool) {
 		problem(w, 400, "INVALID_DRAFT_REQUEST", "草稿请求格式无效")
-		return "", "", false
+		return nil, false
 	}
 	if !jsoninput.ValidUnicode(body) {
 		return invalid()
@@ -40,11 +50,16 @@ func draftBody(w http.ResponseWriter, r *http.Request) (string, string, bool) {
 	if err != nil || start != json.Delim('{') {
 		return invalid()
 	}
-	values := make(map[string]string, 2)
+	fields := 2
+	if pinned {
+		fields = 3
+	}
+	values := make(map[string]string, fields)
 	for d.More() {
 		key, err := d.Token()
 		name, ok := key.(string)
-		if err != nil || !ok || (name != "source_id" && name != "request_key") {
+		allowed := name == "source_id" || name == "request_key" || (pinned && name == "expected_revision")
+		if err != nil || !ok || !allowed {
 			return invalid()
 		}
 		if _, exists := values[name]; exists {
@@ -57,11 +72,12 @@ func draftBody(w http.ResponseWriter, r *http.Request) (string, string, bool) {
 		values[name] = value
 	}
 	end, err := d.Token()
-	if err != nil || end != json.Delim('}') || len(values) != 2 || !draftproblem.ValidKey(values["request_key"]) || len(values["source_id"]) > 128 {
+	if err != nil || end != json.Delim('}') || len(values) != fields || !draftproblem.ValidKey(values["request_key"]) || len(values["source_id"]) > 128 ||
+		(pinned && !draftproblem.ValidImportRevision(values["expected_revision"])) {
 		return invalid()
 	}
 	if _, err = d.Token(); err != io.EOF {
 		return invalid()
 	}
-	return values["request_key"], values["source_id"], true
+	return values, true
 }

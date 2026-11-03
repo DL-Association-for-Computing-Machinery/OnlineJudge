@@ -9,7 +9,7 @@ import (
 )
 
 func TestSessionRoutesDelegateExactPathAndMetadata(t *testing.T) {
-	for _, path := range []string{"/api/v1/session", "/api/v1/session/activity", "/api/v1/session/logout", "/api/v1/session/login/begin", "/api/v1/session/login/complete", "/api/v1/session/login/abandon", "/api/v1/account/password", "/api/v1/problem-drafts", "/api/v1/problem-drafts/11111111111111111111111111111111", "/api/v1/problem-drafts/11111111111111111111111111111111/preview"} {
+	for _, path := range []string{"/api/v1/session", "/api/v1/session/activity", "/api/v1/session/logout", "/api/v1/session/login/begin", "/api/v1/session/login/complete", "/api/v1/session/login/abandon", "/api/v1/account/password", "/api/v1/problem-drafts", "/api/v1/problem-drafts/11111111111111111111111111111111", "/api/v1/problem-drafts/11111111111111111111111111111111/preview", "/api/v1/problem-draft-sources", "/api/v1/problem-draft-imports", "/api/v1/problem-draft-imports/original-import-request-key"} {
 		for _, method := range []string{"GET", "POST", "HEAD", "OPTIONS", "CUSTOM"} {
 			r := httptest.NewRequest(method, "https://session.invalid"+path, nil)
 			r.RemoteAddr = "192.0.2.1:1234"
@@ -29,7 +29,7 @@ func TestSessionRoutesDelegateExactPathAndMetadata(t *testing.T) {
 		}
 	}
 	h := httpapi.NewSessionHandler(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Error("unknown or health path reached sessions") }))
-	for _, path := range []string{"/api/v1/session/", "/api/v1/session/other", "/api/v1/session/login", "/api/v1/submissions", "/api/v1/problem-drafts/", "/api/v1/problem-drafts/unknown", "/api/v1/problem-drafts/11111111111111111111111111111111/materials"} {
+	for _, path := range []string{"/api/v1/session/", "/api/v1/session/other", "/api/v1/session/login", "/api/v1/submissions", "/api/v1/problem-drafts/", "/api/v1/problem-drafts/unknown", "/api/v1/problem-drafts/11111111111111111111111111111111/materials", "/api/v1/problem-draft-sources/", "/api/v1/problem-draft-imports/", "/api/v1/problem-draft-imports/short", "/api/v1/problem-draft-imports/original-import-request-key/extra"} {
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
 		if w.Code != 404 {

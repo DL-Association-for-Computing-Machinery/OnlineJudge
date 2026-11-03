@@ -43,6 +43,7 @@ type Draft struct {
 	RequestKey      string      `json:"request_key"`
 	SourceID        string      `json:"source_id"`
 	Version         string      `json:"version"`
+	ImportRevision  string      `json:"-"`
 	State           string      `json:"state"`
 	ValidationState string      `json:"validation_state"`
 	Document        []byte      `json:"document"`
@@ -56,6 +57,7 @@ type Repository interface {
 	CheckAuthor(context.Context, identity.ProblemActor) error
 	Create(context.Context, identity.ProblemActor, string, *Prepared) (Draft, error)
 	GetOwn(context.Context, identity.ProblemActor, string) (Draft, error)
+	Receipt(context.Context, identity.ProblemActor, string) (ImportReceipt, error)
 }
 
 // SessionReader accepts only opaque ordinary-session credentials.

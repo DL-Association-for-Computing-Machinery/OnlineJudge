@@ -1,0 +1,206 @@
+openapi: 3.1.0
+info:
+  title: OnlineJudge Pinned Private Draft Imports
+  version: 0.1.0
+  description: >-
+    显式 private_drafts 能力下的管理页导入协议，默认关闭。
+    沿用普通会话HTTPS/固定Host、pinned单跳mTLS代理、Cookie及POST正向同源边界。
+    每次检查当前出题权限；候选信息不对未登录或无权限主体公开，回执仅限本人。
+    所有响应no-store/nosniff、无Set-Cookie/CORS、无隐式续期。
+    不接收路径、客户端材料、主体或代次；不执行、审核、发布或授予材料下载。
+    仅接受无query且无转义路径别名的规范路径；方法错误返回405和精确Allow。
+security:
+  - ordinarySession: []
+paths:
+  /api/v1/problem-draft-sources:
+    get:
+      operationId: listConfiguredPrivateDraftSources
+      description: >-
+        当前会话和出题角色预检后返回按source_id排序的1至10个已配置候选摘要，
+        返回前复读同一凭据、比较完整actor并再次检查PG权限和取消状态。
+        摘要在启动时固定，不读取大材料、不占材料活动槽，也不保证材料当前健康。
+        version标识题目文档，import_revision标识完整导入修订，绑定文档与全部有序引用，
+        包括来源报告/index；题目version相同不保证import_revision相同。
+        最终检查后的退出/撤权沿既有在途合同，不承诺Redis/PG原子撤回。
+      responses:
+        '200':
+          description: 完整配置候选摘要，不包含路径、材料引用、源码或标准答案。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [sources]
+                properties:
+                  sources:
+                    type: array
+                    minItems: 1
+                    maxItems: 10
+                    items:
+                      $ref: '#/components/schemas/Source'
+        '400':
+          $ref: '#/components/responses/Failure'
+        '401':
+          $ref: '#/components/responses/Failure'
+        '403':
+          $ref: '#/components/responses/Failure'
+        '404':
+          $ref: '#/components/responses/Failure'
+        '405':
+          $ref: '#/components/responses/Failure'
+        '503':
+          $ref: '#/components/responses/Failure'
+  /api/v1/problem-draft-imports:
+    post:
+      operationId: importOwnPinnedPrivateDraft
+      description: >-
+        严格三字段JSON、至多1024字节；未知/重复/大小写别名/null/坏Unicode/尾随内容拒绝。
+        需要正向同源Origin或Sec-Fetch-Site；所有出现的来源字段均须正确且单值。
+        当前授权后选择source_id并比较完整expected_revision，再获取共享材料活动槽；
+        不匹配409 DRAFT_SOURCE_CHANGED，任何材料I/O和PG草稿写入均未开始。
+        随后沿既有持久化流程：全材料验证写入、复读实际会话、PG同事务当前权限/幂等写入。
+        成功仅产生private-draft/not-run，返回最小已存储回执，不返回文档或材料引用。
+        同owner/key/完整修订重放返回原记录，已用于其他内容为409 DRAFT_REQUEST_CONFLICT。
+        断连/取消/超时/503可能已提交；不自动POST重试。必须保留原source/key/revision，
+        优先只读查询回执；重试也必须原tuple，不能换键、更新revision或回退旧非绑定接口。
+        409不证明旧请求未提交，候选变化后仍可查询已提交的旧回执。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [source_id, request_key, expected_revision]
+              properties:
+                source_id:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                request_key:
+                  $ref: '#/components/schemas/RequestKey'
+                expected_revision:
+                  $ref: '#/components/schemas/Revision'
+      responses:
+        '200':
+          $ref: '#/components/responses/Receipt'
+        '400':
+          $ref: '#/components/responses/Failure'
+        '401':
+          $ref: '#/components/responses/Failure'
+        '403':
+          $ref: '#/components/responses/Failure'
+        '404':
+          $ref: '#/components/responses/Failure'
+        '405':
+          $ref: '#/components/responses/Failure'
+        '409':
+          description: DRAFT_SOURCE_CHANGED或DRAFT_REQUEST_CONFLICT；不覆盖原记录，不解释为原请求不存在。
+          $ref: '#/components/responses/Failure'
+        '413':
+          $ref: '#/components/responses/Failure'
+        '415':
+          $ref: '#/components/responses/Failure'
+        '503':
+          $ref: '#/components/responses/Failure'
+  /api/v1/problem-draft-imports/{request_key}:
+    get:
+      operationId: getOwnPrivateDraftImportReceipt
+      description: >-
+        只读查询本人已提交回执。实际会话读取后，PG同一短事务中检查恢复/账号/当前出题角色，
+        再按owner/key读取并提交；不查询其他主体，不依赖当前候选、Prepared或材料活动槽，
+        不读取材料对象或材料关联表。未知key和其他主体同key均返回相同404。
+        返回import_revision为PG已存储request_sha256，不从现候选或调用者输入拼装。
+        404仅表示本次未观察到提交，不锁住尚不存在的键，也不排除旧POST仍在途或随后提交。
+        客户端保留原tuple，可手动再次查询；本GET不取消或重发原POST。
+        会话读取后的退出沿既有在途合同；PG授权与本次读取同事务，不跨库原子化。
+      parameters:
+        - name: request_key
+          in: path
+          required: true
+          description: 原owner作用域不透明请求键，不是凭据；不能用于读取其他主体。
+          schema:
+            $ref: '#/components/schemas/RequestKey'
+      responses:
+        '200':
+          $ref: '#/components/responses/Receipt'
+        '400':
+          $ref: '#/components/responses/Failure'
+        '401':
+          $ref: '#/components/responses/Failure'
+        '403':
+          $ref: '#/components/responses/Failure'
+        '404':
+          description: 未启用、未知key或无本人回执；不证明无在途请求。
+          $ref: '#/components/responses/Failure'
+        '405':
+          $ref: '#/components/responses/Failure'
+        '503':
+          $ref: '#/components/responses/Failure'
+components:
+  securitySchemes:
+    ordinarySession:
+      $ref: './session.openapi.yaml#/components/securitySchemes/ordinarySession'
+  schemas:
+    RequestKey:
+      type: string
+      pattern: '^[A-Za-z0-9_-]{16,128}$'
+    Revision:
+      type: string
+      pattern: '^[0-9a-f]{64}$'
+      description: 完整导入修订，非题目document version；原样保留和比较。
+    Source:
+      type: object
+      additionalProperties: false
+      required: [source_id, title, version, import_revision]
+      properties:
+        source_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        title:
+          type: string
+          description: 已准入题目标题，UTF-8至多512字节，作为文本呈现。
+        version:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: 已固定的oj.problem-draft.v1文档版本，不是完整导入身份。
+        import_revision:
+          $ref: '#/components/schemas/Revision'
+    ImportReceipt:
+      type: object
+      additionalProperties: false
+      required: [draft_id, request_key, source_id, version, import_revision, state, validation_state, created_at]
+      properties:
+        draft_id:
+          type: string
+          pattern: '^[0-9a-f]{32}$'
+        request_key:
+          $ref: '#/components/schemas/RequestKey'
+        source_id:
+          type: string
+        version:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        import_revision:
+          $ref: '#/components/schemas/Revision'
+        state:
+          const: private-draft
+        validation_state:
+          const: not-run
+        created_at:
+          type: string
+          format: date-time
+  responses:
+    Receipt:
+      description: 已存储本人回执摘要，不包含owner、文档或材料引用。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ImportReceipt'
+    Failure:
+      description: 固定Problem Details，无内部路径、秘密或部分摘要。
+      content:
+        application/problem+json:
+          schema:
+            $ref: './session.openapi.yaml#/components/schemas/Problem'

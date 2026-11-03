@@ -45,6 +45,9 @@ type previewRepository struct {
 }
 
 func (*previewRepository) CheckAuthor(context.Context, identity.ProblemActor) error { return nil }
+func (*previewRepository) Receipt(context.Context, identity.ProblemActor, string) (ImportReceipt, error) {
+	return ImportReceipt{}, ErrNotFound
+}
 func (r *previewRepository) Create(context.Context, identity.ProblemActor, string, *Prepared) (Draft, error) {
 	return r.draft, nil
 }

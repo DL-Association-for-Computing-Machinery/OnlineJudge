@@ -78,12 +78,37 @@ func TestPrivateDraftConfiguredBundle(t *testing.T) {
 	must(t, err)
 	c, err := redisstore.ParseCredential(base64.RawURLEncoding.EncodeToString(make([]byte, 32)))
 	must(t, err)
+	preparedSources := make(map[string]*problem.Prepared, len(index.Problems))
+	for _, entry := range index.Problems {
+		prepared, e := problem.LoadBundle(directory, entry.SourceID, lock)
+		must(t, e)
+		preparedSources[entry.SourceID] = prepared
+		defer func() { must(t, prepared.Close()) }()
+	}
+	importer, err := problem.NewImporter(service, preparedSources, 1)
+	must(t, err)
+	catalog, err := importer.Sources(f.ctx, c)
+	must(t, err)
+	if len(catalog) != 10 {
+		t.Fatal("configured catalog did not contain ten sources")
+	}
+	selected := make(map[string]problem.ImportSource, len(catalog))
+	for n, source := range catalog {
+		prepared, ok := preparedSources[source.SourceID]
+		if !ok || (n > 0 && catalog[n-1].SourceID >= source.SourceID) {
+			t.Fatal("configured sources were missing, duplicated or unsorted")
+		}
+		content := prepared.Content()
+		if source.Version != content.Version || source.ImportRevision != content.RequestSHA256 {
+			t.Fatal("catalog did not bind exact configured metadata and evidence")
+		}
+		selected[source.SourceID] = source
+	}
 	var drafts []problem.Draft
 	cases, examples := 0, 0
 	var previewBytes int
 	for _, entry := range index.Problems {
-		prepared, e := problem.LoadBundle(directory, entry.SourceID, lock)
-		must(t, e)
+		prepared := preparedSources[entry.SourceID]
 		content := prepared.Content()
 		var doc struct {
 			Title     string `json:"title"`
@@ -105,9 +130,15 @@ func TestPrivateDraftConfiguredBundle(t *testing.T) {
 		must(t, json.Unmarshal(content.Document, &doc))
 		cases += len(doc.Cases)
 		examples += len(doc.Examples)
-		draft, e := service.Create(f.ctx, c, "configured-corpus-"+entry.SourceID[len("library-checker:"):], prepared)
+		key := "configured-corpus-" + entry.SourceID[len("library-checker:"):]
+		imported, e := importer.ImportPinned(f.ctx, c, key, entry.SourceID, content.RequestSHA256)
 		must(t, e)
-		importer, e := problem.NewImporter(service, map[string]*problem.Prepared{entry.SourceID: prepared}, 1)
+		committed, e := importer.Receipt(f.ctx, c, key)
+		must(t, e)
+		if committed != imported || committed.ImportRevision != content.RequestSHA256 || selected[entry.SourceID].Title != doc.Title {
+			t.Fatal("pinned corpus import or receipt lost original identity")
+		}
+		draft, e := service.GetOwn(f.ctx, c, imported.DraftID)
 		must(t, e)
 		preview, e := importer.Preview(f.ctx, c, draft.ID)
 		must(t, e)
@@ -139,7 +170,6 @@ func TestPrivateDraftConfiguredBundle(t *testing.T) {
 				t.Fatal("actual corpus preview included a non-sample case")
 			}
 		}
-		must(t, prepared.Close())
 		drafts = append(drafts, draft)
 	}
 	must(t, materials.Close())
@@ -173,5 +203,5 @@ func TestPrivateDraftConfiguredBundle(t *testing.T) {
 	if cases != 254 || examples != 18 {
 		t.Fatal("configured source case/example mapping changed")
 	}
-	t.Logf("configured ten drafts/254 cases/18 examples committed and exact statement/sample previews verified (%d raw bytes); %d logical references, %d immutable objects, %d bytes independently reopened after Store close; owner scope checked through new PG pool; session observation stubbed here", previewBytes, references, len(unique), bytes)
+	t.Logf("configured ten sorted sources/full revisions and pinned imports/read-only receipts verified; ten drafts/254 cases/18 examples committed and exact statement/sample previews verified (%d raw bytes); %d logical references, %d immutable objects, %d bytes independently reopened after Store close; owner scope checked through new PG pool; session observation stubbed here", previewBytes, references, len(unique), bytes)
 }
