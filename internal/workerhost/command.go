@@ -15,9 +15,10 @@ type streamCommand func(context.Context, io.Reader, io.Writer, int64, string, ..
 // Only these locally produced failures retain an exit code. Neither an exec
 // error nor its command/path/stderr is retained across the host boundary.
 type commandFailure struct {
-	code  string
-	exit  int
-	cause error
+	code         string
+	exit         int
+	cause        error
+	processStart string
 }
 
 func (e *commandFailure) Error() string { return "host command " + e.code }
@@ -53,7 +54,10 @@ func runCommandTo(ctx context.Context, input io.Reader, output io.Writer, maximu
 	cmd.Stdout = out
 	cmd.WaitDelay = time.Second
 	if err := cmd.Run(); err != nil {
-		failure := &commandFailure{code: "unknown", exit: -1}
+		failure := &commandFailure{code: "unknown", exit: -1, processStart: "not_started"}
+		if cmd.Process != nil {
+			failure.processStart = "started"
+		}
 		if cause := ctx.Err(); cause != nil {
 			failure.cause = cause
 			failure.code = "canceled"

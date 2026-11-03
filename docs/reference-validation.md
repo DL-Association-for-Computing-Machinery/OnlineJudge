@@ -61,7 +61,11 @@ suffixarray仅扩大该固定来源的完整快照总量，Runtime、文件协�
 
 报告schema为`oj.reference-validation.v1`，包含上述plan/profile及摘要、全部逐点状态、实际编译/执行CPU纳秒与内存字节、固定槽的完整容器ID/StartedAt和停止确认；不序列化源码、输入、答案、实际输出或编译诊断。材料读取失败时plan只保留已声明身份；缺少`plan_sha256`表示完整冻结尚未成功。首个参考错误停止后续点并保留`NOT_RUN`，未知证据归SE，制品清理失败不能通过。参考程序CE/WA/RE/TLE/OLE表示参考验证未通过，不是对选手提交的判题。
 
-停止失败时新增可选`stop_diagnostic`，只含固定`stage`/`code`、已解析枚举及已确认进程数量`observed`/`confirmed`（0—128）和从1开始的失败探针序号`probe`（非探针失败省略）。枚举尚不可用时observed为0，不证明没有进程。阶段为`fence`、`drain`、`inspect_before`、`enumerate`、`kill`、`inspect_after`、`pid_probe`或`complete`；未知适配器错误为`unknown`，不推导阶段。命令错误区分`deadline`、`canceled`、`launch_failed`、`command_exit`、`output_limit`和`wait_delay`，另有固定状态/证据错误；不含原始错误、stderr、参数、退出码或PID。诊断不会改变报告接纳条件；停止成功而marker清理失败时，报告仍失败、stop_confirmed为true且没有stop_diagnostic。
+停止失败时提供可选`stop_diagnostic`，保留固定`stage`/`code`、已解析枚举及已确认进程数量`observed`/`confirmed`（0—128）和从1开始的失败探针序号`probe`（非探针失败省略）。枚举尚不可用时observed为0，不证明没有进程。阶段为`fence`、`drain`、`inspect_before`、`enumerate`、`kill`、`inspect_after`、`pid_probe`或`complete`；未知适配器错误为`unknown`，不推导阶段。命令错误区分`deadline`、`canceled`、`launch_failed`、`command_exit`、`output_limit`和`wait_delay`，另有固定状态/证据错误；不含原始错误、stderr、参数、退出码或PID。诊断不会改变报告接纳条件；停止成功而marker清理失败时，报告仍失败、stop_confirmed为true且没有stop_diagnostic。
+
+本适配器失败诊断附加整体`elapsed_ms`及可选`steps`，最多按实际到达顺序记录`drain / inspect_before / enumerate / kill / inspect_after / pid_probe`六步；未到达步骤不生成零耗时/成功记录，PID探针只记录合计耗时与尝试`count`（最多128），不输出逐PID明细。各毫秒数取单调时间，超过60000截断并设置同级`elapsed_capped=true`；这是证据大小边界，不是新的操作限额。整体从进入Stop起算，包含fence/锁等待及返回前处理，各步之和不保证等于整体，不能据此证明10秒期限在实际调度中严格兑现。成功报告不添加诊断字段，返回与owner映射均复制步骤列表。
+
+kill步骤的`context_before`为调用前采样的`active / canceled / deadline`，active只表示采样时未取消；`call_attempted=true`只证明进入既有调用路径。`local_process_start`为`unknown / not_started / started`：只有真实命令执行器的`cmd.Process`证据区分本地CLI是否启动；替身或nil error无此错误通道证据时保持unknown，不能解释为未启动。即使started，也不证明Docker daemon已接收kill或容器已收到信号。枚举可能先耗尽共享预算，随后kill在过期context上失败；既有kill优先主诊断仍保留，步骤记录补充此前枚举结果。原始失败报告不新增或反推这些字段。
 
 只有制品清理、停止确认、槽标记清理和最终报告写入均成功，命令才可宣布`reference-validation-passed`。该状态仅证明本次固定参考程序与完整点集在指定试验预算下通过；`publication`始终为`blocked`。报告不是可信签名或非作者审核，也不是全部题面/数据质量、完整P4或生产资源准入证明。
 
@@ -85,4 +89,4 @@ Stop内部仍为10秒总预算，保持原调用顺序和零重试。枚举/解�
 
 数据库中的草稿仍为`not-run`，既有来源准备报告不充当本站运行记录。后续须补齐其余题的大材料/依赖、持久化幂等验证任务及当前权限下的报告接纳、完整质量验证、非作者终审和原子发布。
 
-首轮真实专项曾完整通过，但另两次实测出现停止确认未通过：包括额外12点全部AC后仍返回SE、保留隔离。后续受控recover仅确认当时安全，不追认原报告；旧报告没有新诊断，不能用当前代码反推其失败原因。原因尚未定位，当前维护入口存在可用性限制；不自动重试至绿或放宽Stop，具体成功与失败证据见[交付记录](delivery-log.md#2026-11-03首份完整私有草稿的受限参考验证)。
+首轮真实专项曾完整通过，但另两次实测出现停止确认未通过：包括额外12点全部AC后仍返回SE、保留隔离。后续受控recover仅确认当时安全，不追认原报告；旧报告没有新诊断，不能用当前代码反推其失败原因。后来[草稿PR #114](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/114)的旧suffixarray回归又出现第11点SE、Stop kill/deadline且原容器仍运行；外部停止和受控恢复不解除原交付阻断。本次仅补停止步骤证据，执行失败阶段仍待独立补齐；根因尚未定位，当前维护入口存在可用性限制，不自动重试至绿或放宽Stop。历史与本次证据见[交付记录](delivery-log.md)。

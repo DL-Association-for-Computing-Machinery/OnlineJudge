@@ -10,6 +10,8 @@
 
 `internal/problemvalidation`及Worker维护命令的材料/顺序/失败/取消、启动所有权与清理回归归普通backend；`cmd/worker/validation_sandbox_test.go`仅在显式sandbox标签、独立宿主测试驱动及双重实验opt-in下执行。该真实专项验证A+B全点和故障，不进入普通CI，不创建数据库、不改默认M0 suite，也不更新草稿not-run。结果及限制见[受限参考验证](reference-validation.md)。
 
+停止诊断的原故障矩阵继续核对主错误优先级、独立期限与dirty门禁，并验证六步顺序/到达位置、PID合计次数、耗时截断标记、返回副本及owner映射。可信固定本地shell分别证明过期context下kill调用尝试但CLI未启动、CLI已启动后超时；不执行题源或制造真实Docker停止故障，不据此断定历史根因。固定成功报告JSON golden验证新增字段在成功时完全省略。当前参考执行/传输预算与来源准入保持，草稿#114的真实回归失败不被这些检查或普通CI抵消。
+
 独立缓存字节通路的MIME/二进制响应、角色账本、配额/预留、未知回执/坏哈希、清理期间取消和真实本地子进程背压回归随backend执行，后者只运行受信任的固定shell命令。`reference_bytes_sandbox_test.go`的48MiB及缓存stdin/stdout实测仅在显式`OJ_REFERENCE_BYTES=1`与sandbox/宿主驱动下运行，普通CI不执行题源或大文件沙箱；M0默认内联路径及既有回归保持。
 
 unionfind完整磁盘快照、Read/Close竞争/配额释放、坏末点零执行、独立profile互斥、诊断/输出分限及collector OLE负例随backend执行；`cmd/worker/unionfind_sandbox_test.go`仅在sandbox标签、darwin/arm64宿主驱动和`OJ_UNIONFIND_VALIDATION=1`下执行完整18点与256KiB真实边界，使用独立reference槽。普通CI不执行此专项，不自动配置/启动新槽，也不据此更新数据库状态或生产预算。
