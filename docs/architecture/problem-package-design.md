@@ -1,6 +1,6 @@
 # 统一题目模型与题目包导入设计
 
-日期：2026-10-25。版本：0.6。状态：用户确认统一内部题目模型，优先验证 ICPC／Kattis Problem Package Format 2025-09 子集导入及下述导入/发布约定；试用录入入口按开发与交付计划选择。Library Checker离线草稿合同已有实现，标准题包兼容矩阵、业务持久化和完整发布流程仍待验证。关联 [总体架构](system-design.md)、[判题设计](judging-design.md)、[存储](storage-design.md)、[题面渲染](frontend-sandbox-options.md#33-已确认的题面-markdown-与公式渲染)及 [需求](../requirements.md)。
+日期：2026-10-25。版本：0.6。状态：用户确认统一内部题目模型及下述导入/发布约定；试用录入入口按开发与交付计划选择。首批Library Checker固定候选已实现离线适配、授权私有草稿持久化/HTTP与[绑定导入和只读回执](../problem-drafts.md#管理页导入协议)，不等于标准题包或完整发布支持。ICPC／Kattis Problem Package Format 2025-09子集兼容矩阵、一般导入流程和完整发布仍待验证。关联 [总体架构](system-design.md)、[判题设计](judging-design.md)、[存储](storage-design.md)、[题面渲染](frontend-sandbox-options.md#33-已确认的题面-markdown-与公式渲染)及 [需求](../requirements.md)。
 
 ## 1. 已确认路线与取舍
 
