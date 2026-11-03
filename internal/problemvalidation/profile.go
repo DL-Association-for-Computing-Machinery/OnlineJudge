@@ -56,8 +56,12 @@ func ResolveSource(sourceID string) (Profile, experiment.ReferenceTier, error) {
 		return PinnedProfile(), 0, nil
 	case "library-checker:unionfind":
 		return UnionFindProfile(), experiment.ReferenceSmall, nil
-	case "library-checker:zalgorithm", "library-checker:suffixarray":
-		c, err := experiment.ResolveReferenceTier(experiment.ReferenceMedium)
+	case "library-checker:zalgorithm", "library-checker:suffixarray", "library-checker:point_add_range_sum":
+		tier := experiment.ReferenceMedium
+		if sourceID == "library-checker:point_add_range_sum" {
+			tier = experiment.ReferenceMediumBulk
+		}
+		c, err := experiment.ResolveReferenceTier(tier)
 		if err != nil {
 			return Profile{}, 0, err
 		}
@@ -70,9 +74,12 @@ func ResolveSource(sourceID string) (Profile, experiment.ReferenceTier, error) {
 		if sourceID == "library-checker:suffixarray" {
 			p.ID = "p4-lc-suffixarray-reference-desktop-arm64-v1"
 		}
+		if sourceID == "library-checker:point_add_range_sum" {
+			p.ID = "p4-lc-point-add-range-sum-reference-desktop-arm64-v1"
+		}
 		p.Runtime, p.Files, p.Materials = c.Runtime, c.Files, limits
 		p.Text.Bytes = 4 << 20
-		return p, experiment.ReferenceMedium, nil
+		return p, tier, nil
 	default:
 		return Profile{}, 0, errors.New("unsupported reference source")
 	}

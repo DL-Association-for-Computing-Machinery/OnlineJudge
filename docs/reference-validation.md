@@ -4,7 +4,7 @@ P4 的首个执行入口是维护者显式调用 `worker validate-reference`。�
 
 ## 当前支持范围
 
-只接收固定来源锁 SHA-256 `fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617`：默认选择 `library-checker:aplusb` 的 `sample/aplusb/sol/correct.cpp` 和完整12点；显式`--source-id library-checker:unionfind`选择`data_structure/unionfind/sol/correct.cpp`和完整18点，`library-checker:zalgorithm`选择`string/zalgorithm/sol/correct.cpp`和完整29点，`library-checker:suffixarray`选择`string/suffixarray/sol/correct.cpp`和完整50点。各来源绑定独立profile及固定槽；后两者共用medium槽及同一canonical锁。不接收参考程序替换、任意脚本或路径布局。来源锁变更需要重新审查准入。其余六题尚不支持这个执行入口，不截取样例或部分测试点来制造通过。
+只接收固定来源锁 SHA-256 `fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617`：默认选择 `library-checker:aplusb` 的 `sample/aplusb/sol/correct.cpp` 和完整12点；显式`--source-id library-checker:unionfind`选择`data_structure/unionfind/sol/correct.cpp`和完整18点，`library-checker:zalgorithm`选择`string/zalgorithm/sol/correct.cpp`和完整29点，`library-checker:suffixarray`选择`string/suffixarray/sol/correct.cpp`和完整50点，`library-checker:point_add_range_sum`选择`data_structure/point_add_range_sum/sol/correct.cpp`和完整21点。各来源绑定独立profile及固定槽；后三者共用medium槽及同一canonical锁。不接收参考程序替换、任意脚本或路径布局。来源锁变更需要重新审查准入。其余五题尚不支持这个执行入口，不截取样例或部分测试点来制造通过。
 
 限制来自现有实验传输、执行环境和本轮验证配置，不是生产选手限制：
 
@@ -45,7 +45,13 @@ zalgorithm的独立profile为`p4-lc-zalgorithm-reference-desktop-arm64-v1`，suf
 
 suffixarray仅扩大该固定来源的完整快照总量，Runtime、文件协议及槽配置沿用medium；不修改zalgorithm的64 MiB准入。回归实际冻结超过64 MiB的匿名磁盘内容、拒绝超过128 MiB的完整集合、跨来源共享一份额度，并在缓存通路完成50点最坏输出计费及清理；这不构成恰好128 MiB内容成功或宿主连续内存峰值证明。
 
-其他六题仍需更大完整快照、累计传输、临时资源或显式依赖布局，例如`primality_test`私有头文件；本轮不拆样例或提升生产限额。
+point_add_range_sum独立profile为`p4-lc-point-add-range-sum-reference-desktop-arm64-v1`，仅该固定来源准入input16 MiB、完整快照256 MiB，source64 KiB/answer4 MiB/64点保持。封闭`ReferenceMediumBulk`档位与Medium的Runtime逐字段相同，文件协议为`p4-gojudge-cached-files-medium-bulk-v1`、仅累计payload增至512 MiB，其余file/live/对象/操作数及诊断/检查器保持。完整21点最坏payload299443885B、133次逻辑操作，超过原256 MiB但低于512 MiB。所有旧四profile/plan摘要保持。
+
+Medium与MediumBulk共用原容器及`slot-reference-medium.lock`；映射必须保留原tier，使Host与适配器分别绑定正确账本。两者Runtime相同，Verify不区分传输预算；CLI从同一source解析结果构造两端，误配由较小额度一端拒绝，不能据Runtime验证推导预算相同。回归分别验证两端旧256 MiB拒绝、新512 MiB额度及超限拒绝，实际132 MiB快照与16 MiB输入冻结/读回、完整集合超过256 MiB及input cap+1拒绝、共享额度和锁互斥；没有恰好256 MiB快照成功或任意材料组合容量证明。真实缓存stdin专项核验上传SHA-256回读和程序count/sum，在原8 MiB输出RLIMIT下读取8 MiB+1/16 MiB；阶段heap/cgroup/tmpfs样本不代表连续峰值或并发总RSS。
+
+本轮point_add_range_sum首次完整21点与大stdin通过，但旧suffixarray回归在第11点SE，Stop为`kill/deadline`、`observed=0`且原容器仍运行，构成交付阻断。外部停止并受控恢复仅确认当时安全，不追认失败报告；首10点AC/后续NOT_RUN保留，根因尚未定位，不能据诊断判断kill命令已执行或程序超时。其他专项或普通CI通过不能抵消此失败；本新增来源尚未交付，证据见[交付记录](delivery-log.md#2026-11-04point_add_range_sum-实现与停止故障阻断)。
+
+其他五题仍需更大完整快照、累计传输、临时资源或显式依赖布局，例如`primality_test`私有头文件；本轮不拆样例或提升生产限额。
 
 文件入口cap结合固定tmpfs/cgroup边界，内部账本计量存活缓存、总传输载荷与操作数；没有独立multipart暂存或其峰值计数器，64 MiB存活缓存不等于全部存储/内存峰值。创建前为源码/输入预留实际大小，为未知大小的exe/stdout按上限预留；最多一个大输入。上传和校验回读分别计费，下载按请求上限保守计费，失败不退额度；固定MIME/trailer及控制JSON各自有界。累计操作数限制零字节操作与已删除ID历史，并为已存在对象保留DELETE额度。固定挂载、collector和cgroup的真实容量证据另见交付记录。
 
@@ -73,11 +79,11 @@ unionfind运行输出的正常collector溢出按固定协议作窄适配：[v1.1
 
 ## 槽所有权与停止
 
-显式`OJ_SANDBOX_EXPERIMENT=1`和跨checkout文件锁仍是前置条件。默认A+B使用primary/secondary；unionfind使用固定small reference槽，zalgorithm与suffixarray共用固定medium reference槽及同一锁，均拒绝非空`OJ_WORKER_M0_SLOT`，不从M0 parser选择新槽。quarantine不自动恢复。命令先持锁并同步dirty标记，再接触沙箱。`--start-stopped-slot`只启动预存在、停止/PID0、固定owner及完整隔离配置匹配的槽，使用原full ID，不创建、替换、重启运行中容器或接管其他项目。返回Host绑定该ID与新StartedAt；运行中每次请求继续校验同一生命周期。
+显式`OJ_SANDBOX_EXPERIMENT=1`和跨checkout文件锁仍是前置条件。默认A+B使用primary/secondary；unionfind使用固定small reference槽，zalgorithm、suffixarray与point_add_range_sum共用固定medium reference槽及同一锁，均拒绝非空`OJ_WORKER_M0_SLOT`，不从M0 parser选择新槽。quarantine不自动恢复。命令先持锁并同步dirty标记，再接触沙箱。`--start-stopped-slot`只启动预存在、停止/PID0、固定owner及完整隔离配置匹配的槽，使用原full ID，不创建、替换、重启运行中容器或接管其他项目。返回Host绑定该ID与新StartedAt；运行中每次请求继续校验同一生命周期。
 
 正常退出和失败均在独立context中停止并排空Host，核验容器停止及已观察PID消失；只有确认后才清理marker。启动回执未知时仍尝试确认原生命周期停止；拿不到绑定Host、停止未确认或marker同步失败则保留隔离。启动/验证报错后若已确认停止且清标记成功，可以解除marker，但本次报告仍失败。原[受控恢复](../README.md#worker-异常后的受控解封)步骤继续适用。取消发生在Run、制品清理或Stop期间都不得生成通过状态。不会为了保存报告恢复旧槽或再次执行未知操作。
 
-独立槽异常时使用`OJ_SANDBOX_EXPERIMENT=1 worker recover-reference [<admitted-source-id>] <original-full-container-id>`，必须清空`OJ_WORKER_M0_SLOT`并先确认旧宿主进程及在途操作已排空。省略source保留原unionfind/small默认；显式`library-checker:zalgorithm`或`library-checker:suffixarray`只选同一medium槽，A+B或未知source拒绝reference恢复。它只接来源对应的固定槽，核验原ID/配置/停止生命周期，成功才清该锁；不启动槽、不认领任务、不追认失败报告，不能手工清marker。
+独立槽异常时使用`OJ_SANDBOX_EXPERIMENT=1 worker recover-reference [<admitted-source-id>] <original-full-container-id>`，必须清空`OJ_WORKER_M0_SLOT`并先确认旧宿主进程及在途操作已排空。省略source保留原unionfind/small默认；显式`library-checker:zalgorithm`、`library-checker:suffixarray`或`library-checker:point_add_range_sum`只选同一medium槽，A+B或未知source拒绝reference恢复。它只接来源对应的固定槽，核验原ID/配置/停止生命周期，成功才清该锁；不启动槽、不认领任务、不追认失败报告，不能手工清marker。
 
 Host的文件能力与原M0 RoundTrip分开：仅固定loopback文件路由、有限私有bytes reader、随机MIME boundary及有界sink；不接受任意URL、主机路径或流式Body提前交还。HTTP状态使用固定四字节trailer与二进制正文分开校验，子进程和全部IO结束后才释放active登记；取消不证明远端文件或进程已清除。M0默认入口、原JSON预算与Runtime保持。
 

@@ -144,36 +144,5 @@ func (f *mediumMeasuredFiles) ReadFile(ctx context.Context, id string, maximum i
 
 func mediumSandboxHost(t *testing.T) *workerhost.Host {
 	t.Helper()
-	slot, err := workerhost.ReferenceSlotForTier(experiment.ReferenceMedium)
-	if err != nil {
-		t.Fatal(err)
-	}
-	lock, err := lockSlotMode(slot.LockName(), false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := lock.dirty(); err != nil {
-		lock.Close()
-		t.Fatal(err)
-	}
-	h, openErr := workerhost.StartReferenceSlot(context.Background(), slot)
-	t.Cleanup(func() {
-		defer lock.Close()
-		if h == nil {
-			return
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-		if err := h.Stop(ctx); err != nil {
-			t.Error("medium stop unconfirmed; preserve quarantine", err)
-			return
-		}
-		if err := lock.clean(); err != nil {
-			t.Error(err)
-		}
-	})
-	if openErr != nil || h == nil {
-		t.Fatal("medium start", openErr)
-	}
-	return h
+	return referenceSandboxHost(t, experiment.ReferenceMedium)
 }

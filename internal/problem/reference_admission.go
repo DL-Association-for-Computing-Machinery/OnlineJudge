@@ -13,6 +13,8 @@ func referenceDiskAdmission(sourceID string) (diskReferenceAdmission, error) {
 		return diskReferenceAdmission{"string/zalgorithm", ReferenceLimits{SourceBytes: 64 << 10, InputBytes: 1 << 20, AnswerBytes: 4 << 20, TotalBytes: 64 << 20, Cases: 64}}, nil
 	case "library-checker:suffixarray":
 		return diskReferenceAdmission{"string/suffixarray", ReferenceLimits{SourceBytes: 64 << 10, InputBytes: 1 << 20, AnswerBytes: 4 << 20, TotalBytes: 128 << 20, Cases: 64}}, nil
+	case "library-checker:point_add_range_sum":
+		return diskReferenceAdmission{"data_structure/point_add_range_sum", ReferenceLimits{SourceBytes: 64 << 10, InputBytes: 16 << 20, AnswerBytes: 4 << 20, TotalBytes: 256 << 20, Cases: 64}}, nil
 	default:
 		return diskReferenceAdmission{}, ErrReferenceUnsupported
 	}

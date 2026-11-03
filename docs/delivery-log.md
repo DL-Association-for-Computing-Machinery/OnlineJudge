@@ -1,5 +1,23 @@
 # 工程交付记录
 
+## 2026-11-04：point_add_range_sum 实现与停止故障阻断
+
+成功fetch后从`origin/main b7f18f1d393abf7859a10321dbd628ff5910eb8b`建立`codex/point-add-reference`。新增固定point_add_range_sum完整21点与独立profile `p4-lc-point-add-range-sum-reference-desktop-arm64-v1`；仅该来源input16MiB、快照total256MiB，source64KiB/answer4MiB/64点保持。封闭`ReferenceMediumBulk`仅新增文件协议ID及payload512MiB，Runtime逐字段等于Medium；slot仍映射原medium容器/锁且保留原tier，Host与Cached两端分别计量。所有旧四profile golden保持；共享一份快照、实际锁互斥、132MiB匿名快照/16MiB输入读回与超限、坏末点零执行、来源借用拒绝、21点保守传输133操作及失败清理回归通过。512MiB边界使用预充值账本单测，不宣称实际传输512MiB或恰好256MiB快照成功。
+
+固定来源锁不变；重新逐件哈希源码、catalog和全部input/answer。`data_structure/point_add_range_sum/sol/correct.cpp`为1382B、SHA-256 `3d57829f581030f3f97c7f282ffbb51a6a30247e4d28d540d663da139b9aacfe`，仅iostream/vector/cassert。input总105680358B/answer总29352240B，最大13501012B/3852936B；含source/catalog总135038029B，超过旧128MiB。按请求上限计费最坏299443885B/133逻辑操作，超过旧256MiB，在512MiB内。
+
+固定Desktop LinuxKit7.0.14/arm64、go-judge v1.13.3/GCC15.3.0与原镜像下，新题首次两组15.40秒通过（`/private/tmp/oj-point-add-real.log`）：完整21点CLI12.86秒全AC并确认停止，最大执行CPU111100000ns/内存8388608B，编译CPU178704000ns/内存77594624B。报告`/private/tmp/oj-point-add-reference-report-20261104/report.json` SHA-256为`ece7b44eaec8ee29a18897eaf5a658eccd4b965f8cb6a7818a2af739bb753966`，plan `bb4f397db3d3e56d86d209c60ec0480f6d4e2314389728ef37e3a9539831e08b`，profile `5ab143ba3de72e53f361724db7c65ceca51d770dd81dd94be7495e2c286264c1`；0700/0600、无INCOMPLETE。
+
+原8MiB输出RLIMIT下，缓存stdin8388609B/16777216B上传SHA-256回读成功，程序count/sum分别`8388609 1069547520`/`16777216 2139095040`，均AC；count/sum不单独证明字节顺序。资源分计：完整CLI wait4 Maxrss97697792B，不是Go heap或并发总RSS；16MiB输入回读时Go HeapAlloc46908648/HeapInuse48193536/Sys85727512B，shm已用16850944B、tmp0、容量各134217728B，outer memory.peak133808128B；清理后tmp/shm采样0。这些是阶段样本，不含全部宿主/沙箱并发内存，也不证明连续存储峰值。
+
+随后旧suffixarray回归首次26.31秒失败（`/private/tmp/oj-point-add-suffixarray-real.log`）：首10点AC，第11点无usage的SE，其后NOT_RUN；Stop为`kill/deadline/observed=0/confirmed=0`且原medium容器仍运行，构成交付阻断。失败报告`/private/tmp/oj-point-add-suffixarray-regression-20261104/report.json` SHA-256 `19513bf823e8cd40bf5ba13fedcc5f2a3e9f6f073cc843246568ee2f2e14eb36`，旧plan/profile不变。至第11点完整成功路径载荷上界50352261B、含最终清理73操作，普通累计额度不足不能解释失败；不能据SE判断程序超时，或据kill/deadline推断kill已派发并运行10秒。现有报告无法区分上传/回读/运行/输出读取/清理，Stop又共用10秒并优先保留kill错误，根因尚未定位。
+
+停止失败后立即停止后续实测，保留7字节marker；外部仅停止原full CID `f050f360e93733f021f5102fc52532ccedf2416301e0686d2ca8ad0377c16082`到stopped/PID0，OOMKilled=false、Dead=false、ExitCode0、无restart，不能由停止后状态还原失败时资源峰值。已知旧宿主/控制命令匹配0；固定owner/隔离配置及原ID回读后，使用既有`recover-reference library-checker:suffixarray <CID>`成功受控解封（`oj-point-add-recovery.log`）。故障窗口Docker events返回0，未提供派发时序证据；环境/二进制哈希记录在`oj-point-add-{suffixarray-failure-environment,failure-state}.json`。没有手清marker或重试失败题；恢复仅确认当时安全，不追认原报告。
+
+恢复后只继续尚未运行的三个独立专项：zalgorithm三组19.54秒（29点CLI14.07秒、4MiB collector/8MiB文件边界）、unionfind两组12.52秒（18点CLI9.74秒、256KiB边界）、A+B九组22.10秒（12点CLI6.30秒、AC/WA/CE/RE/TLE/MLE/OLE/取消）均通过并确认停止。报告目录`/private/tmp/oj-point-add-{zalgorithm,unionfind,aplusb}-regression-20261104`，SHA-256依次`80f04bb0824c863cfeb137063b0c1b9f14027390b78692d2005f6d7a3dba895c`、`051bb1ddac106dad969d24d453b50498973116f28c880fd8ca50a36290ec4c15`、`2279bb186b32beb032cbf425019933ea42ee599654a05336179dcad76b8d9883`，旧摘要保持。这些独立通过不替代失败的suffixarray回归。
+
+Docker离线Go1.26.10六相关包基线/定向race/vet、完整backend模块/格式/静态/root race/七命令构建与cmd sandbox标签lint通过（`oj-point-add-{baseline,targeted,backend}.log`）。无新依赖、SQL/schema、公共HTTP/UI变化；本地未重跑PG/Redis、浏览器或完整M0，远端精确head检查另核验。Astra/high实现复核无阻断，故障复核确认当前差异未改Cached执行、Host I/O或Stop，未发现明显旧配置回归，但不能证明运行等价；AI不代替人工审批。新增来源保持草稿、未交付，普通CI或新题通过不能抵消旧回归失败。下一步独立补齐脱敏执行阶段、Stop各步耗时及kill派发前deadline证据，保持原时限/停止门禁，再调查故障。原始私有材料、草稿not-run/生产null/publication blocked保持，未部署；临时日志/报告不构成独立备份。
+
 ## 2026-11-04：suffixarray 全50点参考验证
 
 成功fetch后从`origin/main 934923ccefe0b42d7d50a018dbb98327bb7b1853`建立`codex/suffixarray-reference`。维护CLI新增固定来源`library-checker:suffixarray`，完整50点不采样。独立profile `p4-lc-suffixarray-reference-desktop-arm64-v1`仅将该来源完整快照总量准入128MiB；source64KiB/input1MiB/answer4MiB/64点、Medium Runtime/文件协议保持。zalgorithm仍64MiB，旧三profile/plan摘要均回归不变。所有磁盘来源共用匿名单文件与进程内一份额度；suffixarray与zalgorithm共用原medium槽、canonical锁与停止/dirty门禁，没有新增/替换容器或修改配置。

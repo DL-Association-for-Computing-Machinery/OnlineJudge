@@ -96,7 +96,7 @@ func validationFixture(t *testing.T) *problem.Prepared {
 }
 
 func TestReferenceOwnerStopAndQuarantine(t *testing.T) {
-	for _, sourceID := range []string{"library-checker:aplusb", "library-checker:unionfind", "library-checker:zalgorithm", "library-checker:suffixarray"} {
+	for _, sourceID := range []string{"library-checker:aplusb", "library-checker:unionfind", "library-checker:zalgorithm", "library-checker:suffixarray", "library-checker:point_add_range_sum"} {
 		t.Run(sourceID, func(t *testing.T) { testReferenceOwnerStopAndQuarantine(t, sourceID) })
 	}
 }
@@ -112,6 +112,9 @@ func testReferenceOwnerStopAndQuarantine(t *testing.T, sourceID string) {
 				}
 				if sourceID == "library-checker:suffixarray" {
 					b = problemfixture.NewSuffixArray(t)
+				}
+				if sourceID == "library-checker:point_add_range_sum" {
+					b = problemfixture.NewPointAddRangeSum(t)
 				}
 				sourcePath := b.Document["provenance"].(map[string]any)["source_path"].(string)
 				b.AddOriginal(t, sourcePath+"/sol/correct.cpp", []byte("int main(){}"))
@@ -251,7 +254,7 @@ func TestReferenceSourceAndSlotSelectionGuards(t *testing.T) {
 	t.Setenv("OJ_SANDBOX_EXPERIMENT", "1")
 	b := problemfixture.New(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	for _, source := range []string{"library-checker:unionfind", "library-checker:zalgorithm", "library-checker:suffixarray", "library-checker:other"} {
+	for _, source := range []string{"library-checker:unionfind", "library-checker:zalgorithm", "library-checker:suffixarray", "library-checker:point_add_range_sum", "library-checker:other"} {
 		t.Setenv("OJ_WORKER_M0_SLOT", "secondary")
 		output := filepath.Join(t.TempDir(), "report")
 		args := []string{"--source-id", source, "--bundle", b.Directory, "--source-lock", filepath.Join(t.TempDir(), "lock.json"), "--output", output}

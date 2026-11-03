@@ -74,7 +74,9 @@ docker --context desktop-linux run --rm --network none --read-only \
 
 ### 私有草稿参考验证
 
-维护执行入口支持固定Library Checker A+B完整12点、unionfind完整18点、zalgorithm完整29点及suffixarray完整50点，不写数据库验证状态或发布。需要已配置且停止的专用槽、已有固定镜像与Docker Desktop、macOS arm64；命令不会自动创建、替换或恢复槽。使用已有Go1.26.10工具链镜像构建独立宿主产物（不与Linux检查共用输出）：
+维护执行入口支持固定Library Checker A+B完整12点、unionfind完整18点、zalgorithm完整29点、suffixarray完整50点及point_add_range_sum完整21点，不写数据库验证状态或发布。需要已配置且停止的专用槽、已有固定镜像与Docker Desktop、macOS arm64；命令不会自动创建、替换或恢复槽。使用已有Go1.26.10工具链镜像构建独立宿主产物（不与Linux检查共用输出）：
+
+本轮point_add_range_sum实现尚未交付：首次21点通过，但旧suffixarray回归出现停止未确认，仍为阻断；受控恢复不追认失败。具体报告与限制见[交付记录](docs/delivery-log.md#2026-11-04point_add_range_sum-实现与停止故障阻断)。
 
 ```sh
 REFERENCE_TOOLCHAIN_IMAGE=YOUR_EXISTING_LOCAL_GO_TOOLCHAIN_IMAGE
@@ -99,7 +101,7 @@ OJ_SANDBOX_EXPERIMENT=1 OJ_WORKER_M0_SLOT=secondary \
 
 停止失败报告的可选`stop_diagnostic`提供固定阶段/错误类别与有界计数，不含PID、命令参数或原始错误。`pid_present`仅表示探测时路径存在，可能发生PID复用；`deadline`不证明进程仍在或已退出。诊断不授予清理隔离标记的权限，旧失败报告不追认通过。
 
-维护入口使用独立缓存文件通路：源码/输入上传后回读核对SHA-256，输出原始字节拉取，参考答案留在宿主。默认A+B保留2MiB材料/4KiB输出，unionfind使用64MiB匿名磁盘快照与256KiB运行stdout。zalgorithm使用64MiB快照，suffixarray独立准入128MiB快照；后两者共用4MiB stdout、256MiB累计传输档位及同一medium槽锁，所有磁盘来源共用进程内一份快照额度。两端账本均按档位计量。编译双流/运行stderr仍各4KiB，磁盘来源的CPU1秒/wall5秒/memory128MiB只作参考试验；其余六题仍待准入，生产配置不变。
+维护入口使用独立缓存文件通路：源码/输入上传后回读核对SHA-256，输出原始字节拉取，参考答案留在宿主。默认A+B保留2MiB材料/4KiB输出，unionfind使用64MiB匿名磁盘快照与256KiB运行stdout。zalgorithm使用64MiB快照，suffixarray独立准入128MiB快照，两者累计传输256MiB；point_add_range_sum准入单输入16MiB/完整快照256MiB及双端累计传输512MiB。后三者共用4MiB stdout、原medium Runtime及同一槽锁，所有磁盘来源共用进程内一份快照额度。两端账本均按档位计量。编译双流/运行stderr仍各4KiB，磁盘来源的CPU1秒/wall5秒/memory128MiB只作参考试验；其余五题仍待准入，生产配置不变。
 
 unionfind使用独立固定`oj-reference-sandbox`及`slot-reference.lock`，拒非空`OJ_WORKER_M0_SLOT`。维护者确认容器不存在后，可用已有固定镜像显式创建停止槽；已有槽不能替换，须核验owner/配置和停止状态：
 
@@ -119,7 +121,7 @@ env -u OJ_WORKER_M0_SLOT OJ_SANDBOX_EXPERIMENT=1 \
 
 全部材料完整哈希、所有答案检查域先验后才调用execution Verify/Compile；槽启动与Host环境探测更早发生。快照并发/关闭、失败报告和独立槽`recover-reference <original-full-container-id>`的前置要求见[受限参考验证](docs/reference-validation.md)。
 
-zalgorithm与suffixarray选择同一固定medium槽及`slot-reference-medium.lock`，串行使用，旧槽不改配置或替换。确认该容器不存在后，用同一已有镜像覆盖entrypoint并传精确固定Cmd，global output8MiB、copy-out仍1MiB；命令自身不创建槽：
+zalgorithm、suffixarray与point_add_range_sum选择同一固定medium槽及`slot-reference-medium.lock`，串行使用，旧槽不改配置或替换。确认该容器不存在后，用同一已有镜像覆盖entrypoint并传精确固定Cmd，global output8MiB、copy-out仍1MiB；命令自身不创建槽：
 
 ```sh
 docker --context desktop-linux create --pull never --name oj-reference-medium-sandbox \
@@ -138,6 +140,8 @@ env -u OJ_WORKER_M0_SLOT OJ_SANDBOX_EXPERIMENT=1 \
 ```
 
 suffixarray使用同一命令，将`--source-id`改为`library-checker:suffixarray`并使用新的报告目录；不创建另一槽。其独立profile为`p4-lc-suffixarray-reference-desktop-arm64-v1`，仅完整材料总量提高至128MiB，单点input1MiB/answer4MiB、最多64点保持。medium异常恢复显式指定`worker recover-reference library-checker:zalgorithm <original-full-container-id>`或对应suffixarray来源；省略source仍指原unionfind槽。均需实验opt-in、清空M0槽变量并先确认旧宿主在途操作排空；不能手工清marker。
+
+point_add_range_sum同样只改`--source-id library-checker:point_add_range_sum`及新报告路径，不创建槽。独立profile为`p4-lc-point-add-range-sum-reference-desktop-arm64-v1`，使用封闭`ReferenceMediumBulk`档位；Runtime与Medium相同，仅文件协议ID和累计payload512MiB不同。恢复时指定该来源仍核验同一槽/锁；不能把档位归一化而丢弃Host端预算。
 
 真实专项另覆盖固定12点CLI、合成正确/错误/编译错误/RE/TLE/MLE/OLE和取消后的停止确认。它不需要PG/Redis或控制端，不进入普通CI：
 
@@ -177,6 +181,16 @@ env -u OJ_WORKER_M0_SLOT OJ_SANDBOX_EXPERIMENT=1 OJ_SUFFIXARRAY_REFERENCE=1 \
   OJ_SUFFIXARRAY_OUTPUT=/private/tmp/oj-suffixarray-suite-report \
   .local/validation-host/worker-validation.test \
   -test.v -test.count=1 -test.run='^TestSuffixArrayReferenceSandbox$' -test.timeout=5m
+```
+
+point_add_range_sum专项覆盖完整21点CLI和8MiB+1/16MiB全字节缓存stdin，核验上传SHA-256回读、程序读取count/sum、清理及阶段资源样本；不将count/sum单独作为顺序回显证明：
+
+```sh
+env -u OJ_WORKER_M0_SLOT OJ_SANDBOX_EXPERIMENT=1 OJ_POINT_ADD_REFERENCE=1 \
+  OJ_REFERENCE_BUNDLE=/private/tmp/oj-library-checker-drafts/bundle \
+  OJ_POINT_ADD_OUTPUT=/private/tmp/oj-point-add-suite-report \
+  .local/validation-host/worker-validation.test \
+  -test.v -test.count=1 -test.run='^TestPointAddReferenceSandbox$' -test.timeout=5m
 ```
 
 原始字节与容量专项另外使用已停止的M0 secondary槽，覆盖48MiB边界/超限、空输入、全部字节值、缓存stdin→小输出、清理及数值资源采样；它不更新草稿状态或生产限额：

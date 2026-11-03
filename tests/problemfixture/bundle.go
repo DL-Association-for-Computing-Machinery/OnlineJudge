@@ -201,6 +201,12 @@ func NewSuffixArray(t *testing.T) *Bundle {
 	return newReferenceSource(t, "library-checker:suffixarray", "string/suffixarray")
 }
 
+// NewPointAddRangeSum selects the fixed large-input reference source.
+func NewPointAddRangeSum(t *testing.T) *Bundle {
+	t.Helper()
+	return newReferenceSource(t, "library-checker:point_add_range_sum", "data_structure/point_add_range_sum")
+}
+
 func newReferenceSource(t *testing.T, sourceID, sourcePath string) *Bundle {
 	t.Helper()
 	b := New(t)
