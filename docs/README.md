@@ -15,6 +15,7 @@
 | 前端、草稿与渲染 | [前端设计](architecture/frontend-sandbox-options.md) |
 | 判题语义、浮点与 SPJ | [判题设计](architecture/judging-design.md) |
 | 题包、存储、会话、比赛 | [题包](architecture/problem-package-design.md)、[存储](architecture/storage-design.md)、[会话](architecture/session-design.md)、[比赛](architecture/contest-design.md) |
+| 首批题源、固定来源与离线私有候选 | [题源准备](problem-sources.md) |
 | API / Worker 与运维设计 | [协议](architecture/api-worker-design.md)、[运维](architecture/operations-design.md) |
 | 已实现接口的字段、响应和错误 | [健康接口](../api/openapi.yaml)、[Bearer实验接口](../api/experiment.openapi.yaml)、[M0浏览器实验](../api/m0-browser.openapi.yaml)、[Worker 接口](../api/worker.openapi.yaml) |
 | 授权与稳定规则、执行步骤 | [根规则](../AGENTS.md)、[开发工作流](development-workflow.md) |
