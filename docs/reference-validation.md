@@ -4,7 +4,18 @@ P4 的首个执行入口是维护者显式调用 `worker validate-reference`。�
 
 ## 当前支持范围
 
-只接收固定来源锁 SHA-256 `fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617`：默认选择 `library-checker:aplusb` 的 `sample/aplusb/sol/correct.cpp` 和完整12点；显式`--source-id library-checker:unionfind`选择`data_structure/unionfind/sol/correct.cpp`和完整18点，`library-checker:zalgorithm`选择`string/zalgorithm/sol/correct.cpp`和完整29点，`library-checker:suffixarray`选择`string/suffixarray/sol/correct.cpp`和完整50点，`library-checker:primality_test`选择`number_theory/primality_test/sol/correct.cpp`、固定4个头文件和完整13点。各来源绑定独立profile及固定槽；后三者共用medium槽及同一canonical锁。不接收参考程序替换、任意脚本或路径布局。来源锁变更需要重新审查准入。其余五题尚不支持这个执行入口，不截取样例或部分测试点来制造通过。
+只接收固定来源锁 SHA-256 `fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617`。`--source-id`默认A+B；前五项已完成真实参考验证，最后一项为本分支尚未通过的候选试验，不能视为主线支持。路径均相对上游源目录：
+
+| source-id | 固定参考源码 | 完整点数 |
+| --- | --- | --- |
+| `library-checker:aplusb` | `sample/aplusb/sol/correct.cpp` | 12 |
+| `library-checker:unionfind` | `data_structure/unionfind/sol/correct.cpp` | 18 |
+| `library-checker:zalgorithm` | `string/zalgorithm/sol/correct.cpp` | 29 |
+| `library-checker:suffixarray` | `string/suffixarray/sol/correct.cpp` | 50 |
+| `library-checker:primality_test` | `number_theory/primality_test/sol/correct.cpp`及固定4个头文件 | 13 |
+| `library-checker:staticrmq`（候选） | `data_structure/staticrmq/sol/correct.cpp` | 27；第9点SE，后18未运行 |
+
+各来源绑定独立profile及固定槽；后四者共用medium槽及同一canonical锁。不接收参考程序替换、任意脚本或路径布局。来源锁变更需要重新审查准入。其余五题（含候选staticrmq）尚未完成准入，不截取样例或部分测试点来制造通过。
 
 限制来自现有实验传输、执行环境和本轮验证配置，不是生产选手限制：
 
@@ -59,7 +70,11 @@ suffixarray仅扩大该固定来源的完整快照总量，Runtime、文件协�
 
 各材料上传后回读哈希，最多5份源码与exe预留同时存活；所有已知材料共享原独立5秒清理期限。未知上传回执继续fence，清理失败保留已知exe制品供最终清理，并使验证失败。诊断只新增封闭`dependency`角色，不记录头文件名或内容。13点最坏累计载荷为32521421字节、97次逻辑操作（含全部材料双传、stdout按请求上限收费及删除），不以实际小输出退款。嵌套目标目录依据固定[go-judge v1.13.3 copyIn](https://github.com/criyle/go-judge/blob/v1.13.3/envexec/file_copyin.go)的`MkdirAll`语义，另以可信固定嵌套include专项验证。
 
-其余五题仍需完整快照、累计传输或临时资源的独立准入；`point_add_range_sum`的#114仍为草稿，旧失败不因新来源通过而解除。生产限额保持未定。
+staticrmq候选使用独立`ReferenceStaticRMQ`档位（枚举5）、profile `p4-lc-staticrmq-reference-desktop-arm64-v1`、Runtime `p4-staticrmq-gnu17-desktop-arm64-v1`和文件协议`p4-gojudge-cached-staticrmq-v1`。它仅扩大该来源完整快照至256 MiB、单input至16 MiB、累计payload至512 MiB；source64 KiB、answer/stdout/checker4 MiB、最多64点、原编译参数/执行资源/诊断/期限、48 MiB单file/64 MiB存活/4对象/512操作均保持。无私有编译依赖，沿用单文件入口；旧五来源摘要及预算不变，枚举3仍未准入。复用原medium容器及同一锁，Host与Cached保留tier5且拒绝其他Runtime身份。真实完整验证未通过，不能由这些候选配置推断容量/性能成立。
+
+真实完整27点材料共200820493B（含catalog），需要超过旧128 MiB快照；最坏累计载荷`2*1890 + 2*158223359 + 27*(4194304+1) = 429696733`B，需要超过旧256 MiB传输额度。169为execution逻辑操作数，Host仅计自身文件操作，口径不等同。每次下载按请求cap计费，失败不退款；512 MiB精确边界测试通过账本注入证明，不是实际传输512 MiB。超过128 MiB冻结/末点读取使用合成集合；256 MiB材料再加catalog拒绝不等于精确256 MiB成功。真实完整集合另由CLI核验，最大参考答案距4 MiB仅3135B，不能用答案大小代替实际stdout/资源证据。
+
+其余五题（含staticrmq）仍待完整准入；`point_add_range_sum`的#114仍为草稿，旧失败不因其他来源通过而解除。生产限额保持未定。
 
 文件入口cap结合固定tmpfs/cgroup边界，内部账本计量存活缓存、总传输载荷与操作数；没有独立multipart暂存或其峰值计数器，64 MiB存活缓存不等于全部存储/内存峰值。创建前为源码/输入预留实际大小，为未知大小的exe/stdout按上限预留；最多一个大输入。上传和校验回读分别计费，下载按请求上限保守计费，失败不退额度；固定MIME/trailer及控制JSON各自有界。累计操作数限制零字节操作与已删除ID历史，并为已存在对象保留DELETE额度。固定挂载、collector和cgroup的真实容量证据另见交付记录。
 
@@ -103,11 +118,11 @@ phase为verify、upload、readback、control、stdout_read、validate、delete�
 
 ## 槽所有权与停止
 
-显式`OJ_SANDBOX_EXPERIMENT=1`和跨checkout文件锁仍是前置条件。默认A+B使用primary/secondary；unionfind使用固定small reference槽，zalgorithm、suffixarray与primality_test共用固定medium reference槽及同一锁，均拒绝非空`OJ_WORKER_M0_SLOT`，不从M0 parser选择新槽。quarantine不自动恢复。命令先持锁并同步dirty标记，再接触沙箱。`--start-stopped-slot`只启动预存在、停止/PID0、固定owner及完整隔离配置匹配的槽，使用原full ID，不创建、替换、重启运行中容器或接管其他项目。返回Host绑定该ID与新StartedAt；运行中每次请求继续校验同一生命周期。
+显式`OJ_SANDBOX_EXPERIMENT=1`和跨checkout文件锁仍是前置条件。默认A+B使用primary/secondary；unionfind使用固定small reference槽，zalgorithm、suffixarray、primality_test与staticrmq共用固定medium reference槽及同一锁，均拒绝非空`OJ_WORKER_M0_SLOT`，不从M0 parser选择新槽。quarantine不自动恢复。命令先持锁并同步dirty标记，再接触沙箱。`--start-stopped-slot`只启动预存在、停止/PID0、固定owner及完整隔离配置匹配的槽，使用原full ID，不创建、替换、重启运行中容器或接管其他项目。返回Host绑定该ID与新StartedAt；运行中每次请求继续校验同一生命周期。
 
 正常退出和失败均在独立context中停止并排空Host，核验容器停止及已观察PID消失；只有确认后才清理marker。启动回执未知时仍尝试确认原生命周期停止；拿不到绑定Host、停止未确认或marker同步失败则保留隔离。启动/验证报错后若已确认停止且清标记成功，可以解除marker，但本次报告仍失败。原[受控恢复](../README.md#worker-异常后的受控解封)步骤继续适用。取消发生在Run、制品清理或Stop期间都不得生成通过状态。不会为了保存报告恢复旧槽或再次执行未知操作。
 
-独立槽异常时使用`OJ_SANDBOX_EXPERIMENT=1 worker recover-reference [<admitted-source-id>] <original-full-container-id>`，必须清空`OJ_WORKER_M0_SLOT`并先确认旧宿主进程及在途操作已排空。省略source保留原unionfind/small默认；显式`library-checker:zalgorithm`、`library-checker:suffixarray`或`library-checker:primality_test`只选同一medium槽，A+B或未知source拒绝reference恢复。它只接来源对应的固定槽，核验原ID/配置/停止生命周期，成功才清该锁；不启动槽、不认领任务、不追认失败报告，不能手工清marker。
+独立槽异常时使用`OJ_SANDBOX_EXPERIMENT=1 worker recover-reference [<admitted-source-id>] <original-full-container-id>`，必须清空`OJ_WORKER_M0_SLOT`并先确认旧宿主进程及在途操作已排空。省略source保留原unionfind/small默认；显式`library-checker:zalgorithm`、`library-checker:suffixarray`、`library-checker:primality_test`或`library-checker:staticrmq`只选同一medium槽，A+B或未知source拒绝reference恢复。它只接来源对应的固定槽，核验原ID/配置/停止生命周期，成功才清该锁；不启动槽、不认领任务、不追认失败报告，不能手工清marker。
 
 Host的文件能力与原M0 RoundTrip分开：仅固定loopback文件路由、有限私有bytes reader、随机MIME boundary及有界sink；不接受任意URL、主机路径或流式Body提前交还。HTTP状态使用固定四字节trailer与二进制正文分开校验，子进程和全部IO结束后才释放active登记；取消不证明远端文件或进程已清除。M0默认入口、原JSON预算与Runtime保持。
 

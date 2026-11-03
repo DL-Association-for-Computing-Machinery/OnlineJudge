@@ -13,6 +13,8 @@ const (
 	ReferenceMedium ReferenceTier = 2
 	// ReferencePrimality admits the fixed dependency-layout trial.
 	ReferencePrimality ReferenceTier = 4
+	// ReferenceStaticRMQ admits one complete source with larger input transport.
+	ReferenceStaticRMQ ReferenceTier = 5
 )
 
 // ReferenceConfiguration binds runtime and both file-transport budget ledgers.
@@ -28,7 +30,7 @@ func ResolveReferenceTier(tier ReferenceTier) (ReferenceConfiguration, error) {
 	switch tier {
 	case ReferenceSmall:
 		return ReferenceConfiguration{Runtime: PinnedReferenceEnvironment(), Files: PinnedReferenceFiles()}, nil
-	case ReferenceMedium, ReferencePrimality:
+	case ReferenceMedium, ReferencePrimality, ReferenceStaticRMQ:
 		p := PinnedReferenceEnvironment()
 		p.ID = "p4-reference-medium-gnu17-desktop-arm64-v1"
 		p.OutputBytes = 4 << 20
@@ -44,6 +46,11 @@ func ResolveReferenceTier(tier ReferenceTier) (ReferenceConfiguration, error) {
 		f := PinnedReferenceFiles()
 		f.ID = "p4-gojudge-cached-files-medium-v1"
 		f.PayloadBytes = 256 << 20
+		if tier == ReferenceStaticRMQ {
+			p.ID = "p4-staticrmq-gnu17-desktop-arm64-v1"
+			f.ID = "p4-gojudge-cached-staticrmq-v1"
+			f.PayloadBytes = 512 << 20
+		}
 		if tier == ReferencePrimality {
 			p.ID = "p4-primality-gnu17-desktop-arm64-v1"
 			p.OutputBytes = 512 << 10
