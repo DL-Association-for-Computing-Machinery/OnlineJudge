@@ -123,7 +123,7 @@ func (g *GoJudge) result(ctx context.Context, c map[string]any) (goJudgeResult, 
 		return goJudgeResult{}, err
 	}
 	if len(results) != 1 {
-		return goJudgeResult{}, errors.New("invalid sandbox result count")
+		return goJudgeResult{}, withFailureCode(errors.New("invalid sandbox result count"), "invalid_evidence")
 	}
 	return results[0], nil
 }
@@ -207,16 +207,23 @@ func (g *GoJudge) request(ctx context.Context, method, path string, value, targe
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := g.client.Do(req)
 	if err != nil {
-		return errors.New("sandbox transport failed")
+		// Keep the old sanitized error chain; metadata alone retains the category.
+		return withFailureCode(errors.New("sandbox transport failed"), errorFailureCode(err))
 	}
 	// Cleanup does not change the completed operation or its primary error.
 	defer func() { _ = resp.Body.Close() }()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 128*1024+1))
 	if err != nil || len(data) > 128*1024 || resp.StatusCode != http.StatusOK {
-		return errors.New("sandbox response unavailable or oversized")
+		code := errorFailureCode(err)
+		if err == nil && len(data) > 128*1024 {
+			code = "output_limit"
+		} else if err == nil {
+			code = "http_rejected"
+		}
+		return withFailureCode(errors.New("sandbox response unavailable or oversized"), code)
 	}
 	if target == nil {
 		return nil
 	}
-	return json.Unmarshal(data, target)
+	return withFailureCode(json.Unmarshal(data, target), "decode")
 }

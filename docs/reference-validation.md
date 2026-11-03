@@ -75,6 +75,16 @@ unionfind运行输出的正常collector溢出按固定协议作窄适配：[v1.1
 
 输出目录必须是新的绝对路径。解析已有父目录链接后，按目录实际身份检查祖先，拒绝输入bundle内的符号链接及大小写别名路径。目录0700、文件0600；先放置`INCOMPLETE`，最终报告使用排他创建并同步，再移除标记和同步目录。失败/中断保留已有成果，不覆盖、修复或自动删除；写入/同步失败属于未知报告完成状态，须检查命令退出结果和标记，不仅凭JSON中出现passed决定接纳。依赖可信稳定的父目录，不承诺文件系统硬时限、掉电恢复或独立备份。
 
+## 执行失败诊断
+
+可选`execution_diagnostic`包含`entries`与可选`truncated`，跨所有调用最多八条；第九条或诊断遍历遗漏才标记截断。成功省略字段，原成功JSON、profile/plan及schema保持。每条有固定`operation`（verify、compile、run、cleanup、snapshot_close、validation或unknown）、`point`（run从1开始，非逐点为0并省略）、`phase`、`role`和`code`。
+
+phase为verify、upload、readback、control、stdout_read、validate、delete或unknown；role为source、input、executable、stdout、environment或unknown，来自可信调用位置和私有对象账本，不根据错误文本猜测。delete映射到cleanup，保留触发清理的点号；最终制品清理point为0。code只接收deadline、canceled、budget、integrity、ownership、invalid_evidence、http_rejected、decode、command_exit、launch_failed、output_limit、wait_delay或unknown。材料、文件ID、命令、stdout/stderr和原错误均不进入诊断。
+
+已标记分支内同一cause不重复展开；独立join分支保持主错误→各清理错误→最终父context的观察顺序，未标记分支使用unknown阶段/角色。投影最多检查64个根/child槽，包括nil项，限制宽列表、深链与循环；恰好64项且没有待检查项不标截断，每次返回新列表。界限不约束外部Unwrap/类别方法本身的成本或既有errors.Is等其他路径。GoJudge控制传输原本丢弃context unwrap的行为保持，metadata为deadline不表示errors.Is也成立；宿主文件通路继续保持原context原因，Stop类别未扩大。
+
+覆盖缓存适配器Verify/Compile/Run/Remove、Runner调用/结果校验、快照关闭及最终取消；不承诺覆盖Host.Start、材料预检或所有操作系统错误。control仅表示控制调用失败，不证明服务端执行或daemon接收。执行与停止诊断可同时持久化，均不改变SE、停止/dirty门禁、资源预算、零重试或publication blocked；旧报告不反推新字段，也不提供恢复权限。
+
 ## 槽所有权与停止
 
 显式`OJ_SANDBOX_EXPERIMENT=1`和跨checkout文件锁仍是前置条件。默认A+B使用primary/secondary；unionfind使用固定small reference槽，zalgorithm与suffixarray共用固定medium reference槽及同一锁，均拒绝非空`OJ_WORKER_M0_SLOT`，不从M0 parser选择新槽。quarantine不自动恢复。命令先持锁并同步dirty标记，再接触沙箱。`--start-stopped-slot`只启动预存在、停止/PID0、固定owner及完整隔离配置匹配的槽，使用原full ID，不创建、替换、重启运行中容器或接管其他项目。返回Host绑定该ID与新StartedAt；运行中每次请求继续校验同一生命周期。
@@ -89,4 +99,4 @@ Stop内部仍为10秒总预算，保持原调用顺序和零重试。枚举/解�
 
 数据库中的草稿仍为`not-run`，既有来源准备报告不充当本站运行记录。后续须补齐其余题的大材料/依赖、持久化幂等验证任务及当前权限下的报告接纳、完整质量验证、非作者终审和原子发布。
 
-首轮真实专项曾完整通过，但另两次实测出现停止确认未通过：包括额外12点全部AC后仍返回SE、保留隔离。后续受控recover仅确认当时安全，不追认原报告；旧报告没有新诊断，不能用当前代码反推其失败原因。后来[草稿PR #114](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/114)的旧suffixarray回归又出现第11点SE、Stop kill/deadline且原容器仍运行；外部停止和受控恢复不解除原交付阻断。本次仅补停止步骤证据，执行失败阶段仍待独立补齐；根因尚未定位，当前维护入口存在可用性限制，不自动重试至绿或放宽Stop。历史与本次证据见[交付记录](delivery-log.md)。
+首轮真实专项曾完整通过，但另两次实测出现停止确认未通过：包括额外12点全部AC后仍返回SE、保留隔离。后续受控recover仅确认当时安全，不追认原报告；旧报告没有新诊断，不能用当前代码反推其失败原因。后来[草稿PR #114](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/114)的旧suffixarray回归又出现第11点SE、Stop kill/deadline且原容器仍运行；外部停止和受控恢复不解除原交付阻断。当前已补停止步骤与执行失败阶段诊断；原根因尚未定位，维护入口仍有可用性限制，不自动重试至绿或放宽Stop。历史与本次证据见[交付记录](delivery-log.md)。

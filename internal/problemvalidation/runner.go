@@ -36,21 +36,22 @@ type StopDiagnostic struct {
 // to confirm sandbox stop, marker cleanup and report persistence; it is never a
 // complete problem-validation or publication authorization.
 type Report struct {
-	Schema         string                `json:"schema"`
-	Status         string                `json:"status"`
-	Publication    string                `json:"publication"`
-	Profile        Profile               `json:"profile"`
-	ProfileSHA256  string                `json:"profile_sha256"`
-	PlanSHA256     string                `json:"plan_sha256,omitempty"`
-	Plan           problem.ReferencePlan `json:"plan"`
-	Verdict        string                `json:"verdict"`
-	Points         []Point               `json:"points"`
-	CompileUsage   *execution.Usage      `json:"compile_usage,omitempty"`
-	StopConfirmed  bool                  `json:"stop_confirmed"`
-	StopDiagnostic *StopDiagnostic       `json:"stop_diagnostic,omitempty"`
-	Slot           string                `json:"slot"`
-	ContainerID    string                `json:"container_id"`
-	StartedAt      string                `json:"started_at"`
+	Schema              string                `json:"schema"`
+	Status              string                `json:"status"`
+	Publication         string                `json:"publication"`
+	Profile             Profile               `json:"profile"`
+	ProfileSHA256       string                `json:"profile_sha256"`
+	PlanSHA256          string                `json:"plan_sha256,omitempty"`
+	Plan                problem.ReferencePlan `json:"plan"`
+	Verdict             string                `json:"verdict"`
+	Points              []Point               `json:"points"`
+	CompileUsage        *execution.Usage      `json:"compile_usage,omitempty"`
+	StopConfirmed       bool                  `json:"stop_confirmed"`
+	StopDiagnostic      *StopDiagnostic       `json:"stop_diagnostic,omitempty"`
+	ExecutionDiagnostic *ExecutionDiagnostic  `json:"execution_diagnostic,omitempty"`
+	Slot                string                `json:"slot"`
+	ContainerID         string                `json:"container_id"`
+	StartedAt           string                `json:"started_at"`
 }
 
 // Runner owns one operation. The owner must stop its sandbox even after success;
@@ -101,6 +102,7 @@ func (r *Runner) validate(ctx context.Context, prepared *problem.Prepared, profi
 	defer func() {
 		if e := ctx.Err(); e != nil {
 			report.Verdict = "SE"
+			report.recordExecution("validation", 0, e)
 			err = errors.Join(err, e)
 		}
 	}()
@@ -115,6 +117,7 @@ func (r *Runner) validate(ctx context.Context, prepared *problem.Prepared, profi
 	defer func() {
 		if e := frozen.Close(); e != nil {
 			report.Verdict = "SE"
+			report.recordExecution("snapshot_close", 0, e)
 			err = errors.Join(err, e)
 		}
 	}()
@@ -140,12 +143,14 @@ func (r *Runner) validate(ctx context.Context, prepared *problem.Prepared, profi
 	}
 	verifyCtx, done := context.WithTimeout(ctx, 10*time.Second)
 	err = r.sandbox.Verify(verifyCtx, profile.Runtime)
+	report.recordExecution("verify", 0, err)
 	done()
 	if err != nil {
 		return report, err
 	}
 	compileCtx, done := context.WithTimeout(ctx, time.Duration(profile.Runtime.Compile.Wall)+5*time.Second)
 	compiled, err := r.sandbox.Compile(compileCtx, profile.Runtime, string(source))
+	report.recordExecution("compile", 0, err)
 	done()
 	if compiled.Artifact != "" {
 		defer func() {
@@ -153,6 +158,7 @@ func (r *Runner) validate(ctx context.Context, prepared *problem.Prepared, profi
 			defer cancel()
 			if e := r.sandbox.Remove(cleanup, compiled.Artifact); e != nil {
 				report.Verdict = "SE"
+				report.recordExecution("cleanup", 0, e)
 				err = errors.Join(err, e)
 			}
 		}()
@@ -165,6 +171,7 @@ func (r *Runner) validate(ctx context.Context, prepared *problem.Prepared, profi
 	}
 	verdict, err := execution.Classify(compiled, true)
 	if err != nil {
+		report.recordExecution("compile", 0, err)
 		return report, err
 	}
 	report.CompileUsage = &execution.Usage{CPU: compiled.CPU, Memory: compiled.Memory}
@@ -185,6 +192,7 @@ func (r *Runner) validate(ctx context.Context, prepared *problem.Prepared, profi
 		}
 		runCtx, done := context.WithTimeout(ctx, time.Duration(profile.Runtime.Run.Wall)+5*time.Second)
 		o, runErr := r.sandbox.Run(runCtx, profile.Runtime, compiled.Artifact, input)
+		report.recordExecution("run", i+1, runErr)
 		done()
 		report.Points[i].Verdict = "SE"
 		if runErr != nil {
@@ -195,6 +203,7 @@ func (r *Runner) validate(ctx context.Context, prepared *problem.Prepared, profi
 		}
 		verdict, e := execution.Classify(o, false)
 		if e != nil {
+			report.recordExecution("run", i+1, e)
 			return report, e
 		}
 		if verdict == "AC" {

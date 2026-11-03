@@ -1,5 +1,17 @@
 # 工程交付记录
 
+## 2026-11-04：执行阶段与独立清理失败诊断
+
+成功fetch后从`origin/main baae5d5ec840f83db222e938c5142990b1f4fb93`建立`codex/reference-execution-evidence`。将此前九个自有WIP文件按哈希核对后适配当前Stop字段，不覆盖已合并实现。维护报告新增可选`execution_diagnostic`：可信缓存调用位置/角色账本提供phase/role/code，Runner添加operation与逐点序号。按观察顺序保留主错、各清理错误和独立父context，跨调用最多八条，遗漏标记truncated；已标记分支内同cause不重复展开。只记录封闭类别，不保留外来原错误文本/材料/ID；控制metadata与既有context unwrap语义分别验证，宿主文件context原因及Stop窄类别保持。
+
+Astra/high预审发现WIP宽nil列表不计费以及已有tag掩盖独立context分支，均在本次实现修正。诊断遍历所有根/child槽（含nil）最多64项，宽/深/循环/空分支及64/65、8/9精确边界回归；另修正单值Unwrap返回nil的计槽。界限仅约束诊断投影，不约束外部方法或既有errors.Is。17种缓存阶段/角色故障、预算/准入/ErrBusy、控制transport/body/decode、宿主inspect/transfer错误接口、并发副本与保密、Runner跨调用/defer/点号/总量上限均有断言。owner实际调用链的取消+Stop失败同时保留两类诊断，经Finalize及私有报告持久化后仍为SE并保留quarantine。旧成功JSON SHA-256 `8bf9e56626c84d19e31a7050e36330866f798ab8c59b56866032ef7cfea4baa6`保持。
+
+现有离线Docker Go1.26.10四包基线及定向race/vet、最终完整backend模块核验/格式/静态/root race/七命令构建、cmd sandbox标签vet通过（`/private/tmp/oj-execution-evidence-{baseline,first-targeted,targeted,final-targeted,final-backend}.log`）。首次baseline错误地使用镜像默认入口，未执行测试，不计验证；修正entrypoint后基线通过，原失败日志保留。Linux产物与Darwin宿主驱动分目录。本地未重跑PG/Redis、前端/浏览器或完整M0，精确head远端CI另核验。
+
+固定Desktop LinuxKit7.0.14/arm64、go-judge v1.13.3/GCC15.3.0、原镜像/secondary槽下，一次A+B九组22.87秒通过，完整12点CLI6.98秒全AC并停止，AC/WA/CE/RE/TLE/MLE/OLE/取消保持（`oj-execution-evidence-real.log`）。报告`/private/tmp/oj-execution-evidence-aplusb-report-20261104/report.json` SHA-256 `f1729c67d4c5e29a167f04a050583f4b46cd9c6830f8fcc17f64f0a9ca415992`；旧plan `12e87eb8d0771e34a8d187cb2bfc3b5cbf266a3d09768fc20194cfa4927f1325`、profile `658fef827daa872a726e6a728ad05c84a08103bd9857c71606fe76cff92c1437`保持。0700/0600、无INCOMPLETE，成功两类诊断均省略。结束三个原固定槽均停止/PID0，canonical锁空且无占用，无恢复/手清marker。
+
+Astra/high完整差异及证据复核无阻断，AI不代替人工审批。没有新依赖、SQL/schema、公共HTTP/UI、来源准入、重试或预算变化；原草稿not-run/生产null/publication blocked保持。本次仅补诊断，尚未重跑旧suffixarray故障；#114继续草稿，原`19513bf8…`失败与未定根因不被本次通过抵消。下一步在已验证诊断上做独立新目录调查，不追认旧报告或重试至绿；其余六题、持久化验证任务/权限接纳、完整质量/终审发布及整体P4仍未完成，未部署。临时产物不是独立备份。
+
 ## 2026-11-04：停止步骤与本地CLI启动证据
 
 成功fetch后从`origin/main b7f18f1d393abf7859a10321dbd628ff5910eb8b`建立`codex/reference-failure-evidence`。本PR唯一目标为受限Stop失败证据：保留原stage/code/observed/confirmed/probe、原顺序、共享10秒预算、kill优先主错误、context原因、零重试及停止/dirty成功门禁，仅失败时附加整体和最多六个已到达步骤的毫秒记录。各耗时截断上限60000及elapsed_capped是证据边界，不是操作预算；整体含fence/锁等待/返回处理，不能用步骤之和或记录值证明时限严格兑现。PID探针只记合计次数，最多128；StopDetails及owner均复制列表。
