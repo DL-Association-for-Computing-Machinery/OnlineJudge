@@ -79,6 +79,15 @@ COPY --from=materialstore-build /out/materialstore /usr/local/bin/oj-materialsto
 USER 65532:65532
 ENTRYPOINT ["/usr/local/bin/oj-materialstore"]
 
+FROM backend-source AS problem-author-build
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 go build -trimpath -o /out/problem-author ./cmd/problem-author
+
+FROM alpine:3.23@sha256:ff7f0c727dd796aa36787bfcd9a64bf35a6ce72a73451b3359fde849b6703d63 AS problem-author
+COPY --from=problem-author-build /out/problem-author /usr/local/bin/oj-problem-author
+USER 65532:65532
+ENTRYPOINT ["/usr/local/bin/oj-problem-author"]
+
 FROM alpine:3.23@sha256:ff7f0c727dd796aa36787bfcd9a64bf35a6ce72a73451b3359fde849b6703d63 AS api
 COPY --from=backend-build /out/api /usr/local/bin/oj-api
 USER 65532:65532

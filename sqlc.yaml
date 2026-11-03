@@ -2,6 +2,16 @@ version: '2'
 sql:
   - engine: postgresql
     schema: db/migrations
+    queries: db/queries/problem
+    gen:
+      go:
+        package: problemdb
+        out: internal/problem/postgres/problemdb
+        sql_package: pgx/v5
+        emit_empty_slices: true
+        omit_unused_structs: true
+  - engine: postgresql
+    schema: db/migrations
     queries:
       - db/queries/materials.sql
       - db/queries/leases.sql

@@ -1,0 +1,205 @@
+{
+  "schema": "oj.private-problem-draft-evidence.v1",
+  "date": "2026-11-03",
+  "base": "f245055c8fa673e0106ea7b0604bf3ed9e78cdc6",
+  "scope": "authorized private draft application service and owner reads; no HTTP/rendering/validation/review/publication/deployment",
+  "schema_version": 7,
+  "toolchain": "Go1.26.10 linux/arm64; PostgreSQL14.24; Redis7.2.17; existing pinned modules",
+  "validation_image": "sha256:f3c26e4d948876353edd7f84767b9e4d2df0920b21c8f341a42aabc15e62b832",
+  "cli_image": "sha256:3b0e26605a6f4e3b39032f44e0bb707351ae6d73cd3b78f2672def90958c9130",
+  "cli_default_user": "65532:65532",
+  "checks": {
+    "backend": "module verify, format, vet, negative detector controls, static checks, all root race and seven commands passed",
+    "sqlc": "all three generated packages matched",
+    "postgres_seconds": 11.227,
+    "postgres_includes": "real role CLI, audit failure rollback, owner isolation, concurrent same key, reference rollback, real revocation lock waits, lost authorization backend, actual COMMIT reply lost then original-key recovery, owning migration6 and current7 guards, authoritative query plans on 2048 rows, multiple real API/controller processes",
+    "real_sessions_seconds": 45.647,
+    "draft_session_boundary_seconds": 0.5,
+    "draft_session_boundaries": [
+      "success",
+      "default deny before material I/O",
+      "actual logout after successful Put",
+      "real idle expiry after Put",
+      "real Redis client closed after Put",
+      "role revoked after Put"
+    ],
+    "governance": {
+      "tests": 100,
+      "seconds": 15.583,
+      "result": "passed"
+    },
+    "m0_http_compatibility_seconds": 3.88,
+    "component_special_skips": "existing materialstore root-owner and real-capacity fixtures are unchanged and not repeated; ordinary CI skips explicit real-corpus acceptance unless its private inputs are supplied"
+  },
+  "actual_corpus": {
+    "source_bundle": "/private/tmp/oj-library-checker-draft-final-relocated-20261103",
+    "source_lock_sha256": "fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617",
+    "problems": 10,
+    "cases": 254,
+    "examples": 18,
+    "logical_references": 785,
+    "objects": 622,
+    "bytes": 1461321676,
+    "seconds": 11.91,
+    "verification": "Service persisted selected materials and complete PG references; closed/reopened Store, new PG pool, all material snapshots verified",
+    "session_observation": "stubbed for this full-corpus test; actual Redis use-case boundaries separately passed"
+  },
+  "validation_volume": "oj-private-drafts-evidence-20261103",
+  "volume_owner_label": "onlinejudge.private-draft-validation",
+  "volume_readback": {
+    "objects": 622,
+    "bytes": 1461321676,
+    "root_mode": "0700",
+    "file_mode": "0600",
+    "uid": 501
+  },
+  "source_sha256": [
+    {
+      "path": "Dockerfile",
+      "sha256": "ed526ba6636df25157ed02a5ceaa75b0644be8f9c2fe5e7051e41268dfc99864"
+    },
+    {
+      "path": "cmd/problem-author/main.go",
+      "sha256": "0c3b26706c50b4ef3e8ddda958851f58404918e8058fbc30792b5347297e4b9d"
+    },
+    {
+      "path": "cmd/problem-author/main_test.go",
+      "sha256": "f05b3f19390cdaa9be4f83aa25f3a46e0158b9a76e91ad8159a10ad012cb01d7"
+    },
+    {
+      "path": "db/migrate.go",
+      "sha256": "c1bba68c315ce0d5f9825be661d85cf7fce8438860761a534845e207177bc963"
+    },
+    {
+      "path": "db/migrations/00007_private_problem_drafts.sql",
+      "sha256": "3306b90d66fed03a2ad56dae81de51174dd7ebf2ba4732aa5bd4cbead10827e2"
+    },
+    {
+      "path": "db/queries/identity/problem_authors.sql",
+      "sha256": "1f04a2fb534cf03031f5e6647b2fef3e404a4e00afbf9031a1d91b7dcc0804d7"
+    },
+    {
+      "path": "db/queries/problem/drafts.sql",
+      "sha256": "8b439952742442daa76089d5f29e77f1203394aac7afec1056182781edaeb326"
+    },
+    {
+      "path": "internal/identity/postgres/identitydb/models.go",
+      "sha256": "702c7195d24da93aa71f04ba3ed718f5e84958e126077ef4403b70edba3b4012"
+    },
+    {
+      "path": "internal/identity/postgres/identitydb/problem_authors.sql.go",
+      "sha256": "955b6f230486989296a0f8e053a8970be8a90424fcbfb37f74d60c3473045cee"
+    },
+    {
+      "path": "internal/identity/postgres/problem_access.go",
+      "sha256": "ca5ec3f39278cfb631e5c9ea25bb25cd62bc5674a04a9a1638e333a2288d43c1"
+    },
+    {
+      "path": "internal/identity/problem_access.go",
+      "sha256": "39855abe1cb175758907a8c9b302453d8a221ca8c5be5ad6bd1d1bacbf4f0691"
+    },
+    {
+      "path": "internal/problem/bundle.go",
+      "sha256": "9d16596053eaefe343eef91fb129745b0ace7deb3a8c6b9a4300f0bc005666eb"
+    },
+    {
+      "path": "internal/problem/bundle_test.go",
+      "sha256": "cefc4f885ae5da3bae0646755bcc56a59a3d80f03d8515d4272f302551179688"
+    },
+    {
+      "path": "internal/problem/bundle_unix_test.go",
+      "sha256": "2ac83d207e39af64e166d1747a5ce9e6b79e43f044fcbe7d9a78c4d200ab2f81"
+    },
+    {
+      "path": "internal/problem/document.go",
+      "sha256": "1137a22b8a861b389aeee16a0828a6c82faef92623e1bfbf3c5d9cace5d8bf69"
+    },
+    {
+      "path": "internal/problem/postgres/problemdb/db.go",
+      "sha256": "1680e163f5b879d1b285b089c883dcf821c851ba7c4231a771a2edbabe6adb8d"
+    },
+    {
+      "path": "internal/problem/postgres/problemdb/drafts.sql.go",
+      "sha256": "d5412695249d6f4e392d52d1611cbf44e4301cbe712be0cc7ec323a188b7f0fe"
+    },
+    {
+      "path": "internal/problem/postgres/problemdb/models.go",
+      "sha256": "0a9e44f76a680428bf02e0905af54487996423ea925dc76386d9bd05a36c61ed"
+    },
+    {
+      "path": "internal/problem/postgres/store.go",
+      "sha256": "831600ae9efcbced4870e5d783dda546cf7a34b3618de6950ea742af2b089d6b"
+    },
+    {
+      "path": "internal/problem/problem.go",
+      "sha256": "f62488aacda3039f2719c3c00109777acd8dd4899e41bd1e10628fd1f7226c41"
+    },
+    {
+      "path": "internal/problem/service_test.go",
+      "sha256": "e2e9d85d33343e08d88133bbc0c0a72fd39b823fa9f72abbc1e38649f58ec01c"
+    },
+    {
+      "path": "scripts/toolchain.sh",
+      "sha256": "72b1dee6439dbdcf3c2e886a597830f1e8bcc6f6f5a7a84091f25dc1d03db9d2"
+    },
+    {
+      "path": "sqlc.yaml",
+      "sha256": "68a8caf32fb18c7e6a659fe52df1e5986e920ead2327ea648d11dcf483aab6f8"
+    },
+    {
+      "path": "tests/integration/backlog_lifecycle_test.go",
+      "sha256": "115cd2225df47489c7985f3e52d940fc608a45c2e5214d5f96d2b3e425726c62"
+    },
+    {
+      "path": "tests/integration/problem_author_cli_test.go",
+      "sha256": "4a9431fd77106df73a49bde02d678f432d5e6cbafadc6a12fdcff748f4bde018"
+    },
+    {
+      "path": "tests/integration/problem_bundle_test.go",
+      "sha256": "cb32da03fa08124ef3d05c38af843cc644893016e2726d8929b63b25bec60cdc"
+    },
+    {
+      "path": "tests/integration/problem_commit_test.go",
+      "sha256": "11329710423535afc9a0f41464ae7313584d92a84bd6d0b92c24ae6e047bdbc2"
+    },
+    {
+      "path": "tests/integration/problem_drafts_test.go",
+      "sha256": "6a3b779151eecac710506d92529ea9502ddcadf560004e30e1792008df82b119"
+    },
+    {
+      "path": "tests/integration/problem_query_plan_test.go",
+      "sha256": "a2f70a267e4f34f30744e959c674e363c43a5beeb6db907308d1e334c3f85497"
+    },
+    {
+      "path": "tests/integration/submissions_test.go",
+      "sha256": "cc1e3f876441c0a713acf684dbab88fb7691609eae38a27f32399f8892721b8b"
+    },
+    {
+      "path": "tests/problemfixture/bundle.go",
+      "sha256": "0cd0508d07e2502838f41fd6b6518f41ee8e0cb83064124f4b903350bb1a397a"
+    },
+    {
+      "path": "tests/sessionprotocol/problem_drafts_test.go",
+      "sha256": "d481f8474b7a8ae58f80fa3156aa7f4838c056507a85d77a626307160b457e9f"
+    },
+    {
+      "path": "tests/sessionprotocol/protocol_test.go",
+      "sha256": "1b201920f2a52f5df024c636e1e803f2ed307702e5615f5a322e1e31ff52823e"
+    }
+  ],
+  "local_log_sha256": {
+    "/private/tmp/oj-private-drafts-quality-final.log": "51e86c9f164f1a9c951582f71b1691d5711bcd96406f1d9a199fc94a6588ac63",
+    "/private/tmp/oj-private-drafts-session-second.log": "caa1121bf59055fc489c202ccfde152da11a47f8e1f8220e153601e648358138",
+    "/private/tmp/oj-private-drafts-real-corpus-first.log": "063ba83f77638bf4a2ff2253ab877f47f3f180daf027193232fbd7a802b98a3a",
+    "/private/tmp/oj-private-drafts-governance-final.log": "98e35e1faa10f5b0c382e8aaf693a2d290a5f0f2c756635cd8b8be90c62c1ce2",
+    "/private/tmp/oj-private-drafts-http-compatibility.log": "80978f860f697af3c699757361b251eac5e4642800680c9246cf2a936c41539a",
+    "/private/tmp/oj-private-drafts-cli-image-final.log": "8927d8120b68cc80c6585451505eb05b9c6dc6692b0d97bd8c7b173f09618592",
+    "/private/tmp/oj-private-drafts-volume-readback.json": "bd9ca8b81634a25ff90121e3174478d7d334b36741877a9ead5e3a80efa72fcb"
+  },
+  "limits": [
+    "trusted stable private source snapshot; expected source lock supplied from trusted configuration",
+    "single-token logout follows accepted-in-flight semantics; no cross-store atomic logout claim",
+    "materials can remain unreferenced after failure; no automatic deletion/global disk quota",
+    "no real account grant, HTTP exposure, source execution, rendering, independent judging validation, review, publication, production or backup acceptance"
+  ]
+}

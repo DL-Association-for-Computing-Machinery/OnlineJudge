@@ -94,7 +94,7 @@ Go 标准 testing、真实 PostgreSQL、普通 Redis 协议专项与 Vitest 已�
 
 ### 当前应用检查入口
 
-当前 `backend-tests` / `frontend-tests` 分别运行容器内 `toolchain backend` 与 `frontend-check`。`integration-tests` 使用同一工具镜像内的 PostgreSQL 14 私有临时集群，运行 sqlc v1.31.1 生成差异、事务/迁移/租约和双 API/mTLS 控制端测试；不连接现有数据库。Docker Desktop 真实沙箱通过 `python3 scripts/test-worker.py all` 独立验收，不进入普通 PR CI。每次交付须核验对应 head 的结果，不借用旧 PR 的通过状态。
+当前 `backend-tests` / `frontend-tests` 分别运行容器内 `toolchain backend` 与 `frontend-check`。`integration-tests`使用同一工具镜像内的PostgreSQL14私有临时集群，运行sqlc v1.31.1三包（submission/identity/problem）生成差异、事务/迁移/租约、私有草稿授权及双API/mTLS控制端测试；不连接现有数据库。普通会话专项另验真实Redis与草稿消费者的最终会话读取边界。实际十题大材料通过显式私有bundle/新材料根环境选择手动专项，普通CI只执行小型合成夹具，不能写成大语料验收通过。Docker Desktop真实沙箱通过`python3 scripts/test-worker.py all`独立验收，不进入普通PR CI。每次交付须核验对应head的结果，不借用旧PR的通过状态。
 
 Dockerfile 的 sqlc 与 golangci-lint 两条固定版本安装命令局部使用 `GODEBUG=http2client=0`，将 Go 工具安装的 HTTPS 客户端切到 HTTP/1.1，缓解已观察到的校验站 HTTP/2 stream `INTERNAL_ERROR`。该开关受 [Go net/http 文档](https://pkg.go.dev/net/http#hdr-HTTP_2)支持，并已核对锁定 Go 1.26.10 的本地文档；它不是全局 ENV，不改变应用/运行镜像的 HTTP 配置，不关闭 TLS、Go checksum 或更换代理。传输切换不保证远端服务可达，不能解决 TCP 拒绝连接或视为已定位上游根因；实际构建与 CI 验收状态见[交付记录](delivery-log.md)。回退两处命令级赋值即可，无运行配置或数据库迁移。
 

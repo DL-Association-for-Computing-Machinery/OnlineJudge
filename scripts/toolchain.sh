@@ -3,7 +3,7 @@
 set -eu
 build() {
     mkdir -p .local/bin
-    for app in api worker worker-api migrate localdev materialstore; do
+    for app in api worker worker-api migrate localdev materialstore problem-author; do
         go build -trimpath -o ".local/bin/$app" "./cmd/$app"
     done
 }
@@ -18,8 +18,10 @@ case "${1:-}" in
     sqlc)
         cp -r internal/submission/postgres/submissiondb /tmp/submissiondb-before
         cp -r internal/identity/postgres/identitydb /tmp/identitydb-before
+        cp -r internal/problem/postgres/problemdb /tmp/problemdb-before
         sqlc generate
         diff -ru /tmp/submissiondb-before internal/submission/postgres/submissiondb
-        diff -ru /tmp/identitydb-before internal/identity/postgres/identitydb ;;
+        diff -ru /tmp/identitydb-before internal/identity/postgres/identitydb
+        diff -ru /tmp/problemdb-before internal/problem/postgres/problemdb ;;
     *) echo 'Expected backend, db or sqlc' >&2; exit 2 ;;
 esac

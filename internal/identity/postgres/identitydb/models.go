@@ -27,3 +27,9 @@ type IdentityPersonalEmail struct {
 	OriginalEmail string
 	EmailVerified bool
 }
+
+type IdentityProblemAuthor struct {
+	SubjectID string
+	Enabled   bool
+	Revision  int64
+}

@@ -1,6 +1,6 @@
 # 本地不可变材料存储
 
-`internal/materialstore` 实现[存储设计](architecture/storage-design.md#4-文件发布与一致性)的首个 Linux 本地适配器。它保存私有原始字节，成功完成后才可由后续业务事务提交引用；当前没有数据库草稿、用户授权、题目审核或发布入口。服务只依赖`Store`的`Put/Open`及`Object{SHA256,Size}`，不依赖供应商URL或用户可控路径。命令归[README](../README.md#本地不可变材料存储)。
+`internal/materialstore` 实现[存储设计](architecture/storage-design.md#4-文件发布与一致性)的首个 Linux 本地适配器。它保存私有原始字节，成功完成后才可由业务事务提交引用；模块本身不承担用户授权，[上层私有草稿服务](problem-drafts.md#私有草稿入库与本人读取)已接通授权与数据库引用，审核和发布仍待实现。服务只依赖`Store`的`Put/Open`及`Object{SHA256,Size}`，不依赖供应商URL或用户可控路径。命令归[README](../README.md#本地不可变材料存储)。
 
 ## 根目录、预算与生命周期
 
@@ -31,6 +31,6 @@ Docker Desktop LinuxKit7.0.14/arm64的专用ext4命名卷上，已逐对象导�
 
 普通root race覆盖双实例/双独立进程竞争、幂等不换inode、完整快照、预算、取消、特殊文件/链接/权限拒绝、文件/目录Sync及回执失败注入、五个进程中断阶段、严格0777 umask。owner专项在独立root夹具中核验，真实写满专项仅填充独占512KiB tmpfs，观察ENOSPC、无最终对象与同实例后续恢复；普通CI明确跳过这两个显式专项，分别手动通过。精确命令、源文件与日志哈希见[机器证据](evidence/material-store-20261103.json)。
 
-这些证据不验收真实持久磁盘断电、全盘容量、跨主机共享、孤儿回收、独立备份或业务题目发布。后续P4需将自含草稿导入到本存储，先完整保存材料，再按权限/验证/审核合同提交数据库固定引用；当前M0材料入口保持原有独立实现及门禁。
+这些证据不验收真实持久磁盘断电、全盘容量、跨主机共享、孤儿回收、独立备份或业务题目发布。P4私有草稿服务已在完整保存材料后同事务检查当前出题权限并提交数据库固定引用；加入题面/草稿/证据后的622对象联调归草稿合同，不改写本页原597对象证据。受限验证、审核及发布继续待交付；当前M0材料入口保持原有独立实现及门禁。
 
 实现依据：[锁定Go1.26.10的os.Root/Link源码](https://github.com/golang/go/blob/go1.26.10/src/os/root.go)、[Linux link不覆盖语义](https://man7.org/linux/man-pages/man2/link.2.html)、[文件和目录分别fsync的要求](https://man7.org/linux/man-pages/man2/fsync.2.html)。2026-11-03核对官方源码/手册；本项目实际支持范围仍由以上实测限定。

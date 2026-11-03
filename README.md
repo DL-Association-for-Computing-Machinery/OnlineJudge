@@ -62,7 +62,22 @@ python3 -B scripts/import-library-checker.py \
 python3 -B -m unittest discover -s tests/governance -p test_problem_drafts.py -v
 ```
 
-输入须为稳定私有快照；输出为仓库外、与输入不重叠的新目录。工具重新核对源码和全部数据哈希，生成自含的10题/254点/18样例草稿、英文Markdown题面、来源映射与许可对象。所有路径相对bundle，移到其他目录后可独立复验，不依赖原候选目录。失败保留 `INCOMPLETE` 和部分文件，重试用新目录；临时目录不是持久备份。格式、权限及发布阻断见[草稿合同](docs/problem-drafts.md)。当前尚未接入业务题库、授权审核、题面渲染或生产判题配置。
+输入须为稳定私有快照；输出为仓库外、与输入不重叠的新目录。工具重新核对源码和全部数据哈希，生成自含的10题/254点/18样例草稿、英文Markdown题面、来源映射与许可对象。所有路径相对bundle，移到其他目录后可独立复验，不依赖原候选目录。失败保留 `INCOMPLETE` 和部分文件，重试用新目录；临时目录不是持久备份。格式、权限及发布阻断见[草稿合同](docs/problem-drafts.md)。已增加私有草稿入库服务；审核、题面渲染和生产判题配置仍未接通。
+
+### 出题角色维护与草稿入库服务
+
+schema 7 默认不给任何账号授予出题角色。受信维护者先独立迁移，再用 Docker 工具链构建的命令明确授予/撤销；`OJ_DATABASE_URL` 通过既有私有环境注入，不把真实连接信息写入命令或日志：
+
+```sh
+.local/bin/migrate up
+.local/bin/problem-author inspect --subject SUBJECT_ID
+.local/bin/problem-author set --subject SUBJECT_ID --expected-revision 0 \
+  --enabled true --operator MAINTENANCE_OPERATOR --reason AUDIT_REASON
+```
+
+替换大写占位值；主体为已存在的32位小写十六进制ID。初次修订为0；之后必须使用inspect读出的实际修订。撤销用 `--enabled false`，不自动重试冲突或未知结果。`operator`仅为受信维护操作的审计归属，不是已验证的账号登录。单独镜像可通过 `docker --context desktop-linux build --target problem-author -t oj-problem-author:local .` 构建，入口为 `/usr/local/bin/oj-problem-author`，默认UID65532；数据库连接由维护流程单独配置，默认Compose不运行该工具。
+
+`internal/problem.Service` 的创建/本人读取必须传真实普通会话凭据；授权后把选定草稿的全部材料写入私有Store，再读会话，并在同一PG事务核对恢复/账号/角色及写元数据。`LoadBundle`的expectedSourceLock来自受信配置原字节；材料根与bundle均由维护者预建。当前只提供应用服务、数据库适配和角色维护命令，尚未提供草稿HTTP/导入命令或管理页面；完整边界、幂等、迁移与实测归[草稿合同](docs/problem-drafts.md#私有草稿入库与本人读取)。
 
 ## 本地不可变材料存储
 
@@ -130,7 +145,7 @@ API 镜像的 `/usr/local/bin/oj-api` 在非空 `OJ_SESSION_CONFIG_FILE` 下切�
 
 数据库及 Redis 的密码来源各自显式选择 `auth: "none"` 或 `"env"`。后者只读取固定的 `OJ_SESSION_DATABASE_PASSWORD` / `OJ_SESSION_REDIS_PASSWORD`，必须非空；前者拒绝对应非空残留环境。密码、登录 key、TLS 私钥均不写入配置 JSON、镜像或命令行。数据库不消费 `OJ_DATABASE_URL`，连接类 PG 环境变量须按运行时合同清理；服务不修改进程环境。
 
-启动前须由受信维护流程完成当前 schema 6（邮箱模型始于 schema 5）、恢复状态开门、共享密钥分发及匹配的限流 marker 初始化；命令只检查，不自动迁移、初始化或修复。配置与公开证书可只读挂载，登录密钥及 TLS 私钥必须满足 0400/0600、root/进程 euid 所有等约束。非 root 容器须能遍历并读取这些文件。不要把完整配置或秘密对象输出到日志。
+启动前须由受信维护流程完成当前 schema 7（邮箱模型始于 schema 5、积压准入始于6）、恢复状态开门、共享密钥分发及匹配的限流 marker 初始化；命令只检查，不自动迁移、初始化或修复。配置与公开证书可只读挂载，登录密钥及 TLS 私钥必须满足 0400/0600、root/进程 euid 所有等约束。非 root 容器须能遍历并读取这些文件。不要把完整配置或秘密对象输出到日志。
 
 direct 模式要求客户端直接 TLS；proxy 模式要求同一监听器的已验证客户端证书和允许的叶证书指纹，健康检查也须经 mTLS。现有 Compose/Nginx 的明文 backend 和浏览器页面尚未配置该入口；部署、生产阈值、真实证书/存储 TLS 和完整账号权限另行验收。回退先停服务并移除显式配置环境，不把旧明文路径接到会话 Handler。
 
@@ -234,7 +249,7 @@ python3 scripts/test-worker.py browser-loop \
   --output-dir /absolute/new/path/m0-browser
 ```
 
-Chromium参数可省略以使用该Playwright已安装的浏览器。产物必须为仓库外新目录，含检查JSON、私有日志及桌面/390px截图；测试以真实POST提交成功后丢弃响应验证未知/原键恢复，在浏览器确认queued且数据库无attempt后才启动真实Worker。查询503及提交BACKLOG_LIMIT/ADMISSION_UNAVAILABLE展示另由浏览器路由注入，不冒充真实数据库故障；共享准入后端另有真实PostgreSQL/双API验证。回退页面可关闭开关；数据库schema6按上述升级与回退处理，不能直接启动旧版写入API；已接受任务仍按原Worker协议处理。
+Chromium参数可省略以使用该Playwright已安装的浏览器。产物必须为仓库外新目录，含检查JSON、私有日志及桌面/390px截图；测试以真实POST提交成功后丢弃响应验证未知/原键恢复，在浏览器确认queued且数据库无attempt后才启动真实Worker。查询503及提交BACKLOG_LIMIT/ADMISSION_UNAVAILABLE展示另由浏览器路由注入，不冒充真实数据库故障；共享准入后端另有真实PostgreSQL/双API验证。回退页面可关闭开关；数据库当前schema7及历史schema6分别按草稿/积压合同升级与回退，不能直接启动旧版写入API；已接受任务仍按原Worker协议处理。
 
 ### 沙箱资源预算专项
 
