@@ -56,8 +56,18 @@ export function rehypeOutputBudget() {
   }
 }
 
-// Source images have no authorized asset endpoint in draft v1. They must not
-// generate network requests. Links never inherit a private draft referrer.
+// Asset counts do not bound Markdown occurrences. Excess copies stay as text.
+export function rehypeImageBudget() {
+  return (tree: HTMLRoot) => {
+    let count = 0
+    visitParents(tree, 'element', (node: Element) => {
+      if (node.tagName === 'img' && ++count > 32) node.properties.src = ''
+    })
+  }
+}
+
+// Links never inherit a private draft referrer. Images use a separate exact
+// match against the authorized preview manifest, never these link rules.
 export function safeStatementURL(url: string): string {
   if (Array.from(url).some(char => char.charCodeAt(0) <= 32 || (char.charCodeAt(0) >= 127 && char.charCodeAt(0) <= 159) || char === '\\') || url.startsWith('//')) return ''
   if (url.startsWith('#')) return url

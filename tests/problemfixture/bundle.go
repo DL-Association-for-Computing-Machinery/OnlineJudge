@@ -6,6 +6,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"image"
+	"image/color"
+	"image/png"
 	"os"
 	"path/filepath"
 	"testing"
@@ -17,6 +20,47 @@ type Bundle struct {
 	Lock      []byte
 	Document  map[string]any
 	Files     map[string][]byte
+}
+
+// AddStatementImage explicitly designates a source-locked synthetic image.
+// Call Write afterwards, just as for other fixture mutations.
+func (b *Bundle) AddStatementImage(t *testing.T, source string, raw []byte) {
+	t.Helper()
+	provenance := b.Document["provenance"].(map[string]any)
+	name := provenance["source_path"].(string) + "/" + source
+	var lock map[string]any
+	if err := json.Unmarshal(b.Lock, &lock); err != nil {
+		t.Fatal(err)
+	}
+	lock["files"].(map[string]any)[name] = identity(raw)
+	b.Lock = JSON(t, lock)
+	b.Files["provenance/source-lock.json"] = b.Lock
+	provenance["source_lock_sha256"] = Hash(b.Lock)
+	ref := identity(raw)
+	ref["path"] = "objects/sha256/" + Hash(raw)
+	b.Files[ref["path"].(string)] = raw
+	provenance["original_files"].(map[string]any)["source/"+name] = ref
+	statement := b.Document["statement"].(map[string]any)
+	if statement["images"] == nil {
+		statement["images"] = map[string]any{}
+	}
+	statement["images"].(map[string]any)[source] = ref
+}
+
+// PNG creates a small deterministic opaque raster for the synthetic image flow.
+func PNG(t *testing.T, width, height int) []byte {
+	t.Helper()
+	img := image.NewNRGBA(image.Rect(0, 0, width, height))
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			img.SetNRGBA(x, y, color.NRGBA{R: uint8(x % 200), G: uint8(y % 200), B: 170, A: 255})
+		}
+	}
+	var out bytes.Buffer
+	if err := png.Encode(&out, img); err != nil {
+		t.Fatal(err)
+	}
+	return out.Bytes()
 }
 
 // JSON uses the bundle's canonical map serialization for these ASCII fixtures.

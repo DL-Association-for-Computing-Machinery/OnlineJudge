@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import stat
 
@@ -104,6 +105,24 @@ def copy_checked(source, relative, output, entry, budget):
     return {"path": material, "sha256": sha, "size": size}
 
 
+def statement_image_references(draft):
+    """An explicit role, bound to this problem's originals, never a URL fetch."""
+    images = draft["statement"].get("images", {})
+    if not isinstance(images, dict) or len(images) > 16 or ("images" in draft["statement"] and not images):
+        raise ValueError("invalid statement image manifest")
+    for source, reference in images.items():
+        parts = source.split("/")
+        original = "source/" + draft["provenance"]["source_path"] + "/" + source
+        if (len(source) > 240 or not re.fullmatch(r"[A-Za-z0-9_./-]+\.(?:png|jpg|jpeg)", source)
+                or any(not p or p.startswith(".") for p in parts)
+                or not isinstance(reference, dict) or set(reference) != {"path", "sha256", "size"}
+                or reference != draft["provenance"]["original_files"].get(original)
+                or not isinstance(reference["size"], int) or isinstance(reference["size"], bool)
+                or not 1 <= reference["size"] <= 256 << 10):
+            raise ValueError("statement image must bind a canonical source-local original")
+    return list(images.values())
+
+
 def verify_bundle(root, *, allow_incomplete=False):
     """Verify a completed bundle without consulting its original source path.
 
@@ -143,6 +162,7 @@ def verify_bundle(root, *, allow_incomplete=False):
                 or problem["examples"] != len(draft["examples"])):
             raise ValueError("draft index summary differs from content")
         references = [draft["statement"], *draft["provenance"]["original_files"].values()]
+        references.extend(statement_image_references(draft))
         for case in draft["test_cases"]:
             references.extend([case["input"], case["answer"]])
         for reference in references:

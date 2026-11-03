@@ -50,6 +50,8 @@ func testPrivatePreviewSessions(t *testing.T, f *fixture) {
 			repository, err := problempg.New(f.pools[0], access)
 			must(t, err)
 			bundle := problemfixture.New(t)
+			bundle.AddStatementImage(t, "figure.png", problemfixture.PNG(t, 80, 40))
+			bundle.Write(t)
 			prepared, err := problem.LoadBundle(bundle.Directory, "library-checker:aplusb", bundle.Lock)
 			must(t, err)
 			defer func() { must(t, prepared.Close()) }()
@@ -99,11 +101,11 @@ func testPrivatePreviewSessions(t *testing.T, f *fixture) {
 				materials.after = func() { f.open(t) }
 			}
 			preview, err := importer.Preview(f.ctx, credential, draft.ID)
-			if !errors.Is(err, want) || materials.opens != 3 {
+			if !errors.Is(err, want) || materials.opens != 4 {
 				t.Fatalf("preview %s: error=%v verified opens=%d", mode, err, materials.opens)
 			}
 			if mode == "success" {
-				if preview.Markdown != "# Synthetic A + B\n" || len(preview.Examples) != 1 || preview.Examples[0].Output != "3\n" {
+				if preview.Markdown != "# Synthetic A + B\n" || len(preview.Examples) != 1 || preview.Examples[0].Output != "3\n" || len(preview.Images) != 1 || preview.Images[0].Source != "figure.png" || preview.Images[0].Width != 80 {
 					t.Fatal("real stored preview changed immutable text")
 				}
 			} else if !reflect.DeepEqual(preview, problem.Preview{}) {

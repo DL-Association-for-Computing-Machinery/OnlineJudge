@@ -53,6 +53,24 @@ class StatementTests(unittest.TestCase):
                 statement.convert(text, {}, {"x": ("1", "2")})
 
 
+class StatementImageTests(unittest.TestCase):
+    def test_explicit_manifest_is_source_local_and_bounded(self):
+        ref = {"path": "objects/sha256/" + "a" * 64, "sha256": "a" * 64, "size": 100}
+        draft = {"statement": {"images": {"fig/a.png": ref}},
+                 "provenance": {"source_path": "p0", "original_files": {"source/p0/fig/a.png": ref}}}
+        self.assertEqual(files.statement_image_references(draft), [ref])
+        for name in ("../a.png", "./a.png", "/a.png", "fig//a.png", "a:b.png", "a%20b.png", "a.png?x", "a.svg", "a.PNG"):
+            draft["statement"]["images"] = {name: ref}
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                files.statement_image_references(draft)
+        for images in ({}, None, {"fig/a.png": {**ref, "size": 262145}}, {"other.png": ref}):
+            draft["statement"]["images"] = images
+            with self.subTest(images=images), self.assertRaises(ValueError):
+                files.statement_image_references(draft)
+        draft["statement"] = {}
+        self.assertEqual(files.statement_image_references(draft), [])
+
+
 class DraftTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()

@@ -35,7 +35,7 @@ function Preview({ id }: { id: string }) {
     {accountState.status !== 'authenticated' && <p>{accountState.notice.text} <Link to="/login">前往登录</Link></p>}
     {data && <article className="problem-statement" aria-labelledby="draft-title">
       <h2 id="draft-title">{data.title}</h2><p>版本 {data.version} · 英文题面 · 私有草稿</p>
-      <StatementMarkdown source={data.markdown} />
+      <StatementMarkdown source={data.markdown} images={data.images} />
       <section aria-label="原始样例"><h2>样例</h2>{data.examples.map(example => <div key={example.id}><h3>{example.id}</h3><div className="samples"><Sample label="输入" text={example.input} /><Sample label="输出" text={example.output} /></div></div>)}</section>
     </article>}
   </>
@@ -48,7 +48,7 @@ export default function DraftPreviewPage() {
   return <div className="page-width private-draft-page">
     <p className="breadcrumb"><Link to="/">题库</Link> / 本人私有草稿</p>
     <h1>私有草稿预览</h1>
-    <p>输入已导入草稿的 ID。仅作者本人可访问；审核和发布尚未开放。图片资源暂不可用。<Link to="/author/drafts">返回导入管理</Link></p>
+    <p>输入已导入草稿的 ID。仅作者本人可访问；审核和发布尚未开放。<Link to="/author/drafts">返回导入管理</Link></p>
     <form className="private-draft-form" onSubmit={event => { event.preventDefault(); if (validDraftID(input)) void navigate(`/author/drafts/${input}`) }}>
       <label>草稿 ID<input value={input} onChange={event => setInput(event.target.value)} required pattern="[a-f0-9]{32}" maxLength={32} autoComplete="off" spellCheck={false} placeholder="32 位小写十六进制 ID" /></label>
       <button className="button button-outline" type="submit">选择草稿</button>
