@@ -4,7 +4,7 @@ P4 的首个执行入口是维护者显式调用 `worker validate-reference`。�
 
 ## 当前支持范围
 
-只接收固定来源锁 SHA-256 `fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617`，选择 `library-checker:aplusb` 的 `sample/aplusb/sol/correct.cpp` 和完整12点；不接收参考程序替换、任意脚本或路径布局。来源锁变更需要重新审查准入。其余九题尚不支持这个执行入口，不截取样例或部分测试点来制造通过。
+只接收固定来源锁 SHA-256 `fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617`：默认选择 `library-checker:aplusb` 的 `sample/aplusb/sol/correct.cpp` 和完整12点；显式`--source-id library-checker:unionfind`选择`data_structure/unionfind/sol/correct.cpp`和完整18点。两者分别绑定固定profile和槽，不接收参考程序替换、任意脚本或路径布局。来源锁变更需要重新审查准入。其余八题尚不支持这个执行入口，不截取样例或部分测试点来制造通过。
 
 限制来自现有实验传输、执行环境和本轮验证配置，不是生产选手限制：
 
@@ -18,7 +18,19 @@ P4 的首个执行入口是维护者显式调用 `worker validate-reference`。�
 | 阶段墙钟 | 验证阶段2分钟；启动预检20秒；制品清理/停止另用独立5秒/15秒预算，不能以取消证明停止 |
 | 文件协议 | `p4-gojudge-cached-files-v1`；单文件48 MiB、存活缓存64 MiB、任务载荷128 MiB、最多4个活动缓存对象/512次操作，文件IO并发1 |
 
-独立profile为`p4-lc-reference-files-small-desktop-arm64-v1`，绑定文件协议预算和原Runtime，区别历史内联profile。源码和输入上传后回读核对SHA-256；stdin使用缓存fileId，stdout缓存后按原始字节拉取，不经过JSON字符串转换。参考答案始终留在宿主；参考答案编码不符合检查域时在任何编译/沙箱调用前拒绝，源码和输入允许原始字节。其他九题仍超过当前完整冻结材料的大小限制，或需要更大的临时盘/输出预算及显式依赖布局，例如`primality_test`的私有头文件。48 MiB协议cap不授予大题准入；当前每次运行stdout仍限4 KiB，不能据此宣称支持10.4 MB判题输出。生产配置仍为null。
+上述小材料profile为`p4-lc-reference-files-small-desktop-arm64-v1`，绑定文件协议预算和原Runtime，区别历史内联profile。源码和输入上传后回读核对SHA-256；stdin使用缓存fileId，stdout缓存后按原始字节拉取，不经过JSON字符串转换。参考答案始终留在宿主，全部答案在任何execution适配器Verify/Compile前先验；CLI在此之前可做槽启动和Host环境探测，不运行参考程序。源码和输入允许原始字节。48 MiB协议cap不授予其他大题准入，不能据此宣称支持10.4 MB输出；生产配置仍为null。
+
+unionfind独立profile为`p4-lc-unionfind-reference-desktop-arm64-v1`，Runtime为`p4-unionfind-gnu17-desktop-arm64-v1`，不放宽M0或小材料入口：
+
+| 范围 | unionfind试验预算 |
+| --- | --- |
+| 磁盘快照 | source64 KiB、单input4 MiB、单answer256 KiB、总64 MiB含两个catalog、最多64点；完整来源集合仍独立核验 |
+| 执行 | Run CPU1秒、wall5秒、memory128 MiB；Compile原10秒CPU/15秒wall/512 MiB；原镜像/工具链/命令及外层隔离保持 |
+| 流与检查器 | 仅raw Run stdout256 KiB；Compile stdout/stderr及Run stderr各4 KiB，独立`diagnostic_bytes`进入profile摘要；checker每文件256 KiB/token4 KiB |
+| 阶段与文件 | 验证阶段3分钟；原48/64/128 MiB文件协议、4对象/512操作、独立清理和Stop预算保持 |
+| 固定槽 | `oj-reference-sandbox` / `slot-reference.lock`；新构造器只接此profile，拒M0配置，M0入口同样拒此配置 |
+
+其他八题仍需更大输出/累计传输、临时资源或显式依赖布局，例如`primality_test`私有头文件；本轮不拆样例或提升生产限额。
 
 文件入口cap结合固定tmpfs/cgroup边界，内部账本计量存活缓存、总传输载荷与操作数；没有独立multipart暂存或其峰值计数器，64 MiB存活缓存不等于全部存储/内存峰值。创建前为源码/输入预留实际大小，为未知大小的exe/stdout按上限预留；最多一个大输入。上传和校验回读分别计费，下载按请求上限保守计费，失败不退额度；固定MIME/trailer及控制JSON各自有界。累计操作数限制零字节操作与已删除ID历史，并为已存在对象保留DELETE额度。固定挂载、collector和cgroup的真实容量证据另见交付记录。
 
@@ -27,6 +39,8 @@ P4 的首个执行入口是维护者显式调用 `worker validate-reference`。�
 ## 固定快照与失败报告
 
 `Prepared.PrepareReference`沿用bundle私有权限、路径/库存和来源校验，先检查完整材料集合的大小，再从安全打开的同一描述符限长读取、校验大小/哈希并冻结私有字节。每次调用返回独立切片，不在执行期间重开原材料。版本、完整导入修订、来源锁、源码身份和有序逐点身份进入plan；plan摘要为不含原始字节的紧凑`encoding/json` SHA-256，profile摘要绑定完整配置。读取预算和检查器预算分别计量。
+
+unionfind使用`Prepared.PrepareUnionFindReference`：先按完整集合扣除总预算，再创建0600临时文件并立即unlink，在同一匿名文件依次存入全部source/input/answer，每个对象从同一安全打开描述符分块哈希并核验完整大小后才返回。进程内最多一份，Prepared占用持续到幂等Close；错误/取消关闭并释放，Close失败阻断报告成功。外部plan为独立身份拷贝，内部span不可修改，执行时通过ReadAt只读当前点，所有答案预检不加载输入。原文件后续修改不影响已冻结字节；不宣称Go堆或文件系统硬时限。匿名unlink失败在写内容前拒绝，极端情况下可能留空0600文件；磁盘准备失败没有完成的plan和逐点列表，报告points可为空，不能解释为已执行零点后通过。
 
 验证器独立读取锁定`info.toml.tests`，按组顺序与组内编号生成完整点集，严格核对草稿映射、sample角色和每点输入/答案SHA；`hash.json`必须恰为这些点的完整配对，无遗漏/额外/重复键。删点后重算合法版本和index仍会在Compile前拒绝，不只检查草稿自称的完整集合，也不按哈希字典排序推导来源顺序。仅复用已锁定的MIT许可`go-toml/v2 v2.2.4`，从间接依赖提升为直接使用；无版本升级、新下载或go.sum变化，不执行生成器/脚本。
 
@@ -38,13 +52,17 @@ P4 的首个执行入口是维护者显式调用 `worker validate-reference`。�
 
 缓存账本只接受本次操作创建的source/exe/input/stdout身份，拒绝外来、重复或角色冲突的ID。每点独立限时清理input/stdout，最终清理exe；未知上传回执不重传、不猜ID删除，任何协议/清理错误封闭适配器，由整槽Stop收束。源码/参考答案不会进入报告。清理期间父context失效也必须返回失败；全部原始参考答案仍在编译前先验。旧报告保留其原profile身份，不升级或追认。
 
+unionfind运行输出的正常collector溢出按固定协议作窄适配：[v1.13.3收集逻辑](https://github.com/criyle/go-judge/blob/v1.13.3/envexec/file_collect.go)及[结果转换](https://github.com/criyle/go-judge/blob/v1.13.3/envexec/run_single.go)会附带同名`Output Limit Exceeded`错误标签。仅在精确status/error、Exit0、完整非负且不超预算用量、恰好cap+1原始stdout、存在有界stderr、唯一stdout/CollectSizeExceeded、已验证角色和无残余ID同时成立时，才归一化这个冗余标签并判OLE。其他error、缺字段、混合文件错误、编译或M0路径继续拒绝；控制JSON仍限128 KiB。
+
 输出目录必须是新的绝对路径。解析已有父目录链接后，按目录实际身份检查祖先，拒绝输入bundle内的符号链接及大小写别名路径。目录0700、文件0600；先放置`INCOMPLETE`，最终报告使用排他创建并同步，再移除标记和同步目录。失败/中断保留已有成果，不覆盖、修复或自动删除；写入/同步失败属于未知报告完成状态，须检查命令退出结果和标记，不仅凭JSON中出现passed决定接纳。依赖可信稳定的父目录，不承诺文件系统硬时限、掉电恢复或独立备份。
 
 ## 槽所有权与停止
 
-显式`OJ_SANDBOX_EXPERIMENT=1`、固定primary/secondary槽和现有跨checkout文件锁仍是前置条件；quarantine不自动恢复。命令先持锁并同步dirty标记，再接触沙箱。`--start-stopped-slot`只启动预存在、停止/PID0、固定owner及完整隔离配置匹配的槽，使用原full ID，不创建、替换、重启运行中容器或接管其他项目。返回Host绑定该ID与新StartedAt；运行中每次请求继续校验同一生命周期。
+显式`OJ_SANDBOX_EXPERIMENT=1`和跨checkout文件锁仍是前置条件。默认A+B使用primary/secondary；unionfind只用独立reference槽，拒绝非空`OJ_WORKER_M0_SLOT`，不从M0 parser选择新槽。quarantine不自动恢复。命令先持锁并同步dirty标记，再接触沙箱。`--start-stopped-slot`只启动预存在、停止/PID0、固定owner及完整隔离配置匹配的槽，使用原full ID，不创建、替换、重启运行中容器或接管其他项目。返回Host绑定该ID与新StartedAt；运行中每次请求继续校验同一生命周期。
 
 正常退出和失败均在独立context中停止并排空Host，核验容器停止及已观察PID消失；只有确认后才清理marker。启动回执未知时仍尝试确认原生命周期停止；拿不到绑定Host、停止未确认或marker同步失败则保留隔离。启动/验证报错后若已确认停止且清标记成功，可以解除marker，但本次报告仍失败。原[受控恢复](../README.md#worker-异常后的受控解封)步骤继续适用。取消发生在Run、制品清理或Stop期间都不得生成通过状态。不会为了保存报告恢复旧槽或再次执行未知操作。
+
+独立槽异常时使用`OJ_SANDBOX_EXPERIMENT=1 worker recover-reference <original-full-container-id>`，必须清空`OJ_WORKER_M0_SLOT`并先确认旧宿主进程及在途操作已排空。它只接固定reference槽，核验原ID/配置/停止生命周期，成功才清该锁；不启动槽、不认领任务、不追认失败报告，不能手工清marker。
 
 Host的文件能力与原M0 RoundTrip分开：仅固定loopback文件路由、有限私有bytes reader、随机MIME boundary及有界sink；不接受任意URL、主机路径或流式Body提前交还。HTTP状态使用固定四字节trailer与二进制正文分开校验，子进程和全部IO结束后才释放active登记；取消不证明远端文件或进程已清除。M0默认入口、原JSON预算与Runtime保持。
 

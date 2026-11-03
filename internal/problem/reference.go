@@ -67,49 +67,11 @@ func (p *Prepared) PrepareReference(ctx context.Context, limits ReferenceLimits)
 		return plan, err
 	}
 	defer p.release()
-	d, err := parseDocument(p.content.Document, p.content.SourceID)
+	plan, d, err := p.referenceMetadata(ctx, limits, "library-checker:aplusb", "sample/aplusb")
 	if err != nil {
 		return plan, err
 	}
-	plan = ReferencePlan{SourceID: p.content.SourceID, Version: p.content.Version, ImportRevision: p.content.RequestSHA256, SourceLockSHA256: d.Provenance.SourceLockSHA256}
-	for _, c := range d.TestCases {
-		plan.Cases = append(plan.Cases, ReferenceCase{ID: c.ID, Input: c.Input.object(), Answer: c.Answer.object()})
-	}
-	if d.Provenance.SourceID != "library-checker:aplusb" || d.Provenance.SourcePath != "sample/aplusb" || len(d.TestCases) > limits.Cases {
-		return plan, ErrReferenceUnsupported
-	}
-	source, ok := d.Provenance.OriginalFiles["source/sample/aplusb/sol/correct.cpp"]
-	if !ok || source.Size < 1 || source.Size > limits.SourceBytes {
-		return plan, ErrReferenceUnsupported
-	}
-	definition, hasDefinition := d.Provenance.OriginalFiles["source/sample/aplusb/info.toml"]
-	hashes, hasHashes := d.Provenance.OriginalFiles["source/sample/aplusb/hash.json"]
-	if !hasDefinition || !hasHashes || definition.Size < 1 || hashes.Size < 1 || definition.Size > maxReferenceCatalog || hashes.Size > maxReferenceCatalog {
-		return plan, ErrReferenceUnsupported
-	}
-	plan.Source, plan.Definition, plan.Hashes = source.object(), definition.object(), hashes.object()
-	total := source.Size + definition.Size + hashes.Size
-	for _, c := range d.TestCases {
-		if c.Input.Size > limits.InputBytes || c.Answer.Size > limits.AnswerBytes {
-			return plan, ErrReferenceUnsupported
-		}
-		total += c.Input.Size + c.Answer.Size
-	}
-	if total > limits.TotalBytes {
-		return plan, ErrReferenceUnsupported
-	}
-	info, err := p.readReference(ctx, definition)
-	if err != nil {
-		return plan, err
-	}
-	hashList, err := p.readReference(ctx, hashes)
-	if err != nil {
-		return plan, err
-	}
-	if err := validateReferenceCatalog(d, info, hashList, limits.Cases); err != nil {
-		return plan, err
-	}
-	plan.SourceData, err = p.readReference(ctx, source)
+	plan.SourceData, err = p.readReference(ctx, d.Provenance.OriginalFiles["source/sample/aplusb/sol/correct.cpp"])
 	if err != nil {
 		return plan, err
 	}
@@ -124,10 +86,59 @@ func (p *Prepared) PrepareReference(ctx context.Context, limits ReferenceLimits)
 		}
 		plan.Cases[i].InputData, plan.Cases[i].AnswerData = input, answer
 	}
-	if err := ctx.Err(); err != nil {
-		return plan, err
+	return plan, ctx.Err()
+}
+
+func (p *Prepared) referenceMetadata(ctx context.Context, limits ReferenceLimits, sourceID, sourcePath string) (ReferencePlan, document, error) {
+	var plan ReferencePlan
+	d, err := parseDocument(p.content.Document, p.content.SourceID)
+	if err != nil {
+		return plan, d, err
 	}
-	return plan, nil
+	plan = ReferencePlan{SourceID: p.content.SourceID, Version: p.content.Version, ImportRevision: p.content.RequestSHA256, SourceLockSHA256: d.Provenance.SourceLockSHA256}
+	for _, c := range d.TestCases {
+		plan.Cases = append(plan.Cases, ReferenceCase{ID: c.ID, Input: c.Input.object(), Answer: c.Answer.object()})
+	}
+	if d.Provenance.SourceID != sourceID || d.Provenance.SourcePath != sourcePath || len(d.TestCases) > limits.Cases {
+		return plan, d, ErrReferenceUnsupported
+	}
+	source, ok := d.Provenance.OriginalFiles["source/"+sourcePath+"/sol/correct.cpp"]
+	if !ok || source.Size < 1 || source.Size > limits.SourceBytes {
+		return plan, d, ErrReferenceUnsupported
+	}
+	definition, hasDefinition := d.Provenance.OriginalFiles["source/"+sourcePath+"/info.toml"]
+	hashes, hasHashes := d.Provenance.OriginalFiles["source/"+sourcePath+"/hash.json"]
+	if !hasDefinition || !hasHashes || definition.Size < 1 || hashes.Size < 1 || definition.Size > maxReferenceCatalog || hashes.Size > maxReferenceCatalog {
+		return plan, d, ErrReferenceUnsupported
+	}
+	plan.Source, plan.Definition, plan.Hashes = source.object(), definition.object(), hashes.object()
+	total := source.Size + definition.Size + hashes.Size
+	if total > limits.TotalBytes {
+		return plan, d, ErrReferenceUnsupported
+	}
+	for _, c := range d.TestCases {
+		if c.Input.Size > limits.InputBytes || c.Answer.Size > limits.AnswerBytes {
+			return plan, d, ErrReferenceUnsupported
+		}
+		for _, size := range []int64{c.Input.Size, c.Answer.Size} {
+			if size > limits.TotalBytes-total {
+				return plan, d, ErrReferenceUnsupported
+			}
+			total += size
+		}
+	}
+	info, err := p.readReference(ctx, definition)
+	if err != nil {
+		return plan, d, err
+	}
+	hashList, err := p.readReference(ctx, hashes)
+	if err != nil {
+		return plan, d, err
+	}
+	if err := validateReferenceCatalog(d, info, hashList, limits.Cases); err != nil {
+		return plan, d, err
+	}
+	return plan, d, ctx.Err()
 }
 
 func (p *Prepared) readReference(ctx context.Context, ref fileReference) ([]byte, error) {

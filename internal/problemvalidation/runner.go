@@ -65,8 +65,22 @@ func New(s execution.Sandbox) *Runner { return &Runner{sandbox: s} }
 // Artifact cleanup uses an independent deadline; HTTP cancellation alone never
 // proves sandbox stop. Finalize must be called after the owner confirms stop.
 func (r *Runner) Validate(ctx context.Context, prepared *problem.Prepared, profile Profile) (report Report, err error) {
+	return r.validate(ctx, prepared, profile, false)
+}
+
+// ValidateUnionFind admits the independently pinned disk snapshot/runtime. All
+// answers are prechecked before the first execution adapter call.
+func (r *Runner) ValidateUnionFind(ctx context.Context, prepared *problem.Prepared, profile Profile) (report Report, err error) {
+	return r.validate(ctx, prepared, profile, true)
+}
+
+func (r *Runner) validate(ctx context.Context, prepared *problem.Prepared, profile Profile, disk bool) (report Report, err error) {
 	report = Report{Schema: "oj.reference-validation.v1", Status: "reference-validation-failed", Publication: "blocked", Profile: profile, ProfileSHA256: profile.Digest(), Verdict: "SE", Points: []Point{}}
-	if r == nil || ctx == nil || r.sandbox == nil || !r.used.CompareAndSwap(false, true) || !reflect.DeepEqual(profile, PinnedProfile()) {
+	admitted := PinnedProfile()
+	if disk {
+		admitted = UnionFindProfile()
+	}
+	if r == nil || ctx == nil || r.sandbox == nil || !r.used.CompareAndSwap(false, true) || !reflect.DeepEqual(profile, admitted) {
 		return report, errors.New("unsupported or occupied reference validation")
 	}
 	ctx, cancel := context.WithTimeout(ctx, profile.Wall)
@@ -77,7 +91,7 @@ func (r *Runner) Validate(ctx context.Context, prepared *problem.Prepared, profi
 			err = errors.Join(err, e)
 		}
 	}()
-	plan, err := prepared.PrepareReference(ctx, profile.Materials)
+	plan, frozen, err := freezeReferences(ctx, prepared, profile, disk)
 	report.Plan = plan
 	for _, c := range plan.Cases {
 		report.Points = append(report.Points, Point{ID: c.ID, Verdict: "NOT_RUN"})
@@ -85,11 +99,25 @@ func (r *Runner) Validate(ctx context.Context, prepared *problem.Prepared, profi
 	if err != nil {
 		return report, err
 	}
+	defer func() {
+		if e := frozen.Close(); e != nil {
+			report.Verdict = "SE"
+			err = errors.Join(err, e)
+		}
+	}()
 	report.Plan, report.PlanSHA256 = plan, plan.Digest()
-	for _, c := range plan.Cases {
-		if _, err := judging.CompareLibraryCheckerText(c.AnswerData, nil, profile.Text); err != nil {
+	for i := range plan.Cases {
+		answer, err := frozen.ReadAnswer(ctx, i)
+		if err != nil {
 			return report, err
 		}
+		if _, err := judging.CompareLibraryCheckerText(answer, nil, profile.Text); err != nil {
+			return report, err
+		}
+	}
+	source, err := frozen.ReadSource(ctx)
+	if err != nil {
+		return report, err
 	}
 	if err := ctx.Err(); err != nil {
 		return report, err
@@ -101,7 +129,7 @@ func (r *Runner) Validate(ctx context.Context, prepared *problem.Prepared, profi
 		return report, err
 	}
 	compileCtx, done := context.WithTimeout(ctx, time.Duration(profile.Runtime.Compile.Wall)+5*time.Second)
-	compiled, err := r.sandbox.Compile(compileCtx, profile.Runtime, string(plan.SourceData))
+	compiled, err := r.sandbox.Compile(compileCtx, profile.Runtime, string(source))
 	done()
 	if compiled.Artifact != "" {
 		defer func() {
@@ -135,8 +163,12 @@ func (r *Runner) Validate(ctx context.Context, prepared *problem.Prepared, profi
 		if err := ctx.Err(); err != nil {
 			return report, err
 		}
+		input, answer, err := frozen.ReadCase(ctx, i)
+		if err != nil {
+			return report, err
+		}
 		runCtx, done := context.WithTimeout(ctx, time.Duration(profile.Runtime.Run.Wall)+5*time.Second)
-		o, runErr := r.sandbox.Run(runCtx, profile.Runtime, compiled.Artifact, c.InputData)
+		o, runErr := r.sandbox.Run(runCtx, profile.Runtime, compiled.Artifact, input)
 		done()
 		report.Points[i].Verdict = "SE"
 		if runErr != nil {
@@ -150,7 +182,7 @@ func (r *Runner) Validate(ctx context.Context, prepared *problem.Prepared, profi
 			return report, e
 		}
 		if verdict == "AC" {
-			ok, e := judging.CompareLibraryCheckerText(c.AnswerData, o.Stdout, profile.Text)
+			ok, e := judging.CompareLibraryCheckerText(answer, o.Stdout, profile.Text)
 			if e != nil {
 				return report, e
 			}

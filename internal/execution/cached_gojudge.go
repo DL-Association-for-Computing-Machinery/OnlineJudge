@@ -24,6 +24,8 @@ type CachedGoJudge struct {
 	control                    *GoJudge
 	files                      FileTransport
 	limits                     experiment.ReferenceFilesProfile
+	runtime                    experiment.ExecutionProfile
+	reference                  bool
 	busy                       atomic.Bool
 	verified, compiled, failed bool
 	executable                 string
@@ -36,7 +38,15 @@ type CachedGoJudge struct {
 // NewCachedGoJudge keeps the M0 constructor and transport subset unchanged.
 // Only the separately pinned file experiment and fixed runtime are admitted.
 func NewCachedGoJudge(transport http.RoundTripper, verify func(context.Context, experiment.ExecutionProfile) error, files FileTransport) *CachedGoJudge {
-	return &CachedGoJudge{control: NewGoJudge(transport, verify), files: files, limits: experiment.PinnedReferenceFiles(), objects: map[string]*cachedObject{}, seen: map[string]bool{}}
+	return &CachedGoJudge{control: NewGoJudge(transport, verify), files: files, limits: experiment.PinnedReferenceFiles(), runtime: experiment.PinnedEnvironment(), objects: map[string]*cachedObject{}, seen: map[string]bool{}}
+}
+
+// NewReferenceGoJudge binds only the separately admitted unionfind runtime.
+// It cannot widen the M0 constructor or accept arbitrary caller budgets.
+func NewReferenceGoJudge(transport http.RoundTripper, verify func(context.Context, experiment.ExecutionProfile) error, files FileTransport) *CachedGoJudge {
+	g := NewCachedGoJudge(transport, verify, files)
+	g.runtime, g.reference = experiment.PinnedReferenceEnvironment(), true
+	return g
 }
 
 // Verify admits one fixed runtime and probes the actual trusted host/executor.
@@ -45,7 +55,7 @@ func (g *CachedGoJudge) Verify(ctx context.Context, p experiment.ExecutionProfil
 		return err
 	}
 	defer func() { err = g.finish(ctx, err) }()
-	if g.verified || g.files == nil || !reflect.DeepEqual(p, experiment.PinnedEnvironment()) {
+	if g.verified || g.files == nil || !reflect.DeepEqual(p, g.runtime) {
 		return errors.New("unsupported cached sandbox profile")
 	}
 	if err = g.step(0, false); err != nil {
@@ -68,7 +78,7 @@ func (g *CachedGoJudge) Compile(ctx context.Context, p experiment.ExecutionProfi
 		return o, err
 	}
 	defer func() { err = g.finish(ctx, err) }()
-	if !g.verified || g.compiled || !reflect.DeepEqual(p, experiment.PinnedEnvironment()) || int64(len(source)) > g.limits.SourceBytes {
+	if !g.verified || g.compiled || !reflect.DeepEqual(p, g.runtime) || int64(len(source)) > g.limits.SourceBytes {
 		return o, errors.New("cached compilation rejected")
 	}
 	g.compiled = true
@@ -86,6 +96,7 @@ func (g *CachedGoJudge) Compile(ctx context.Context, p experiment.ExecutionProfi
 		return o, err
 	}
 	c := command(p, p.CompileArgs, p.Compile, nil)
+	g.boundDiagnostics(c, true)
 	c["copyIn"] = map[string]any{"main.cpp": map[string]any{"fileId": src.id}}
 	c["copyOutCached"] = []string{"main?"}
 	c["copyOutMax"] = p.ExecutableBytes
@@ -103,7 +114,7 @@ func (g *CachedGoJudge) Compile(ctx context.Context, p experiment.ExecutionProfi
 	} else if r.Status != "Accepted" {
 		g.release(exe)
 	}
-	o, err = inlineObservation(r, p, true)
+	o, err = g.observation(r, p, true)
 	if err == nil {
 		_, err = Classify(o, true)
 	}
@@ -123,7 +134,7 @@ func (g *CachedGoJudge) Run(ctx context.Context, p experiment.ExecutionProfile, 
 		return o, err
 	}
 	defer func() { err = g.finish(ctx, err) }()
-	if !g.verified || !g.compiled || id != g.executable || g.objects[id] == nil || !reflect.DeepEqual(p, experiment.PinnedEnvironment()) {
+	if !g.verified || !g.compiled || id != g.executable || g.objects[id] == nil || !reflect.DeepEqual(p, g.runtime) {
 		return o, errors.New("cached execution rejected")
 	}
 	in, err := g.upload(ctx, input, "input")
@@ -142,6 +153,7 @@ func (g *CachedGoJudge) Run(ctx context.Context, p experiment.ExecutionProfile, 
 		return o, err
 	}
 	c := command(p, p.RunArgs, p.Run, nil)
+	g.boundDiagnostics(c, false)
 	c["files"].([]any)[0] = map[string]any{"fileId": in.id}
 	c["copyIn"] = map[string]any{"main": map[string]any{"fileId": id}}
 	c["copyOutCached"] = []string{"stdout"}
@@ -176,7 +188,7 @@ func (g *CachedGoJudge) Run(ctx context.Context, p experiment.ExecutionProfile, 
 	text := string(raw)
 	r.Files["stdout"] = &text
 	r.IDs = nil
-	o, err = inlineObservation(r, p, false)
+	o, err = g.observation(r, p, false)
 	if err == nil {
 		_, err = Classify(o, false)
 	}

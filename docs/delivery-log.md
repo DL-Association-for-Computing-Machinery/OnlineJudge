@@ -1,5 +1,19 @@
 # 工程交付记录
 
+## 2026-11-03：unionfind 完整参考验证与磁盘快照
+
+成功fetch后从`origin/main 0f77fec0f5f7c0b12bd32377b499a90c7450dda1`建立`codex/unionfind-reference`。维护CLI显式`--source-id library-checker:unionfind`接完整18点；默认A+B12点保持原profile。新增单个0600匿名磁盘快照，同fd完整哈希所有source/input/answer，完整catalog、逐点顺序/身份及总预算先核验；进程最多一份，Prepared占用至Close。全部答案UTF-8/token预检先于execution Verify/Compile，执行时只加载当前点，原材料随后修改不影响冻结值；CLI槽启动/Host探测仍先发生。失败关闭与取消、Read/Close竞争、完整集合超限、末点无效零执行、元数据不改内部span均有回归。磁盘准备失败可无完整plan/点列表；匿名unlink失败在写内容前拒绝，极端情况下只可能留空0600文件。
+
+独立`p4-lc-unionfind-reference-desktop-arm64-v1`绑定64MiB磁盘总量、4MiB单input/256KiB单answer、最多64点、CPU1秒/wall5秒/memory128MiB、raw stdout256KiB；编译双流/运行stderr各4KiB并显式进入profile摘要。使用新固定`oj-reference-sandbox`和`slot-reference.lock`，新旧构造器及入口相互拒绝profile，M0 parser不接新槽。原固定镜像/内层64MiB临时盘、外层1GiB及128MiB tmp/shm、global输出/复制1MiB和文件48/64/128MiB/4对象/512操作保持；CLI不创建或替换槽。本轮显式创建独立停止槽CID`5900da241d91266df7302b50f0811c5cec32a3a6ab497834de9343833bea4d21`，固定owner、无网络/端口/挂载、private cgroup，既有M0槽保留。`recover-reference`只在旧宿主操作已排空及原ID/配置/停止确认下解封该锁，不启动或追认旧报告。
+
+真实边界首先复现正常退出的cap+1输出被拒SE（`/private/tmp/oj-unionfind-real.log`及`oj-unionfind-output-diagnostic.log`）。固定v1.13.3官方[collector](https://github.com/criyle/go-judge/blob/v1.13.3/envexec/file_collect.go)、[结果转换](https://github.com/criyle/go-judge/blob/v1.13.3/envexec/run_single.go)与固定go-sandbox v0.14.2标签表证明：该OLE同时附带同名error。仅reference Run在精确status/error、Exit0、合法用量、唯一stdout/CollectSizeExceeded、raw恰cap+1、两个已验证流角色且无残余ID同时成立时归一化冗余标签；其他error/编译/M0仍SE。17类伪证据负例和完整缓存链通过，M0用其自身cap+1单独验证不吞该标签；未削弱断言或放大预算。
+
+最终固定Desktop LinuxKit7.0.14/arm64、go-judge v1.13.3/GCC15.3.0、原镜像下，unionfind两组12.48秒通过（`oj-unionfind-release-real.log`）：完整18点CLI9.83秒全AC，input总34989222B/answer总1913930B，单点最大3126112B/200700B，实际最大CPU26175000ns/内存2097152B。64KiB/256KiB stdout原字节成功，262145B返回OLE；真实响应的固定标签/状态/Exit0/用量presence比较均true。probe清理后tmp/shm采样0、容量各134217728B，外层memory.peak40783872B，不含宿主堆、不是连续存储峰值。报告`/private/tmp/oj-unionfind-reference-release-20261103/report.json` SHA-256为`9da2d74fb0c039bb64182649682286bac530145713ee6923a2c45edb7a3829f6`，plan `9a5377ec9c56f8950e3b003337bceb2753d94d76ac5133814232e30804250e9b`，profile `a3f3b1fcea5d65e79003497ee98d713e4323131fb5446e08ea6482d9486c74c2`。
+
+同最终产品构建的原A+B九组21.89秒通过（`oj-unionfind-aplusb-real.log`）：完整12点CLI6.27秒、AC/WA/CE/RE/TLE/MLE/OLE及取消，全部停止确认。报告`/private/tmp/oj-unionfind-aplusb-regression-20261103/report.json` SHA-256为`2ea259ba5c2d731629a1ff9b3c5e951dd1426cb1c93df5e2014b111568887311`，旧plan/profile摘要保持。两报告0700/0600，仅身份/用量/状态；新旧槽成功收尾，历史失败日志保留，没有手清marker或放宽Stop。旧两次停止故障本轮未复现，根因仍未知，不能追认旧报告。
+
+Docker离线Go1.26.10模块验证、格式/vet、三范围静态/root race/七命令构建及cmd sandbox标签检查通过（`oj-unionfind-backend.log`），新增完整快照超限测试另作定向补验。Astra/high针对设计/完整差异/collector适配复核无阻断，AI不代替人工审批。初次基线挂载旧只读模块缓存缺当前版本而失败，改用镜像既有完整缓存后离线通过，未联网安装。无新依赖、SQL/schema、公共HTTP/UI或生产配置变化；本地未重跑PG/Redis、浏览器或完整M0，远端精确head CI另核验。文档与知识按交付同步；其余八题大输出/依赖、持久化验证任务/权限接纳、完整质量/非作者终审发布仍待完成，not-run、生产null、publication blocked保持，未部署。临时日志、报告及产物不是独立备份。
+
 ## 2026-11-03：P4 缓存文件的保真执行通路
 
 成功fetch后从`origin/main 61ba081249a26711f354a27ec373c87c973aae8f`建立`codex/reference-byte-execution`。首份完整参考验证实际改用独立`CachedGoJudge`：源码/输入上传后回读SHA-256、缓存stdin、stdout原始字节拉取，答案留在宿主。M0默认构造器、内联白名单/预算、原样提取的结果校验及Runtime保持；新模式先严格验证角色/互斥表示/原始长度，再复用结构化证据校验。材料移除ASCII约束，参考答案仍全部在编译前按UTF-8/token域先验，坏编码不会触发沙箱。无新依赖、SQL/schema、公共HTTP或UI变化，草稿版本/not-run/production null不变。

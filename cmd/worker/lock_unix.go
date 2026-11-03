@@ -28,6 +28,14 @@ func lockM0(slot workerhost.M0Slot) (*slotLock, error) {
 }
 
 func lockM0Mode(slot workerhost.M0Slot, recovery bool) (*slotLock, error) {
+	return lockSlotMode(slot.LockName(), recovery)
+}
+
+func lockReference() (*slotLock, error) {
+	return lockSlotMode(workerhost.ReferenceSlot{}.LockName(), false)
+}
+
+func lockSlotMode(name string, recovery bool) (*slotLock, error) {
 	u, err := user.Current()
 	if err != nil || !filepath.IsAbs(u.HomeDir) {
 		return nil, errors.New("cannot resolve M0 owner home")
@@ -44,7 +52,7 @@ func lockM0Mode(slot workerhost.M0Slot, recovery bool) (*slotLock, error) {
 	if !ok || stat.Uid != uint32(os.Geteuid()) {
 		return nil, errors.New("M0 ownership directory has wrong owner")
 	}
-	return acquireLockMode(filepath.Join(dir, slot.LockName()), recovery)
+	return acquireLockMode(filepath.Join(dir, name), recovery)
 }
 
 func acquireLock(path string) (*slotLock, error) {

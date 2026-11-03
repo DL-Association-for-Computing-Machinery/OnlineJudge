@@ -96,9 +96,27 @@ func validationFixture(t *testing.T) *problem.Prepared {
 }
 
 func TestReferenceOwnerStopAndQuarantine(t *testing.T) {
+	for _, unionfind := range []bool{false, true} {
+		t.Run(strconv.FormatBool(unionfind), func(t *testing.T) { testReferenceOwnerStopAndQuarantine(t, unionfind) })
+	}
+}
+
+func testReferenceOwnerStopAndQuarantine(t *testing.T, unionfind bool) {
 	for _, scenario := range []string{"pass", "stop", "clean", "cancel", "cancel-stop", "open", "start-error"} {
 		t.Run(scenario, func(t *testing.T) {
 			p := validationFixture(t)
+			if unionfind {
+				b := problemfixture.NewUnionFind(t)
+				b.AddOriginal(t, "data_structure/unionfind/sol/correct.cpp", []byte("int main(){}"))
+				b.BindReferenceCases(t)
+				b.Write(t)
+				var err error
+				p, err = problem.LoadBundle(b.Directory, "library-checker:unionfind", b.Lock)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = p.Close() })
+			}
 			path := filepath.Join(t.TempDir(), "lock")
 			lock, err := acquireLock(path)
 			if err != nil {
@@ -120,7 +138,7 @@ func TestReferenceOwnerStopAndQuarantine(t *testing.T) {
 			if scenario == "cancel-stop" {
 				h.stopCancel = cancel
 			}
-			r, err := runReferenceLocked(ctx, p, lock, func(context.Context) (validationHost, error) {
+			r, err := runReferenceProfileLocked(ctx, p, lock, func(context.Context) (validationHost, error) {
 				raw, e := os.ReadFile(path)
 				if e != nil || len(raw) == 0 {
 					t.Fatal("sandbox opened before persisted dirty marker")
@@ -132,7 +150,7 @@ func TestReferenceOwnerStopAndQuarantine(t *testing.T) {
 					return h, errors.New("start ack")
 				}
 				return h, nil
-			})
+			}, unionfind)
 			if (err == nil) != (scenario == "pass") {
 				t.Fatalf("%s err=%v", scenario, err)
 			}
@@ -219,6 +237,26 @@ func TestReferenceReportAndCommandGuards(t *testing.T) {
 	}
 	if _, err := readValidationLock(lock); err == nil {
 		t.Fatal("unreviewed lock accepted")
+	}
+}
+
+func TestReferenceSourceAndSlotSelectionGuards(t *testing.T) {
+	t.Setenv("OJ_SANDBOX_EXPERIMENT", "1")
+	b := problemfixture.New(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	for _, source := range []string{"library-checker:unionfind", "library-checker:other"} {
+		t.Setenv("OJ_WORKER_M0_SLOT", "secondary")
+		output := filepath.Join(t.TempDir(), "report")
+		args := []string{"--source-id", source, "--bundle", b.Directory, "--source-lock", filepath.Join(t.TempDir(), "lock.json"), "--output", output}
+		if err := validateReference(context.Background(), args, logger); err == nil {
+			t.Fatal("source/slot override accepted")
+		}
+		if _, err := os.Stat(output); !os.IsNotExist(err) {
+			t.Fatal("invalid selection created output")
+		}
+	}
+	if err := dispatch(context.Background(), []string{"recover-reference", strings.Repeat("a", 64)}, logger, nil); err == nil {
+		t.Fatal("reference recovery accepted M0 override")
 	}
 }
 

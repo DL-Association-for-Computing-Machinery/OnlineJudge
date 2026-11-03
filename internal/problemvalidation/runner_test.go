@@ -22,12 +22,21 @@ type sandbox struct {
 	removeErr, runErr error
 	cancel            context.CancelFunc
 	removeCancel      context.CancelFunc
+	runtime           experiment.ExecutionProfile
+	onVerify          func()
 }
 
 func (s *sandbox) Verify(_ context.Context, p experiment.ExecutionProfile) error {
 	s.calls = append(s.calls, "verify")
-	if !reflect.DeepEqual(p, experiment.PinnedEnvironment()) {
+	want := s.runtime
+	if want.ID == "" {
+		want = experiment.PinnedEnvironment()
+	}
+	if !reflect.DeepEqual(p, want) {
 		return errors.New("runtime")
+	}
+	if s.onVerify != nil {
+		s.onVerify()
 	}
 	return nil
 }
