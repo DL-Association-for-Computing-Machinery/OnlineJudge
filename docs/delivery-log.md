@@ -6,7 +6,7 @@
 
 同一私有bundle的source/catalog/完整27组input-answer共57对象、200820493B逐字节哈希一致；证据`/private/tmp/oj-staticrmq-complete-material-evidence-20261104.json` SHA `55b3afa8c3d29c7e27d11aefb6c092a7f5ce984e7cc6d079ae633e7c093fae3d`。源码1890B SHA `a5586c48fa83887a773876dc5377ab6c5f7b59264051d6484ea7712ca5aafb3c`，仅三个标准头，无私有依赖。input总158223359/最大11723831B；answer总42589939/最大4191169B，距4MiB仅3135B，不能替代实际stdout证据。候选tier5独立Runtime/Files/profile身份，快照256MiB/input16MiB、累计payload512MiB；其他执行/外层/文件预算、单文件编译、3分钟阶段/10秒Run包装及5秒清理/原Stop期限保持。最坏429696733B/169 execution逻辑操作，Host操作口径独立；旧五来源及未准入3保持。
 
-离线Docker Go1.26.10模块核验、六包race基线与定向race/vet、最终完整backend格式/vet/静态/root race/七Linux命令构建、sandbox vet及独立Darwin驱动构建均通过（`/private/tmp/oj-staticrmq-{baseline,targeted,backend}.log`）。新增合成集合实际冻结超过128MiB并读末点、256MiB再加catalog拒绝/共享额度释放、input16MiB和answer4MiB精确/+1、坏末点hash/UTF-8/token零Verify、旧五profile摘要、来源/档位隔离、512MiB账本注入边界/超限后删除及第六来源Stop矩阵；账本边界不等于实际搬运512MiB。Astra/high设计/完整实现及失败证据复核无生产阻断，不构成真实准入或人工审批。
+离线Docker Go1.26.10模块核验、六包race基线与定向race/vet、最终完整backend格式/vet/静态/root race/七Linux命令构建、sandbox vet及独立Darwin驱动构建均通过（`/private/tmp/oj-staticrmq-{baseline,targeted,backend}.log`）。新增合成集合实际冻结超过128MiB并读末点、256MiB再加catalog拒绝/共享额度释放、input16MiB和answer4MiB精确/+1、坏末点hash/UTF-8/token零Verify、旧五profile摘要、来源/档位隔离、512MiB账本注入边界/超限后删除及第六来源Stop矩阵；账本边界不等于实际搬运512MiB。Astra/high设计与静态实现审查未发现明确代码缺陷；真实准入仍因第9点失败阻断，不构成通过或人工审批。
 
 原medium CID/镜像/owner/完整配置、停止PID0及私有空锁无占用先核验。一次真实双组共33.29秒：可信16MiB stdin2.28秒通过，沙箱逐块memcmp验证全字节并核对总长，CPU4997000ns/Memory524288B；tmp阶段均0、shm活跃16850944B/清理后0，outer cgroup memory.peak阶段最大112693248B，仅阶段观测、不证明连续峰值/总RSS。完整27点CLI31.02秒失败：首8点AC、第9点SE且无usage，后18点NOT_RUN。compile CPU215782000ns/Memory75915264B；已完成点最大CPU110782000ns/Memory41418752B，不能推断失败点资源。
 
