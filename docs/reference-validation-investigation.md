@@ -43,6 +43,10 @@
 
 下一次有明确触发的调查预注册为：“stdout DELETE客户端完成失败，而该请求服务端handler已短时间返回。”使用新execution_diagnostic、Stop trace和同格式服务日志关联；需要补观测时，只记录有界固定角色/类别、单调begin/end与context状态，先独立复核设计，不关闭日志、改日志驱动或放宽期限。delete/stdout超时、短handler耗时与异常记录时间差同时出现，仅支持该狭窄位置假设；失败在此前阶段或handler自身长耗时则不支持；全部通过仍为未复现，不追加次数。前置序列不是唯一未决因素。
 
+另一独立候选[草稿#119](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/119)的staticrmq完整27点单次验证，在第9点control失败且两个独立cleanup deadline，Stop已确认；原报告SHA `ee524a329fbfcc5d654e3ff761ce310dc0f1dee43b089dfa3bb5332a816d2d69`。该点input4035B，输入回读与后续run完成日志相隔约24.453秒，而handler计时19.172ms；service/Docker时间差最大约0.439ms，没有本页旧窗口的23.787秒形态。两次失败阶段不同，不能直接等同或排除共同上层原因，也不能把HTTP200追认为客户端完成。完整候选证据仍归其草稿交付日志；主线来源准入不扩大。
+
+现有[Host分段失败证据](reference-validation.md#执行失败诊断)补充RoundTrip的admission/prepare/inspect/command/response_validation、最后完成位置、阶段及整体耗时、context/剩余期限与本地CLI启动证据。确定性单测区分命令未启动/启动后超时、阶段冻结与收尾等待，并验证跨层独立错误归属；不据此断定旧根因。本次只执行受信本地命令及一次既有A+B兼容回归，没有重跑suffixarray或staticrmq。后续若调查#119，应另行登记可检验假设与一次执行条件，再结合具体point/role/host_trace和同窗口脱敏服务日志判断，不把新增诊断或新通过当作自动解除草稿的依据。
+
 ## 证据索引
 
 - 独立报告`/private/tmp/oj-suffixarray-diagnostic-report-20261104/report.json`，SHA-256 `3671e312db6e664e5fe474469964e8b07abd3c3c252f8e32f937211090a4bb20`。

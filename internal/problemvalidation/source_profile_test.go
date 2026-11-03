@@ -20,6 +20,10 @@ func TestSourceProfilesPreserveOldDigestsAndRejectBorrowing(t *testing.T) {
 	if p.Digest() != "32aa64eb913108ccc089a0548a98cb777f019f37cd4bc349ab87ff0ddd1a515d" {
 		t.Fatal("zalgorithm profile changed")
 	}
+	primality, _, err := problemvalidation.ResolveSource("library-checker:primality_test")
+	if err != nil || primality.Digest() != "68f8cab1263e8c12897c6f0fc3a66ce915ba5296ee3304c03b2a6b5bd3419276" {
+		t.Fatal("primality profile changed", err)
+	}
 	suffix, suffixTier, err := problemvalidation.ResolveSource("library-checker:suffixarray")
 	if err != nil || suffixTier != tier || suffix.Materials.TotalBytes != 128<<20 || p.Materials.TotalBytes != 64<<20 || suffix.Digest() == p.Digest() {
 		t.Fatal("source-specific snapshot admission", err)

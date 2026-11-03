@@ -17,9 +17,9 @@ func TestExecutionDiagnosticAcrossCallsAndBounds(t *testing.T) {
 	r.recordExecution("run", 2, errors.Join(context.DeadlineExceeded, deleteErr))
 	r.recordExecution("cleanup", 0, context.Canceled)
 	want := []ExecutionFailure{
-		{"run", 2, "unknown", "unknown", "deadline"},
-		{"cleanup", 2, "delete", "executable", "ownership"},
-		{"cleanup", 0, "unknown", "unknown", "canceled"},
+		{Operation: "run", Point: 2, Phase: "unknown", Role: "unknown", Code: "deadline"},
+		{Operation: "cleanup", Point: 2, Phase: "delete", Role: "executable", Code: "ownership"},
+		{Operation: "cleanup", Phase: "unknown", Role: "unknown", Code: "canceled"},
 	}
 	if !reflect.DeepEqual(r.ExecutionDiagnostic.Entries, want) || r.ExecutionDiagnostic.Truncated {
 		t.Fatalf("call order/point/cleanup mapping: %+v", r.ExecutionDiagnostic)

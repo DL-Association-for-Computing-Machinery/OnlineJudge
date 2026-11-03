@@ -12,6 +12,8 @@
 
 停止诊断的原故障矩阵继续核对主错误优先级、独立期限与dirty门禁，并验证六步顺序/到达位置、PID合计次数、耗时截断标记、返回副本及owner映射。可信固定本地shell分别证明过期context下kill调用尝试但CLI未启动、CLI已启动后超时；不执行题源或制造真实Docker停止故障，不据此断定历史根因。固定成功报告JSON golden验证新增字段在成功时完全省略。当前参考执行/传输预算与来源准入保持，草稿#114的真实回归失败不被这些检查或普通CI抵消。
 
+Host控制失败五阶段采样、冻结阶段/整体收尾耗时区分、直接本地启动证据、边界/枚举/结构净化、逐层脱敏复制及独立cleanup trace归属随backend执行；每次公开投影仍只检查64槽，裸provider不额外开启类别遍历，八条上限保持。原错误`Is/As`、五profile/成功JSON兼容、真实私有报告写入及Stop成功/失败隔离决策一并验证。Darwin专用workerhost驱动先核对精确清单再运行固定受信命令和替身，不等同沙箱或题源验收；字段及缺失限制见[参考验证](reference-validation.md#执行失败诊断)。#114/#119真实失败仍阻断其准入。
+
 独立缓存字节通路的MIME/二进制响应、角色账本、配额/预留、未知回执/坏哈希、清理期间取消和真实本地子进程背压回归随backend执行，后者只运行受信任的固定shell命令。`reference_bytes_sandbox_test.go`的48MiB及缓存stdin/stdout实测仅在显式`OJ_REFERENCE_BYTES=1`与sandbox/宿主驱动下运行，普通CI不执行题源或大文件沙箱；M0默认内联路径及既有回归保持。
 
 unionfind完整磁盘快照、Read/Close竞争/配额释放、坏末点零执行、独立profile互斥、诊断/输出分限及collector OLE负例随backend执行；`cmd/worker/unionfind_sandbox_test.go`仅在sandbox标签、darwin/arm64宿主驱动和`OJ_UNIONFIND_VALIDATION=1`下执行完整18点与256KiB真实边界，使用独立reference槽。普通CI不执行此专项，不自动配置/启动新槽，也不据此更新数据库状态或生产预算。

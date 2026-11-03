@@ -186,7 +186,7 @@ func TestJoinedPrimaryAndCleanupEvidenceKeepsContext(t *testing.T) {
 	cleanup := g.Remove(context.Background(), compiled.Artifact)
 	err = errors.Join(primary, cleanup)
 	d := FailureDetails(err)
-	want := []FailureEntry{{"readback", "input", "integrity"}, {"delete", "input", "deadline"}, {"unknown", "unknown", "canceled"}, {"delete", "executable", "unknown"}}
+	want := []FailureEntry{{Phase: "readback", Role: "input", Code: "integrity"}, {Phase: "delete", Role: "input", Code: "deadline"}, {Phase: "unknown", Role: "unknown", Code: "canceled"}, {Phase: "delete", Role: "executable", Code: "unknown"}}
 	if d == nil || fmt.Sprint(d.Entries) != fmt.Sprint(want) || d.Truncated || !errors.Is(err, context.Canceled) {
 		t.Fatalf("joined failure lost cause or order: %+v", d)
 	}
@@ -200,7 +200,7 @@ func (e *cyclicEvidenceError) Unwrap() error { e.visits++; return e }
 func TestFailureProjectionBoundsCopiesAndUnknownText(t *testing.T) {
 	cycle := &cyclicEvidenceError{}
 	d := FailureDetails(cycle)
-	if !d.Truncated || cycle.visits != 64 || d.Entries[0] != (FailureEntry{"unknown", "unknown", "unknown"}) {
+	if !d.Truncated || cycle.visits != 64 || d.Entries[0] != (FailureEntry{Phase: "unknown", Role: "unknown", Code: "unknown"}) {
 		t.Fatal("unbounded error graph traversal")
 	}
 	var failures []error
@@ -209,7 +209,7 @@ func TestFailureProjectionBoundsCopiesAndUnknownText(t *testing.T) {
 	}
 	err := errors.Join(failures...)
 	d = FailureDetails(err)
-	if !d.Truncated || len(d.Entries) != 8 || d.Entries[0] != (FailureEntry{"unknown", "unknown", "unknown"}) {
+	if !d.Truncated || len(d.Entries) != 8 || d.Entries[0] != (FailureEntry{Phase: "unknown", Role: "unknown", Code: "unknown"}) {
 		t.Fatal("entry cap or whitelist bypassed")
 	}
 	var wg sync.WaitGroup
