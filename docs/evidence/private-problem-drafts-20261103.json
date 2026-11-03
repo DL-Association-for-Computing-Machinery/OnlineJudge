@@ -29,7 +29,9 @@
       "result": "passed"
     },
     "m0_http_compatibility_seconds": 3.88,
-    "component_special_skips": "existing materialstore root-owner and real-capacity fixtures are unchanged and not repeated; ordinary CI skips explicit real-corpus acceptance unless its private inputs are supplied"
+    "component_special_skips": "existing materialstore root-owner and real-capacity fixtures are unchanged and not repeated; ordinary CI skips explicit real-corpus acceptance unless its private inputs are supplied",
+    "format_follow_up": "after parameterizing the diagnostic fixture, gofmt and complete offline backend checks/seven builds passed; targeted actual PG query plans passed 1.151s",
+    "secret_false_positive_follow_up": "3 verified synthetic fixture/source-hash false positives removed by parameterization and explicit path/hash records; user authorized one exact-lease task commit replacement; unchanged detector rejects synthetic token, actual revised HEAD full history passed with zero findings; no ignore configuration"
   },
   "actual_corpus": {
     "source_bundle": "/private/tmp/oj-library-checker-draft-final-relocated-20261103",
@@ -168,7 +170,7 @@
     },
     {
       "path": "tests/integration/problem_query_plan_test.go",
-      "sha256": "a2f70a267e4f34f30744e959c674e363c43a5beeb6db907308d1e334c3f85497"
+      "sha256": "2c6a8515e8b2e648f31accf3da2b6926e51d12fdbf599a109ffef698d51f648e"
     },
     {
       "path": "tests/integration/submissions_test.go",
@@ -187,15 +189,56 @@
       "sha256": "1b201920f2a52f5df024c636e1e803f2ed307702e5615f5a322e1e31ff52823e"
     }
   ],
-  "local_log_sha256": {
-    "/private/tmp/oj-private-drafts-quality-final.log": "51e86c9f164f1a9c951582f71b1691d5711bcd96406f1d9a199fc94a6588ac63",
-    "/private/tmp/oj-private-drafts-session-second.log": "caa1121bf59055fc489c202ccfde152da11a47f8e1f8220e153601e648358138",
-    "/private/tmp/oj-private-drafts-real-corpus-first.log": "063ba83f77638bf4a2ff2253ab877f47f3f180daf027193232fbd7a802b98a3a",
-    "/private/tmp/oj-private-drafts-governance-final.log": "98e35e1faa10f5b0c382e8aaf693a2d290a5f0f2c756635cd8b8be90c62c1ce2",
-    "/private/tmp/oj-private-drafts-http-compatibility.log": "80978f860f697af3c699757361b251eac5e4642800680c9246cf2a936c41539a",
-    "/private/tmp/oj-private-drafts-cli-image-final.log": "8927d8120b68cc80c6585451505eb05b9c6dc6692b0d97bd8c7b173f09618592",
-    "/private/tmp/oj-private-drafts-volume-readback.json": "bd9ca8b81634a25ff90121e3174478d7d334b36741877a9ead5e3a80efa72fcb"
-  },
+  "local_log_sha256": [
+    {
+      "path": "/private/tmp/oj-private-drafts-quality-final.log",
+      "sha256": "51e86c9f164f1a9c951582f71b1691d5711bcd96406f1d9a199fc94a6588ac63"
+    },
+    {
+      "path": "/private/tmp/oj-private-drafts-session-second.log",
+      "sha256": "caa1121bf59055fc489c202ccfde152da11a47f8e1f8220e153601e648358138"
+    },
+    {
+      "path": "/private/tmp/oj-private-drafts-real-corpus-first.log",
+      "sha256": "063ba83f77638bf4a2ff2253ab877f47f3f180daf027193232fbd7a802b98a3a"
+    },
+    {
+      "path": "/private/tmp/oj-private-drafts-governance-final.log",
+      "sha256": "98e35e1faa10f5b0c382e8aaf693a2d290a5f0f2c756635cd8b8be90c62c1ce2"
+    },
+    {
+      "path": "/private/tmp/oj-private-drafts-http-compatibility.log",
+      "sha256": "80978f860f697af3c699757361b251eac5e4642800680c9246cf2a936c41539a"
+    },
+    {
+      "path": "/private/tmp/oj-private-drafts-cli-image-final.log",
+      "sha256": "8927d8120b68cc80c6585451505eb05b9c6dc6692b0d97bd8c7b173f09618592"
+    },
+    {
+      "path": "/private/tmp/oj-private-drafts-volume-readback.json",
+      "sha256": "bd9ca8b81634a25ff90121e3174478d7d334b36741877a9ead5e3a80efa72fcb"
+    },
+    {
+      "path": "/private/tmp/oj-private-drafts-backend-after-format.log",
+      "sha256": "fdb0f8c2380ccdee5cdc0851ef255a6e09e6c7928d264867d9517ba10a4c1c02"
+    },
+    {
+      "path": "/private/tmp/oj-private-drafts-query-parameter-regression.log",
+      "sha256": "b1f0d861890e0c0f88085bee5e8b837fd624ac3e518901134953fa13ef78c743"
+    },
+    {
+      "path": "/private/tmp/oj-private-drafts-secret-selftest.log",
+      "sha256": "777ae5702083e86b81f6f4f090ea4611255df25fc253116c89538d8dd4ab14d4"
+    },
+    {
+      "path": "/private/tmp/oj-private-drafts-revised-head-secrets.log",
+      "sha256": "ed11e5089b126f567903bfcbe2747daa52925534677cb4bda030471b4858aa95"
+    },
+    {
+      "path": "/private/tmp/oj-private-drafts-replacement-secret-scan.json",
+      "sha256": "160c7816fa5b71e574b646f19e4086e716d1217f60e896c5f3adc38842c78836"
+    }
+  ],
   "limits": [
     "trusted stable private source snapshot; expected source lock supplied from trusted configuration",
     "single-token logout follows accepted-in-flight semantics; no cross-store atomic logout claim",

@@ -40,7 +40,7 @@ SELECT md5('draft-plan-'||n::text),$1,'private-plan-key-'||n::text,$2,$3,$4,$5 F
 			query = strings.NewReplacer(tc.replace...).Replace(query)
 			// Choose an actual populated PK, rather than timing an absent-key plan.
 			if tc.name != "DraftByKeyForShare" {
-					must(t, f.a.QueryRow(f.ctx, `SELECT id FROM problem_drafts WHERE request_key=$1`, "private-plan-key-1024").Scan(&tc.args[0]))
+				must(t, f.a.QueryRow(f.ctx, `SELECT id FROM problem_drafts WHERE request_key=$1`, "private-plan-key-1024").Scan(&tc.args[0]))
 			}
 			var plan string
 			must(t, f.a.QueryRow(f.ctx, "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) "+query, tc.args...).Scan(&plan))
