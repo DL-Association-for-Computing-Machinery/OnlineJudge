@@ -23,7 +23,7 @@
 
 题面转换不证明Markdown/KaTeX渲染通过，不执行模板表达式或把原始HTML认作已获准公开内容。原始`info.toml`、`task.md`和其他锁定源码完整保留；来源的solutions/forum/生成配置只作为来源信息，不悄悄成为本站执行配置。
 
-十题配置为大小写敏感的精确token字节比较，明确关闭数字等价（`01`与`1`不同）；不继承M0默认忽略ASCII大小写。[独立文本组件](checker-admission.md)已提供四种空白的`lc-wcmp-tokens-v1`及显式限额，区别M0的VT/FF规则；它尚未接入草稿或Worker。`compatibility=configured-not-validated`保持，生产配置、编码/预算支持域绑定和故障适配仍待接通。上游timelimit只记录在来源字段，本站`limits`与`production_profile`保持null，不能用题源准备容器的预算充当选手限制。
+十题配置为大小写敏感的精确token字节比较，明确关闭数字等价（`01`与`1`不同）；不继承M0默认忽略ASCII大小写。[独立文本组件](checker-admission.md)已提供四种空白的`lc-wcmp-tokens-v1`及显式限额，区别M0的VT/FF规则，并接入[首份完整草稿的受限参考验证](reference-validation.md)。该维护报告不更新数据库验证状态或生产Worker；`compatibility=configured-not-validated`保持，生产配置和完整验证任务仍待接通。上游timelimit只记录在来源字段，本站`limits`与`production_profile`保持null，不能用题源准备容器的预算充当选手限制。
 
 ## 校验、失败与下一步
 

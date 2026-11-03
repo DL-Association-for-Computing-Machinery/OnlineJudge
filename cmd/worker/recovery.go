@@ -15,6 +15,9 @@ func dispatch(ctx context.Context, args []string, logger *slog.Logger, drain <-c
 	if len(args) == 0 {
 		return run(ctx, logger, drain)
 	}
+	if args[0] == "validate-reference" {
+		return validateReference(ctx, args[1:], logger)
+	}
 	if len(args) != 2 || args[0] != "recover" || !regexp.MustCompile(`^[a-f0-9]{64}$`).MatchString(args[1]) {
 		return errors.New("usage: worker [recover <original-full-container-id>]")
 	}

@@ -179,6 +179,12 @@ func (r *Runner) Judge(ctx context.Context, d materials.Descriptor, blobs map[st
 }
 
 func classify(o Observation, compile bool) (string, error) {
+	return Classify(o, compile)
+}
+
+// Classify maps already verified sandbox evidence to an execution verdict. It
+// does not verify the profile, transport evidence or reference correctness.
+func Classify(o Observation, compile bool) (string, error) {
 	if o.CPU < 0 || o.Memory < 0 {
 		return "SE", errors.New("invalid resource evidence")
 	}
