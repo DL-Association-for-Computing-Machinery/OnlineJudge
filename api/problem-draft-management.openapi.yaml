@@ -1,0 +1,100 @@
+openapi: 3.1.0
+info:
+  title: OnlineJudge Subject-Pinned Private Draft Management
+  version: 0.1.0
+  description: >-
+    独立可选管理能力；未启用返回404，客户端不得回退到旧路径。
+    沿用普通HTTPS会话、固定Host、同源POST、无query及无转义路径别名的约束。
+    每次首次读取实际会话后，在权限、候选、容量、材料或回执访问前比较请求头。
+    请求头仅是前置条件，绝不作为身份或权限来源；不匹配返回409 DRAFT_SUBJECT_CHANGED。
+    基础设施故障及未知结果优先返回503。所有响应no-store/nosniff。
+security:
+  - ordinarySession: []
+paths:
+  /api/v1/problem-draft-management/sources:
+    parameters:
+      - $ref: '#/components/parameters/ExpectedSubject'
+    get:
+      operationId: listManagedDraftSources
+      description: >-
+        返回与旧来源协议相同的候选摘要；首次主体比较后进行权限预检，
+        返回前再次读取会话并在PG检查当前权限。
+      responses:
+        '200':
+          description: 已配置的候选摘要。
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sources]
+                additionalProperties: false
+                properties:
+                  sources:
+                    type: array
+                    minItems: 1
+                    maxItems: 10
+                    items:
+                      $ref: './problem-draft-imports.openapi.yaml#/components/schemas/Source'
+        '400': { $ref: '#/components/responses/Failure' }
+        '401': { $ref: '#/components/responses/Failure' }
+        '403': { $ref: '#/components/responses/Failure' }
+        '404': { $ref: '#/components/responses/Failure' }
+        '405': { $ref: '#/components/responses/Failure' }
+        '409': { $ref: '#/components/responses/Failure' }
+        '503': { $ref: '#/components/responses/Failure' }
+  /api/v1/problem-draft-management/imports:
+    parameters:
+      - $ref: '#/components/parameters/ExpectedSubject'
+    post:
+      operationId: importManagedPinnedDraft
+      description: >-
+        沿用旧固定修订导入的严格三字段、材料持久化、最终会话和PG事务合同。
+        不确定结果保留原subject、source、request_key和revision，通过本协议查询回执；不自动重试POST。
+      requestBody:
+        $ref: './problem-draft-imports.openapi.yaml#/paths/~1api~1v1~1problem-draft-imports/post/requestBody'
+      responses:
+        '200': { $ref: './problem-draft-imports.openapi.yaml#/components/responses/Receipt' }
+        '400': { $ref: '#/components/responses/Failure' }
+        '401': { $ref: '#/components/responses/Failure' }
+        '403': { $ref: '#/components/responses/Failure' }
+        '404': { $ref: '#/components/responses/Failure' }
+        '405': { $ref: '#/components/responses/Failure' }
+        '409': { $ref: '#/components/responses/Failure' }
+        '413': { $ref: '#/components/responses/Failure' }
+        '415': { $ref: '#/components/responses/Failure' }
+        '503': { $ref: '#/components/responses/Failure' }
+  /api/v1/problem-draft-management/imports/{request_key}:
+    parameters:
+      - $ref: '#/components/parameters/ExpectedSubject'
+      - name: request_key
+        in: path
+        required: true
+        schema: { $ref: './problem-draft-imports.openapi.yaml#/components/schemas/RequestKey' }
+    get:
+      operationId: getManagedDraftImportReceipt
+      description: >-
+        查询本人已提交回执，PG在同一事务中检查当前权限和owner；404不证明没有在途POST。
+      responses:
+        '200': { $ref: './problem-draft-imports.openapi.yaml#/components/responses/Receipt' }
+        '400': { $ref: '#/components/responses/Failure' }
+        '401': { $ref: '#/components/responses/Failure' }
+        '403': { $ref: '#/components/responses/Failure' }
+        '404': { $ref: '#/components/responses/Failure' }
+        '405': { $ref: '#/components/responses/Failure' }
+        '409': { $ref: '#/components/responses/Failure' }
+        '503': { $ref: '#/components/responses/Failure' }
+components:
+  securitySchemes:
+    ordinarySession: { $ref: './session.openapi.yaml#/components/securitySchemes/ordinarySession' }
+  parameters:
+    ExpectedSubject:
+      name: X-OJ-Expected-Subject
+      in: header
+      required: true
+      description: 必须恰好一个值，32位小写十六进制；重复、逗号合并或无效值返回400。
+      schema:
+        type: string
+        pattern: '^[0-9a-f]{32}$'
+  responses:
+    Failure:
+      $ref: './problem-draft-imports.openapi.yaml#/components/responses/Failure'

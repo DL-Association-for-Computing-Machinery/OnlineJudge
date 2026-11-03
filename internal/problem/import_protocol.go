@@ -47,10 +47,22 @@ func ValidImportRevision(value string) bool { return validHash(value) }
 // then fences the detached summary with fresh session and final PG permission.
 // Metadata was admitted at startup; this is not a material health check.
 func (i *Importer) Sources(ctx context.Context, credential redisstore.Credential) ([]ImportSource, error) {
+	return i.sourcesForSubject(ctx, credential, "")
+}
+
+// SourcesForSubject requires the current session to belong to expectedSubject.
+func (i *Importer) SourcesForSubject(ctx context.Context, credential redisstore.Credential, expectedSubject string) ([]ImportSource, error) {
+	if !identity.ValidID(expectedSubject) {
+		return nil, ErrInvalid
+	}
+	return i.sourcesForSubject(ctx, credential, expectedSubject)
+}
+
+func (i *Importer) sourcesForSubject(ctx context.Context, credential redisstore.Credential, expectedSubject string) ([]ImportSource, error) {
 	if i == nil || ctx == nil {
 		return nil, ErrInvalid
 	}
-	actor, err := i.service.actor(ctx, credential)
+	actor, err := i.service.actorForSubject(ctx, credential, expectedSubject)
 	if err != nil {
 		return nil, err
 	}
@@ -77,10 +89,22 @@ func (i *Importer) Sources(ctx context.Context, credential redisstore.Credential
 // ImportPinned requires the full revision selected by the caller, not just the
 // problem document version. The existing create transaction remains authoritative.
 func (i *Importer) ImportPinned(ctx context.Context, credential redisstore.Credential, key, source, expectedRevision string) (ImportReceipt, error) {
+	return i.importPinnedForSubject(ctx, credential, key, source, expectedRevision, "")
+}
+
+// ImportPinnedForSubject pins both the candidate revision and session subject.
+func (i *Importer) ImportPinnedForSubject(ctx context.Context, credential redisstore.Credential, key, source, expectedRevision, expectedSubject string) (ImportReceipt, error) {
+	if !identity.ValidID(expectedSubject) {
+		return ImportReceipt{}, ErrInvalid
+	}
+	return i.importPinnedForSubject(ctx, credential, key, source, expectedRevision, expectedSubject)
+}
+
+func (i *Importer) importPinnedForSubject(ctx context.Context, credential redisstore.Credential, key, source, expectedRevision, expectedSubject string) (ImportReceipt, error) {
 	if !ValidImportRevision(expectedRevision) {
 		return ImportReceipt{}, ErrInvalid
 	}
-	draft, err := i.importSelected(ctx, credential, key, source, expectedRevision)
+	draft, err := i.importSelected(ctx, credential, key, source, expectedRevision, expectedSubject)
 	if err != nil {
 		return ImportReceipt{}, err
 	}
@@ -90,10 +114,22 @@ func (i *Importer) ImportPinned(ctx context.Context, credential redisstore.Crede
 // Receipt observes the current owner's committed key without selecting a
 // candidate, accessing materials, or acquiring import/preview capacity.
 func (i *Importer) Receipt(ctx context.Context, credential redisstore.Credential, key string) (ImportReceipt, error) {
+	return i.receiptForSubject(ctx, credential, key, "")
+}
+
+// ReceiptForSubject observes a receipt only for the expected session subject.
+func (i *Importer) ReceiptForSubject(ctx context.Context, credential redisstore.Credential, key, expectedSubject string) (ImportReceipt, error) {
+	if !identity.ValidID(expectedSubject) {
+		return ImportReceipt{}, ErrInvalid
+	}
+	return i.receiptForSubject(ctx, credential, key, expectedSubject)
+}
+
+func (i *Importer) receiptForSubject(ctx context.Context, credential redisstore.Credential, key, expectedSubject string) (ImportReceipt, error) {
 	if i == nil || ctx == nil || !ValidKey(key) {
 		return ImportReceipt{}, ErrInvalid
 	}
-	actor, err := i.service.actor(ctx, credential)
+	actor, err := i.service.actorForSubject(ctx, credential, expectedSubject)
 	if err != nil {
 		return ImportReceipt{}, err
 	}

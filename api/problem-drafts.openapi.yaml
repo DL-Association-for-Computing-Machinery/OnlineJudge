@@ -12,6 +12,12 @@ info:
 security:
   - ordinarySession: []
 paths:
+  /api/v1/problem-draft-management/sources:
+    $ref: './problem-draft-management.openapi.yaml#/paths/~1api~1v1~1problem-draft-management~1sources'
+  /api/v1/problem-draft-management/imports:
+    $ref: './problem-draft-management.openapi.yaml#/paths/~1api~1v1~1problem-draft-management~1imports'
+  /api/v1/problem-draft-management/imports/{request_key}:
+    $ref: './problem-draft-management.openapi.yaml#/paths/~1api~1v1~1problem-draft-management~1imports~1%7Brequest_key%7D'
   /api/v1/problem-draft-sources:
     $ref: './problem-draft-imports.openapi.yaml#/paths/~1api~1v1~1problem-draft-sources'
   /api/v1/problem-draft-imports:

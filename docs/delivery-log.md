@@ -1,5 +1,19 @@
 # 工程交付记录
 
+## 2026-11-03：私有草稿导入管理与本机回执恢复
+
+从成功fetch的`origin/main 1cf96c76934c6fe2cf735cfc46dc65ff42443353`建立`codex/draft-import-management`。唯一目标为`/author/drafts`来源选择、固定完整修订导入、本机原tuple恢复及接入本人预览，原按ID入口移至`/author/drafts/open`。没有服务端完整本人列表、图片、编辑、独立受限验证、审核/发布或训练提交，不解除private-draft/not-run阻断，不部署。
+
+为避免已Read账号A但另一标签Cookie已变B的请求落入B，新增独立`/api/v1/problem-draft-management`三路及mandatory单个规范`X-OJ-Expected-Subject`。它只在实际会话Read之后、任何业务访问之前比较，不构造actor，保留最终真实会话/PG授权。独立namespace让旧二进制404而不是忽略header写入；旧两字段及先前绑定协议不变，新UI绝不fallback。基础设施/未知/取消优先503。无PG schema/SQL/索引及后端依赖变化。
+
+引入idb8.0.3（ISC、无运行依赖，许可随站点分发）承载独立最小恢复数据库，仅owner/source/key/revision/pending或confirmed+draftId。readwrite同事务检查owner复合主键前缀及精确内容、活动source槽和32条上限，strict事务`done`成功后且记录仍匹配才POST；只新插入胜出者首次发送，pending无自动删除/驱逐/换键/换修订。确认/替换/清理CAS完整tuple，确认历史保留且旧操作不碰新pending。手动恢复先GET，404且原修订仍配置时才显式原tuplePOST；刷新、重新聚焦、通知没有自动POST。新修订先核验旧确认回执；本地confirmed不授予链接，必须本次真实回执匹配。退出保留恢复元数据，切账号清显示并仅读当前账号；不是AC21代码保存/退出清理或加密隔离。浏览器清库/回收/换设备可能丢失，可导出供人工核验，无自动回灌或跨设备保证。
+
+Docker Node24.19/pnpm11.25类型/lint（含7项检测器）/97项前端测试、生产构建与pnpm audit全级别零已知漏洞通过；新增依赖版本/ISC/无依赖及LICENSE实读核验。`pnpm licenses list`因绑定安装的临时store索引已不在容器而失败，未将此命令记为通过；本次仅新增idb，已有许可图保持并补其许可证。Docker Go1.26.10/linux arm64格式/vet/三范围静态/root race/七命令/sqlc通过，真实PG全套13.800秒及双实际API回执专项通过。100治理11.401秒和repository通过；初次治理受沙箱回环bind限制，原样在授权环境重跑，没有改测试。
+
+最终已有Playwright1.64.1/Chromium141.0.7390.37浏览器14组通过，1280×960/390×844截图已查看，无水平溢出或意外console/pageerror；真实HTTPS→pinned mTLS race API/PG/Redis夹具38.238秒通过，浏览器/夹具/容器/Redis/清理均true。实际导入先由服务端提交、再定向屏蔽成功回包，刷新只GET恢复原八字段回执，无第二POST；同修订只核验不再导入。实际A Read回包持有期间从HTTP将Cookie换为有作者权B，放行A响应后三条管理操作均409，B同键404、目录200且本机看不到A记录。真实IDB两连接并发仅一次创建、32条原子限额、旧确认/删除不碰新pending、损坏owner字段不漏检、配额失败零POST、未知schema不重建及清库后零内存重试通过；这不是两个完整管理标签并发验收。
+
+针对性Astra审查推动修复“清库后内存重试”与“value.owner索引损坏漏检”，补原记录按key复核和owner主键前缀枚举；另保留合法BOM/来源字符。新控制器单测覆盖会话/页面清除、断开、只改时钟而timer未跑的迟到catalog/receipt，以及确认回执404/错ID/503不能创建新请求；追加非空记录在等待catalog/POST时到期的完整清除回归，最终Astra无剩余阻断，AI复核不代替人工审批。首轮浏览器最终B加载等待错误：账号空间变化会重建作用域，修正测试要求再次显式点击并验证没有自动GET，不改变产品满足测试。候选补丁秘密扫描无泄漏；合成检测器控制拒绝并脱敏，未放宽扫描规则。证据在仓库外`/private/tmp/oj-management-browser-qa-verified`、`oj-management-frontend-verified.log`、`oj-management-frontend-final-tests.log`、`oj-management-backend-full.log`、`oj-management-postgres.log`、`oj-management-governance-verified.log`；临时日志不是备份。API/README/计划/架构与界面约定同步，最终head CI/审查及合并按门禁回读。
+
 ## 2026-11-03：管理页的绑定导入与只读回执协议
 
 成功fetch后从`origin/main 171bc6fefe9390bc5d53bf469c541107276c49a2`建立独立`codex/draft-import-protocol`。唯一目标是补齐管理页选题、完整修订绑定及未知回执恢复的[服务协议](problem-drafts.md#管理页导入协议)，随后再接页面；本阶段没有新增导入表单/本人列表、图片授权、受限执行、审核、发布或部署，不解除private-draft/not-run阻断。无依赖、schema、新SQL或索引变化，整个private_drafts仍默认关闭且须成功预加载启动。

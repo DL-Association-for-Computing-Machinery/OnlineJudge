@@ -12,12 +12,13 @@ import (
 )
 
 var (
-	ErrInvalid       = errors.New("invalid private draft request")
-	ErrNotFound      = errors.New("private draft not found")
-	ErrConflict      = errors.New("private draft request key conflict")
-	ErrStore         = errors.New("private draft storage unavailable")
-	ErrCommitUnknown = errors.New("private draft commit outcome unknown; retain original request key")
-	ErrBusy          = errors.New("private draft preparation in use")
+	ErrInvalid        = errors.New("invalid private draft request")
+	ErrNotFound       = errors.New("private draft not found")
+	ErrConflict       = errors.New("private draft request key conflict")
+	ErrStore          = errors.New("private draft storage unavailable")
+	ErrCommitUnknown  = errors.New("private draft commit outcome unknown; retain original request key")
+	ErrBusy           = errors.New("private draft preparation in use")
+	ErrSubjectChanged = errors.New("private draft session subject changed")
 )
 
 // Reference is a private logical role and immutable object identity. Its name
@@ -25,6 +26,22 @@ var (
 type Reference struct {
 	Name   string               `json:"name"`
 	Object materialstore.Object `json:"object"`
+}
+
+func (s *Service) actorForSubject(ctx context.Context, credential redisstore.Credential, expected string) (identity.ProblemActor, error) {
+	a, err := s.actor(ctx, credential)
+	if err != nil {
+		return a, err
+	}
+	if expected != "" {
+		if err := ctx.Err(); err != nil {
+			return identity.ProblemActor{}, err
+		}
+	}
+	if expected != "" && a.SubjectID != expected {
+		return identity.ProblemActor{}, ErrSubjectChanged
+	}
+	return a, nil
 }
 
 // Content is a detached snapshot of validated import metadata.
@@ -103,11 +120,11 @@ func (s *Service) Create(ctx context.Context, credential redisstore.Credential, 
 	if s == nil || ctx == nil || !ValidKey(key) || p == nil {
 		return Draft{}, ErrInvalid
 	}
-	return s.create(ctx, credential, key, func() (*Prepared, error) { return p, nil })
+	return s.create(ctx, credential, key, "", func() (*Prepared, error) { return p, nil })
 }
 
-func (s *Service) create(ctx context.Context, credential redisstore.Credential, key string, selectPrepared func() (*Prepared, error)) (Draft, error) {
-	actor, err := s.actor(ctx, credential)
+func (s *Service) create(ctx context.Context, credential redisstore.Credential, key, expectedSubject string, selectPrepared func() (*Prepared, error)) (Draft, error) {
+	actor, err := s.actorForSubject(ctx, credential, expectedSubject)
 	if err != nil {
 		return Draft{}, err
 	}

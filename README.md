@@ -102,9 +102,9 @@ schema 7 默认不给任何账号授予出题角色。受信维护者先独立�
 
 已通过真实普通登录的出题账号可向`POST /api/v1/problem-drafts`发送`{"source_id":"library-checker:aplusb","request_key":"original-import-request-01"}`，需要同源证据及会话Cookie；最多1KiB JSON。成功/原回执均200，再以`GET /api/v1/problem-drafts/草稿ID`读取本人固定JSON元数据。断连/503可能已经提交，保留原键及精确候选快照核验，不自动重试或换键；配置/候选版本切换前须保留原版本供未知回执恢复。完整协议见[OpenAPI](api/problem-drafts.openapi.yaml)。默认Compose及本地测试账号均不自动开启或取得出题权。
 
-管理页导入使用新的[绑定协议](api/problem-draft-imports.openapi.yaml)：先`GET /api/v1/problem-draft-sources`取得当前授权候选的`source_id/title/version/import_revision`，再向`POST /api/v1/problem-draft-imports`提交严格三字段`source_id/request_key/expected_revision`，其中expected_revision原样取完整import_revision。它还绑定index/来源证据，不能用仅代表题目文档的version代替；修订变化在材料I/O前409拒绝。成功返回八字段最小回执，没有文档或材料引用。
+`/author/drafts`已接来源选择、绑定导入及本机回执恢复，使用[主体绑定管理协议](api/problem-draft-management.openapi.yaml)：先`GET /api/v1/problem-draft-management/sources`取得当前授权候选的`source_id/title/version/import_revision`，再向`POST /api/v1/problem-draft-management/imports`提交严格三字段`source_id/request_key/expected_revision`，其中expected_revision原样取完整import_revision。三条管理路由都必须带当前检查的`X-OJ-Expected-Subject`；服务端只把它与实际会话比较，不作为身份来源，账号变化409且业务零访问。完整修订还绑定index/来源证据，不能用仅代表题目文档的version代替；修订变化在材料I/O前409拒绝。成功返回八字段最小回执，没有文档或材料引用。
 
-若响应丢失或结果未知，保留原source/key/revision，以`GET /api/v1/problem-draft-imports/原请求键`只读查询本人已提交回执，不必重传材料。该GET不依赖当前候选或材料活动槽，但整个private_drafts仍须有效配置并启动成功。404只是本次没有观察到提交，409也不证明旧请求不存在；保留原tuple，显式再次查询或用原tuple恢复，不自动POST、不换键/修订，不回退上述旧两字段接口。旧接口保持兼容但不提供客户端修订锁定；导入管理页面随后接入，当前`/author/drafts`仍只支持按已入库ID预览。细节和回退见[草稿合同](docs/problem-drafts.md#管理页导入协议)。
+若响应丢失或结果未知，保留原owner/source/key/revision，以`GET /api/v1/problem-draft-management/imports/原请求键`只读查询本人已提交回执，不必重传材料。该GET不依赖当前候选或材料活动槽，但整个private_drafts仍须有效配置并启动成功。404只是本次没有观察到提交，409也不证明旧请求不存在；保留原tuple，显式再次查询或用原tuple恢复，不自动POST、不换键/修订。页面先等本机IndexedDB严格事务提交才发起POST，最多32条/账号，不自动清除pending；刷新/恢复/账号变化只清显示。旧两字段及[先前绑定协议](api/problem-draft-imports.openapi.yaml)保持兼容，页面绝不回退它们，旧二进制404须停写。`/author/drafts/open`保留按已有ID选择入口；图片/审核/发布及完整本人列表待交付。本机恢复记录的保留、导出与存储丢失限制见[界面约定](docs/frontend-design.md#私有草稿导入管理)，细节和回退见[草稿合同](docs/problem-drafts.md#管理页导入协议)。
 
 `GET /api/v1/problem-drafts/草稿ID/preview`返回本人已入库版本的`markdown`和有序`examples`（id/input/output），不依赖当前候选版本；仍须有效普通会话和当前出题权。先核对全部题面/样例引用与总预算，再逐份验证快照，读取后复核同一凭据和PG授权，失败不返回部分文本。原始markdown/input/output总计至多1MiB，重复对象按返回次数计数；JSON转义可放大到六倍另加元数据。只接受严格UTF-8，保留空格、CRLF及末尾换行，不替换或截断。它是管理页的数据接口，不提供一般材料下载或发布；正式测试与源码不进入预览。最终会话读取之后的退出及最终PG授权之后的撤权沿已接受在途合同，不能原子撤回已经开始发送的响应。关闭整个`private_drafts`能力即可停止入口，已入库资料保留。
 
@@ -230,7 +230,7 @@ python3 scripts/test-browser-account.py \
 
 可选 `--chromium-executable /absolute/path/to/existing/chromium` 指定已有浏览器；`--statement-corpus /absolute/path/to/prepared-bundle/statements` 增加至多10份只读Markdown的浏览器渲染耗时/节点测量（响应替换，不冒充十题真实HTTP授权验收）；`--toolchain-image`、`--module-cache`、`--build-cache-volume` 和 `--context` 的约束沿用现有专项。驱动只发布随机回环 HTTPS/HTTP 对照端口，建立隔离的合成账号/存储；真实 race API 使用固定 pin 的 mTLS，外层临时证书只在新测试 context 忽略。控制端点仅供本夹具，不能对外开放或接入真实数据。
 
-产物包含日志、浏览器断言 JSON 与桌面/390px 截图；驱动分别检查浏览器和夹具结果，结束只清理本轮带 owner 标签的资源。`integration && browser` 夹具只运行 `TestBrowserFixture`，普通 PR CI 不自动执行此手动浏览器专项。生产证书、浏览器兼容矩阵及完整业务验收仍须另做。
+产物包含日志、浏览器断言 JSON 与桌面/390px 截图；当前14组保留账号/预览覆盖，并验证真实主体绑定导入、丢成功回包后刷新只读恢复、实际Cookie换账号拒绝、IndexedDB严格事务仲裁/容量/损坏/失败及清库后零内存重试。独立journal测试入口仅由此驱动构建到临时assets，生产构建不引用它。驱动分别检查浏览器和夹具结果，结束只清理本轮带 owner 标签的资源。`integration && browser` 夹具只运行 `TestBrowserFixture`，普通 PR CI 不自动执行此手动浏览器专项。生产证书、浏览器兼容矩阵及完整业务验收仍须另做。
 
 真实 Worker 专项（当前固定 macOS arm64、Docker Desktop LinuxKit 7.0.14）：
 

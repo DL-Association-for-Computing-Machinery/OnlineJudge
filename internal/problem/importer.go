@@ -48,10 +48,10 @@ func NewImporter(service *Service, sources map[string]*Prepared, maxInFlight int
 // Import never accepts a filesystem path. Unknown candidates and capacity are
 // observed only by an authorized author, before any material I/O.
 func (i *Importer) Import(ctx context.Context, credential redisstore.Credential, key, source string) (Draft, error) {
-	return i.importSelected(ctx, credential, key, source, "")
+	return i.importSelected(ctx, credential, key, source, "", "")
 }
 
-func (i *Importer) importSelected(ctx context.Context, credential redisstore.Credential, key, source, expectedRevision string) (Draft, error) {
+func (i *Importer) importSelected(ctx context.Context, credential redisstore.Credential, key, source, expectedRevision, expectedSubject string) (Draft, error) {
 	if i == nil || ctx == nil || !ValidKey(key) {
 		return Draft{}, ErrInvalid
 	}
@@ -61,7 +61,7 @@ func (i *Importer) importSelected(ctx context.Context, credential redisstore.Cre
 			<-i.slots
 		}
 	}()
-	return i.service.create(ctx, credential, key, func() (*Prepared, error) {
+	return i.service.create(ctx, credential, key, expectedSubject, func() (*Prepared, error) {
 		p, ok := i.sources[source]
 		if !ok {
 			return nil, ErrUnknownSource

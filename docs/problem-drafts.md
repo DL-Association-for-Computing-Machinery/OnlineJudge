@@ -31,7 +31,7 @@
 
 原子创建新输出后先写`INCOMPLETE`，只在全部文件、草稿版本和引用独立复验通过后，将`bundle.partial`改名为`bundle`并移除标记。磁盘错误、中断或校验失败保留标记及部分成果，不修改输入；不保证掉电持久性或自动清理部分文件。命令行复验拒绝带未完成标记的输出，可独立检查搬迁后的bundle；校验成功始终返回publication blocked。
 
-源报告仅记录题源准备阶段已执行的验证，不将其当作本站运行证据。草稿的本站验证固定`not-run`，发布继续阻断于题面/公式渲染、生产检查器与资源准入、本站独立受限验证、获授权非作者终审及原子发布。下方应用服务及可选HTTP已接入[本地材料存储](material-store.md)、数据库固定引用和最小出题权限；后续仍须完成管理页面、受限验证和审核发布。P3/P5接入真实训练授权及页面，当前Worker的固定M0材料门禁保持。
+源报告仅记录题源准备阶段已执行的验证，不将其当作本站运行证据。草稿的本站验证固定`not-run`，发布继续阻断于完整题面质量、生产检查器与资源准入、本站独立受限验证、获授权非作者终审及原子发布。下方应用服务及可选HTTP已接入[本地材料存储](material-store.md)、数据库固定引用、最小出题权限及导入管理页；后续仍须完成图片授权、受限验证和审核发布。P3/P5接入真实训练授权及页面，当前Worker的固定M0材料门禁保持。
 
 ## 私有草稿入库与本人读取
 
@@ -43,7 +43,7 @@
 
 ### 管理页导入协议
 
-[绑定导入合同](../api/problem-draft-imports.openapi.yaml)补齐选题与未知回执恢复的数据边界，尚未提供导入表单或本人草稿列表。`GET /api/v1/problem-draft-sources`在当前作者预检后返回按source_id排序的1—10份`source_id/title/version/import_revision`，末尾再次观察同一凭据、比较完整actor并检查PG角色/取消；失败不返回部分目录。摘要在启动时准入并固定，不访问大材料，不是材料健康检查，也不暴露路径/材料引用。
+[绑定导入合同](../api/problem-draft-imports.openapi.yaml)补齐选题与未知回执恢复的数据边界；[管理页](frontend-design.md#私有草稿导入管理)现使用下述主体绑定命名空间，不提供服务端完整本人草稿列表。`GET /api/v1/problem-draft-sources`在当前作者预检后返回按source_id排序的1—10份`source_id/title/version/import_revision`，末尾再次观察同一凭据、比较完整actor并检查PG角色/取消；失败不返回部分目录。摘要在启动时准入并固定，不访问大材料，不是材料健康检查，也不暴露路径/材料引用。
 
 `version`只标识题目文档；`import_revision`为`Prepared.RequestSHA256`，覆盖文档摘要和全部排序逻辑引用，包含index及来源报告。证据或其他引用变化时，题目version可以不变，但完整导入修订必须改变。因此`POST /api/v1/problem-draft-imports`严格要求`source_id/request_key/expected_revision`三字段JSON，仍至多1024字节；`expected_revision`为选中候选的64位小写hex完整修订，不是document version。授权后先比较修订，再占用原导入/预览材料槽和执行任何材料I/O；不匹配为409 `DRAFT_SOURCE_CHANGED`，同键不同已存内容仍为409 `DRAFT_REQUEST_CONFLICT`。后续材料、最终会话与PG幂等事务完全复用原路径，不新增执行或发布能力。
 
@@ -51,11 +51,13 @@
 
 断连、超时、取消和503可能已提交，保留原source/key/revision，先手动只读查回执；没有自动POST重试。404只表示本次未观察到提交，不锁住不存在的键或取消在途POST；409修订变化也不证明旧请求没有提交。未确认期间不得换key、更新expected_revision或回退旧POST，继续原tuple核验；候选切换后未提交旧请求的重试需要维护者恢复原受信快照，已提交则只读查询即可。新协议拒绝query及转义路径别名，不接受主体、材料、路径或版本选择器。
 
-回执复用现有`DraftByKeyForShare`及owner/key唯一索引，无schema、新SQL或索引变化；原2048行EXPLAIN ANALYZE继续验证相同查询。材料槽范围不扩成整个HTTP或这些只读请求的限额；最终Redis观察之后的退出、最终PG检查之后的撤权仍按已接受在途边界，不宣称跨库原子撤回。回退旧API二进制后新端点404，数据库/材料不变；未来管理页应保留未确认tuple，不能自动降级调用旧接口。
+回执复用现有`DraftByKeyForShare`及owner/key唯一索引，无schema、新SQL或索引变化；原2048行EXPLAIN ANALYZE继续验证相同查询。材料槽范围不扩成整个HTTP或这些只读请求的限额；最终Redis观察之后的退出、最终PG检查之后的撤权仍按已接受在途边界，不宣称跨库原子撤回。回退旧API二进制后新端点404，数据库/材料不变；管理页保留未确认tuple，不能自动降级调用旧接口。
+
+[主体绑定管理合同](../api/problem-draft-management.openapi.yaml)将上述三种操作映射到独立的`GET /api/v1/problem-draft-management/sources`、`POST /api/v1/problem-draft-management/imports`及`GET /api/v1/problem-draft-management/imports/{request_key}`。必须有且仅有一个规范32位小写hex的`X-OJ-Expected-Subject`，否则400；它仅是对实际会话主体的前置比较，不构造actor或授予权限。首次真实Read之后、角色/候选/容量/材料/回执访问前不一致则409`DRAFT_SUBJECT_CHANGED`，存储/未知/取消仍优先503。后续完整会话/PG授权及所有原协议DTO/幂等边界复用同一调用链。独立路径使旧实例缺能力时404，避免旧二进制忽略新header而把旧账号意图写入新Cookie账号；客户端无旧路径fallback。已经按旧凭据接受的在途工作不因此变成可原子取消。
 
 ### 本人题面与样例预览
 
-浏览器页面 `/author/drafts/:id` 已复用此接口和[共享 Markdown/数学渲染](frontend-design.md#共享题面与本人预览)，显式核验会话后展示本人固定版本，并可原文复制样例。当前只有按ID读取，导入管理、图片资源授权、审核与发布另行交付；页面不会修改 `not-run` 或自动清除任何发布阻断。
+浏览器页面 `/author/drafts/:id` 已复用此接口和[共享 Markdown/数学渲染](frontend-design.md#共享题面与本人预览)，显式核验会话后展示本人固定版本，并可原文复制样例；`/author/drafts`接入导入与恢复。图片资源授权、审核与发布另行交付；页面不会修改 `not-run` 或自动清除任何发布阻断。
 
 `Importer.Preview`和`GET /api/v1/problem-drafts/{id}/preview`只读取已入库固定版本。初次新鲜actor及同事务owner/当前角色检查成功后取得材料槽；解析PG固定文档，核对ID/owner/source/version/state、draft.json原文关联及无重复逻辑名，再将statement与所有sample=true点的input/answer逐一匹配文档和存储引用。examples顺序必须与固定测试清单相符。客户端不能选择路径、hash或任意测试点，正式数据、原始程序和来源报告不读取；该题在现候选中换版或不再选中时，已启用服务仍读取旧存储版本。入口启动的受信bundle/配置条件保持。
 

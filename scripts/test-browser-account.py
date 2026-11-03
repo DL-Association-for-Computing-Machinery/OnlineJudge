@@ -190,7 +190,7 @@ def main():
             if not (ROOT / "web" / name).exists():
                 raise ValueError("frontend source incomplete")
         expected_checks = re.findall(r"^\s+passed\('([^'\n]+)'\)", (ROOT / "tests/browser/account-qa.mjs").read_text(), re.M)
-        if len(expected_checks) != 13 or len(set(expected_checks)) != 13:
+        if len(expected_checks) != 14 or len(set(expected_checks)) != 14:
             raise ValueError("browser driver check contract changed")
         phase = "FRONTEND"
         print("Building assets with cached dependencies", flush=True)
@@ -204,6 +204,9 @@ cp -R /workspace/web/src /workspace/web/scripts /workspace/web/public .
 for file in index.html vite.config.ts tsconfig.json eslint.config.js package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc; do cp /workspace/web/$file .; done
 pnpm build
 cp -R dist/. /out/
+mkdir -p tests
+cp /workspace/web/tests/journal-harness.ts tests/
+node --input-type=module -e "import {build} from 'vite'; await build({configFile:false,publicDir:false,build:{lib:{entry:'tests/journal-harness.ts',formats:['es'],fileName:'journal-harness'},outDir:'/out/journal-test',emptyOutDir:true,minify:false}})"
 """
         containers["frontend"] = docker.create("--pull", "never", "--network", "none", "--cpus", "2", "--memory", "2g", "--cap-drop", "ALL",
             "--security-opt", "no-new-privileges", "--workdir", "/src/web", "--mount", f"type=bind,src={ROOT},dst=/workspace,readonly",

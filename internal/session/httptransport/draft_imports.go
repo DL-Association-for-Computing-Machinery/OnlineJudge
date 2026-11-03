@@ -6,12 +6,22 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
 	draftproblem "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/redisstore"
 )
 
 const draftSources = "/api/v1/problem-draft-sources"
 const draftImports = "/api/v1/problem-draft-imports"
+const managementSources = "/api/v1/problem-draft-management/sources"
+const managementImports = "/api/v1/problem-draft-management/imports"
+
+// DraftManagement is the subject-pinned management capability.
+type DraftManagement interface {
+	SourcesForSubject(context.Context, redisstore.Credential, string) ([]draftproblem.ImportSource, error)
+	ImportPinnedForSubject(context.Context, redisstore.Credential, string, string, string, string) (draftproblem.ImportReceipt, error)
+	ReceiptForSubject(context.Context, redisstore.Credential, string, string) (draftproblem.ImportReceipt, error)
+}
 
 // DraftImportProtocol is an additive capability for pinned imports and read-only
 // recovery. Existing two-field draft imports retain their original contract.
@@ -22,14 +32,30 @@ type DraftImportProtocol interface {
 }
 
 func draftImportKey(path string) string {
-	if !strings.HasPrefix(path, draftImports+"/") {
+	return importKey(path, draftImports)
+}
+
+func importKey(path, prefix string) string {
+	if !strings.HasPrefix(path, prefix+"/") {
 		return ""
 	}
-	key := strings.TrimPrefix(path, draftImports+"/")
+	key := strings.TrimPrefix(path, prefix+"/")
 	if !draftproblem.ValidKey(key) {
 		return ""
 	}
 	return key
+}
+
+func managementPath(path string) bool {
+	return path == managementSources || path == managementImports || importKey(path, managementImports) != ""
+}
+
+func expectedSubject(r *http.Request) (string, bool) {
+	values := r.Header.Values("X-OJ-Expected-Subject")
+	if len(values) != 1 || !identity.ValidID(values[0]) {
+		return "", false
+	}
+	return values[0], true
 }
 
 func draftImportPath(path string) bool {
@@ -41,13 +67,26 @@ func (h *handler) serveDraftImport(w http.ResponseWriter, r *http.Request, ctx c
 		problem(w, http.StatusBadRequest, "INVALID_DRAFT_REQUEST", "草稿请求格式无效")
 		return
 	}
-	imports := h.drafts.(DraftImportProtocol)
+	management := managementPath(r.URL.Path)
+	expected := ""
+	if management {
+		var ok bool
+		expected, ok = expectedSubject(r)
+		if !ok {
+			problem(w, http.StatusBadRequest, "INVALID_DRAFT_REQUEST", "草稿请求格式无效")
+			return
+		}
+	}
 	var result any
 	var err error
 	switch {
-	case r.URL.Path == draftSources:
+	case r.URL.Path == draftSources || r.URL.Path == managementSources:
 		var sources []draftproblem.ImportSource
-		sources, err = imports.Sources(ctx, credential)
+		if management {
+			sources, err = h.drafts.(DraftManagement).SourcesForSubject(ctx, credential, expected)
+		} else {
+			sources, err = h.drafts.(DraftImportProtocol).Sources(ctx, credential)
+		}
 		result = struct {
 			Sources []draftproblem.ImportSource `json:"sources"`
 		}{sources}
@@ -56,9 +95,17 @@ func (h *handler) serveDraftImport(w http.ResponseWriter, r *http.Request, ctx c
 		if !ok {
 			return
 		}
-		result, err = imports.ImportPinned(ctx, credential, key, source, revision)
+		if management {
+			result, err = h.drafts.(DraftManagement).ImportPinnedForSubject(ctx, credential, key, source, revision, expected)
+		} else {
+			result, err = h.drafts.(DraftImportProtocol).ImportPinned(ctx, credential, key, source, revision)
+		}
 	default:
-		result, err = imports.Receipt(ctx, credential, draftImportKey(r.URL.Path))
+		if management {
+			result, err = h.drafts.(DraftManagement).ReceiptForSubject(ctx, credential, importKey(r.URL.Path, managementImports), expected)
+		} else {
+			result, err = h.drafts.(DraftImportProtocol).Receipt(ctx, credential, draftImportKey(r.URL.Path))
+		}
 	}
 	if err == nil {
 		err = ctx.Err()

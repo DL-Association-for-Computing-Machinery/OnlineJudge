@@ -106,8 +106,12 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			problem(w, http.StatusNotFound, "NOT_FOUND", "接口不存在")
 			return
 		}
+		if _, available := h.drafts.(DraftManagement); managementPath(r.URL.Path) && !available {
+			problem(w, http.StatusNotFound, "NOT_FOUND", "接口不存在")
+			return
+		}
 		method = http.MethodGet
-		if r.URL.Path == draftCollection || r.URL.Path == draftImports {
+		if r.URL.Path == draftCollection || r.URL.Path == draftImports || r.URL.Path == managementImports {
 			method = http.MethodPost
 		}
 	}
