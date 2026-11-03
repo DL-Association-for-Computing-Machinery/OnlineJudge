@@ -3,13 +3,16 @@ package execution
 import (
 	"context"
 	"errors"
+
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 )
 
 // FailureEntry identifies a trusted adapter call site, never command or file data.
 type FailureEntry struct {
-	Phase string `json:"phase"`
-	Role  string `json:"role"`
-	Code  string `json:"code"`
+	Phase     string     `json:"phase"`
+	Role      string     `json:"role"`
+	Code      string     `json:"code"`
+	HostTrace *HostTrace `json:"host_trace,omitempty"`
 }
 
 // FailureDiagnostic bounds joined primary and cleanup evidence to eight entries.
@@ -27,19 +30,33 @@ func (e *executionFailure) Error() string { return e.cause.Error() }
 func (e *executionFailure) Unwrap() error { return e.cause }
 
 type codedFailure struct {
-	code  string
-	cause error
+	code    string
+	cause   error
+	host    experiment.HostFailureTrace
+	hasHost bool
 }
 
 func (e *codedFailure) Error() string              { return e.cause.Error() }
 func (e *codedFailure) Unwrap() error              { return e.cause }
 func (e *codedFailure) SandboxFailureCode() string { return safeFailureCode(e.code) }
 
+func (e *codedFailure) SandboxHostTrace() (experiment.HostFailureTrace, bool) {
+	return e.host, e.hasHost
+}
+
 func withFailureCode(err error, code string) error {
 	if err == nil {
 		return nil
 	}
 	return &codedFailure{code: safeFailureCode(code), cause: err}
+}
+
+func withFailureMetadata(label error, original error) error {
+	if label == nil {
+		return nil
+	}
+	trace, present := hostTraceFrom(original)
+	return &codedFailure{code: errorFailureCode(original), cause: label, host: trace, hasHost: present}
 }
 
 func safeFailureCode(code string) string {
@@ -133,7 +150,7 @@ func tagFailure(err error, phase, role, code string) error {
 	if code == "" {
 		code = errorFailureCode(err)
 	}
-	return &executionFailure{detail: FailureEntry{Phase: phase, Role: role, Code: safeFailureCode(code)}, cause: err}
+	return &executionFailure{detail: FailureEntry{Phase: phase, Role: role, Code: safeFailureCode(code), HostTrace: hostTraceDetails(err)}, cause: err}
 }
 
 func failureError(phase, role, code, label string) error {
@@ -152,6 +169,7 @@ func safeFailureEntry(d FailureEntry) FailureEntry {
 		d.Role = "unknown"
 	}
 	d.Code = safeFailureCode(d.Code)
+	d.HostTrace = CloneHostTrace(d.HostTrace)
 	return d
 }
 
@@ -173,6 +191,14 @@ func FailureDetails(err error) *FailureDiagnostic {
 		if e, ok := current.(*executionFailure); ok {
 			appendEntry(e.detail)
 			return false
+		}
+		if provider, ok := current.(hostTraceProvider); ok {
+			if value, present := provider.SandboxHostTrace(); present {
+				if trace := projectHostTrace(value); trace != nil {
+					appendEntry(FailureEntry{Phase: "unknown", Role: "unknown", Code: nodeFailureCode(current), HostTrace: trace})
+					return false
+				}
+			}
 		}
 		if code := nodeFailureCode(current); code != "unknown" {
 			appendEntry(FailureEntry{Phase: "unknown", Role: "unknown", Code: code})

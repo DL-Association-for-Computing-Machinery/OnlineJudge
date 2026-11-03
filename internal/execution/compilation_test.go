@@ -207,7 +207,7 @@ func TestCompilationFailuresCleanEveryKnownFile(t *testing.T) {
 	g, f, p := compilationAdapter(t, files)
 	f.badRead = 5
 	_, err := g.CompileFiles(context.Background(), p, files)
-	if err == nil || f.compiles != 0 || len(f.deletes) != 5 || g.liveObjects != 0 || FailureDetails(err).Entries[0] != (FailureEntry{"readback", "dependency", "integrity"}) {
+	if err == nil || f.compiles != 0 || len(f.deletes) != 5 || g.liveObjects != 0 || FailureDetails(err).Entries[0] != (FailureEntry{Phase: "readback", Role: "dependency", Code: "integrity"}) {
 		t.Fatal("last dependency integrity/cleanup")
 	}
 }

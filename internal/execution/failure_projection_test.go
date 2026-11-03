@@ -69,14 +69,14 @@ func TestFailureProjectionSlotBound(t *testing.T) {
 func TestFailureProjectionIndependentBranches(t *testing.T) {
 	primary := tagFailure(context.Canceled, "control", "stdout", "deadline")
 	cleanup := tagFailure(context.DeadlineExceeded, "delete", "input", "deadline")
-	unknown := FailureEntry{"unknown", "unknown", "unknown"}
+	unknown := FailureEntry{Phase: "unknown", Role: "unknown", Code: "unknown"}
 	for _, tc := range []struct {
 		err  error
 		want []FailureEntry
 	}{
-		{errors.Join(context.Canceled, cleanup), []FailureEntry{{"unknown", "unknown", "canceled"}, {"delete", "input", "deadline"}}},
-		{errors.Join(primary, cleanup, context.DeadlineExceeded), []FailureEntry{{"control", "stdout", "deadline"}, {"delete", "input", "deadline"}, {"unknown", "unknown", "deadline"}}},
-		{fmt.Errorf("fixed: %w", errors.Join(errors.New("private"), cleanup)), []FailureEntry{unknown, {"delete", "input", "deadline"}}},
+		{errors.Join(context.Canceled, cleanup), []FailureEntry{{Phase: "unknown", Role: "unknown", Code: "canceled"}, {Phase: "delete", Role: "input", Code: "deadline"}}},
+		{errors.Join(primary, cleanup, context.DeadlineExceeded), []FailureEntry{{Phase: "control", Role: "stdout", Code: "deadline"}, {Phase: "delete", Role: "input", Code: "deadline"}, {Phase: "unknown", Role: "unknown", Code: "deadline"}}},
+		{fmt.Errorf("fixed: %w", errors.Join(errors.New("private"), cleanup)), []FailureEntry{unknown, {Phase: "delete", Role: "input", Code: "deadline"}}},
 	} {
 		d := FailureDetails(tc.err)
 		if d.Truncated || !reflect.DeepEqual(d.Entries, tc.want) {
@@ -103,7 +103,7 @@ func TestCachedFailurePreservesBusyIdentity(t *testing.T) {
 		t.Fatal("busy sentinel identity changed")
 	}
 	d := FailureDetails(err)
-	if d.Truncated || !reflect.DeepEqual(d.Entries, []FailureEntry{{"verify", "environment", "ownership"}}) {
+	if d.Truncated || !reflect.DeepEqual(d.Entries, []FailureEntry{{Phase: "verify", Role: "environment", Code: "ownership"}}) {
 		t.Fatalf("busy category: %+v", d)
 	}
 }
@@ -135,7 +135,7 @@ func TestCachedFailureBudgetAndAdmissionCategories(t *testing.T) {
 				_, err = g.Run(ctx, g.runtime, "foreign", nil)
 			}
 			d := FailureDetails(err)
-			if d == nil || d.Truncated || !reflect.DeepEqual(d.Entries, []FailureEntry{{tc.phase, tc.role, tc.code}}) {
+			if d == nil || d.Truncated || !reflect.DeepEqual(d.Entries, []FailureEntry{{Phase: tc.phase, Role: tc.role, Code: tc.code}}) {
 				t.Fatalf("budget/admission category: %+v", d)
 			}
 		})

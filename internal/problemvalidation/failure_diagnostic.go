@@ -5,11 +5,12 @@ import "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/e
 // ExecutionFailure locates bounded adapter evidence within a validation call.
 // Point is one-based for a run and zero outside a point; no material is included.
 type ExecutionFailure struct {
-	Operation string `json:"operation"`
-	Point     int    `json:"point,omitempty"`
-	Phase     string `json:"phase"`
-	Role      string `json:"role"`
-	Code      string `json:"code"`
+	Operation string               `json:"operation"`
+	Point     int                  `json:"point,omitempty"`
+	Phase     string               `json:"phase"`
+	Role      string               `json:"role"`
+	Code      string               `json:"code"`
+	HostTrace *execution.HostTrace `json:"host_trace,omitempty"`
 }
 
 // ExecutionDiagnostic retains primary and cleanup failures in observation order.
@@ -46,6 +47,6 @@ func (r *Report) recordExecution(operation string, point int, err error) {
 		if e.Phase == "delete" {
 			op = "cleanup"
 		}
-		out.Entries = append(out.Entries, ExecutionFailure{Operation: op, Point: point, Phase: e.Phase, Role: e.Role, Code: e.Code})
+		out.Entries = append(out.Entries, ExecutionFailure{Operation: op, Point: point, Phase: e.Phase, Role: e.Role, Code: e.Code, HostTrace: execution.CloneHostTrace(e.HostTrace)})
 	}
 }

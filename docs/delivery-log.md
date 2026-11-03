@@ -1,5 +1,21 @@
 # 工程交付记录
 
+## 2026-11-04：Host控制失败的阶段与本地启动证据
+
+成功fetch后从`origin/main 31474f2a19280f7b9d53a64ca6987cb0ba5af6dc`建立独立`codex/host-control-evidence`。唯一目标为Host.RoundTrip失败证据：既有execution条目可选`host_trace`记录admission/prepare/inspect/command/response_validation固定前缀、失败/最后完成位置、单调耗时、进入时context与剩余期限，以及直接本地命令启动证据；原顺序、错误/取消、预算、清理、Stop及零重试语义保持。它不修改来源准入、Runtime/Profile/Plan、数据库或发布状态，也不修复/解释#114/#119旧故障。完整字段及缺失语义归[参考验证](reference-validation.md#执行失败诊断)。
+
+共享纯值契约放`internal/experiment`但不进入Profile；Host局部固定5数组，不用共享LastError。每个失败返回点先冻结该阶段，整体在defer收尾后采样；原型把收尾时间计入末阶段的歧义经Astra指出后修正，25ms Body.Close定向回归核对整体与阶段之和差值。直接`commandFailure`才提供started/not_started，wrapped/nil/替身保持unknown；context/剩余期限非原子，0ms可能取整。前缀结构/数量/完成位置严格校验、数值0..60000及截断标记、枚举净化、未到达数组槽归零；无效或多操作歧义trace不借用。解耦Host/execution的typed getter按值返回，公开DTO/报告再分别复制。
+
+GoJudge.request与cachedError重建固定脱敏错误前只复制元数据，不重新挂回已丢弃的transport cause；原Is/As（包括JSON SyntaxError与cached层原保留的context）保持。主control、点内input清理、最终exe清理分别经tag/FailureDetails/recordExecution携带自己的trace，finish附加context不复制。初稿provider终止分支另开类别遍历的缺口由Astra复核发现，现只读当前节点类别；计数型8个环provider零Unwrap、外层63/64链对应64/65槽，八条/第九条截断及poison Error方法断言通过。裸provider可unknown，槽预算不约束外来方法自身成本。Host成功而后JSON decode失败保持无Host trace，不引入成功响应侧通道。
+
+现有离线Docker Go1.26.10模块核验、四包race基线及各阶段定向race/vet、最终完整backend格式/vet/静态/root race/七Linux命令构建、sandbox vet及独立Darwin驱动构建通过。第一次完整静态发现freeze返回值未检查，修正为保留原错误的赋值后全量通过；原失败日志保持。第五profile固定摘要及最后静态再验通过，成功JSON SHA `8bf9e56626c84d19e31a7050e36330866f798ab8c59b56866032ef7cfea4baa6`和旧五profile/Plan结构保持。主要日志`/private/tmp/oj-host-control-evidence-{baseline,host-targeted,host-reviewed,connected,projection,bounded-projection,backend,backend-fixed,final-quality-build}.log`；Linux与Darwin输出分目录。
+
+Darwin原生测试先断言清单恰有11项（8项Host诊断及3项旧Stop），再一次执行，全部通过；包含真实受信本地进程未启动/启动后超时、过期inspect后仍保留原command尝试、wrapped/nil不伪造启动、inspect解码/隔离失败零command、阶段不吸收收尾、实际Host→execution接口、后续decode无trace。其余投影/并发副本/数字边界/多错误归属、旧cause及owner实际私有报告持久化/Stop成功失败marker决策由普通race测试验证。日志`oj-host-control-evidence-native.log`与精确清单`oj-host-control-evidence-native-list.txt`保留；这些仅执行固定受信命令和替身，不构成题源验收。
+
+另一次必要的真实Host路径兼容回归使用原secondary CID/镜像/owner及停止/空锁前置：A+B九组23.43秒全部通过，完整12点AC/停止确认，AC/WA/CE/RE/TLE/MLE/OLE/取消保持。报告`/private/tmp/oj-host-control-aplusb-report-20261104/report.json` SHA `f4489bf3e618e2c701333d0833344fe20ef0d9aaf456204c35b44790847c2f08`；旧plan `12e87eb8d0771e34a8d187cb2bfc3b5cbf266a3d09768fc20194cfa4927f1325`、profile `658fef827daa872a726e6a728ad05c84a08103bd9857c71606fe76cff92c1437`保持，0700/0600、无INCOMPLETE、成功execution/stop诊断省略。结束时三个原槽均停止/PID0、私有空锁无占用，无恢复/手清marker。未重跑suffixarray、staticrmq或其余完整来源，亦未本地重跑PG/Redis、前端/浏览器或完整M0；精确head远端CI另核验。
+
+没有新依赖、SQL/schema、HTTP/UI、实际期限或来源预算变更；#114与#119仍为原head草稿，旧失败/根因未知不解除，草稿not-run/生产null/publication blocked保持。下一次调查另行登记一次可检验假设和安全条件，不能以新增诊断或本轮A+B通过替代因果证据。其余五题、持久化验证任务/权限接纳、完整质量/终审发布与整体P4仍待完成，未部署。
+
 ## 2026-11-04：primality固定依赖与完整参考验证
 
 成功fetch后从`origin/main b653bfcd9622204c9b5dd056d695aa0a99aa5473`建立`codex/primality-reference-dependencies`，独立于仍为草稿的#114。唯一目标为固定编译依赖闭包及完整13点；没有新依赖、SQL/schema、HTTP/UI、数据库验证状态、生产参数或发布行为变化。

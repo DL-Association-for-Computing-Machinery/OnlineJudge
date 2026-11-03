@@ -208,7 +208,7 @@ func (g *GoJudge) request(ctx context.Context, method, path string, value, targe
 	resp, err := g.client.Do(req)
 	if err != nil {
 		// Keep the old sanitized error chain; metadata alone retains the category.
-		return withFailureCode(errors.New("sandbox transport failed"), errorFailureCode(err))
+		return withFailureMetadata(errors.New("sandbox transport failed"), err)
 	}
 	// Cleanup does not change the completed operation or its primary error.
 	defer func() { _ = resp.Body.Close() }()
