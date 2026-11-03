@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/workerhost"
 )
 
@@ -18,13 +19,19 @@ func dispatch(ctx context.Context, args []string, logger *slog.Logger, drain <-c
 	if args[0] == "validate-reference" {
 		return validateReference(ctx, args[1:], logger)
 	}
-	if len(args) != 2 || (args[0] != "recover" && args[0] != "recover-reference") || !regexp.MustCompile(`^[a-f0-9]{64}$`).MatchString(args[1]) {
-		return errors.New("usage: worker [recover|recover-reference <original-full-container-id>]")
+	reference := args[0] == "recover-reference"
+	sourceID, id := "library-checker:unionfind", ""
+	if reference && len(args) == 3 {
+		sourceID, id = args[1], args[2]
+	} else if len(args) == 2 && (reference || args[0] == "recover") {
+		id = args[1]
+	}
+	if !regexp.MustCompile(`^[a-f0-9]{64}$`).MatchString(id) {
+		return errors.New("usage: worker recover <original-id> | recover-reference [<admitted-source-id>] <original-id>")
 	}
 	if os.Getenv("OJ_SANDBOX_EXPERIMENT") != "1" {
 		return errors.New("explicit OJ_SANDBOX_EXPERIMENT=1 required")
 	}
-	reference := args[0] == "recover-reference"
 	if reference && os.Getenv("OJ_WORKER_M0_SLOT") != "" {
 		return errors.New("reference recovery has its own fixed slot")
 	}
@@ -33,8 +40,17 @@ func dispatch(ctx context.Context, args []string, logger *slog.Logger, drain <-c
 		return err
 	}
 	var lock *slotLock
+	var referenceSlot workerhost.ReferenceTierSlot
 	if reference {
-		lock, err = lockSlotMode(workerhost.ReferenceSlot{}.LockName(), true)
+		_, tier, resolveErr := problemvalidation.ResolveSource(sourceID)
+		if resolveErr != nil || tier == 0 {
+			return errors.New("unsupported reference recovery source")
+		}
+		referenceSlot, err = workerhost.ReferenceSlotForTier(tier)
+		if err != nil {
+			return err
+		}
+		lock, err = lockSlotMode(referenceSlot.LockName(), true)
 	} else {
 		lock, err = lockM0Mode(slot, true)
 	}
@@ -44,9 +60,9 @@ func dispatch(ctx context.Context, args []string, logger *slog.Logger, drain <-c
 	defer lock.Close()
 	if err := recoverLocked(ctx, lock, func(ctx context.Context) error {
 		if reference {
-			return workerhost.RecoverReference(ctx, args[1])
+			return workerhost.RecoverReferenceSlot(ctx, referenceSlot, id)
 		}
-		return workerhost.RecoverM0Slot(ctx, slot, args[1])
+		return workerhost.RecoverM0Slot(ctx, slot, id)
 	}); err != nil {
 		return err
 	}

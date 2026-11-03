@@ -24,6 +24,7 @@ type cacheFixture struct {
 	block, entered                chan struct{}
 	cancelCleanup                 context.CancelFunc
 	reference                     bool
+	referenceOutput               int
 	stdout                        []byte
 }
 
@@ -87,6 +88,9 @@ func (f *cacheFixture) RoundTrip(r *http.Request) (*http.Response, error) {
 	compile := len(c["args"].([]any)) > 1
 	if f.reference {
 		stdoutMax := 256 << 10
+		if f.referenceOutput != 0 {
+			stdoutMax = f.referenceOutput
+		}
 		if compile {
 			stdoutMax = 4096
 		}

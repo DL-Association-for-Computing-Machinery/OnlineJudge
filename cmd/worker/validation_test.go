@@ -96,22 +96,26 @@ func validationFixture(t *testing.T) *problem.Prepared {
 }
 
 func TestReferenceOwnerStopAndQuarantine(t *testing.T) {
-	for _, unionfind := range []bool{false, true} {
-		t.Run(strconv.FormatBool(unionfind), func(t *testing.T) { testReferenceOwnerStopAndQuarantine(t, unionfind) })
+	for _, sourceID := range []string{"library-checker:aplusb", "library-checker:unionfind", "library-checker:zalgorithm"} {
+		t.Run(sourceID, func(t *testing.T) { testReferenceOwnerStopAndQuarantine(t, sourceID) })
 	}
 }
 
-func testReferenceOwnerStopAndQuarantine(t *testing.T, unionfind bool) {
+func testReferenceOwnerStopAndQuarantine(t *testing.T, sourceID string) {
 	for _, scenario := range []string{"pass", "stop", "clean", "cancel", "cancel-stop", "open", "start-error"} {
 		t.Run(scenario, func(t *testing.T) {
 			p := validationFixture(t)
-			if unionfind {
+			if sourceID != "library-checker:aplusb" {
 				b := problemfixture.NewUnionFind(t)
-				b.AddOriginal(t, "data_structure/unionfind/sol/correct.cpp", []byte("int main(){}"))
+				if sourceID == "library-checker:zalgorithm" {
+					b = problemfixture.NewZAlgorithm(t)
+				}
+				sourcePath := b.Document["provenance"].(map[string]any)["source_path"].(string)
+				b.AddOriginal(t, sourcePath+"/sol/correct.cpp", []byte("int main(){}"))
 				b.BindReferenceCases(t)
 				b.Write(t)
 				var err error
-				p, err = problem.LoadBundle(b.Directory, "library-checker:unionfind", b.Lock)
+				p, err = problem.LoadBundle(b.Directory, sourceID, b.Lock)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -138,7 +142,7 @@ func testReferenceOwnerStopAndQuarantine(t *testing.T, unionfind bool) {
 			if scenario == "cancel-stop" {
 				h.stopCancel = cancel
 			}
-			r, err := runReferenceProfileLocked(ctx, p, lock, func(context.Context) (validationHost, error) {
+			r, err := runReferenceSourceLocked(ctx, p, lock, func(context.Context) (validationHost, error) {
 				raw, e := os.ReadFile(path)
 				if e != nil || len(raw) == 0 {
 					t.Fatal("sandbox opened before persisted dirty marker")
@@ -150,7 +154,7 @@ func testReferenceOwnerStopAndQuarantine(t *testing.T, unionfind bool) {
 					return h, errors.New("start ack")
 				}
 				return h, nil
-			}, unionfind)
+			}, sourceID)
 			if (err == nil) != (scenario == "pass") {
 				t.Fatalf("%s err=%v", scenario, err)
 			}
@@ -244,7 +248,7 @@ func TestReferenceSourceAndSlotSelectionGuards(t *testing.T) {
 	t.Setenv("OJ_SANDBOX_EXPERIMENT", "1")
 	b := problemfixture.New(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	for _, source := range []string{"library-checker:unionfind", "library-checker:other"} {
+	for _, source := range []string{"library-checker:unionfind", "library-checker:zalgorithm", "library-checker:other"} {
 		t.Setenv("OJ_WORKER_M0_SLOT", "secondary")
 		output := filepath.Join(t.TempDir(), "report")
 		args := []string{"--source-id", source, "--bundle", b.Directory, "--source-lock", filepath.Join(t.TempDir(), "lock.json"), "--output", output}

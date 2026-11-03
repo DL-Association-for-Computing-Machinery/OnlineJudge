@@ -49,6 +49,18 @@ func NewReferenceGoJudge(transport http.RoundTripper, verify func(context.Contex
 	return g
 }
 
+// NewReferenceGoJudgeForTier binds one reviewed runtime and file budget set.
+// Unknown tiers fail before constructing a usable adapter.
+func NewReferenceGoJudgeForTier(transport http.RoundTripper, verify func(context.Context, experiment.ExecutionProfile) error, files FileTransport, tier experiment.ReferenceTier) (*CachedGoJudge, error) {
+	c, err := experiment.ResolveReferenceTier(tier)
+	if err != nil {
+		return nil, err
+	}
+	g := NewReferenceGoJudge(transport, verify, files)
+	g.runtime, g.limits = c.Runtime, c.Files
+	return g, nil
+}
+
 // Verify admits one fixed runtime and probes the actual trusted host/executor.
 func (g *CachedGoJudge) Verify(ctx context.Context, p experiment.ExecutionProfile) (err error) {
 	if err = g.acquire(ctx, false); err != nil {

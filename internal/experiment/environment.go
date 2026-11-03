@@ -1,6 +1,6 @@
 package experiment
 
-// ExecutionProfile describes the exact local M0 artifact and command budgets.
+// ExecutionProfile describes an exact pinned local artifact and command budgets.
 // ImageID is the immutable identity reported by the validated Docker image store.
 // A rebuild or another architecture requires a new profile and material version.
 type ExecutionProfile struct {
@@ -12,6 +12,7 @@ type ExecutionProfile struct {
 	CompilerVersion  string   `json:"compiler_version"`
 	SandboxVersion   string   `json:"sandbox_version"`
 	SandboxArgs      []string `json:"sandbox_args"`
+	SandboxCmd       []string `json:"sandbox_cmd,omitempty"`
 	CompileArgs      []string `json:"compile_args"`
 	RunArgs          []string `json:"run_args"`
 	Env              []string `json:"env"`

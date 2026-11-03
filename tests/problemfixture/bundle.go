@@ -186,16 +186,27 @@ func New(t *testing.T) *Bundle {
 // NewUnionFind selects the second fixed reference source for synthetic tests.
 func NewUnionFind(t *testing.T) *Bundle {
 	t.Helper()
+	return newReferenceSource(t, "library-checker:unionfind", "data_structure/unionfind")
+}
+
+// NewZAlgorithm selects the fixed medium reference source for synthetic tests.
+func NewZAlgorithm(t *testing.T) *Bundle {
+	t.Helper()
+	return newReferenceSource(t, "library-checker:zalgorithm", "string/zalgorithm")
+}
+
+func newReferenceSource(t *testing.T, sourceID, sourcePath string) *Bundle {
+	t.Helper()
 	b := New(t)
 	var lock map[string]any
 	if err := json.Unmarshal(b.Lock, &lock); err != nil {
 		t.Fatal(err)
 	}
-	lock["problems"].([]any)[0].(map[string]any)["path"] = "data_structure/unionfind"
+	lock["problems"].([]any)[0].(map[string]any)["path"] = sourcePath
 	b.Lock = JSON(t, lock)
 	b.Files["provenance/source-lock.json"] = b.Lock
 	p := b.Document["provenance"].(map[string]any)
-	p["source_id"], p["source_path"], p["source_lock_sha256"] = "library-checker:unionfind", "data_structure/unionfind", Hash(b.Lock)
+	p["source_id"], p["source_path"], p["source_lock_sha256"] = sourceID, sourcePath, Hash(b.Lock)
 	return b
 }
 

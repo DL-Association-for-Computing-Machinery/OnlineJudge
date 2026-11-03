@@ -66,7 +66,7 @@ func TestUnionFindReferenceSandbox(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(output, "INCOMPLETE")); !os.IsNotExist(err) {
 			t.Fatal("incomplete marker")
 		}
-		lock, err := lockReference()
+		lock, err := lockSlotMode((workerhost.ReferenceSlot{}).LockName(), false)
 		if err != nil {
 			t.Fatal("reference ownership not clean", err)
 		}
@@ -150,7 +150,7 @@ func (p referenceProbeTransport) RoundTrip(req *http.Request) (*http.Response, e
 
 func unionSandboxHost(t *testing.T) *workerhost.Host {
 	t.Helper()
-	lock, err := lockReference()
+	lock, err := lockSlotMode((workerhost.ReferenceSlot{}).LockName(), false)
 	if err != nil {
 		t.Fatal(err)
 	}
