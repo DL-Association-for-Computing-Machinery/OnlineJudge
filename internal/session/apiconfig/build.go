@@ -56,7 +56,20 @@ func (w document) config() (Config, error) {
 	if w.PasswordChange != nil && w.PasswordChange.apply(&c) != nil {
 		return Config{}, ErrConfig
 	}
+	if w.PrivateDrafts != nil && w.PrivateDrafts.apply(&c) != nil {
+		return Config{}, ErrConfig
+	}
 	return c, nil
+}
+
+func (w privateDraftsWire) apply(c *Config) error {
+	d := &sessionruntime.PrivateDraftsConfig{MaterialRoot: w.MaterialRoot, BundleDirectory: w.BundleDirectory,
+		SourceLockFile: w.SourceLockFile, SourceIDs: append([]string(nil), w.SourceIDs...), MaxInFlight: w.MaxInFlight}
+	if !durations([]durationField{{w.Timeout, &d.Timeout}}) || d.Validate() != nil || c.Server.WriteTimeout < d.Timeout {
+		return ErrConfig
+	}
+	c.Runtime.PrivateDrafts = d
+	return nil
 }
 
 func (w passwordChangeWire) apply(c *Config) error {

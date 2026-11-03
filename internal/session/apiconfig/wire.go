@@ -17,6 +17,16 @@ type document struct {
 	TLS               *Material           `json:"tls"`
 	Server            *serverWire         `json:"server"`
 	PasswordChange    *passwordChangeWire `json:"password_change"`
+	PrivateDrafts     *privateDraftsWire  `json:"private_drafts"`
+}
+
+type privateDraftsWire struct {
+	MaterialRoot    string   `json:"material_root"`
+	BundleDirectory string   `json:"bundle_directory"`
+	SourceLockFile  string   `json:"source_lock_file"`
+	SourceIDs       []string `json:"source_ids"`
+	Timeout         string   `json:"timeout"`
+	MaxInFlight     int      `json:"max_in_flight"`
 }
 
 type passwordChangeWire struct {

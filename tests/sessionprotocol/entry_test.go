@@ -16,6 +16,7 @@ import (
 
 func testEntry(t *testing.T, f *fixture) {
 	binary := entryBinary(t)
+	t.Run("private draft HTTP", func(t *testing.T) { testEntryPrivateDrafts(t, f, binary) })
 	t.Run("default bootstrap has no session entry", func(t *testing.T) {
 		p := entryStart(t, binary, "", "127.0.0.1:0")
 		event := p.waitEvent(t, "API starting")

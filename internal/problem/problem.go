@@ -101,11 +101,19 @@ func (s *Service) Create(ctx context.Context, credential redisstore.Credential, 
 	if s == nil || ctx == nil || !ValidKey(key) || p == nil {
 		return Draft{}, ErrInvalid
 	}
+	return s.create(ctx, credential, key, func() (*Prepared, error) { return p, nil })
+}
+
+func (s *Service) create(ctx context.Context, credential redisstore.Credential, key string, selectPrepared func() (*Prepared, error)) (Draft, error) {
 	actor, err := s.actor(ctx, credential)
 	if err != nil {
 		return Draft{}, err
 	}
 	if err = s.repository.CheckAuthor(ctx, actor); err != nil {
+		return Draft{}, err
+	}
+	p, err := selectPrepared()
+	if err != nil {
 		return Draft{}, err
 	}
 	if err = p.acquire(); err != nil {

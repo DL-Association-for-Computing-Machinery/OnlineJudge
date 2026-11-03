@@ -77,7 +77,30 @@ schema 7 默认不给任何账号授予出题角色。受信维护者先独立�
 
 替换大写占位值；主体为已存在的32位小写十六进制ID。初次修订为0；之后必须使用inspect读出的实际修订。撤销用 `--enabled false`，不自动重试冲突或未知结果。`operator`仅为受信维护操作的审计归属，不是已验证的账号登录。单独镜像可通过 `docker --context desktop-linux build --target problem-author -t oj-problem-author:local .` 构建，入口为 `/usr/local/bin/oj-problem-author`，默认UID65532；数据库连接由维护流程单独配置，默认Compose不运行该工具。
 
-`internal/problem.Service` 的创建/本人读取必须传真实普通会话凭据；授权后把选定草稿的全部材料写入私有Store，再读会话，并在同一PG事务核对恢复/账号/角色及写元数据。`LoadBundle`的expectedSourceLock来自受信配置原字节；材料根与bundle均由维护者预建。当前只提供应用服务、数据库适配和角色维护命令，尚未提供草稿HTTP/导入命令或管理页面；完整边界、幂等、迁移与实测归[草稿合同](docs/problem-drafts.md#私有草稿入库与本人读取)。
+`internal/problem.Service` 的创建/本人读取必须传真实普通会话凭据；授权后把选定草稿的全部材料写入私有Store，再读会话，并在同一PG事务核对恢复/账号/角色及写元数据。`LoadBundle`的expectedSourceLock来自受信配置原字节；材料根与bundle均由维护者预建。可选HTTP接入见下节；管理页面、审核和发布仍待完成，完整边界、幂等、迁移与实测归[草稿合同](docs/problem-drafts.md#私有草稿入库与本人读取)。
+
+### 显式启用私有草稿 HTTP
+
+在已有 `OJ_SESSION_CONFIG_FILE` 普通会话配置内增加下列对象（示例预算需按材料量实测调整）：
+
+```json
+{
+  "private_drafts": {
+    "material_root": "/store/private-materials",
+    "bundle_directory": "/input/private-bundle",
+    "source_lock_file": "/config/library-checker-source-lock.json",
+    "source_ids": ["library-checker:aplusb"],
+    "timeout": "30s",
+    "max_in_flight": 1
+  }
+}
+```
+
+仅Linux；`material_root`必须是按[存储合同](docs/material-store.md)预建持久根，bundle为已准备的稳定私有快照，两者均由运行euid所有、目录0700/文件0600。来源锁从仓库受信的[固定来源锁](config/problem-sources/library-checker.json)单独配置，不得从请求或bundle自行选作信任根。三个路径须绝对规范，材料根与bundle不得互相包含，锁须在两者之外；部署者也须保证实际挂载/祖先没有把它们别名到同一位置。bundle/锁只读挂载，材料根可写，镜像默认UID65532须有对应访问权。服务不自动建目录、迁移、授予角色或修复文件。
+
+`source_ids`为1—10个不重复候选，启动逐项加载元数据；大对象仍在授权后的导入中验证。`timeout`为正且至多1分钟，`server.write_timeout`不得小于它；`max_in_flight`为1—10，仅限制本实例已授权且命中候选后的材料导入段，不是全部HTTP并发、共享频率或磁盘总额。每对象128MiB、固定bundle上限及同题单份Prepared活动约束继续适用。缺省整个对象关闭能力，关闭后重启保留草稿和材料，无迁移；旧二进制回退前也先移除该对象。
+
+已通过真实普通登录的出题账号可向`POST /api/v1/problem-drafts`发送`{"source_id":"library-checker:aplusb","request_key":"original-import-request-01"}`，需要同源证据及会话Cookie；最多1KiB JSON。成功/原回执均200，再以`GET /api/v1/problem-drafts/草稿ID`读取本人固定JSON元数据；没有材料下载或发布接口。断连/503可能已经提交，保留原键及精确候选快照核验，不自动重试或换键；配置/候选版本切换前须保留原版本供未知回执恢复。完整协议见[OpenAPI](api/problem-drafts.openapi.yaml)。默认Compose及本地测试账号均不自动开启或取得出题权。
 
 ## 本地不可变材料存储
 

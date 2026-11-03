@@ -49,8 +49,10 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 		return nil, ErrConfig
 	}
 	keep := false
+	closeDrafts := func() error { return nil }
 	defer func() {
 		if !keep {
+			_ = closeDrafts()
 			_ = client.Close()
 		}
 	}()
@@ -106,13 +108,25 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 	if err != nil {
 		return nil, ErrConfig
 	}
+	if c.PrivateDrafts != nil {
+		importer, cleanup, err := openDrafts(startup, *c.PrivateDrafts, store, pool)
+		if err != nil {
+			return nil, err
+		}
+		closeDrafts = cleanup
+		handler, err = httptransport.WithPrivateDrafts(handler, importer, c.PrivateDrafts.Timeout)
+		if err != nil {
+			return nil, ErrConfig
+		}
+	}
 	if err := startup.Err(); err != nil {
 		return nil, err
 	}
 	result := newRuntime(handler, func() error {
+		draftErr := closeDrafts()
 		err := client.Close()
 		pool.Close()
-		if err != nil {
+		if err != nil || draftErr != nil {
 			return ErrClose
 		}
 		return nil

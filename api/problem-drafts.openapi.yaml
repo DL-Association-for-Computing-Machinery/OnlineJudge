@@ -1,0 +1,175 @@
+openapi: 3.1.0
+info:
+  title: OnlineJudge Private Problem Drafts
+  version: 0.1.0
+  description: >-
+    仅在显式普通会话 HTTPS 模式配置 private_drafts 后启用，默认关闭。
+    沿用 session.openapi.yaml 的 TLS/Host、单跳已验证且 pin 的 mTLS 代理及 Cookie 边界。
+    登录不授予出题权；每次操作重新检查当前出题角色，GET 仅可读取本人草稿。
+    所有响应 no-store、nosniff，无 CORS 许可或 Set-Cookie，不隐式续期。
+    不提供上传、文件下载、执行、审核或发布。未知/外人 ID 返回相同 404；
+    未登录或无出题权不能通过候选查找判断 source_id 是否配置。
+security:
+  - ordinarySession: []
+paths:
+  /api/v1/problem-drafts:
+    post:
+      operationId: importOwnPrivateDraft
+      description: >-
+        Origin 或 Sec-Fetch-Site 至少一个正向同源字段，所有出现的字段均须正确且单值。
+        仅从维护者预配置的固定私有候选导入，不接受客户端路径/材料/主体/代次。
+        授权后复制材料，再读取同一会话，在 PG 同事务检查账号/恢复/角色并写草稿及引用。
+        同 owner 同 key 同内容返回原回执；不同内容 409。不会自动重试。
+        断连、超时或 503 可能已经提交，只能保留原 key 和精确候选版本向同部署核验。
+        候选版本或部署配置变化前须保留原快照以恢复未确认操作；相同 source_id 不保证相同版本。
+      parameters:
+        - name: Origin
+          in: header
+          schema:
+            type: string
+          description: 精确等于配置的 HTTPS Origin；与 Sec-Fetch-Site 至少提供一个。
+        - name: Sec-Fetch-Site
+          in: header
+          schema:
+            const: same-origin
+      requestBody:
+        required: true
+        description: 最多 1024 字节，拒绝未知/重复/大小写别名字段、null、非法 Unicode 和尾随数据。
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [source_id, request_key]
+              properties:
+                source_id:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                  description: 受信配置内的候选编号，例如 library-checker:aplusb。
+                request_key:
+                  type: string
+                  pattern: '^[A-Za-z0-9_-]{16,128}$'
+      responses:
+        '200':
+          $ref: '#/components/responses/Draft'
+        '400':
+          description: 请求格式无效，或已授权作者选择未配置候选。
+          $ref: '#/components/responses/Failure'
+        '401':
+          description: 会话缺失/无效/过期。
+          $ref: '#/components/responses/Failure'
+        '403':
+          description: 来源/TLS/代理拒绝，或当前没有出题权。
+          $ref: '#/components/responses/Failure'
+        '404':
+          description: 未启用该能力。
+          $ref: '#/components/responses/Failure'
+        '405':
+          description: 不支持的方法，Allow 为 POST。
+          $ref: '#/components/responses/Failure'
+        '409':
+          description: 同一请求键已用于不同内容；不覆盖原记录。
+          $ref: '#/components/responses/Failure'
+        '413':
+          description: 请求体超过 1024 字节。
+          $ref: '#/components/responses/Failure'
+        '415':
+          description: 需要 application/json。
+          $ref: '#/components/responses/Failure'
+        '503':
+          description: 容量、存储、恢复、材料异常、取消或未知提交；保留原键和精确候选版本，不能假定未创建。
+          $ref: '#/components/responses/Failure'
+  /api/v1/problem-drafts/{draft_id}:
+    get:
+      operationId: getOwnPrivateDraft
+      parameters:
+        - name: draft_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9a-f]{32}$'
+      responses:
+        '200':
+          $ref: '#/components/responses/Draft'
+        '401':
+          $ref: '#/components/responses/Failure'
+        '403':
+          $ref: '#/components/responses/Failure'
+        '404':
+          description: 未启用、未知草稿或其他作者草稿。
+          $ref: '#/components/responses/Failure'
+        '405':
+          description: 不支持的方法，Allow 为 GET。
+          $ref: '#/components/responses/Failure'
+        '503':
+          $ref: '#/components/responses/Failure'
+components:
+  securitySchemes:
+    ordinarySession:
+      $ref: './session.openapi.yaml#/components/securitySchemes/ordinarySession'
+  responses:
+    Failure:
+      description: 稳定 Problem Details 错误，无内部原因、路径或凭据。
+      content:
+        application/problem+json:
+          schema:
+            $ref: './session.openapi.yaml#/components/schemas/Problem'
+    Draft:
+      description: 已确认的新建/原回执或本人草稿元数据，所有材料仍私有。
+      headers:
+        Cache-Control:
+          schema:
+            const: no-store
+        X-Content-Type-Options:
+          schema:
+            const: nosniff
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [id, request_key, source_id, version, state, validation_state, document, references, created_at]
+            properties:
+              id:
+                type: string
+                pattern: '^[0-9a-f]{32}$'
+              request_key:
+                type: string
+              source_id:
+                type: string
+              version:
+                type: string
+                pattern: '^[0-9a-f]{64}$'
+              state:
+                const: private-draft
+              validation_state:
+                const: not-run
+              document:
+                type: object
+                description: 已固定 oj.problem-draft.v1 私有元数据，JSON 对象而非 base64 或 HTML。
+              references:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [name, object]
+                  properties:
+                    name:
+                      type: string
+                      description: 私有逻辑角色，不是下载授权或宿主绝对路径。
+                    object:
+                      type: object
+                      additionalProperties: false
+                      required: [sha256, size]
+                      properties:
+                        sha256:
+                          type: string
+                          pattern: '^[0-9a-f]{64}$'
+                        size:
+                          type: integer
+                          minimum: 0
+              created_at:
+                type: string
+                format: date-time

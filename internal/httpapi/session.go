@@ -2,35 +2,43 @@ package httpapi
 
 import (
 	"net/http"
+	"strings"
+
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
 )
 
-// NewSessionHandler delegates the six session paths and the optional account
-// password path for every method, without rewriting transport metadata. Runtime
-// capability controls the account route. Health/unknown paths retain bootstrap;
-// no slash/prefix redirects or experiment routes are added.
+// NewSessionHandler delegates session and optional account/private-draft paths
+// for every method without rewriting transport metadata. Runtime capabilities
+// control availability. Health/unknown paths retain bootstrap; no redirects or
+// experiment routes are added.
 func NewSessionHandler(session http.Handler) http.Handler {
 	bootstrap := NewHandler()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		draft := path == "/api/v1/problem-drafts" || (strings.HasPrefix(path, "/api/v1/problem-drafts/") && identity.ValidID(strings.TrimPrefix(path, "/api/v1/problem-drafts/")))
 		switch r.URL.Path {
 		case "/api/v1/session", "/api/v1/session/activity", "/api/v1/session/logout",
 			"/api/v1/session/login/begin", "/api/v1/session/login/complete", "/api/v1/session/login/abandon", "/api/v1/account/password":
-			if session == nil {
-				sessionProblem(w)
+		default:
+			if !draft {
+				bootstrap.ServeHTTP(w, r)
 				return
 			}
-			tracked := &sessionWriter{ResponseWriter: w}
-			defer func() {
-				if recover() != nil {
-					if tracked.written {
-						panic(http.ErrAbortHandler)
-					}
-					sessionProblem(w)
-				}
-			}()
-			session.ServeHTTP(tracked, r)
-		default:
-			bootstrap.ServeHTTP(w, r)
 		}
+		if session == nil {
+			sessionProblem(w)
+			return
+		}
+		tracked := &sessionWriter{ResponseWriter: w}
+		defer func() {
+			if recover() != nil {
+				if tracked.written {
+					panic(http.ErrAbortHandler)
+				}
+				sessionProblem(w)
+			}
+		}()
+		session.ServeHTTP(tracked, r)
 	})
 }
 
