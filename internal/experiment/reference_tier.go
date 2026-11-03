@@ -9,7 +9,7 @@ type ReferenceTier uint8
 const (
 	// ReferenceSmall preserves the original unionfind configuration.
 	ReferenceSmall ReferenceTier = 1
-	// ReferenceMedium is the separately admitted zalgorithm trial.
+	// ReferenceMedium is the reviewed medium-material reference trial.
 	ReferenceMedium ReferenceTier = 2
 )
 

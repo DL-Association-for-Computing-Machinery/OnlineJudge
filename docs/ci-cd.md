@@ -14,7 +14,7 @@
 
 unionfind完整磁盘快照、Read/Close竞争/配额释放、坏末点零执行、独立profile互斥、诊断/输出分限及collector OLE负例随backend执行；`cmd/worker/unionfind_sandbox_test.go`仅在sandbox标签、darwin/arm64宿主驱动和`OJ_UNIONFIND_VALIDATION=1`下执行完整18点与256KiB真实边界，使用独立reference槽。普通CI不执行此专项，不自动配置/启动新槽，也不据此更新数据库状态或生产预算。
 
-固定来源/封闭Small-Medium档位、未知档位零派发、旧profile摘要与Cmd空值兼容、双端累计配额及三来源停止回归归backend；`cmd/worker/medium_reference_sandbox_test.go`只在sandbox标签、darwin/arm64及`OJ_MEDIUM_REFERENCE=1`下运行完整zalgorithm29点、4MiB collector和8MiB文件边界，使用新固定medium槽。普通CI只检查代码，不执行该专项或自动创建/替换任何槽。
+固定来源/封闭Small-Medium档位、未知档位零派发、旧profile摘要与Cmd空值兼容、双端累计配额及四来源停止回归归backend；`cmd/worker/medium_reference_sandbox_test.go`只在sandbox标签、darwin/arm64及`OJ_MEDIUM_REFERENCE=1`下运行完整zalgorithm29点、4MiB collector和8MiB文件边界，使用固定medium槽。`reference_source_sandbox_test.go`共用完整CLI校验，并在`OJ_SUFFIXARRAY_REFERENCE=1`及同样宿主/实验前置条件下验证suffixarray全50点，复用同一槽锁，不创建槽。suffixarray超过64MiB实际磁盘冻结/超过128MiB拒绝、共享额度、坏末点零执行和50点最坏输出/累计计费清理归backend；旧三profile摘要保持。普通CI只检查代码，不执行这些真实专项或自动创建/替换任何槽。
 
 `integration-tests` 在既有 sqlc/真实 PostgreSQL 检查后，构建同一 Docker 工具链并下载固定摘要 Redis 7.2.17，执行 `scripts/test-session-protocol.py --context default`。专项使用私有网络、临时 PG、双客户端/双连接池及 TLS 入口验证正式普通 Redis 协议、文件加载的合成密钥、两步登录与共享准入/限流故障，以及固定单跳 TLS→mTLS 反代的证书、来源和 Cookie 路径，失败传递到原 integration 必需门禁；不开放宿主端口，不持有生产凭据或运行选手代码。命令归 README，隔离和结果归 M0/交付记录；不代表公开 HTTP/SCS、真实浏览器/生产代理、生产阈值或完整恢复验收。
 

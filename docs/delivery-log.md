@@ -1,5 +1,17 @@
 # 工程交付记录
 
+## 2026-11-04：suffixarray 全50点参考验证
+
+成功fetch后从`origin/main 934923ccefe0b42d7d50a018dbb98327bb7b1853`建立`codex/suffixarray-reference`。维护CLI新增固定来源`library-checker:suffixarray`，完整50点不采样。独立profile `p4-lc-suffixarray-reference-desktop-arm64-v1`仅将该来源完整快照总量准入128MiB；source64KiB/input1MiB/answer4MiB/64点、Medium Runtime/文件协议保持。zalgorithm仍64MiB，旧三profile/plan摘要均回归不变。所有磁盘来源共用匿名单文件与进程内一份额度；suffixarray与zalgorithm共用原medium槽、canonical锁与停止/dirty门禁，没有新增/替换容器或修改配置。
+
+按固定LC锁复核`string/suffixarray/sol/correct.cpp`为3631B、SHA-256 `eadecedffa32796491d66c7450758ebee2ac52596784492b783989fb0154aeea`，仅标准库iostream/vector。完整50点input总13584593B、answer总91580275B，单点最大500001B/3388890B；总材料约105MB加source/catalog，超过旧64MiB。按请求上限计费最坏payload236891698B、307次逻辑操作，在256MiB/512次内，不退款或只计实际输出。回归实际写入并读取约68MiB匿名快照、旧来源拒绝相同集合、超过128MiB集合拒绝及跨来源共享额度；未声称恰好128MiB内容成功。另以50点各512KiB输入/4MiB输出验证更保守累计收费、307操作及每点/最终清理，坏末点UTF-8零执行与来源借用拒绝保持。
+
+固定Desktop LinuxKit7.0.14/arm64、go-judge v1.13.3/GCC15.3.0和原镜像下，首轮完整50点24.67秒全部AC并确认停止（`/private/tmp/oj-suffixarray-real.log`）。最大执行CPU75731000ns/内存18567168B，编译CPU339128000ns/内存83959808B；CLI wait4 Maxrss43089920B只是Darwin OS计数，不当作Go heap或CLI/Docker/沙箱并发RSS总和。报告`/private/tmp/oj-suffixarray-reference-report-20261104/report.json` SHA-256为`8c33f50079f8eeb8c32befb5b31141b7e67212ef13c871480d1ec672c0b24cdf`，plan `0ac8ba8b1fd52f7027ff401fdb495eb9f81fea9d2bbd3f1c0c752de24054b5c6`，profile `0082bb2f961c1f1c082c0ed671881bca49cdaae72d9587bb76d8424ff5e661e7`；0700/0600、字段白名单及无INCOMPLETE已回读核验。
+
+同构建复验zalgorithm三组19.42秒（全29点13.95秒、4MiB collector及8MiB文件边界）、unionfind两组12.05秒（全18点9.35秒、256KiB边界）、A+B九组21.78秒（全12点6.26秒、AC/WA/CE/RE/TLE/MLE/OLE/取消）全部通过并确认停止。报告目录分别为`/private/tmp/oj-suffixarray-{zalgorithm,unionfind,aplusb}-regression-20261104`，报告SHA-256依次`61716791784387435e14bf673caca4604643cf8c580e8d10926d280f59e34de9`、`571d0a521f13f99b5c2282156c15da2b8279fa79129e2c8d04c9ff76bcd4d993`、`eaa7bddb24cfc6073f6d70d91ae295e1cb2d7b18abebc089c72399257320600b`；日志为`oj-suffixarray-{zalgorithm,unionfind,aplusb}-real.log`。结束时三个原槽均停止/PID0，没有重试至绿、恢复或手清marker。旧历史停止故障本轮未复现，根因仍未知，不追认旧报告。
+
+Docker离线Go1.26.10四相关包基线/定向race/vet、模块核验、完整backend格式/静态/root race/七命令构建及cmd sandbox标签lint均通过（`oj-suffixarray-{baseline,targeted,backend}.log`）。Astra/high针对性设计及完整差异复核无阻断；AI不替代人工审批。无新依赖、SQL/schema、公共HTTP或UI变化；本地未重跑PG/Redis、浏览器或完整M0，精确head远端CI另核验。原始私有材料、草稿not-run/生产null/publication blocked保持；其余六题、持久化验证任务/权限接纳、完整质量及非作者终审发布仍未完成，未部署。临时报告/日志/产物不构成独立备份。
+
 ## 2026-11-04：zalgorithm 全29点与封闭参考档位
 
 成功fetch后从`origin/main f7b92c9477a2783603f6561fb550997a9e7f0604`建立`codex/zalgorithm-reference`。显式来源入口新增zalgorithm完整29点，不采样。固定来源表选择受信布局/材料预算，Runner在准备前及冻结后核对sourceID；所有来源仍先冻结/哈希完整集合、预检全部答案，再调用execution Verify/Compile。单匿名磁盘文件、进程级一份额度和按点加载共用；原A+B/unionfind API作为兼容入口保留，不借用新profile。按固定LC锁重核源码`string/zalgorithm/sol/correct.cpp`为969B、SHA-256 `9f7168d28138fb61d7706b5b899bb0ae21503a848428fc7d7551c5a8507ff8d7`，仅标准库iostream/vector，无私有依赖。

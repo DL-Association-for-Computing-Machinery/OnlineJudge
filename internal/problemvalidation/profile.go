@@ -56,7 +56,7 @@ func ResolveSource(sourceID string) (Profile, experiment.ReferenceTier, error) {
 		return PinnedProfile(), 0, nil
 	case "library-checker:unionfind":
 		return UnionFindProfile(), experiment.ReferenceSmall, nil
-	case "library-checker:zalgorithm":
+	case "library-checker:zalgorithm", "library-checker:suffixarray":
 		c, err := experiment.ResolveReferenceTier(experiment.ReferenceMedium)
 		if err != nil {
 			return Profile{}, 0, err
@@ -67,6 +67,9 @@ func ResolveSource(sourceID string) (Profile, experiment.ReferenceTier, error) {
 		}
 		p := UnionFindProfile()
 		p.ID = "p4-lc-zalgorithm-reference-desktop-arm64-v1"
+		if sourceID == "library-checker:suffixarray" {
+			p.ID = "p4-lc-suffixarray-reference-desktop-arm64-v1"
+		}
 		p.Runtime, p.Files, p.Materials = c.Runtime, c.Files, limits
 		p.Text.Bytes = 4 << 20
 		return p, experiment.ReferenceMedium, nil

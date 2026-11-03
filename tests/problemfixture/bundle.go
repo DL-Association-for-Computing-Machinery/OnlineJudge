@@ -195,6 +195,12 @@ func NewZAlgorithm(t *testing.T) *Bundle {
 	return newReferenceSource(t, "library-checker:zalgorithm", "string/zalgorithm")
 }
 
+// NewSuffixArray selects the fixed large-snapshot medium reference source.
+func NewSuffixArray(t *testing.T) *Bundle {
+	t.Helper()
+	return newReferenceSource(t, "library-checker:suffixarray", "string/suffixarray")
+}
+
 func newReferenceSource(t *testing.T, sourceID, sourcePath string) *Bundle {
 	t.Helper()
 	b := New(t)
