@@ -120,7 +120,7 @@
 
 ### P1 提交持久化与任务协议
 
-已验证子项增加[跨 API 共享积压准入](submission-backlog.md)：单一显式策略、全局/主体未终结计数及原回执优先，schema 6 升级与配置独立维护。当前跨上下文口径是工程选择，数值及真实产品策略仍待确认；频率限流、团队/比赛额度和 DOMjudge 虚拟时间公平调度尚未完成，不据此标记整个 P1 或试用准入通过。
+已验证子项增加[跨 API 共享积压准入](submission-backlog.md)：单一显式策略、全局/主体未终结计数及原回执优先，schema 6 升级与配置独立维护。用户于2026-11-03确认同一用户跨训练场景统计queued＋running，每提交计一次、终态释放，超额仅拒绝新增，同键重试保留原语义；具体限额显式配置，生产数值仍待确认。频率限流、团队/比赛额度和 DOMjudge 虚拟时间公平调度尚未完成，不据此标记整个 P1 或试用准入通过。
 
 依照[总体架构](architecture/system-design.md)和[接口与 Worker 协议](architecture/api-worker-design.md)，接入真实 PostgreSQL、sqlc/pgx、Goose。实现最小提交、任务、执行尝试、结果和材料版本引用模型，并先定义 OpenAPI 输入、输出、错误及幂等语义。
 
