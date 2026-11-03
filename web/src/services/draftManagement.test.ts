@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { decodeReceipt, decodeSources, fetchImportSources, postImport } from './draftManagement'
+import { decodeReceipt, decodeSources, decodeOwnDraftPage, fetchImportSources, fetchOwnDraftPage, postImport } from './draftManagement'
 const tuple = { owner: 'a'.repeat(32), key: 'request_key_1234567', source: 'library-checker:aplusb', revision: 'b'.repeat(64) }
 const source = { source_id: tuple.source, title: 'A + B', version: 'c'.repeat(64), import_revision: tuple.revision }
 const receipt = { draft_id: 'd'.repeat(32), request_key: tuple.key, source_id: tuple.source, version: source.version, import_revision: tuple.revision, state: 'private-draft', validation_state: 'not-run', created_at: '2026-11-03T00:00:00Z' }
@@ -27,4 +27,16 @@ it('does not downgrade, retry, or accept unexpected errors and oversized data', 
     await expect(fetchImportSources(tuple.owner, new AbortController().signal)).rejects.toThrow()
     expect(fetch).toHaveBeenCalledOnce()
   }
+})
+it('accepts bounded owner metadata without rebuilding opaque microsecond cursors', async () => {
+  const rows = Array.from({ length: 20 }, (_, n) => ({ ...receipt, draft_id: n.toString(16).padStart(32, '0'), request_key: tuple.key + '_' + n, created_at: '2026-11-03T00:00:00.123456Z' }))
+  const page = { drafts: rows, next_cursor: 'Opaque_microseconds_123456' }
+  expect(decodeOwnDraftPage(page, tuple.owner)).toEqual(page)
+  expect(() => decodeOwnDraftPage({ drafts: [receipt, { ...receipt, draft_id: 'e'.repeat(32) }], next_cursor: '' }, tuple.owner)).toThrow()
+  for (const bad of [{ drafts: [receipt, receipt], next_cursor: '' }, { drafts: rows.concat(receipt), next_cursor: '' }, { drafts: [], next_cursor: 'unexpected' }, { ...page, next_cursor: 'encoded%2Falias' }, { ...page, extra: true }]) expect(() => decodeOwnDraftPage(bad, tuple.owner)).toThrow()
+  vi.stubGlobal('location', { protocol: 'https:' })
+  const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json({ drafts: [receipt], next_cursor: '' })); vi.stubGlobal('fetch', fetch)
+  await fetchOwnDraftPage(tuple.owner, page.next_cursor, new AbortController().signal)
+  expect(fetch.mock.calls[0][0]).toBe('/api/v1/problem-draft-management/drafts?cursor=' + page.next_cursor)
+  expect(fetch).toHaveBeenCalledOnce()
 })

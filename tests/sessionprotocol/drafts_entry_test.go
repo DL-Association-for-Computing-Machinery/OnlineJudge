@@ -84,8 +84,11 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	access, err := identitypg.NewProblemAccess(f.pools[0])
 	must(t, err)
 	testEntryImportPreflight(t, x, cookies)
+	loginStatus(t, ownListGET(x, nil, subject.ID, ""), 401)
+	loginStatus(t, ownListGET(x, cookies, subject.ID, ""), 403)
 	_, err = access.SetAuthorRole(f.ctx, identity.ProblemRoleChange{SubjectID: subject.ID, Enabled: true, ExpectedRevision: 0, Operator: "entry-fixture", Reason: "synthetic private draft author"})
 	must(t, err)
+	checkEntryOwnList(t, x, cookies, subject.ID, 0)
 	loginStatus(t, loginCall(x, collection, body, cookies, func(r *http.Request) { r.Header.Set("Origin", "https://other.invalid") }), 403)
 	loginStatus(t, loginCall(x, collection, unknown, cookies, nil), 400)
 	var zero int
@@ -113,6 +116,7 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 		t.Fatal("cross-API original-key recovery changed receipt")
 	}
 	pinnedReceipt := testEntryPinnedImport(t, x, y, cookies)
+	checkEntryOwnList(t, y, cookies, subject.ID, 2)
 	if pinnedReceipt.DraftID == draft.ID {
 		t.Fatal("different request keys shared a draft")
 	}
@@ -143,6 +147,7 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	third := entryStart(t, binary, entryConfig(t, cChanged, ca, 3*time.Second), "127.0.0.1:0")
 	thirdEndpoint := endpoint(third)
 	testEntryChangedImportCatalog(t, thirdEndpoint, cookies, pinnedReceipt)
+	checkEntryOwnList(t, thirdEndpoint, cookies, subject.ID, 2)
 	loginStatus(t, loginCall(thirdEndpoint, collection, body, cookies, nil), 409)
 	oldVersion := get(thirdEndpoint, draft.ID+"/preview", cookies)
 	loginStatus(t, oldVersion, 200)
@@ -158,6 +163,8 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	_, err = access.SetAuthorRole(f.ctx, identity.ProblemRoleChange{SubjectID: stranger.ID, Enabled: true, ExpectedRevision: 0, Operator: "entry-fixture", Reason: "synthetic second author"})
 	must(t, err)
 	strangerCookies := []*http.Cookie{{Name: transport.CookieName, Value: strangerCredential.Value()}}
+	checkEntryOwnList(t, x, strangerCookies, stranger.ID, 0)
+	loginStatus(t, ownListGET(x, strangerCookies, subject.ID, ""), 409)
 	testEntryReceiptOwner(t, x, strangerCookies, pinnedReceipt.RequestKey)
 	foreign, missing := get(x, draft.ID, strangerCookies), get(x, strings.Repeat("f", 32), strangerCookies)
 	loginStatus(t, foreign, 404)
@@ -174,6 +181,7 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	_, err = access.SetAuthorRole(f.ctx, identity.ProblemRoleChange{SubjectID: subject.ID, Enabled: false, ExpectedRevision: 1, Operator: "entry-fixture", Reason: "revoke author"})
 	must(t, err)
 	loginStatus(t, get(y, draft.ID, cookies), 403)
+	loginStatus(t, ownListGET(y, cookies, subject.ID, ""), 403)
 	loginStatus(t, get(y, draft.ID+"/preview", cookies), 403)
 	loginStatus(t, loginCall(y, collection, body, cookies, nil), 403)
 	loginStatus(t, importGET(y, entrySourcesPath, cookies), 403)
@@ -181,6 +189,7 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	loginStatus(t, loginCall(y, entryImportsPath, pinnedBody(t, pinnedReceipt.RequestKey, pinnedReceipt.SourceID, pinnedReceipt.ImportRevision), cookies, nil), 403)
 	loginStatus(t, loginCall(x, "/api/v1/session/logout", "", cookies, nil), 204)
 	loginStatus(t, get(y, draft.ID, cookies), 401)
+	loginStatus(t, ownListGET(y, cookies, subject.ID, ""), 401)
 	loginStatus(t, get(y, draft.ID+"/preview", cookies), 401)
 	loginStatus(t, importGET(y, entrySourcesPath, cookies), 401)
 	loginStatus(t, importGET(y, entryImportsPath+"/"+pinnedReceipt.RequestKey, cookies), 401)

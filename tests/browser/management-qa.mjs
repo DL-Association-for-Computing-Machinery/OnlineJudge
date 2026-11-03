@@ -63,6 +63,12 @@ export async function runManagementChecks(browser, info, ready, password, output
     await page.unroute('**' + base + '/imports', lose)
     await page.reload({ waitUntil: 'networkidle' }); assert.equal(posts().length, 1)
     await load(); assert.equal(await page.getByRole('link', { name: '打开草稿预览', exact: true }).count(), 0)
+    const beforeServerList = await readRecords()
+    await page.getByRole('button', { name: '检查会话并查看第一页', exact: true }).click()
+    await page.getByRole('region', { name: '服务器上的本人草稿', exact: true }).getByRole('link', { name: '预览此草稿', exact: true }).first().waitFor()
+    assert.deepEqual(await readRecords(), beforeServerList, 'Server discovery never reconciles or clears a pending import')
+    assert.equal(posts().length, 1)
+    await load()
     await page.getByRole('button', { name: '查询原回执', exact: true }).click(); await page.getByRole('link', { name: '打开草稿预览', exact: true }).waitFor()
     assert.equal(posts().length, 1, 'Refresh and recovery use GET only')
     records = await readRecords(); assert.equal(records[0].status, 'confirmed'); assert.equal(records[0].draftId, committed.draft_id)
@@ -111,7 +117,7 @@ export async function runManagementChecks(browser, info, ready, password, output
     await page.getByText('浏览器账号已变化。已清除显示，请重新检查当前账号。', { exact: true }).waitFor()
     await page.unroute('**/api/v1/session', hold)
     const raced = posts().at(-1).body
-    for (const [method, suffix, data] of [['GET', '/sources'], ['GET', '/imports/' + raced.request_key], ['POST', '/imports', raced]]) {
+    for (const [method, suffix, data] of [['GET', '/sources'], ['GET', '/drafts'], ['GET', '/imports/' + raced.request_key], ['POST', '/imports', raced]]) {
       const response = await context.request.fetch(info.origin + base + suffix, { method, headers: { Origin: info.origin, 'X-OJ-Expected-Subject': ready.subject_id }, ...(data ? { data } : {}) })
       assert.equal(response.status(), 409); assert.equal((await response.json()).code, 'DRAFT_SUBJECT_CHANGED')
     }
@@ -126,7 +132,7 @@ export async function runManagementChecks(browser, info, ready, password, output
     await load(); assert.equal(await page.getByText('此账号在本机没有保留记录。', { exact: true }).count(), 1)
     assert.equal((await readRecords()).length, 1, 'A pending journal is retained but hidden from B')
     assert.equal(errors.length, 0); assert.equal(routeErrors.length, 0); assert(diagnostics.every(Boolean), 'No unexpected console warnings/errors')
-    fs.writeFileSync(path.join(output, 'management-qa.json'), JSON.stringify({ success: true, journal, actualCommittedImport: true, lostResponseRefreshGetOnly: true, staleCookieAllThreeRefused: true, storageClearZeroRetryPost: true, screenshots }, null, 2) + '\n')
+    fs.writeFileSync(path.join(output, 'management-qa.json'), JSON.stringify({ success: true, journal, actualCommittedImport: true, lostResponseRefreshGetOnly: true, staleCookieRoutesRefused: 4, pendingUnchangedByServerList: true, storageClearZeroRetryPost: true, screenshots }, null, 2) + '\n')
     return screenshots
   } catch (error) {
     await page.screenshot({ path: path.join(output, 'management-failure.png'), fullPage: true }).catch(() => {})

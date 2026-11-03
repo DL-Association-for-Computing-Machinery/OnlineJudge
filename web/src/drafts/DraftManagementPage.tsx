@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { useCurrentAccount } from '../account/context'
 import { subscribePrivateInvalidation } from '../account/privateInvalidation'
 import { DraftManagementController } from './managementController'
+import { OwnDraftList } from './OwnDraftList'
 import './management.css'
 
 export default function DraftManagementPage() {
@@ -29,6 +30,7 @@ export default function DraftManagementPage() {
     <button className="button button-primary" type="button" disabled={disabled} onClick={() => void controller.load()}>检查会话并加载来源与记录</button>
     <p role="status" className="management-notice">{state.notice}</p>
     {accountState.status !== 'authenticated' && <p>{accountState.notice.text} <Link to="/login">前往登录</Link></p>}
+    <OwnDraftList />
     {state.owner && <>
       <section aria-labelledby="import-sources"><h2 id="import-sources">可导入来源</h2>
         {state.sources.length === 0 ? <p>尚未读取来源。可重新检查，或先查询下面的原回执。</p> : <ul className="management-list">

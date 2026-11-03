@@ -8,6 +8,7 @@ import { createRequire } from 'node:module'
 import { runPreviewChecks } from './preview-qa.mjs'
 import { runDraftChecks } from './draft-qa.mjs'
 import { runManagementChecks } from './management-qa.mjs'
+import { runOwnListChecks } from './own-list-qa.mjs'
 
 // The Python runner validates these local paths. This driver never installs a
 // browser or package, and always creates a fresh profile for synthetic accounts.
@@ -306,6 +307,10 @@ const problem = (status, code) => ({ status, contentType: 'application/problem+j
     phase = 'private draft management and durable recovery'
     report.screenshots.push(...await runManagementChecks(browser, info, ready, finalPassword, output))
     passed('real pinned import, durable IndexedDB recovery, lost response GET-only refresh, owner switch refusal and storage failure fences')
+
+    phase = 'server own draft discovery independent of local persistence'
+    report.screenshots.push(...await runOwnListChecks(browser, info, ready, finalPassword, output))
+    passed('real server own-list pagination, fresh-profile denied persistence discovery, actual preview and late next-page isolation')
 
     phase = 'mobile visual and HTTP boundary'
     await page.setViewportSize({ width: 390, height: 844 })

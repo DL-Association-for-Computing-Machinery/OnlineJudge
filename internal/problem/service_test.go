@@ -60,6 +60,10 @@ func (r *serviceRepository) Receipt(context.Context, identity.ProblemActor, stri
 	return ImportReceipt{}, r.errorFinal
 }
 
+func (r *serviceRepository) ListOwn(context.Context, identity.ProblemActor, *ListPosition) ([]ImportReceipt, error) {
+	return nil, r.errorFinal
+}
+
 func TestCreateFreshAuthorizationBoundaries(t *testing.T) {
 	credential, err := redisstore.ParseCredential(base64.RawURLEncoding.EncodeToString(make([]byte, 32)))
 	if err != nil {

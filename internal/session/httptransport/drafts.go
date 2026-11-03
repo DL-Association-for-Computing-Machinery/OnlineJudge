@@ -37,11 +37,11 @@ func WithPrivateDrafts(base http.Handler, drafts Drafts, timeout time.Duration) 
 // IsPrivateDraftPath recognizes route shapes only, without granting capability
 // or authority. The outer HTTP router and this adapter share the same predicate.
 func IsPrivateDraftPath(path string) bool {
-	return draftImportPath(path) || managementPath(path) || path == draftCollection || draftPreviewID(path) != "" || (strings.HasPrefix(path, draftCollection+"/") && identity.ValidID(strings.TrimPrefix(path, draftCollection+"/")))
+	return path == ownDraftCollection || draftImportPath(path) || managementPath(path) || path == draftCollection || draftPreviewID(path) != "" || (strings.HasPrefix(path, draftCollection+"/") && identity.ValidID(strings.TrimPrefix(path, draftCollection+"/")))
 }
 
 func (h *handler) serveDraft(w http.ResponseWriter, r *http.Request) {
-	if managementPath(r.URL.Path) {
+	if managementPath(r.URL.Path) || r.URL.Path == ownDraftCollection {
 		if _, ok := expectedSubject(r); !ok {
 			problem(w, http.StatusBadRequest, "INVALID_DRAFT_REQUEST", "草稿请求格式无效")
 			return
@@ -54,6 +54,10 @@ func (h *handler) serveDraft(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), h.draftTimeout)
 	defer cancel()
+	if r.URL.Path == ownDraftCollection {
+		h.serveOwnDrafts(w, r, ctx, credential)
+		return
+	}
 	if draftImportPath(r.URL.Path) || managementPath(r.URL.Path) {
 		h.serveDraftImport(w, r, ctx, credential)
 		return
@@ -135,6 +139,9 @@ func draftError(w http.ResponseWriter, err error) {
 			return
 		case errors.Is(err, draftproblem.ErrSubjectChanged):
 			problem(w, 409, "DRAFT_SUBJECT_CHANGED", "会话用户已变化")
+			return
+		case errors.Is(err, draftproblem.ErrInvalidCursor):
+			problem(w, 400, "DRAFT_CURSOR_INVALID", "分页游标无效，请重新检查第一页")
 			return
 		}
 	}

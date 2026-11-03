@@ -43,7 +43,7 @@
 
 ### 管理页导入协议
 
-[绑定导入合同](../api/problem-draft-imports.openapi.yaml)补齐选题与未知回执恢复的数据边界；[管理页](frontend-design.md#私有草稿导入管理)现使用下述主体绑定命名空间，不提供服务端完整本人草稿列表。`GET /api/v1/problem-draft-sources`在当前作者预检后返回按source_id排序的1—10份`source_id/title/version/import_revision`，末尾再次观察同一凭据、比较完整actor并检查PG角色/取消；失败不返回部分目录。摘要在启动时准入并固定，不访问大材料，不是材料健康检查，也不暴露路径/材料引用。
+[绑定导入合同](../api/problem-draft-imports.openapi.yaml)补齐选题与未知回执恢复的数据边界；[管理页](frontend-design.md#私有草稿导入管理)使用下述主体绑定命名空间，并提供独立的本人列表。`GET /api/v1/problem-draft-sources`在当前作者预检后返回按source_id排序的1—10份`source_id/title/version/import_revision`，末尾再次观察同一凭据、比较完整actor并检查PG角色/取消；失败不返回部分目录。摘要在启动时准入并固定，不访问大材料，不是材料健康检查，也不暴露路径/材料引用。
 
 `version`只标识题目文档；`import_revision`为`Prepared.RequestSHA256`，覆盖文档摘要和全部排序逻辑引用，包含index及来源报告。证据或其他引用变化时，题目version可以不变，但完整导入修订必须改变。因此`POST /api/v1/problem-draft-imports`严格要求`source_id/request_key/expected_revision`三字段JSON，仍至多1024字节；`expected_revision`为选中候选的64位小写hex完整修订，不是document version。授权后先比较修订，再占用原导入/预览材料槽和执行任何材料I/O；不匹配为409 `DRAFT_SOURCE_CHANGED`，同键不同已存内容仍为409 `DRAFT_REQUEST_CONFLICT`。后续材料、最终会话与PG幂等事务完全复用原路径，不新增执行或发布能力。
 
@@ -54,6 +54,14 @@
 回执复用现有`DraftByKeyForShare`及owner/key唯一索引，无schema、新SQL或索引变化；原2048行EXPLAIN ANALYZE继续验证相同查询。材料槽范围不扩成整个HTTP或这些只读请求的限额；最终Redis观察之后的退出、最终PG检查之后的撤权仍按已接受在途边界，不宣称跨库原子撤回。回退旧API二进制后新端点404，数据库/材料不变；管理页保留未确认tuple，不能自动降级调用旧接口。
 
 [主体绑定管理合同](../api/problem-draft-management.openapi.yaml)将上述三种操作映射到独立的`GET /api/v1/problem-draft-management/sources`、`POST /api/v1/problem-draft-management/imports`及`GET /api/v1/problem-draft-management/imports/{request_key}`。必须有且仅有一个规范32位小写hex的`X-OJ-Expected-Subject`，否则400；它仅是对实际会话主体的前置比较，不构造actor或授予权限。首次真实Read之后、角色/候选/容量/材料/回执访问前不一致则409`DRAFT_SUBJECT_CHANGED`，存储/未知/取消仍优先503。后续完整会话/PG授权及所有原协议DTO/幂等边界复用同一调用链。独立路径使旧实例缺能力时404，避免旧二进制忽略新header而把旧账号意图写入新Cookie账号；客户端无旧路径fallback。已经按旧凭据接受的在途工作不因此变成可原子取消。
+
+### 本人草稿列表
+
+`GET /api/v1/problem-draft-management/drafts`使用相同的单个`X-OJ-Expected-Subject`，实际会话Read后先比较主体，再在同一5秒内PG事务持有恢复→账号→当前作者权限锁并查询owner；完成提交才返回完整页。默认拒绝、TLS/pinned代理及no-store/nosniff/不返回Set-Cookie或续期与原协议一致；新可选能力缺失404。只投影每行既有八字段导入回执，不读/解析document，不查材料关联/对象、现候选或占材料槽，不查询他人计数。旧草稿的来源无需仍在现目录中，但整个private_drafts须有效配置且成功启用，不能绕过启动门禁。
+
+固定每页20条，`created_at DESC,id COLLATE "C" DESC`；读21条判定续页，next_cursor取第20条，空字符串表示本次无下一页。first/after两个sqlc查询避免可选边界OR；比较、排序和索引使用同一C排序。仅列表允许一个规范cursor query，空值/重复/未知字段/百分号别名/裸问号拒绝400；其余管理路径继续拒绝query。游标是规范raw-base64url的版本/owner/十进制Unix微秒/ID，校验长度、规范编码、可JSON表示时间和当前actor的owner；它只提供seek边界，不授予权限，不需签名或查询边界ID是否存在。`DRAFT_CURSOR_INVALID`400与内部ErrInvalid/存储/未知/取消503分开，无部分页。
+
+分页只保证静态已提交数据按边界可完整遍历，并不持有跨请求快照。created_at在提交前产生，较早时间戳的在途导入可能在游标越过后才提交，沿旧边界将漏过，需重新检查第一页；空页或末页不证明没有在途请求。浏览器只保留当前页，显式下一页/回首页，每次检查会话且清除迟到/过期/换账号结果；不依赖本机IndexedDB，不自动POST或修改pending。列表提供发现及本人预览入口，不授予一般材料访问、编辑、审核或发布。
 
 ### 本人题面与样例预览
 
@@ -73,8 +81,10 @@
 
 每题保存题面、选中题目的输入/答案、原始源码/许可、草稿文档及四份来源证据和bundle索引。逻辑名绑定hash/size，不存宿主绝对路径，不按对象哈希授予下载权。bundle索引中其他题目的条目只作来源证据，本草稿仅拥有自己列出的材料引用。内容版本继续绑定原始草稿语义；请求摘要另绑定文档及有序全部引用（含证据/index），因而来源报告字节变化也会改变请求内容。
 
-PG事务同一次提交owner、稳定ID、不可变文档/版本、全部引用及请求回执。同owner同键同内容返回原记录，不同内容为`ErrConflict`。`ErrCommitUnknown`后保持原键/原bundle核验；不得用新键制造重复记录。Put失败/未知不提交引用，已成功的无引用对象保留，当前没有全局磁盘额度或孤儿GC。业务读取限本人元数据/题面样例、授权配置候选摘要和本人导入回执；不提供改写、删除、转让、本人草稿列表、共享或一般材料下载，状态结构性固定`private-draft/not-run`。
+PG事务同一次提交owner、稳定ID、不可变文档/版本、全部引用及请求回执。同owner同键同内容返回原记录，不同内容为`ErrConflict`。`ErrCommitUnknown`后保持原键/原bundle核验；不得用新键制造重复记录。Put失败/未知不提交引用，已成功的无引用对象保留，当前没有全局磁盘额度或孤儿GC。业务读取限本人元数据/题面样例、授权配置候选摘要、本人导入回执和分页列表；不提供改写、删除、转让、共享或一般材料下载，状态结构性固定`private-draft/not-run`。
 
-schema7新增角色/审计及草稿/材料关联表，不为历史账号授予权限。升级前停止旧API/维护进程，独立`migrate up`后启动同版二进制；当前API拒绝6或未来schema。schema7仅在角色、审计、草稿均空时允许Down到6，保留账号、恢复和原积压表；存在任何上述数据均须向前修复。继续回退6时仍满足原积压保护，不清表绕过。新增owner/key唯一索引支持有界幂等定位，草稿主键支持本人ID查询，材料复合主键支持按草稿读取；每次草稿/引用/审计写入需维护相应索引并占用存储，无按版本/哈希扩建的冗余索引。
+角色/审计及草稿/材料关联表始于schema7，不为历史账号授予权限；当前精确schema8新增`problem_drafts_owner_created_id_idx(owner_subject_id,created_at DESC,id COLLATE "C" DESC)`，使首屏和深页owner+seek查询不扫描/排序全部历史。每次新草稿多维护一个B-tree条目及相应WAL/磁盘，实际占用依数据分布而变；12000行合成查询计划及索引大小见交付记录，不将该样本当生产容量估算。原owner/key唯一索引支持幂等定位，主键支持本人ID读取，材料复合主键支持按草稿读取；不为列表附带大document或冗余覆盖字段。
+
+升级在维护窗口排空并停止旧版API/Worker及维护写入，独立`migrate up`至8后启动同版二进制；API不自动迁移。普通CREATE INDEX在事务中建索引，需要协调写入，不使用CONCURRENTLY。新二进制拒绝7/未来schema；旧二进制只在启动检查时拒绝8，迁移不会自动停止已运行的旧进程，不混跑。回退先停新版，独立Down8仅删索引并保留全部草稿/权限，再启动要求7的旧版；重Up8保留资料。继续Down7至6仍仅允许角色、审计、草稿均空，存在数据则向前修复；Down6也保留原积压保护，不清表绕过。
 
 真实PG专项覆盖默认拒绝、owner隔离、角色CAS/审计失败回滚、同键并发、引用失败回滚、三类撤销锁及连接失去后禁止另库提交。提交未知用真实PG的COMMIT/ReadyForQuery回包被测试传输消耗后断连验证，再按原键恢复；不是直接伪造成功。2048行填充的权威sqlc查询计划自然使用owner/key、草稿与材料主键索引。真实十题服务联调已提交785逻辑引用、622对象/1461321676字节，并在Store关闭后及新PG池读回；该语料专项的会话观察为stub，真实Redis身份边界由普通协议专项单独覆盖。具体运行证据归交付日志；不据此宣称完整P4、邮箱验证后的训练权限、审核、发布或部署完成。

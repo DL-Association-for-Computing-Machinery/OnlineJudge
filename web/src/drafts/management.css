@@ -1,6 +1,6 @@
 .management-page section { margin-block: 32px; }
 .management-page h2 { font-size: 22px; }
-.management-page h3 { margin: 0; font-size: 17px; }
+.management-page h3 { margin: 0; font-size: 17px; overflow-wrap: anywhere; }
 .management-notice { min-height: 2em; }
 .management-list { padding: 0; list-style: none; border-top: 1px solid var(--line); }
 .management-list > li { display: flex; align-items: start; justify-content: space-between; gap: 24px; padding-block: 22px; border-bottom: 1px solid var(--line); }

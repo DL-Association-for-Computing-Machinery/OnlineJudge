@@ -66,7 +66,7 @@ python3 -B -m unittest discover -s tests/governance -p test_problem_drafts.py -v
 
 ### 出题角色维护与草稿入库服务
 
-schema 7 默认不给任何账号授予出题角色。受信维护者先独立迁移，再用 Docker 工具链构建的命令明确授予/撤销；`OJ_DATABASE_URL` 通过既有私有环境注入，不把真实连接信息写入命令或日志：
+出题角色始于schema 7，当前schema 8仍默认不给任何账号授予角色。受信维护者先独立迁移，再用 Docker 工具链构建的命令明确授予/撤销；`OJ_DATABASE_URL` 通过既有私有环境注入，不把真实连接信息写入命令或日志：
 
 ```sh
 .local/bin/migrate up
@@ -102,9 +102,11 @@ schema 7 默认不给任何账号授予出题角色。受信维护者先独立�
 
 已通过真实普通登录的出题账号可向`POST /api/v1/problem-drafts`发送`{"source_id":"library-checker:aplusb","request_key":"original-import-request-01"}`，需要同源证据及会话Cookie；最多1KiB JSON。成功/原回执均200，再以`GET /api/v1/problem-drafts/草稿ID`读取本人固定JSON元数据。断连/503可能已经提交，保留原键及精确候选快照核验，不自动重试或换键；配置/候选版本切换前须保留原版本供未知回执恢复。完整协议见[OpenAPI](api/problem-drafts.openapi.yaml)。默认Compose及本地测试账号均不自动开启或取得出题权。
 
-`/author/drafts`已接来源选择、绑定导入及本机回执恢复，使用[主体绑定管理协议](api/problem-draft-management.openapi.yaml)：先`GET /api/v1/problem-draft-management/sources`取得当前授权候选的`source_id/title/version/import_revision`，再向`POST /api/v1/problem-draft-management/imports`提交严格三字段`source_id/request_key/expected_revision`，其中expected_revision原样取完整import_revision。三条管理路由都必须带当前检查的`X-OJ-Expected-Subject`；服务端只把它与实际会话比较，不作为身份来源，账号变化409且业务零访问。完整修订还绑定index/来源证据，不能用仅代表题目文档的version代替；修订变化在材料I/O前409拒绝。成功返回八字段最小回执，没有文档或材料引用。
+`/author/drafts`已接来源选择、绑定导入及本机回执恢复，使用[主体绑定管理协议](api/problem-draft-management.openapi.yaml)：先`GET /api/v1/problem-draft-management/sources`取得当前授权候选的`source_id/title/version/import_revision`，再向`POST /api/v1/problem-draft-management/imports`提交严格三字段`source_id/request_key/expected_revision`，其中expected_revision原样取完整import_revision。所有管理路由都必须带当前检查的`X-OJ-Expected-Subject`；服务端只把它与实际会话比较，不作为身份来源，账号变化409且业务零访问。完整修订还绑定index/来源证据，不能用仅代表题目文档的version代替；修订变化在材料I/O前409拒绝。成功返回八字段最小回执，没有文档或材料引用。
 
-若响应丢失或结果未知，保留原owner/source/key/revision，以`GET /api/v1/problem-draft-management/imports/原请求键`只读查询本人已提交回执，不必重传材料。该GET不依赖当前候选或材料活动槽，但整个private_drafts仍须有效配置并启动成功。404只是本次没有观察到提交，409也不证明旧请求不存在；保留原tuple，显式再次查询或用原tuple恢复，不自动POST、不换键/修订。页面先等本机IndexedDB严格事务提交才发起POST，最多32条/账号，不自动清除pending；刷新/恢复/账号变化只清显示。旧两字段及[先前绑定协议](api/problem-draft-imports.openapi.yaml)保持兼容，页面绝不回退它们，旧二进制404须停写。`/author/drafts/open`保留按已有ID选择入口；图片/审核/发布及完整本人列表待交付。本机恢复记录的保留、导出与存储丢失限制见[界面约定](docs/frontend-design.md#私有草稿导入管理)，细节和回退见[草稿合同](docs/problem-drafts.md#管理页导入协议)。
+若响应丢失或结果未知，保留原owner/source/key/revision，以`GET /api/v1/problem-draft-management/imports/原请求键`只读查询本人已提交回执，不必重传材料。该GET不依赖当前候选或材料活动槽，但整个private_drafts仍须有效配置并启动成功。404只是本次没有观察到提交，409也不证明旧请求不存在；保留原tuple，显式再次查询或用原tuple恢复，不自动POST、不换键/修订。页面先等本机IndexedDB严格事务提交才发起POST，最多32条/账号，不自动清除pending；刷新/恢复/账号变化只清显示。旧两字段及[先前绑定协议](api/problem-draft-imports.openapi.yaml)保持兼容，页面绝不回退它们，旧二进制404须停写。`/author/drafts/open`保留按已有ID选择入口；图片/审核/发布待交付。本机恢复记录的保留、导出与存储丢失限制见[界面约定](docs/frontend-design.md#私有草稿导入管理)，细节和回退见[草稿合同](docs/problem-drafts.md#管理页导入协议)。
+
+服务器本人列表为`GET /api/v1/problem-draft-management/drafts`，带同一预期主体header。首次无query，之后原样传单个`cursor=next_cursor`；每页最多20条，空next_cursor表示本次末页，无总数/他人统计。只读最小回执，不读题面或材料；网页即使本机记录已清或IndexedDB不可用也能手动发现已提交草稿并打开预览，不自动确认或清理pending。逐页视图不是跨请求快照，较早时间戳迟提交可能被旧边界漏过，并发时重查首页；空/末页不是取消或无在途证明。schema8索引的维护升级/回退见[本人列表合同](docs/problem-drafts.md#本人草稿列表)。
 
 `GET /api/v1/problem-drafts/草稿ID/preview`返回本人已入库版本的`markdown`和有序`examples`（id/input/output），不依赖当前候选版本；仍须有效普通会话和当前出题权。先核对全部题面/样例引用与总预算，再逐份验证快照，读取后复核同一凭据和PG授权，失败不返回部分文本。原始markdown/input/output总计至多1MiB，重复对象按返回次数计数；JSON转义可放大到六倍另加元数据。只接受严格UTF-8，保留空格、CRLF及末尾换行，不替换或截断。它是管理页的数据接口，不提供一般材料下载或发布；正式测试与源码不进入预览。最终会话读取之后的退出及最终PG授权之后的撤权沿已接受在途合同，不能原子撤回已经开始发送的响应。关闭整个`private_drafts`能力即可停止入口，已入库资料保留。
 
@@ -176,7 +178,7 @@ API 镜像的 `/usr/local/bin/oj-api` 在非空 `OJ_SESSION_CONFIG_FILE` 下切�
 
 数据库及 Redis 的密码来源各自显式选择 `auth: "none"` 或 `"env"`。后者只读取固定的 `OJ_SESSION_DATABASE_PASSWORD` / `OJ_SESSION_REDIS_PASSWORD`，必须非空；前者拒绝对应非空残留环境。密码、登录 key、TLS 私钥均不写入配置 JSON、镜像或命令行。数据库不消费 `OJ_DATABASE_URL`，连接类 PG 环境变量须按运行时合同清理；服务不修改进程环境。
 
-启动前须由受信维护流程完成当前 schema 7（邮箱模型始于 schema 5、积压准入始于6）、恢复状态开门、共享密钥分发及匹配的限流 marker 初始化；命令只检查，不自动迁移、初始化或修复。配置与公开证书可只读挂载，登录密钥及 TLS 私钥必须满足 0400/0600、root/进程 euid 所有等约束。非 root 容器须能遍历并读取这些文件。不要把完整配置或秘密对象输出到日志。
+启动前须由受信维护流程完成当前 schema 8（邮箱模型始于5、积压准入始于6、私有草稿始于7）、恢复状态开门、共享密钥分发及匹配的限流 marker 初始化；命令只检查，不自动迁移、初始化或修复。schema8普通索引迁移须在维护窗口排空/停止旧进程后执行，再启动匹配新版；运行中旧进程不会因版本变化自动停止，详见[升级回退](docs/problem-drafts.md#私有草稿入库与本人读取)。配置与公开证书可只读挂载，登录密钥及 TLS 私钥必须满足 0400/0600、root/进程 euid 所有等约束。非 root 容器须能遍历并读取这些文件。不要把完整配置或秘密对象输出到日志。
 
 direct 模式要求客户端直接 TLS；proxy 模式要求同一监听器的已验证客户端证书和允许的叶证书指纹，健康检查也须经 mTLS。现有 Compose/Nginx 的明文 backend 和浏览器页面尚未配置该入口；部署、生产阈值、真实证书/存储 TLS 和完整账号权限另行验收。回退先停服务并移除显式配置环境，不把旧明文路径接到会话 Handler。
 
@@ -230,7 +232,7 @@ python3 scripts/test-browser-account.py \
 
 可选 `--chromium-executable /absolute/path/to/existing/chromium` 指定已有浏览器；`--statement-corpus /absolute/path/to/prepared-bundle/statements` 增加至多10份只读Markdown的浏览器渲染耗时/节点测量（响应替换，不冒充十题真实HTTP授权验收）；`--toolchain-image`、`--module-cache`、`--build-cache-volume` 和 `--context` 的约束沿用现有专项。驱动只发布随机回环 HTTPS/HTTP 对照端口，建立隔离的合成账号/存储；真实 race API 使用固定 pin 的 mTLS，外层临时证书只在新测试 context 忽略。控制端点仅供本夹具，不能对外开放或接入真实数据。
 
-产物包含日志、浏览器断言 JSON 与桌面/390px 截图；当前14组保留账号/预览覆盖，并验证真实主体绑定导入、丢成功回包后刷新只读恢复、实际Cookie换账号拒绝、IndexedDB严格事务仲裁/容量/损坏/失败及清库后零内存重试。独立journal测试入口仅由此驱动构建到临时assets，生产构建不引用它。驱动分别检查浏览器和夹具结果，结束只清理本轮带 owner 标签的资源。`integration && browser` 夹具只运行 `TestBrowserFixture`，普通 PR CI 不自动执行此手动浏览器专项。生产证书、浏览器兼容矩阵及完整业务验收仍须另做。
+产物包含日志、浏览器断言 JSON 与桌面/390px 截图；当前15组保留账号/预览与导入恢复覆盖，另验新浏览器档案/IndexedDB禁用时真实服务器分页发现及本人预览、迟到页隔离、列表不改变pending日志；实际Cookie换账号覆盖四条管理路由。独立journal测试入口仅由此驱动构建到临时assets，生产构建不引用它。驱动分别检查浏览器和夹具结果，结束只清理本轮带 owner 标签的资源。`integration && browser` 夹具只运行 `TestBrowserFixture`，普通 PR CI 不自动执行此手动浏览器专项。生产证书、浏览器兼容矩阵及完整业务验收仍须另做。
 
 真实 Worker 专项（当前固定 macOS arm64、Docker Desktop LinuxKit 7.0.14）：
 
@@ -280,7 +282,7 @@ python3 scripts/test-worker.py browser-loop \
   --output-dir /absolute/new/path/m0-browser
 ```
 
-Chromium参数可省略以使用该Playwright已安装的浏览器。产物必须为仓库外新目录，含检查JSON、私有日志及桌面/390px截图；测试以真实POST提交成功后丢弃响应验证未知/原键恢复，在浏览器确认queued且数据库无attempt后才启动真实Worker。查询503及提交BACKLOG_LIMIT/ADMISSION_UNAVAILABLE展示另由浏览器路由注入，不冒充真实数据库故障；共享准入后端另有真实PostgreSQL/双API验证。回退页面可关闭开关；数据库当前schema7及历史schema6分别按草稿/积压合同升级与回退，不能直接启动旧版写入API；已接受任务仍按原Worker协议处理。
+Chromium参数可省略以使用该Playwright已安装的浏览器。产物必须为仓库外新目录，含检查JSON、私有日志及桌面/390px截图；测试以真实POST提交成功后丢弃响应验证未知/原键恢复，在浏览器确认queued且数据库无attempt后才启动真实Worker。查询503及提交BACKLOG_LIMIT/ADMISSION_UNAVAILABLE展示另由浏览器路由注入，不冒充真实数据库故障；共享准入后端另有真实PostgreSQL/双API验证。回退页面可关闭开关；数据库当前schema8及历史schema7/6分别按草稿/积压合同升级与回退，不能直接混跑旧版进程；已接受任务仍按原Worker协议处理。
 
 ### 沙箱资源预算专项
 

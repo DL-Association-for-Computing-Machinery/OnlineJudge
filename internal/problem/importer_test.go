@@ -92,6 +92,10 @@ func (importRepository) Receipt(context.Context, identity.ProblemActor, string) 
 	return ImportReceipt{}, ErrNotFound
 }
 
+func (importRepository) ListOwn(context.Context, identity.ProblemActor, *ListPosition) ([]ImportReceipt, error) {
+	return nil, nil
+}
+
 type blockedMaterial struct {
 	checkingMaterials
 	once             sync.Once
