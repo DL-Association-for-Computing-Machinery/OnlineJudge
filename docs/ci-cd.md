@@ -12,7 +12,7 @@
 
 停止诊断的原故障矩阵继续核对主错误优先级、独立期限与dirty门禁，并验证六步顺序/到达位置、PID合计次数、耗时截断标记、返回副本及owner映射。可信固定本地shell分别证明过期context下kill调用尝试但CLI未启动、CLI已启动后超时；不执行题源或制造真实Docker停止故障，不据此断定历史根因。固定成功报告JSON golden验证新增字段在成功时完全省略。当前参考执行/传输预算与来源准入保持，历史#114失败不被诊断或普通CI改写；新版本吸收#123后另经一次八来源固定环境接纳通过，最终CI与合并状态见[PR #114](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/114)。
 
-Host控制失败五阶段采样、冻结阶段/整体收尾耗时区分、直接本地启动证据、边界/枚举/结构净化、逐层脱敏复制及独立cleanup trace归属随backend执行；每次公开投影仍只检查64槽，裸provider不额外开启类别遍历，八条上限保持。原错误`Is/As`、五profile/成功JSON兼容、真实私有报告写入及Stop成功/失败隔离决策一并验证。Darwin专用workerhost驱动先核对精确清单再运行固定受信命令和替身，不等同沙箱或题源验收；字段及缺失限制见[参考验证](reference-validation.md#执行失败诊断)。#114历史失败保留，新版本已通过独立八来源接纳；#119仍待验收。
+Host控制失败五阶段采样、冻结阶段/整体收尾耗时区分、直接本地启动证据、边界/枚举/结构净化、逐层脱敏复制及独立cleanup trace归属随backend执行；每次公开投影仍只检查64槽，裸provider不额外开启类别遍历，八条上限保持。原错误`Is/As`、五profile/成功JSON兼容、真实私有报告写入及Stop成功/失败隔离决策一并验证。Darwin专用workerhost驱动先核对精确清单再运行固定受信命令和替身，不等同沙箱或题源验收；字段及缺失限制见[参考验证](reference-validation.md#执行失败诊断)。#114历史失败保留，新版本已通过独立八来源接纳；#119新版本已通过九来源独立接纳，最终CI与合并状态见[PR #119](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/119)。
 
 独立缓存字节通路的MIME/二进制响应、角色账本、配额/预留、未知回执/坏哈希、清理期间取消和真实本地子进程背压回归随backend执行，后者只运行受信任的固定shell命令。`reference_bytes_sandbox_test.go`的48MiB及缓存stdin/stdout实测仅在显式`OJ_REFERENCE_BYTES=1`与sandbox/宿主驱动下运行，普通CI不执行题源或大文件沙箱；M0默认内联路径及既有回归保持。
 
@@ -22,9 +22,9 @@ unionfind完整磁盘快照、Read/Close竞争/配额释放、坏末点零执行
 
 primality固定依赖布局、同文件冻结/关闭竞争、聚合64KiB及路径预检、多文件逐个上传失败/未知回执、原始字节回读、六对象额度、共享独立5秒清理/保留exe及第五来源停止矩阵随backend执行；旧四profile摘要保持。`cmd/worker/primality_sandbox_test.go`仅在sandbox标签、darwin/arm64宿主驱动与`OJ_PRIMALITY_REFERENCE=1`及实验opt-in下运行，先验证可信嵌套include，再验证完整13点；首组失败即停止。它复用medium槽锁但保留独立档位，不进入普通CI或创建/替换槽，不代表数据库验证状态、生产预算或P4发布验收。
 
-本分支staticrmq候选的256MiB材料/16MiB输入上限、真实大于128MiB的合成冻结、共享额度、末点坏哈希/UTF-8/超长token零Verify、双端512MiB累计账本精确边界与清理、27点最坏传输、跨档位/来源拒绝及staticrmq候选停止矩阵随backend执行；旧八profile摘要保持。`cmd/worker/staticrmq_sandbox_test.go`仅在sandbox标签、darwin/arm64、`OJ_STATICRMQ_REFERENCE=1`和实验opt-in下运行可信16MiB stdin及完整27点，前组（含Stop cleanup）失败即中止。一次真实CLI第9点SE使本项保持未完成，普通CI即使通过也不能解除；没有继续旧来源真实回归、重试或放宽期限。失败与后续调查见[交付记录](delivery-log.md)。
+staticrmq的256MiB材料/16MiB输入上限、真实大于128MiB的合成冻结、共享额度、末点坏哈希/UTF-8/超长token零Verify、双端512MiB累计账本精确边界与清理、27点最坏传输、跨档位/来源拒绝及staticrmq停止矩阵随backend执行；旧八profile摘要保持。`cmd/worker/staticrmq_sandbox_test.go`仅在sandbox标签、darwin/arm64、`OJ_STATICRMQ_REFERENCE=1`和实验opt-in下运行可信16MiB stdin及完整27点，前组（含Stop cleanup）失败即中止。原第9点SE及早期未复现观测作为历史保留；吸收主线前置后，一次九来源201点/24个子测试、完整原Plan/Profile及全部Stop通过，支持新版本固定环境接纳；最终CI与合并状态见[PR #119](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/119)，不放宽期限或重试。失败与后续接纳见[交付记录](delivery-log.md)。
 
-static_range_sum的256MiB上限/超过128MiB实际冻结与共享额度、16MiB input与8MiB answer边界、275765609B/73逻辑操作计费、25MiB+1字节存活预留、8MiB原始字节/SIGXFSZ窄证据、额外wire角色下载前拒绝/保留未知预留和第六来源Stop矩阵随backend执行。预期stderr拒绝不能掩盖stdout/input清理失败、取消或截断的合成回归亦归普通backend；旧五profile保持；档位3的point_add_range_sum已通过本轮固定环境接纳，5仍待准入。`cmd/worker/static_range_sum_sandbox_test.go`仅在sandbox标签、darwin/arm64宿主驱动与`OJ_STATIC_RANGE_SUM_REFERENCE=1`/实验opt-in下运行真实字节边界及完整11点，首组或Stop失败不进入CLI，不进入普通CI或改变槽。首轮槽启动/停止证据失败仍保留；已批准环境改变后的独立新观测与原五来源串行回归通过，不证明旧根因或长期稳定，普通CI不替代这些真实证据。
+static_range_sum的256MiB上限/超过128MiB实际冻结与共享额度、16MiB input与8MiB answer边界、275765609B/73逻辑操作计费、25MiB+1字节存活预留、8MiB原始字节/SIGXFSZ窄证据、额外wire角色下载前拒绝/保留未知预留和第六来源Stop矩阵随backend执行。预期stderr拒绝不能掩盖stdout/input清理失败、取消或截断的合成回归亦归普通backend；旧五profile保持；档位3的point_add_range_sum已通过本轮固定环境接纳，5亦已通过九来源固定环境接纳。`cmd/worker/static_range_sum_sandbox_test.go`仅在sandbox标签、darwin/arm64宿主驱动与`OJ_STATIC_RANGE_SUM_REFERENCE=1`/实验opt-in下运行真实字节边界及完整11点，首组或Stop失败不进入CLI，不进入普通CI或改变槽。首轮槽启动/停止证据失败仍保留；已批准环境改变后的独立新观测与原五来源串行回归通过，不证明旧根因或长期稳定，普通CI不替代这些真实证据。
 
 associative_array的含catalog512MiB精确/+1、超过256MiB实际匿名冻结、48MiB input/8MiB answer精确/+1、993543748B/127操作计费、57MiB+1预留、1GiB两端账本注入边界/已知清理、5s/10s wire参数和第七来源Stop矩阵归普通backend，旧六profile保持。`cmd/worker/associative_array_sandbox_test.go`仅在sandbox标签、darwin/arm64及`OJ_ASSOCIATIVE_ARRAY_REFERENCE=1`/实验opt-in下执行同次48MiB输入→8MiB输出及完整20点；首组含Stop失败则后组不运行。一次两组及后续旧六来源独立串行回归已通过；物理medium槽/锁不变，普通CI不执行该真实专项，不代替固定环境证据、生产容量或发布验收。
 

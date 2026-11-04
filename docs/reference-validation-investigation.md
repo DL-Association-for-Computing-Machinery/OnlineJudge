@@ -1,8 +1,8 @@
 # 参考验证的停止故障调查
 
-本页正文保留2026-11-04早期旧suffixarray故障调查的历史时点；其中“当前”“#114继续草稿”等均指相应调查阶段。根因尚未确定，旧失败不追认。本页不是故障已修复、完整P4通过或生产稳定性证明。
+本页正文保留2026-11-04早期旧suffixarray及staticrmq故障调查的历史时点；其中“当前”“#114继续草稿”“#119继续草稿”等均指相应调查阶段。根因尚未确定，旧失败不追认。本页不是故障已修复、完整P4通过或生产稳定性证明。
 
-后续状态：吸收已交付#123停止预算修复后，新版本HEAD `0cd63e3ddacb3be00e3f693f1d0797a2f02d4e42`已通过一次八来源174点及22个原子子测试的固定环境接纳，全部AC/Stop、旧完整Plan/Profile相等；最终CI与合并状态见[PR #114](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/114)，#119仍待独立验收。新证据入口见[接纳记录](delivery-log.md#2026-11-04point_add_range_sum-八来源固定环境接纳)，当前合同见[参考验证](reference-validation.md)；该成功不解释旧阻塞根因。
+后续状态：#114已合并为`b20900b2567f959879657d18a196dd6aba86b41a`；staticrmq版本HEAD `e777ae2b985193ddaf1ec8d647d8697aa13c5964`吸收该前置与#123后，通过一次九来源201点及24个原子子测试的固定环境接纳，全部AC/Stop、旧完整Plan/Profile相等。最终CI与合并状态见[PR #119](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/119)，新证据见[九来源接纳记录](delivery-log.md#2026-11-04staticrmq-九来源固定环境接纳)；当前合同见[参考验证](reference-validation.md)。新成功不解释旧阻塞根因，下面各历史阶段结论保持原时点。
 
 ## 原始故障与新运行
 
