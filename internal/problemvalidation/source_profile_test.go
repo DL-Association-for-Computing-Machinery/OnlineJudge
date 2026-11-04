@@ -31,6 +31,10 @@ func TestSourceProfilesPreserveOldDigestsAndRejectBorrowing(t *testing.T) {
 	if suffix.Digest() != "0082bb2f961c1f1c082c0ed671881bca49cdaae72d9587bb76d8424ff5e661e7" {
 		t.Fatal("suffixarray profile changed")
 	}
+	static, _, err := problemvalidation.ResolveSource("library-checker:static_range_sum")
+	if err != nil || static.Digest() != "501331a58bd9dfe76059e79701c80b7e7ba4d8096f1c93252f38c20d199cb028" {
+		t.Fatal("static_range_sum profile changed", err)
+	}
 	if _, _, err := problemvalidation.ResolveSource("library-checker:unknown"); err == nil {
 		t.Fatal("unknown source accepted")
 	}

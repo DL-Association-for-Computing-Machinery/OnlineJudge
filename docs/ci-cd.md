@@ -24,6 +24,8 @@ primality固定依赖布局、同文件冻结/关闭竞争、聚合64KiB及路�
 
 static_range_sum的256MiB上限/超过128MiB实际冻结与共享额度、16MiB input与8MiB answer边界、275765609B/73逻辑操作计费、25MiB+1字节存活预留、8MiB原始字节/SIGXFSZ窄证据、额外wire角色下载前拒绝/保留未知预留和第六来源Stop矩阵随backend执行。预期stderr拒绝不能掩盖stdout/input清理失败、取消或截断的合成回归亦归普通backend；旧五profile保持，3/5仍未准入。`cmd/worker/static_range_sum_sandbox_test.go`仅在sandbox标签、darwin/arm64宿主驱动与`OJ_STATIC_RANGE_SUM_REFERENCE=1`/实验opt-in下运行真实字节边界及完整11点，首组或Stop失败不进入CLI，不进入普通CI或改变槽。首轮槽启动/停止证据失败仍保留；已批准环境改变后的独立新观测与原五来源串行回归通过，不证明旧根因或长期稳定，普通CI不替代这些真实证据。
 
+associative_array候选的含catalog512MiB精确/+1、超过256MiB实际匿名冻结、48MiB input/8MiB answer精确/+1、993543748B/127操作计费、57MiB+1预留、1GiB两端账本注入边界/已知清理、5s/10s wire参数和第七来源Stop矩阵归普通backend，旧六profile保持。`cmd/worker/associative_array_sandbox_test.go`仅在sandbox标签、darwin/arm64及`OJ_ASSOCIATIVE_ARRAY_REFERENCE=1`/实验opt-in下执行同次48MiB输入→8MiB输出及完整20点；首组含Stop失败则后组不运行。物理medium槽/锁不变，普通CI不执行该真实专项，不代替独立预算/容量/来源准入或发布验收。
+
 `integration-tests` 在既有 sqlc/真实 PostgreSQL 检查后，构建同一 Docker 工具链并下载固定摘要 Redis 7.2.17，执行 `scripts/test-session-protocol.py --context default`。专项使用私有网络、临时 PG、双客户端/双连接池及 TLS 入口验证正式普通 Redis 协议、文件加载的合成密钥、两步登录与共享准入/限流故障，以及固定单跳 TLS→mTLS 反代的证书、来源和 Cookie 路径，失败传递到原 integration 必需门禁；不开放宿主端口，不持有生产凭据或运行选手代码。命令归 README，隔离和结果归 M0/交付记录；不代表公开 HTTP/SCS、真实浏览器/生产代理、生产阈值或完整恢复验收。
 
 `containers` 在原 Compose 冒烟后执行 `scripts/test-local-development.py`：全新 UUID 项目验证本地账号首次初始化、重复初始化不改材料、Redis marker 丢失后拒绝启动且不修复，再核验并清理该轮自有资源。此专项不启动 HTTPS 网关或占用 8443，不触及用户的持久 `oj-local-dev`。加入第二套真实容器检查后，该 job 超时为 30 分钟，原必需门禁保持。

@@ -1,5 +1,15 @@
 # 工程交付记录
 
+## 2026-11-04：associative_array完整20点候选（真实验证待执行）
+
+成功fetch后从`origin/main 7f009bd504a0541cff5b76ad12de4c376e9cc98c`建立独立`codex/associative-array-reference`，不依赖#114/#119。唯一目标为该固定来源的完整参考验证；43对象451132962B逐哈希核对，证据`/private/tmp/oj-associative-array-complete-material-evidence-20261104.json` SHA `4fc147dc30505ca7b5ef93bf4de6a46d6d11e4fe459c75201e04196a0e2ad196`。固定源码474B仅用标准头，input总412885310B/最大39588095B，answer总38242614B/最大4691775B；源码和20点不替换/采样。预算及独立整体期限归[候选合同](reference-validation.md#associative_array候选)。
+
+新tier7/profile仅为此来源设置完整材料512MiB/input48MiB/raw stdout及checker8MiB/payload1GiB及RunCPU5s/wall10s/memory128MiB。CPU选择依据固定info.toml的5.0秒，不宣称本站生产参数或性能成立；阶段3分钟、单Run共享15秒、CLI4分钟/顶层5分钟为独立更严上限，可能先于单点预算耗尽。原六profile、编译、file/live/操作数、medium物理配置与canonical锁、Stop及零重试保持。
+
+Astra设计及实现复核未见剩余代码阻断，指出单Run共享期限、3分钟整体限与48MiB+8MiB组合必须独立实测；主代理落实同次全字节探针/清理/Stop门禁，并补含catalog总预算精确512MiB/+1。现有离线Docker Go1.26.10模块核验、六包race基线/定向race-vet、额外problem/execution精确边界race、完整backend格式/vet/静态/root race/七Linux命令构建、sandbox vet及独立Darwin制品构建通过，日志`/private/tmp/oj-associative-array-{baseline,targeted,exact-and-build,backend}.log`；含catalog预算不等于匿名文件物理长度，1GiB账本注入不等于真实搬运。质量检测器中的四份故意缺陷夹具均被拒绝，其错误输出不代表应用检查失败。
+
+当前未启动真实槽或题源，组合边界/完整20点和原六来源回归待执行，维护准入仍六题；不会自动启动#114/#119候选或解除其历史失败。无新依赖、SQL/schema、HTTP/UI、数据库验证或发布改动，草稿not-run/生产null/publication blocked保持，整体P4未完成，未部署。
+
 ## 2026-11-04：static_range_sum完整11点与原五来源回归
 
 接续#121的干净head `cc23d6b97739d3bd1921c30d6de7d30e395d805d`，仅补足原候选的固定环境维护准入证据。用户在上一聊天明确批准只重启现有localdev，`00:01:52Z`一次重启返回0；同CID、镜像、端口和挂载指纹保持，PostgreSQL/Redis等兄弟容器生命周期未变，原公开CA校验HTTPS返回204，重启后PIDS单次样本22。已有离线镜像的受信`/bin/true`独立容器返回0。证据`/private/tmp/oj-localdev-approved-restart-20261104-{before,command,after,trusted-process}.json`。这些只证明环境条件改变与当时可用，不解释近五万PIDS或旧启动失败，不宣称永久修复；本轮没有再次重启或更改持久服务。

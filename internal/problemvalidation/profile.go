@@ -56,6 +56,21 @@ func ResolveSource(sourceID string) (Profile, experiment.ReferenceTier, error) {
 		return PinnedProfile(), 0, nil
 	case "library-checker:unionfind":
 		return UnionFindProfile(), experiment.ReferenceSmall, nil
+	case "library-checker:associative_array":
+		c, err := experiment.ResolveReferenceTier(experiment.ReferenceAssociativeArray)
+		if err != nil {
+			return Profile{}, 0, err
+		}
+		limits, err := problem.DiskReferenceLimits(sourceID)
+		if err != nil {
+			return Profile{}, 0, err
+		}
+		p := UnionFindProfile()
+		p.ID = "p4-lc-associative-array-reference-desktop-arm64-v1"
+		p.Runtime, p.Files, p.Materials = c.Runtime, c.Files, limits
+		p.Text.Bytes = 8 << 20
+		// This remains an independent total cap, not twenty full wall budgets.
+		return p, experiment.ReferenceAssociativeArray, nil
 	case "library-checker:primality_test":
 		c, err := experiment.ResolveReferenceTier(experiment.ReferencePrimality)
 		if err != nil {

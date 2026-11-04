@@ -76,6 +76,8 @@ docker --context desktop-linux run --rm --network none --read-only \
 
 维护入口已验证固定Library Checker A+B完整12点、unionfind完整18点、zalgorithm完整29点、suffixarray完整50点、primality_test固定依赖/完整13点及static_range_sum完整11点。static_range_sum在用户批准的localdev专项重启后，以原制品/预算通过独立字节边界及完整点集，另一次原五来源回归通过；首次启动失败仍失败，根因未知，不据新通过宣称故障修复或长期稳定，证据归[交付记录](docs/delivery-log.md)。入口不写数据库验证状态或发布。需要已配置且停止的专用槽、已有固定镜像与Docker Desktop、macOS arm64；命令不会自动创建、替换或恢复槽。使用已有Go1.26.10工具链镜像构建独立宿主产物（不与Linux检查共用输出）：
 
+本分支另有`associative_array`完整20点候选：512MiB完整材料总预算、input48MiB、stdout/checker8MiB、payload1GiB，独立CPU5秒/wall10秒，保留更严的整体3分钟和原medium物理槽/锁。真实组合边界和完整CLI尚待执行，未作为第七题准入；[候选合同](docs/reference-validation.md#associative_array候选)与旧失败限制分开记录。
+
 ```sh
 REFERENCE_TOOLCHAIN_IMAGE=YOUR_EXISTING_LOCAL_GO_TOOLCHAIN_IMAGE
 docker --context desktop-linux run --rm --network none --cap-drop ALL \
@@ -219,6 +221,16 @@ env -u OJ_WORKER_M0_SLOT OJ_SANDBOX_EXPERIMENT=1 OJ_STATIC_RANGE_SUM_REFERENCE=1
   OJ_STATIC_RANGE_SUM_OUTPUT=/private/tmp/oj-static-range-sum-suite-report \
   .local/validation-host/worker-validation.test \
   -test.v -test.count=1 -test.run='^TestStaticRangeSumReferenceSandbox$' -test.timeout=5m
+```
+
+associative_array候选命令选择`--source-id library-checker:associative_array`及新报告目录，不创建另一物理槽。专用驱动先验证同次48MiB完整输入与8MiB完整输出；任一清理/Stop失败则不进入20点CLI。更严整体期限和候选预算先固定，不能失败后自动追加：
+
+```sh
+env -u OJ_WORKER_M0_SLOT OJ_SANDBOX_EXPERIMENT=1 OJ_ASSOCIATIVE_ARRAY_REFERENCE=1 \
+  OJ_REFERENCE_BUNDLE=/private/tmp/oj-library-checker-drafts/bundle \
+  OJ_ASSOCIATIVE_ARRAY_OUTPUT=/private/tmp/oj-associative-array-suite-report \
+  .local/validation-host/worker-validation.test \
+  -test.v -test.count=1 -test.failfast -test.run='^TestAssociativeArrayReferenceSandbox$' -test.timeout=5m
 ```
 
 原始字节与容量专项另外使用已停止的M0 secondary槽，覆盖48MiB边界/超限、空输入、全部字节值、缓存stdin→小输出、清理及数值资源采样；它不更新草稿状态或生产限额：
