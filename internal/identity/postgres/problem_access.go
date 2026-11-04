@@ -23,42 +23,54 @@ func NewProblemAccess(pool *pgxpool.Pool) (*ProblemAccess, error) {
 	return &ProblemAccess{pool: pool}, nil
 }
 
-// LockAuthor checks identity-owned facts in the caller's SAME business tx. The
-// caller must use READ COMMITTED and keep the transaction alive through its
-// business commit; no filesystem work, Redis calls or responses run under locks.
-// Lock order is recovery -> account -> role -> caller's business rows.
+// LockAuthor preserves the existing error-only authorization boundary.
 func (s *ProblemAccess) LockAuthor(ctx context.Context, tx pgx.Tx, actor identity.ProblemActor) error {
+	_, err := s.LockAuthorSnapshot(ctx, tx, actor)
+	return err
+}
+
+// LockAuthorSnapshot checks identity-owned facts and returns their revision in
+// the caller's SAME READ COMMITTED business transaction. It neither begins nor
+// ends that transaction; recovery -> account -> role locks last until its end.
+// No filesystem work, Redis calls or responses may run under these locks.
+// A returned snapshot is not permission after commit, rollback or connection
+// loss. A later task operation must recheck and compare the complete snapshot.
+// Single-token logout retains the ordinary session's accepted-in-flight boundary.
+func (s *ProblemAccess) LockAuthorSnapshot(ctx context.Context, tx pgx.Tx, actor identity.ProblemActor) (identity.ProblemAuthorSnapshot, error) {
 	if s == nil || s.pool == nil || ctx == nil || tx == nil || !actor.Valid() {
-		return identity.ErrInvalid
+		return identity.ProblemAuthorSnapshot{}, identity.ErrInvalid
 	}
 	q := identitydb.New(tx)
 	if err := lockRecovery(ctx, q, actor.RecoveryID); err != nil {
-		return err
+		return identity.ProblemAuthorSnapshot{}, err
 	}
 	row, err := q.GetStateForShare(ctx, actor.SubjectID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return identity.ErrConflict
+		return identity.ProblemAuthorSnapshot{}, identity.ErrConflict
 	}
 	if err != nil {
-		return storageError{err}
+		return identity.ProblemAuthorSnapshot{}, storageError{err}
 	}
 	if row.ID != actor.SubjectID || !row.Enabled || row.AuthGeneration != actor.AuthGeneration {
-		return identity.ErrConflict
+		return identity.ProblemAuthorSnapshot{}, identity.ErrConflict
 	}
 	role, err := q.ProblemAuthorForShare(ctx, actor.SubjectID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return identity.ErrForbidden
+		return identity.ProblemAuthorSnapshot{}, identity.ErrForbidden
 	}
 	if err != nil {
-		return storageError{err}
+		return identity.ProblemAuthorSnapshot{}, storageError{err}
 	}
 	if role.SubjectID != actor.SubjectID || role.Revision < 1 {
-		return storageError{identity.ErrInvalid}
+		return identity.ProblemAuthorSnapshot{}, storageError{identity.ErrInvalid}
 	}
 	if !role.Enabled {
-		return identity.ErrForbidden
+		return identity.ProblemAuthorSnapshot{}, identity.ErrForbidden
 	}
-	return ctx.Err()
+	if err = ctx.Err(); err != nil {
+		return identity.ProblemAuthorSnapshot{}, err
+	}
+	return identity.ProblemAuthorSnapshot{Actor: actor, RoleRevision: role.Revision}, nil
 }
 
 // AuthorRole reads point-in-time maintenance metadata, never a permission grant.

@@ -87,6 +87,8 @@
 
 创建顺序为：新鲜会话读取→短出题授权预检→逐项持久化材料→再次读取同一实际凭据→同一READ COMMITTED事务核对恢复、账号及当前角色并写入草稿。全流程锁序为恢复→账号→角色→草稿，identity公开窄事务适配器，problem不读取identity私有SQL。材料复制/哈希和Redis读取均不在PG锁内。最终Read之前退出、过期或存储故障拒绝写入；Read之后的单token退出遵循普通会话“已接受在途工作不追溯撤销”合同，不宣称Redis与PG跨库原子退出。
 
+`identity/postgres.ProblemAccess.LockAuthorSnapshot`在调用方的同一READ COMMITTED事务返回`ProblemAuthorSnapshot{Actor,RoleRevision}`；所有检查成功后才返回完整快照，失败返回零值。恢复、账号和角色共享锁保持到调用方提交或回滚，原`LockAuthor`委托该检查并保留error-only接口。快照不是凭据、提交证明或事务结束后的权限；后续持久化任务接入时必须重新锁定当前授权并比较完整快照。只比较enabled会把撤权后重授误认成原授权，role revision对此有区分；credential-only rehash不改变会话授权，改密产生的新AuthGeneration及恢复代次变化则会改变Actor。本次只增加事务适配能力，未新增任务表、调度、报告接纳或HTTP字段，草稿继续`not-run`，发布仍阻断。
+
 `LoadBundle`接受维护者控制的稳定私有目录及**受信配置的来源锁原始字节**，不把bundle内的锁自行当作信任根。Go读取器核对完整文件集合、0700/0600及euid所有权、精确JSON字段/必填值/规范字节、版本、来源锁、选题映射、全部原始文件及样例关系；拒绝未完成标记、路径别名、链接、FIFO、公开权限、未列文件、未知schema和生产预算。预算为1MiB元数据、每对象128MiB、bundle2GiB、最多8192文件；每份Prepared只允许一个在途导入，Close拒绝活动导入。小元数据被冻结，大材料在授权后由Put核验原始字节；不是针对恶意同UID并发改写者的上传隔离。
 
 每题保存题面、选中题目的输入/答案、原始源码/许可、草稿文档及四份来源证据和bundle索引。逻辑名绑定hash/size，不存宿主绝对路径，不按对象哈希授予下载权。bundle索引中其他题目的条目只作来源证据，本草稿仅拥有自己列出的材料引用。内容版本继续绑定原始草稿语义；请求摘要另绑定文档及有序全部引用（含证据/index），因而来源报告字节变化也会改变请求内容。
