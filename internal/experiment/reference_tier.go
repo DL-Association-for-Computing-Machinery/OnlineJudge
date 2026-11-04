@@ -11,6 +11,8 @@ const (
 	ReferenceSmall ReferenceTier = 1
 	// ReferenceMedium is the reviewed medium-material reference trial.
 	ReferenceMedium ReferenceTier = 2
+	// ReferenceMediumBulk retains Medium execution with a larger transfer ledger.
+	ReferenceMediumBulk ReferenceTier = 3
 	// ReferencePrimality admits the fixed dependency-layout trial.
 	ReferencePrimality ReferenceTier = 4
 	// ReferenceStaticRangeSum admits one complete source with larger raw output.
@@ -32,7 +34,7 @@ func ResolveReferenceTier(tier ReferenceTier) (ReferenceConfiguration, error) {
 	switch tier {
 	case ReferenceSmall:
 		return ReferenceConfiguration{Runtime: PinnedReferenceEnvironment(), Files: PinnedReferenceFiles()}, nil
-	case ReferenceMedium, ReferencePrimality, ReferenceStaticRangeSum, ReferenceAssociativeArray:
+	case ReferenceMedium, ReferenceMediumBulk, ReferencePrimality, ReferenceStaticRangeSum, ReferenceAssociativeArray:
 		p := PinnedReferenceEnvironment()
 		p.ID = "p4-reference-medium-gnu17-desktop-arm64-v1"
 		p.OutputBytes = 4 << 20
@@ -48,6 +50,10 @@ func ResolveReferenceTier(tier ReferenceTier) (ReferenceConfiguration, error) {
 		f := PinnedReferenceFiles()
 		f.ID = "p4-gojudge-cached-files-medium-v1"
 		f.PayloadBytes = 256 << 20
+		if tier == ReferenceMediumBulk {
+			f.ID = "p4-gojudge-cached-files-medium-bulk-v1"
+			f.PayloadBytes = 512 << 20
+		}
 		if tier == ReferenceStaticRangeSum {
 			p.ID = "p4-static-range-sum-gnu17-desktop-arm64-v1"
 			p.OutputBytes = 8 << 20

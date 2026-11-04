@@ -23,7 +23,7 @@ func TestStaticRangeSumKeepsMediumIsolationAndOtherLimits(t *testing.T) {
 	if !reflect.DeepEqual(unchangedRuntime, medium.Runtime) || unchangedFiles != medium.Files {
 		t.Fatal("output admission changed isolation, execution or other file limits")
 	}
-	for _, tier := range []ReferenceTier{0, 3, 5, 255} {
+	for _, tier := range []ReferenceTier{0, 5, 255} {
 		if _, err := ResolveReferenceTier(tier); err == nil {
 			t.Fatal("unadmitted tier accepted", tier)
 		}

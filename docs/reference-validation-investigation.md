@@ -1,6 +1,8 @@
 # 参考验证的停止故障调查
 
-本页记录2026-11-04对旧suffixarray故障的有界调查，事实以所列报告、哈希和受限日志投影为准；当前行为归[参考验证合同](reference-validation.md)。根因尚未确定，#114继续草稿，旧失败不追认。本页不是故障已修复、完整P4通过或生产稳定性证明。
+本页正文保留2026-11-04早期旧suffixarray故障调查的历史时点；其中“当前”“#114继续草稿”等均指相应调查阶段。根因尚未确定，旧失败不追认。本页不是故障已修复、完整P4通过或生产稳定性证明。
+
+后续状态：吸收已交付#123停止预算修复后，新版本HEAD `0cd63e3ddacb3be00e3f693f1d0797a2f02d4e42`已通过一次八来源174点及22个原子子测试的固定环境接纳，全部AC/Stop、旧完整Plan/Profile相等；最终CI与合并状态见[PR #114](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/114)，#119仍待独立验收。新证据入口见[接纳记录](delivery-log.md#2026-11-04point_add_range_sum-八来源固定环境接纳)，当前合同见[参考验证](reference-validation.md)；该成功不解释旧阻塞根因。
 
 ## 原始故障与新运行
 
