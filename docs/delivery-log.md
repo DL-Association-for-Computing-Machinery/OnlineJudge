@@ -1,10 +1,24 @@
 # 工程交付记录
 
+## 2026-11-04：static_range_sum完整11点与原五来源回归
+
+接续#121的干净head `cc23d6b97739d3bd1921c30d6de7d30e395d805d`，仅补足原候选的固定环境维护准入证据。用户在上一聊天明确批准只重启现有localdev，`00:01:52Z`一次重启返回0；同CID、镜像、端口和挂载指纹保持，PostgreSQL/Redis等兄弟容器生命周期未变，原公开CA校验HTTPS返回204，重启后PIDS单次样本22。已有离线镜像的受信`/bin/true`独立容器返回0。证据`/private/tmp/oj-localdev-approved-restart-20261104-{before,command,after,trusted-process}.json`。这些只证明环境条件改变与当时可用，不解释近五万PIDS或旧启动失败，不宣称永久修复；本轮没有再次重启或更改持久服务。
+
+原失败26工件/22源码归档逐哈希保持。新预检核对原17个Go文件、两份Darwin制品、25对象149774419B、完整source lock、三原槽完整配置/owner/停止/PID0/私有空锁，Engine29.8.1及Kernel7.0.14-linuxkit/aarch64与原协议完全相等。新observer改为证据失败也等待原驱动并独立检查槽，先落postflight再独立写result；异常流只给前缀摘要，不冒充完整日志。Astra指出的收尾顺序及不完整流标注问题已修正，七类固定受信Python故障注入通过，包含2MiB日志写失败持续drain、启动失败、read异常/中断、槽检查失败和两份证据分别写失败；不运行题源或真实槽。脚本、材料与制品在执行前冻结，固定字段inspect不读取Config.Env。
+
+一次新观测协议`/private/tmp/oj-static-range-sum-post-restart-protocol.json` SHA `9dc39d98b9c8e800567f518f5a3c69a8a5ce2464bec559c662a93202f535dd3f`；原协议/token及失败报告缺失保持，不沿用旧协议重试。新顶层9.88秒通过，先真实16MiB完整stdin、stdout8MiB/stderr4096逐字节校验，再核验cap+1返回完整8MiB/窄OLE/Exit25及stderr4097严格拒绝，已知缓存清理完成；边界组2.47秒、Stop确认后完整11点CLI7.37秒全部AC/Stop。输出原始SHA `7d212b9c884f5c77896de960ae17cc341cda43b14d6a971f34ca29ebd4badf7f`；探针输出存活shm-used25239552B、清理后0，外层memory-peak126369792B仅为该生命周期计数。真实题源编译CPU86798000ns/内存39399424B；逐点最大CPU90860000ns/内存12058624B，Darwin CLI wait4 maxrss111640576B不是并发总RSS或Go heap。
+
+私有报告`/private/tmp/oj-static-range-sum-post-restart-report-20261104/report.json` SHA `f5bafb103a5b3731aef9490cd64faedc1d535c2fa81fe7b9ae5663435d2546f9`，plan `4b0480ec6f522182060acc6c064e9a90220b86548eded1dd859870f7989af846`、profile `501331a58bd9dfe76059e79701c80b7e7ba4d8096f1c93252f38c20d199cb028`，0700/0600、无INCOMPLETE、成功两类诊断省略。完整日志1971B且无截断或observer失败，postflight/result均落盘；三原槽停止/PID0/私有空锁无占用。新通过不追认首次启动或首次Stop成功。
+
+随后另行登记五来源一次串行兼容回归，协议`/private/tmp/oj-static-range-sum-regression-20261104-protocol.json` SHA `287d950fc2c45b8b8bd83285649e9e1e5cd84caccf55c32eb523c0966a9d5bcd`，核对原五报告及239个唯一材料对象189896096B。顺序A+B九组17.54秒、unionfind两组9.77秒、zalgorithm三组15.77秒、suffixarray一组20.12秒、primality两组9.26秒，全部通过；完整12/18/29/50/13点均AC/Stop，完整Plan/Profile与原五报告逐项相等。原count=1/5分钟及各内部预算保持；`-test.failfast`确保任一subtest失败后不进入后组/来源，无自动恢复或重试。五份报告均0700/0600、无INCOMPLETE、成功诊断省略，摘要及逐报告哈希归`/private/tmp/oj-static-range-sum-regression-20261104-summary.json`。结束时三槽均停止/PID0/私有空锁，不涉及#114/#119候选执行。
+
+Astra完整目标分支22文件及观测/回归协议复核未见剩余代码阻断，主代理另核验实际结果和完整diff；AI不代替真实审批。后续文档更新不改Go源码、profile或制品；本地仓库检查与最新head CI/PR状态单独核验。不把旧head CI当新head通过，也不重复无变化的应用检查。当前仅准入第六个固定环境维护来源；首次启动失败、未知根因及#114/#119的运行中旧失败限制保留，未证明长期稳定。数据库草稿not-run、生产null/publication blocked保持；其余四题、持久化验证任务/权限接纳、完整质量/终审发布及整体P4未完成，未部署。以下首次失败节为历史快照。
+
 ## 2026-11-04：static_range_sum候选与首次槽启动失败（未交付）
 
 成功fetch后从`origin/main 8e5001063001d670e69e8ebb0a964b0adaab87bc`建立独立`codex/static-range-sum-reference`，不依赖仍为草稿的#114/#119。固定来源328B、仅两个标准头；source/catalog及完整11组材料25对象149774419B逐哈希一致，证据`/private/tmp/oj-static-range-sum-complete-material-evidence-20261104.json` SHA `3f96c296b7d9b04518897134bd8fd59b77d8239c57a91a11bcaf7a49ab3282bb`。input总91745127/最大11722894B，answer总58026619/最大7636751B；最大答案大小不替代实际stdout或资源证据。
 
-唯一目标是该来源完整参考验证：独立tier6/Runtime/Files/profile，快照256MiB/input16MiB/answer及raw stdout/checker8MiB、payload512MiB，最坏275765609B/73 execution逻辑操作；旧五来源摘要、未准入3/5、执行CPU/wall/memory、文件/Stop期限及零重试保持。复用原medium完整配置、owner及canonical锁，不创建/替换槽。上游固定v1.13.3的Output→RLIMIT_FSIZE及非pipe独立文件collector已分别从官方源码页面/只读API核实；8MiB stdout+4KiB stderr不因合计超过8MiB自动超限，真实边界尚需验证，不据静态分析宣布容量成立。完整合同归[候选说明](reference-validation.md#static_range_sum候选)。
+唯一目标是该来源完整参考验证：独立tier6/Runtime/Files/profile，快照256MiB/input16MiB/answer及raw stdout/checker8MiB、payload512MiB，最坏275765609B/73 execution逻辑操作；旧五来源摘要、未准入3/5、执行CPU/wall/memory、文件/Stop期限及零重试保持。复用原medium完整配置、owner及canonical锁，不创建/替换槽。上游固定v1.13.3的Output→RLIMIT_FSIZE及非pipe独立文件collector已分别从官方源码页面/只读API核实；8MiB stdout+4KiB stderr不因合计超过8MiB自动超限，真实边界尚需验证，不据静态分析宣布容量成立。完整合同归[参考说明](reference-validation.md#static_range_sum参考验证)。
 
 现有离线Docker Go1.26.10六包race基线/定向race-vet、完整backend模块/格式/vet/静态/root race/七Linux命令构建、sandbox vet及独立Darwin驱动构建通过。测试实际冻结超过128MiB、256MiB再加catalog拒绝、共享quota释放、input16MiB/answer8MiB精确/+1，验证11点最坏载荷/512MiB账本注入边界、25MiB+1字节峰值预留和逐点/最终清理。注入账本不等于真实搬运512MiB或实际内存峰值。旧五profile/来源及Runtime互斥、未知档位零派发、第六来源Stop/dirty矩阵保持。
 
