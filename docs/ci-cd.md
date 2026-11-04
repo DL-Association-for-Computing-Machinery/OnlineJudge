@@ -4,6 +4,8 @@
 
 ## 当前状态
 
+[持久化参考验证申请](reference-requests.md)的可信目录、冻结配置副本、新鲜会话身份及取消/未知回执边界归普通backend单元测试；真实临时PostgreSQL用例归integration，覆盖owner隔离、同键恢复、并发最后额度、policy等待后的原键复查、取消竞争、撤权锁、事务/COMMIT回包故障、历史摘要完整性、权威SQL计划及schema9空库回退/非空拒绝。服务与真实PG组合用例使用合成会话观察，不代表申请能力的真实Redis/HTTP、Worker消费或大材料验收；草稿not-run、生产配置null及发布阻断保持。执行结果以本次head的[交付记录](delivery-log.md)为准。
+
 convolution_mod的完整材料/16MiB输入答案、共享快照、封闭tier8及双端2GiB账本、独立槽与错Cmd/跨档位拒绝归普通backend。`TestConvolutionReferenceSandbox`仅在sandbox标签、Darwin arm64、`OJ_CONVOLUTION_REFERENCE=1`与实验opt-in下运行同次16MiB输入/输出边界、窄OLE证据及完整53点；失败或Stop未确认即停止。一次十来源254点/26子测试、独立四槽顺序后置、预备新Plan/Profile与旧九完整Plan/Profile核对均通过；普通CI仍不创建槽或执行题源，不替代这次固定环境证据。最终CI/合并状态与证据限制见[交付记录](delivery-log.md#2026-11-04convolution_mod-十来源固定环境接纳)。
 
 `tests/governance/test_problem_sources.py` 验证离线题源工具的来源哈希、完整集合、安全提取及输出/清理失败边界，随 governance 执行；不下载或执行外部题源程序。十题完整数据生成/validator/checker只由 README 的显式本地 Docker 命令运行，不进入普通 CI，也不构成生产 Worker/SPJ 或 P4 发布验收。
@@ -48,7 +50,7 @@ MediumBulk的共享槽/原tier保留、两端256/512MiB累计额度及失败清�
 
 同一手动浏览器驱动现为15组，保留管理页真实绑定导入、服务端已提交后屏蔽成功回包/刷新只读恢复、同修订只读核验、实际Cookie从A切换到已有作者权B时原三条管理路由及本人列表均409且B无草稿、B不见A本机记录。真实Chromium IndexedDB覆盖两连接首次插入仲裁、32条事务上限、旧确认/删除不碰新pending、owner主键内容损坏、配额失败、未知schema拒绝且不自动重建；UI清库后不能用内存重试。独立journal入口只由测试驱动构建到临时assets，生产App不引用，不是产品调试入口。backend覆盖mandatory header/缺cap404/主体比较零业务I/O；前端覆盖迟到响应、延迟到期timer和确认回执拒绝不换新请求。证据是小型合成bundle和两IDB连接，不扩写为十题页面、两个完整管理标签并发或生产浏览器矩阵验收。
 
-本人服务器列表新增固定20条seek分页、同事务当前权限/owner只读摘要，真实PG验证0/20/21/45条、全相同时间戳跨多页、微秒边界、其他owner隔离、三种撤销锁、死事务零结果、infinity/不可JSON时间拒绝；12,000行权威first/deep SQL计划验证目标索引/owner与seek Index Cond、无Sort并记录索引大小。schema8的Up/Down/重Up保留非空草稿与权限，旧7/未来9门禁明确拒绝，原7数据保护断言仍执行。实际在途插入证明created_at早但迟提交可被旧边界漏过，重查首页可见，不宣称跨页快照。真实direct/proxy API验证默认拒绝、目录换版后仍读旧列表、owner与主体错配/撤权/退出；手动浏览器额外在新档案禁用IndexedDB后分页发现并预览真实草稿、丢弃迟到下一页、列表不改pending，全程发现操作无POST。原始材料/题源不在本专项执行。
+本人服务器列表新增固定20条seek分页、同事务当前权限/owner只读摘要，真实PG验证0/20/21/45条、全相同时间戳跨多页、微秒边界、其他owner隔离、三种撤销锁、死事务零结果、infinity/不可JSON时间拒绝；12,000行权威first/deep SQL计划验证目标索引/owner与seek Index Cond、无Sort并记录索引大小。历史schema8索引的Up/Down/重Up保留非空草稿与权限，原7数据保护断言仍执行；当前启动精确要求schema9，其他版本拒绝，最新回退条件见[参考申请迁移](reference-requests.md#迁移与回退)。实际在途插入证明created_at早但迟提交可被旧边界漏过，重查首页可见，不宣称跨页快照。真实direct/proxy API验证默认拒绝、目录换版后仍读旧列表、owner与主体错配/撤权/退出；手动浏览器额外在新档案禁用IndexedDB后分页发现并预览真实草稿、丢弃迟到下一页、列表不改pending，全程发现操作无POST。原始材料/题源不在本专项执行。
 
 | 控制 | 状态 |
 | --- | --- |
@@ -132,7 +134,7 @@ Go 标准 testing、真实 PostgreSQL、普通 Redis 协议专项与 Vitest 已�
 
 ### 当前应用检查入口
 
-当前 `backend-tests` / `frontend-tests` 分别运行容器内 `toolchain backend` 与 `frontend-check`。`integration-tests`使用同一工具镜像内的PostgreSQL14私有临时集群，运行sqlc v1.31.1三包（submission/identity/problem）生成差异、事务/迁移/租约、私有草稿授权及双API/mTLS控制端测试；不连接现有数据库。普通会话专项另验真实Redis与草稿消费者的最终会话读取边界。实际十题大材料通过显式私有bundle/新材料根环境选择手动专项，普通CI只执行小型合成夹具，不能写成大语料验收通过。Docker Desktop真实沙箱通过`python3 scripts/test-worker.py all`独立验收，不进入普通PR CI。每次交付须核验对应head的结果，不借用旧PR的通过状态。
+当前 `backend-tests` / `frontend-tests` 分别运行容器内 `toolchain backend` 与 `frontend-check`。`integration-tests`使用同一工具镜像内的PostgreSQL14私有临时集群，运行sqlc v1.31.1四包（submission/identity/problem/problemreference）生成差异，新增`internal/problemreference/postgres/referencedb`；并执行事务/迁移/租约、私有草稿授权、持久化参考申请及双API/mTLS控制端测试，不连接现有数据库。普通会话专项另验真实Redis与草稿消费者的最终会话读取边界。实际十题大材料通过显式私有bundle/新材料根环境选择手动专项，普通CI只执行小型合成夹具，不能写成大语料验收通过。Docker Desktop真实沙箱通过`python3 scripts/test-worker.py all`独立验收，不进入普通PR CI。每次交付须核验对应head的结果，不借用旧PR的通过状态。
 
 Dockerfile 的 sqlc 与 golangci-lint 两条固定版本安装命令局部使用 `GODEBUG=http2client=0`，将 Go 工具安装的 HTTPS 客户端切到 HTTP/1.1，缓解已观察到的校验站 HTTP/2 stream `INTERNAL_ERROR`。该开关受 [Go net/http 文档](https://pkg.go.dev/net/http#hdr-HTTP_2)支持，并已核对锁定 Go 1.26.10 的本地文档；它不是全局 ENV，不改变应用/运行镜像的 HTTP 配置，不关闭 TLS、Go checksum 或更换代理。传输切换不保证远端服务可达，不能解决 TCP 拒绝连接或视为已定位上游根因；实际构建与 CI 验收状态见[交付记录](delivery-log.md)。回退两处命令级赋值即可，无运行配置或数据库迁移。
 

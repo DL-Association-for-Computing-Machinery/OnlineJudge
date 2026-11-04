@@ -2,6 +2,16 @@ version: '2'
 sql:
   - engine: postgresql
     schema: db/migrations
+    queries: db/queries/problemreference
+    gen:
+      go:
+        package: referencedb
+        out: internal/problemreference/postgres/referencedb
+        sql_package: pgx/v5
+        emit_empty_slices: true
+        omit_unused_structs: true
+  - engine: postgresql
+    schema: db/migrations
     queries: db/queries/problem
     gen:
       go:

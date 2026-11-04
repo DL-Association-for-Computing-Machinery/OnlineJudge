@@ -128,6 +128,41 @@ func (q *Queries) DraftByOwner(ctx context.Context, arg DraftByOwnerParams) (Pro
 	return i, err
 }
 
+const draftIdentityByOwner = `-- name: DraftIdentityByOwner :one
+SELECT id,owner_subject_id,source_id,content_version,request_sha256,state,validation_state
+FROM problem_drafts WHERE id = $1 AND owner_subject_id = $2 FOR SHARE
+`
+
+type DraftIdentityByOwnerParams struct {
+	ID    string
+	Owner string
+}
+
+type DraftIdentityByOwnerRow struct {
+	ID              string
+	OwnerSubjectID  string
+	SourceID        string
+	ContentVersion  string
+	RequestSha256   string
+	State           string
+	ValidationState string
+}
+
+func (q *Queries) DraftIdentityByOwner(ctx context.Context, arg DraftIdentityByOwnerParams) (DraftIdentityByOwnerRow, error) {
+	row := q.db.QueryRow(ctx, draftIdentityByOwner, arg.ID, arg.Owner)
+	var i DraftIdentityByOwnerRow
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerSubjectID,
+		&i.SourceID,
+		&i.ContentVersion,
+		&i.RequestSha256,
+		&i.State,
+		&i.ValidationState,
+	)
+	return i, err
+}
+
 const draftMaterials = `-- name: DraftMaterials :many
 SELECT logical_name,sha256,byte_size FROM problem_draft_materials WHERE draft_id = $1 ORDER BY logical_name
 `
