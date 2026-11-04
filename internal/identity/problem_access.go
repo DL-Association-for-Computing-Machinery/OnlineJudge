@@ -20,6 +20,16 @@ type ProblemActor struct {
 // Valid checks shape only, not authentication or permission.
 func (a ProblemActor) Valid() bool { return ValidID(a.SubjectID) && a.SessionVersion.Valid() }
 
+// ProblemAuthorSnapshot records the identity generation and author revision
+// checked under one caller-owned transaction. It is not a reusable permission,
+// proof of commit, or a credential. Later operations must lock and check current
+// authority again and compare the complete snapshot, including RoleRevision:
+// revocation followed by regrant must not revive an older task's authority.
+type ProblemAuthorSnapshot struct {
+	Actor        ProblemActor
+	RoleRevision int64
+}
+
 // ProblemAuthorRole is administrative metadata, not reusable authorization.
 type ProblemAuthorRole struct {
 	SubjectID string `json:"subject_id"`

@@ -1,5 +1,13 @@
 # 工程交付记录
 
+## 2026-11-04：同事务出题授权修订快照
+
+从成功fetch的`origin/main 9a09be17e8a1a889d86899e3f6fb7d13a972e80c`建立独立`codex/author-authorization-snapshot`。新增identity公开`ProblemAuthorSnapshot{Actor,RoleRevision}`及`ProblemAccess.LockAuthorSnapshot`，保留旧`LockAuthor`接口并委托同一路径；恢复→账号→角色共享锁仍属于调用方READ COMMITTED事务，全部检查及最终取消检查成功后才返回快照，所有失败返回零值。用途与限制归[私有草稿合同](problem-drafts.md#入库版本与迁移)：后续任务需重新锁定并比较完整快照，不能把当前enabled或旧快照当作权限；持久化任务、可信报告接纳及发布尚未接入。
+
+现有隔离Docker工具链`sha256:4b016e9e3915f1cacb1d70c1ea0507d8a987822efc020c6d8ce17247d0936fec`以离线网络运行identity race基线，随后完整`toolchain backend`、`toolchain sqlc`和`toolchain db`均退出0；覆盖格式/vet/静态检测器正反例/全race/七命令构建、生成一致性、私有临时PG集成及双API实际进程，未连接既有数据库或执行题源。日志`/private/tmp/oj-author-snapshot-checks-20261104.log`。新增五顶层/15子测试通过：撤权拒绝/重授revision变化；credential-only rehash保持、改密/恢复代次隔离；11失败路径零快照；三行独立NOWAIT探针证明提交/回滚前持锁及之后释放；实际role等待后读取已提交撤权并拒绝。既有私有草稿授权/撤销并发覆盖继续通过。Astra设计及完整实现只读复核无阻断，不能代替真实人工批准。
+
+本次无SQL、迁移、依赖或外部HTTP合同变更；尚未建立队列、租约或跨判题/参考任务的共享槽额度。四核不等于四槽，4GB同机容量仍须目标服务器实测，草稿`not-run`和发布阻断保持。最终head的CI与合并状态以交付回读为准。
+
 ## 2026-11-04：convolution_mod 十来源固定环境接纳
 
 冻结源码HEAD `f04dfdfe7d3f8fb3abdfcb61518e2fe176577291`已吸收服务器资源约定纯文档PR #124的主线提交`9b144b0cadedccb8f8e7759343801b2937d6c233`，全部Go/config与已完成离线检查的候选保持。完整backend/race/静态、sandbox vet及Darwin构建通过（`/private/tmp/oj-convolution-backend-20261104.log`）。新增独立tier8/profile/runtime/files和第四槽，旧九来源预算与摘要保持；16MiB input/answer/stdout、512MiB含catalog快照及2GiB累计传输只准入该固定来源，不扩张旧medium槽或生产预算。
@@ -25,7 +33,9 @@
 
 第四槽仅创建一次，回执`/private/tmp/oj-convolution-slot-created-20261104.json` SHA-256 `09fd475857819fbe8f4398d8973153ab5a1910b897f9e7240b5927a8a60e01f5`保留；原full CID `7e6784da27313d56d02d778ee368597e3ef3a3411f5561a17a0422d33712691b`经驱动原有start/Stop生命周期完成，本次最终停止/PID0/私有空锁无占用，原三槽ID/固定配置保留且亦确认停止。本次四槽顺序检查均完成成功，不能将顺序采样宣称为原子快照。外置`save_new`未fsync；排他创建、一次标记及本次成功读回不构成断电恢复下的exactly-once保证或独立备份。冻结Go源码与制品未变，此后仅更新五页文档，不追加真实验收。
 
-旧suffixarray/staticrmq失败及全部历史调查保持，根因和长期稳定仍未知，不追认原失败。当前十题254点只完成固定环境维护参考验证；持久化验证任务、权限下报告接纳、题面/数据质量、非作者终审与原子发布仍未完成，草稿not-run/生产null/publication blocked不变。最终CI与合并状态以本条后续交付回读为准，未部署。
+旧suffixarray/staticrmq失败及全部历史调查保持，根因和长期稳定仍未知，不追认原失败。当前十题254点只完成固定环境维护参考验证；持久化验证任务、权限下报告接纳、题面/数据质量、非作者终审与原子发布仍未完成，草稿not-run/生产null/publication blocked不变。最终CI与合并状态见下方交付回读，未部署。
+
+交付回读：[PR #125](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/125)最终head`6e4c8cd470c7004a58e297db11e007447b262ef2`的[CI 41767312377](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/actions/runs/41767312377)九项全成功，保护与讨论核验后正常match-head squash为`9a09be17e8a1a889d86899e3f6fb7d13a972e80c`。合并树与最终head一致，成功fetch后主工作区仅快进；66份证据/制品含11份忽略资料及完整head bundle逐哈希归档于`/private/tmp/oj-pr125-delivery-archive-20261104`（manifest SHA-256 `bd8e93512732fd1fdee737c354753cb53e16dcb7f884aa9f08ee01a6c99acc38`），完成的本地分支/worktree已清理。知识库六页事务及严格lint通过；归档仍为本机临时材料，不是独立备份。
 
 ## 2026-11-04：convolution_mod完整材料与独立槽候选
 
