@@ -19,9 +19,11 @@ case "${1:-}" in
         cp -r internal/submission/postgres/submissiondb /tmp/submissiondb-before
         cp -r internal/identity/postgres/identitydb /tmp/identitydb-before
         cp -r internal/problem/postgres/problemdb /tmp/problemdb-before
+        cp -r internal/problemreference/postgres/referencedb /tmp/referencedb-before
         sqlc generate
         diff -ru /tmp/submissiondb-before internal/submission/postgres/submissiondb
         diff -ru /tmp/identitydb-before internal/identity/postgres/identitydb
-        diff -ru /tmp/problemdb-before internal/problem/postgres/problemdb ;;
+        diff -ru /tmp/problemdb-before internal/problem/postgres/problemdb
+        diff -ru /tmp/referencedb-before internal/problemreference/postgres/referencedb ;;
     *) echo 'Expected backend, db or sqlc' >&2; exit 2 ;;
 esac

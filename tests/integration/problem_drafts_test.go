@@ -127,7 +127,7 @@ func TestPrivateDraftRolesAndOwner(t *testing.T) {
 	if read.ID != draft.ID {
 		t.Fatal("regrant changed immutable draft")
 	}
-	_, err = f.provider.Down(f.ctx)
+	_, err = f.provider.DownTo(f.ctx, 7)
 	must(t, err)
 	if _, err = f.provider.Down(f.ctx); err == nil {
 		t.Fatal("migration discarded private author/draft state")

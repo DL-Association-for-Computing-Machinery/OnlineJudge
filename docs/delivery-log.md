@@ -1,5 +1,17 @@
 # 工程交付记录
 
+## 2026-11-04：持久化参考验证申请
+
+从成功fetch的`origin/main 26a9882d0aebc4b60392a8b93f143e9559704303`建立独立`codex/persistent-reference-requests`。新增[内部申请用例](reference-requests.md)及独立PG/sqlc包，固定本人草稿、完整导入/来源锁、Profile原始字节及原授权快照；提供原键回执和queued→cancelled幂等取消。schema9默认空policy，只有显式维护配置才可申请；恢复→账号→角色→草稿→policy→申请行锁，原键在目录/额度检查前恢复，policy锁后重查避免最后额度竞争误拒绝。读/取消不更新旧权限，未知写回执保持原键恢复；无HTTP、消费、Plan/attempt/判定字段，草稿not-run及发布阻断保持。
+
+既有离线隔离工具链`sha256:4b016e9e3915f1cacb1d70c1ea0507d8a987822efc020c6d8ce17247d0936fec`完成完整backend格式/vet/静态正反例/race/七命令构建、四包sqlc生成一致性、真实临时PG及双API进程检查，最终退出0。日志`/private/tmp/oj-reference-requests-final-checks-20261104.log` SHA-256 `23c805cb9c6990080e9aa505e24fa1effad6b59f99f3d53370a21cca665e844f`。新增12顶层/27子测试通过，包含强制两调用实际等待policy后同键恢复/异草稿冲突、跨owner/全局额度、取消竞争、撤权与死事务、实际COMMIT回包丢失、缺policy/退役后原键恢复、重授后旧快照保持及新请求revision3、非空回退和查询计划。10,001行/30queued合成分布的部分索引16,384B，仅为该分布证据，不是生产容量。实际Service→PG在移除fixture材料后完成申请/回读/取消及撤权拒绝，会话观察明确stub。
+
+首轮PG仅旧迁移测试失败：两处依赖Down次数的测试须改为显式DownTo7，保留角色/审计非空拒绝及旧schema门禁断言；修后整套通过。Astra复核发现并由真实PG复现Down9初稿的表锁交错：请求读取后/草稿锁前的旧例明确`40P01`，空policy授权后/请求读前的旧例仅确认ErrStore，不扩张具体SQLSTATE结论。修正为凭据→申请→草稿→policy表锁，包含DROP外键触发器父表需求；两个确定性交错分别让申请提交后拒绝删除历史、缺policy调用安全拒绝后空库Down到8/重Up9。前后日志`/private/tmp/oj-reference-request-races-{before,fixed}-20261104.log`保留；业务行锁与迁移表锁顺序不能混用，维护窗口要求保持。
+
+治理首轮受普通沙箱禁止回环bind影响，两项环境检查失败；按正常本地测试权限重验101项全通过，日志`/private/tmp/oj-reference-requests-governance-fixed-20261104.log`，未改断言。主代理与Sol实现/自审，Astra针对性设计及完整高风险复核无剩余代码阻断；AI不代替人工批准。最后仅修正两处注释及文档，不改变已测逻辑。实际原十题bundle另经只读元数据审计：关闭全部Prepared后十来源仍匹配配置，Profile原字节最大1,484B，输出`/private/tmp/oj-reference-requests-ten-catalog-20261104.json` SHA-256 `2be7412c19f528a9bd356edcef9cc61381c3f217b256ebe470f0bd8d9508fc19`；未连接数据库、读取大点数据或执行题源，不冒充实际十题任务入库/消费。
+
+永久撤权queued仍占额度，历史增长、跨判题/参考共享槽、持久化材料读取、可信报告、真实会话HTTP及完整P4尚未完成。现有localdev持久库及目标服务器未迁移、未部署；4核4GB/3Mbps同机容量与100人混合负载待实测。最新head CI/合并结果以交付回读为准。
+
 ## 2026-11-04：同事务出题授权修订快照
 
 从成功fetch的`origin/main 9a09be17e8a1a889d86899e3f6fb7d13a972e80c`建立独立`codex/author-authorization-snapshot`。新增identity公开`ProblemAuthorSnapshot{Actor,RoleRevision}`及`ProblemAccess.LockAuthorSnapshot`，保留旧`LockAuthor`接口并委托同一路径；恢复→账号→角色共享锁仍属于调用方READ COMMITTED事务，全部检查及最终取消检查成功后才返回快照，所有失败返回零值。用途与限制归[私有草稿合同](problem-drafts.md#入库版本与迁移)：后续任务需重新锁定并比较完整快照，不能把当前enabled或旧快照当作权限；持久化任务、可信报告接纳及发布尚未接入。
@@ -7,6 +19,8 @@
 现有隔离Docker工具链`sha256:4b016e9e3915f1cacb1d70c1ea0507d8a987822efc020c6d8ce17247d0936fec`以离线网络运行identity race基线，随后完整`toolchain backend`、`toolchain sqlc`和`toolchain db`均退出0；覆盖格式/vet/静态检测器正反例/全race/七命令构建、生成一致性、私有临时PG集成及双API实际进程，未连接既有数据库或执行题源。日志`/private/tmp/oj-author-snapshot-checks-20261104.log`。新增五顶层/15子测试通过：撤权拒绝/重授revision变化；credential-only rehash保持、改密/恢复代次隔离；11失败路径零快照；三行独立NOWAIT探针证明提交/回滚前持锁及之后释放；实际role等待后读取已提交撤权并拒绝。既有私有草稿授权/撤销并发覆盖继续通过。Astra设计及完整实现只读复核无阻断，不能代替真实人工批准。
 
 本次无SQL、迁移、依赖或外部HTTP合同变更；尚未建立队列、租约或跨判题/参考任务的共享槽额度。四核不等于四槽，4GB同机容量仍须目标服务器实测，草稿`not-run`和发布阻断保持。最终head的CI与合并状态以交付回读为准。
+
+交付回读：[PR #126](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/126)精确head`51d1f378dd98dbf945718e493ff9db3ba878bb3d`的[CI 41769325261](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/actions/runs/41769325261)八项成功、frontend-tests按范围跳过，四必需门禁成功；无阻断讨论且普通ruleset满足后正常match-head squash为`26a9882d0aebc4b60392a8b93f143e9559704303`。树与最终head一致，成功fetch/prune后仅快进main；七份忽略制品及完整head bundle逐哈希归档于`/private/tmp/oj-pr126-delivery-archive-20261104`，manifest SHA-256 `8fbbb4f57699dd583c45d539986a6240abc648e5ad4b88cd4bce92a7ebf840c1`，完成的分支/worktree清理。五页知识事务及严格lint通过；本机临时归档不等于独立备份。
 
 ## 2026-11-04：convolution_mod 十来源固定环境接纳
 

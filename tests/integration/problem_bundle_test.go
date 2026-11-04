@@ -38,7 +38,7 @@ func TestPrivateDraftMigration(t *testing.T) {
 		t.Fatal("migration automatically granted existing accounts")
 	}
 	f.role(t, f.actor.SubjectID, 0, false)
-	_, err = f.provider.Down(f.ctx)
+	_, err = f.provider.DownTo(f.ctx, 7)
 	must(t, err)
 	if _, err = f.provider.Down(f.ctx); err == nil {
 		t.Fatal("rollback discarded explicit disabled role and audit")

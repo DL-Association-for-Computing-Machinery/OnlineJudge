@@ -16,3 +16,7 @@ VALUES(@draft_id,@logical_name,@sha256,@byte_size);
 
 -- name: DraftMaterials :many
 SELECT logical_name,sha256,byte_size FROM problem_draft_materials WHERE draft_id = @draft_id ORDER BY logical_name;
+
+-- name: DraftIdentityByOwner :one
+SELECT id,owner_subject_id,source_id,content_version,request_sha256,state,validation_state
+FROM problem_drafts WHERE id = @id AND owner_subject_id = @owner FOR SHARE;

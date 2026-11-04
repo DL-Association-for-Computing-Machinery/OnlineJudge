@@ -31,7 +31,7 @@
 
 原子创建新输出后先写`INCOMPLETE`，只在全部文件、草稿版本和引用独立复验通过后，将`bundle.partial`改名为`bundle`并移除标记。磁盘错误、中断或校验失败保留标记及部分成果，不修改输入；不保证掉电持久性或自动清理部分文件。命令行复验拒绝带未完成标记的输出，可独立检查搬迁后的bundle；校验成功始终返回publication blocked。
 
-源报告仅记录题源准备阶段已执行的验证，不将其当作本站运行证据。草稿的本站验证固定`not-run`，发布继续阻断于完整题面质量、生产检查器与资源准入、本站独立受限验证、获授权非作者终审及原子发布。下方应用服务及可选HTTP已接入[本地材料存储](material-store.md)、数据库固定引用、最小出题权限、导入管理页和显式图片预览；后续仍须完成受限验证和审核发布。P3/P5接入真实训练授权及页面，当前Worker的固定M0材料门禁保持。
+源报告仅记录题源准备阶段已执行的验证，不将其当作本站运行证据。草稿的本站验证固定`not-run`，发布继续阻断于完整题面质量、生产检查器与资源准入、本站独立受限验证、获授权非作者终审及原子发布。下方应用服务及可选HTTP已接入[本地材料存储](material-store.md)、数据库固定引用、最小出题权限、导入管理页和显式图片预览；[持久化参考验证申请](reference-requests.md)只保存受权意图、原键回执与取消，没有HTTP入口或消费者，后续仍须接通持久化材料执行、报告接纳和审核发布。P3/P5接入真实训练授权及页面，当前Worker的固定M0材料门禁保持。
 
 ## 私有草稿入库与本人读取
 
@@ -87,7 +87,7 @@
 
 创建顺序为：新鲜会话读取→短出题授权预检→逐项持久化材料→再次读取同一实际凭据→同一READ COMMITTED事务核对恢复、账号及当前角色并写入草稿。全流程锁序为恢复→账号→角色→草稿，identity公开窄事务适配器，problem不读取identity私有SQL。材料复制/哈希和Redis读取均不在PG锁内。最终Read之前退出、过期或存储故障拒绝写入；Read之后的单token退出遵循普通会话“已接受在途工作不追溯撤销”合同，不宣称Redis与PG跨库原子退出。
 
-`identity/postgres.ProblemAccess.LockAuthorSnapshot`在调用方的同一READ COMMITTED事务返回`ProblemAuthorSnapshot{Actor,RoleRevision}`；所有检查成功后才返回完整快照，失败返回零值。恢复、账号和角色共享锁保持到调用方提交或回滚，原`LockAuthor`委托该检查并保留error-only接口。快照不是凭据、提交证明或事务结束后的权限；后续持久化任务接入时必须重新锁定当前授权并比较完整快照。只比较enabled会把撤权后重授误认成原授权，role revision对此有区分；credential-only rehash不改变会话授权，改密产生的新AuthGeneration及恢复代次变化则会改变Actor。本次只增加事务适配能力，未新增任务表、调度、报告接纳或HTTP字段，草稿继续`not-run`，发布仍阻断。
+`identity/postgres.ProblemAccess.LockAuthorSnapshot`在调用方的同一READ COMMITTED事务返回`ProblemAuthorSnapshot{Actor,RoleRevision}`；所有检查成功后才返回完整快照，失败返回零值。恢复、账号和角色共享锁保持到调用方提交或回滚，原`LockAuthor`委托该检查并保留error-only接口。快照不是凭据、提交证明或事务结束后的权限；后续领取或接纳报告必须重新锁定当前授权并比较完整快照。只比较enabled会把撤权后重授误认成原授权，role revision对此有区分；credential-only rehash不改变会话授权，改密产生的新AuthGeneration及恢复代次变化则会改变Actor。schema9的[参考申请](reference-requests.md#身份与可信配置)保存该原快照，当前作者读取或取消旧申请不改写它；没有调度、报告接纳或新增HTTP字段，草稿继续`not-run`，发布仍阻断。
 
 `LoadBundle`接受维护者控制的稳定私有目录及**受信配置的来源锁原始字节**，不把bundle内的锁自行当作信任根。Go读取器核对完整文件集合、0700/0600及euid所有权、精确JSON字段/必填值/规范字节、版本、来源锁、选题映射、全部原始文件及样例关系；拒绝未完成标记、路径别名、链接、FIFO、公开权限、未列文件、未知schema和生产预算。预算为1MiB元数据、每对象128MiB、bundle2GiB、最多8192文件；每份Prepared只允许一个在途导入，Close拒绝活动导入。小元数据被冻结，大材料在授权后由Put核验原始字节；不是针对恶意同UID并发改写者的上传隔离。
 
@@ -95,8 +95,10 @@
 
 PG事务同一次提交owner、稳定ID、不可变文档/版本、全部引用及请求回执。同owner同键同内容返回原记录，不同内容为`ErrConflict`。`ErrCommitUnknown`后保持原键/原bundle核验；不得用新键制造重复记录。Put失败/未知不提交引用，已成功的无引用对象保留，当前没有全局磁盘额度或孤儿GC。业务读取限本人元数据/题面样例、授权配置候选摘要、本人导入回执和分页列表；不提供改写、删除、转让、共享或一般材料下载，状态结构性固定`private-draft/not-run`。
 
-角色/审计及草稿/材料关联表始于schema7，不为历史账号授予权限；当前精确schema8新增`problem_drafts_owner_created_id_idx(owner_subject_id,created_at DESC,id COLLATE "C" DESC)`，使首屏和深页owner+seek查询不扫描/排序全部历史。每次新草稿多维护一个B-tree条目及相应WAL/磁盘，实际占用依数据分布而变；12000行合成查询计划及索引大小见交付记录，不将该样本当生产容量估算。原owner/key唯一索引支持幂等定位，主键支持本人ID读取，材料复合主键支持按草稿读取；不为列表附带大document或冗余覆盖字段。
+角色/审计及草稿/材料关联表始于schema7，不为历史账号授予权限；schema8新增`problem_drafts_owner_created_id_idx(owner_subject_id,created_at DESC,id COLLATE "C" DESC)`，使首屏和深页owner+seek查询不扫描/排序全部历史。每次新草稿多维护一个B-tree条目及相应WAL/磁盘，实际占用依数据分布而变；12000行合成查询计划及索引大小见交付记录，不将该样本当生产容量估算。原owner/key唯一索引支持幂等定位，主键支持本人ID读取，材料复合主键支持按草稿读取；不为列表附带大document或冗余覆盖字段。当前精确schema9另增[参考申请账本与默认空policy](reference-requests.md)，不修改既有草稿、角色或材料引用。
 
-升级在维护窗口排空并停止旧版API/Worker及维护写入，独立`migrate up`至8后启动同版二进制；API不自动迁移。普通CREATE INDEX在事务中建索引，需要协调写入，不使用CONCURRENTLY。新二进制拒绝7/未来schema；旧二进制只在启动检查时拒绝8，迁移不会自动停止已运行的旧进程，不混跑。回退先停新版，独立Down8仅删索引并保留全部草稿/权限，再启动要求7的旧版；重Up8保留资料。继续Down7至6仍仅允许角色、审计、草稿均空，存在数据则向前修复；Down6也保留原积压保护，不清表绕过。
+升级在维护窗口排空并停止旧版API/Worker及维护写入，独立`migrate up`至9后启动同版二进制；API不自动迁移，新二进制拒绝其他schema。迁移不会自动停止已运行的旧进程，不混跑；本次没有迁移现有持久化localdev或部署服务器。回退先停新版，独立Down9仅在参考申请历史及policy均为空时允许；已配置、queued或cancelled均拒绝，须前向修复，精确锁序与条件见[参考申请迁移](reference-requests.md#迁移与回退)。
+
+历史schema8的普通CREATE INDEX在事务中建索引，需要协调写入，不使用CONCURRENTLY。Down8仅删列表索引并保留全部草稿/权限，重Up8保留资料；回到8后须匹配要求8的二进制，继续Down8至7后才可启动要求7的旧版。继续Down7至6仍仅允许角色、审计、草稿均空，存在数据则向前修复；Down6也保留原积压保护，不清表绕过。
 
 真实PG专项覆盖默认拒绝、owner隔离、角色CAS/审计失败回滚、同键并发、引用失败回滚、三类撤销锁及连接失去后禁止另库提交。提交未知用真实PG的COMMIT/ReadyForQuery回包被测试传输消耗后断连验证，再按原键恢复；不是直接伪造成功。2048行填充的权威sqlc查询计划自然使用owner/key、草稿与材料主键索引。真实十题服务联调已提交785逻辑引用、622对象/1461321676字节，并在Store关闭后及新PG池读回；该语料专项的会话观察为stub，真实Redis身份边界由普通协议专项单独覆盖。具体运行证据归交付日志；不据此宣称完整P4、邮箱验证后的训练权限、审核、发布或部署完成。
