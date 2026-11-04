@@ -15,12 +15,14 @@ func TestStopTraceDistinguishesExpiredKillAttempt(t *testing.T) {
 	h, f := opened(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
+	stopCtx := ctx
 	kills := 0
 	h.run = func(ctx context.Context, input io.Reader, name string, args ...string) ([]byte, error) {
 		switch args[2] {
 		case "top":
-			<-ctx.Done()
-			return nil, ctx.Err()
+			// Model teardown that consumes the remaining total stop deadline.
+			<-stopCtx.Done()
+			return nil, stopCtx.Err()
 		case "kill":
 			kills++
 			return runCommand(ctx, nil, "/bin/sh", "-c", "printf SHOULD_NOT_RUN")

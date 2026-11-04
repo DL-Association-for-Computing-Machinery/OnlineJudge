@@ -56,7 +56,9 @@ func (h *Host) Stop(ctx context.Context) (result error) {
 	}
 	trace.record("inspect_before", stepStart, "ok")
 	stepStart = time.Now()
-	out, topErr := h.docker(ctx, nil, "top", h.id, "-eo", "pid")
+	enumerateCtx, finishEnumeration := stopPhaseContext(ctx)
+	out, topErr := h.docker(enumerateCtx, nil, "top", h.id, "-eo", "pid")
+	finishEnumeration()
 	pids, parseErr := parsePIDs(string(out), s.PID)
 	code := stepCode(topErr)
 	if topErr == nil && parseErr != nil {
@@ -66,8 +68,10 @@ func (h *Host) Stop(ctx context.Context) (result error) {
 	// Even if process enumeration fails, kill the verified owned lifetime. Missing
 	// evidence must never become success, but should not leave known work running.
 	stepStart = time.Now()
-	beforeKill := contextState(ctx)
-	_, killErr := h.docker(ctx, nil, "kill", "--signal", "KILL", h.id)
+	killCtx, finishKill := stopPhaseContext(ctx)
+	beforeKill := contextState(killCtx)
+	_, killErr := h.docker(killCtx, nil, "kill", "--signal", "KILL", h.id)
+	finishKill()
 	trace.recordKill(stepStart, beforeKill, killErr)
 	// A failed kill takes diagnostic precedence over missing enumeration; neither
 	// outcome can become a stop acknowledgement. Enumeration always precedes kill.
@@ -118,6 +122,18 @@ func (h *Host) Stop(ctx context.Context) (result error) {
 		return stopError("complete", failureCode(err), len(pids), len(pids), 0, err)
 	}
 	return nil
+}
+
+// Preserve time for termination after enumeration and for evidence after kill.
+// This bounds scheduled command work, not process teardown or OS scheduling.
+func stopPhaseContext(parent context.Context) (context.Context, context.CancelFunc) {
+	budget := 2 * time.Second
+	if deadline, ok := parent.Deadline(); ok {
+		if reserve := time.Until(deadline) / 2; reserve < budget {
+			budget = reserve
+		}
+	}
+	return context.WithTimeout(parent, budget)
 }
 
 func parsePIDs(out string, initPID int) ([]int, error) {
