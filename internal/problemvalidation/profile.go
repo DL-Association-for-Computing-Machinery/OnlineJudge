@@ -70,8 +70,12 @@ func ResolveSource(sourceID string) (Profile, experiment.ReferenceTier, error) {
 		p.Runtime, p.Files, p.Materials = c.Runtime, c.Files, limits
 		p.Text.Bytes = 512 << 10
 		return p, experiment.ReferencePrimality, nil
-	case "library-checker:zalgorithm", "library-checker:suffixarray":
-		c, err := experiment.ResolveReferenceTier(experiment.ReferenceMedium)
+	case "library-checker:zalgorithm", "library-checker:suffixarray", "library-checker:static_range_sum":
+		tier := experiment.ReferenceMedium
+		if sourceID == "library-checker:static_range_sum" {
+			tier = experiment.ReferenceStaticRangeSum
+		}
+		c, err := experiment.ResolveReferenceTier(tier)
 		if err != nil {
 			return Profile{}, 0, err
 		}
@@ -84,9 +88,15 @@ func ResolveSource(sourceID string) (Profile, experiment.ReferenceTier, error) {
 		if sourceID == "library-checker:suffixarray" {
 			p.ID = "p4-lc-suffixarray-reference-desktop-arm64-v1"
 		}
+		if sourceID == "library-checker:static_range_sum" {
+			p.ID = "p4-lc-static-range-sum-reference-desktop-arm64-v1"
+		}
 		p.Runtime, p.Files, p.Materials = c.Runtime, c.Files, limits
 		p.Text.Bytes = 4 << 20
-		return p, experiment.ReferenceMedium, nil
+		if sourceID == "library-checker:static_range_sum" {
+			p.Text.Bytes = 8 << 20
+		}
+		return p, tier, nil
 	default:
 		return Profile{}, 0, errors.New("unsupported reference source")
 	}

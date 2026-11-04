@@ -1,5 +1,43 @@
 # 工程交付记录
 
+## 2026-11-04：static_range_sum完整11点与原五来源回归
+
+接续#121的干净head `cc23d6b97739d3bd1921c30d6de7d30e395d805d`，仅补足原候选的固定环境维护准入证据。用户在上一聊天明确批准只重启现有localdev，`00:01:52Z`一次重启返回0；同CID、镜像、端口和挂载指纹保持，PostgreSQL/Redis等兄弟容器生命周期未变，原公开CA校验HTTPS返回204，重启后PIDS单次样本22。已有离线镜像的受信`/bin/true`独立容器返回0。证据`/private/tmp/oj-localdev-approved-restart-20261104-{before,command,after,trusted-process}.json`。这些只证明环境条件改变与当时可用，不解释近五万PIDS或旧启动失败，不宣称永久修复；本轮没有再次重启或更改持久服务。
+
+原失败26工件/22源码归档逐哈希保持。新预检核对原17个Go文件、两份Darwin制品、25对象149774419B、完整source lock、三原槽完整配置/owner/停止/PID0/私有空锁，Engine29.8.1及Kernel7.0.14-linuxkit/aarch64与原协议完全相等。新observer改为证据失败也等待原驱动并独立检查槽，先落postflight再独立写result；异常流只给前缀摘要，不冒充完整日志。Astra指出的收尾顺序及不完整流标注问题已修正，七类固定受信Python故障注入通过，包含2MiB日志写失败持续drain、启动失败、read异常/中断、槽检查失败和两份证据分别写失败；不运行题源或真实槽。脚本、材料与制品在执行前冻结，固定字段inspect不读取Config.Env。
+
+一次新观测协议`/private/tmp/oj-static-range-sum-post-restart-protocol.json` SHA `9dc39d98b9c8e800567f518f5a3c69a8a5ce2464bec559c662a93202f535dd3f`；原协议/token及失败报告缺失保持，不沿用旧协议重试。新顶层9.88秒通过，先真实16MiB完整stdin、stdout8MiB/stderr4096逐字节校验，再核验cap+1返回完整8MiB/窄OLE/Exit25及stderr4097严格拒绝，已知缓存清理完成；边界组2.47秒、Stop确认后完整11点CLI7.37秒全部AC/Stop。输出原始SHA `7d212b9c884f5c77896de960ae17cc341cda43b14d6a971f34ca29ebd4badf7f`；探针输出存活shm-used25239552B、清理后0，外层memory-peak126369792B仅为该生命周期计数。真实题源编译CPU86798000ns/内存39399424B；逐点最大CPU90860000ns/内存12058624B，Darwin CLI wait4 maxrss111640576B不是并发总RSS或Go heap。
+
+私有报告`/private/tmp/oj-static-range-sum-post-restart-report-20261104/report.json` SHA `f5bafb103a5b3731aef9490cd64faedc1d535c2fa81fe7b9ae5663435d2546f9`，plan `4b0480ec6f522182060acc6c064e9a90220b86548eded1dd859870f7989af846`、profile `501331a58bd9dfe76059e79701c80b7e7ba4d8096f1c93252f38c20d199cb028`，0700/0600、无INCOMPLETE、成功两类诊断省略。完整日志1971B且无截断或observer失败，postflight/result均落盘；三原槽停止/PID0/私有空锁无占用。新通过不追认首次启动或首次Stop成功。
+
+随后另行登记五来源一次串行兼容回归，协议`/private/tmp/oj-static-range-sum-regression-20261104-protocol.json` SHA `287d950fc2c45b8b8bd83285649e9e1e5cd84caccf55c32eb523c0966a9d5bcd`，核对原五报告及239个唯一材料对象189896096B。顺序A+B九组17.54秒、unionfind两组9.77秒、zalgorithm三组15.77秒、suffixarray一组20.12秒、primality两组9.26秒，全部通过；完整12/18/29/50/13点均AC/Stop，完整Plan/Profile与原五报告逐项相等。原count=1/5分钟及各内部预算保持；`-test.failfast`确保任一subtest失败后不进入后组/来源，无自动恢复或重试。五份报告均0700/0600、无INCOMPLETE、成功诊断省略，摘要及逐报告哈希归`/private/tmp/oj-static-range-sum-regression-20261104-summary.json`。结束时三槽均停止/PID0/私有空锁，不涉及#114/#119候选执行。
+
+Astra完整目标分支22文件及观测/回归协议复核未见剩余代码阻断，主代理另核验实际结果和完整diff；AI不代替真实审批。后续文档更新不改Go源码、profile或制品；本地仓库检查与最新head CI/PR状态单独核验。不把旧head CI当新head通过，也不重复无变化的应用检查。当前仅准入第六个固定环境维护来源；首次启动失败、未知根因及#114/#119的运行中旧失败限制保留，未证明长期稳定。数据库草稿not-run、生产null/publication blocked保持；其余四题、持久化验证任务/权限接纳、完整质量/终审发布及整体P4未完成，未部署。以下首次失败节为历史快照。
+
+## 2026-11-04：static_range_sum候选与首次槽启动失败（未交付）
+
+成功fetch后从`origin/main 8e5001063001d670e69e8ebb0a964b0adaab87bc`建立独立`codex/static-range-sum-reference`，不依赖仍为草稿的#114/#119。固定来源328B、仅两个标准头；source/catalog及完整11组材料25对象149774419B逐哈希一致，证据`/private/tmp/oj-static-range-sum-complete-material-evidence-20261104.json` SHA `3f96c296b7d9b04518897134bd8fd59b77d8239c57a91a11bcaf7a49ab3282bb`。input总91745127/最大11722894B，answer总58026619/最大7636751B；最大答案大小不替代实际stdout或资源证据。
+
+唯一目标是该来源完整参考验证：独立tier6/Runtime/Files/profile，快照256MiB/input16MiB/answer及raw stdout/checker8MiB、payload512MiB，最坏275765609B/73 execution逻辑操作；旧五来源摘要、未准入3/5、执行CPU/wall/memory、文件/Stop期限及零重试保持。复用原medium完整配置、owner及canonical锁，不创建/替换槽。上游固定v1.13.3的Output→RLIMIT_FSIZE及非pipe独立文件collector已分别从官方源码页面/只读API核实；8MiB stdout+4KiB stderr不因合计超过8MiB自动超限，真实边界尚需验证，不据静态分析宣布容量成立。完整合同归[参考说明](reference-validation.md#static_range_sum参考验证)。
+
+现有离线Docker Go1.26.10六包race基线/定向race-vet、完整backend模块/格式/vet/静态/root race/七Linux命令构建、sandbox vet及独立Darwin驱动构建通过。测试实际冻结超过128MiB、256MiB再加catalog拒绝、共享quota释放、input16MiB/answer8MiB精确/+1，验证11点最坏载荷/512MiB账本注入边界、25MiB+1字节峰值预留和逐点/最终清理。注入账本不等于真实搬运512MiB或实际内存峰值。旧五profile/来源及Runtime互斥、未知档位零派发、第六来源Stop/dirty矩阵保持。
+
+新增负例初稿在裸observation要求额外空角色拒绝，但实际合同在更早Cached.Run wire ownership检查；Astra核对后将断言移至真实适配器入口，验证零stdout下载、已知input清理、后续fenced、已知exe可删及未知stdout预留保持，未修改生产分类。一次测试API签名编译错误修正后execution race/vet通过。驱动复核还要求预期stderr4097拒绝不得掩盖cleanup join；现仅接受一条未截断`validate/stdout/invalid_evidence`，注入stdout/input DELETE失败、取消和截断诊断均拒绝。对应普通race及sandbox标签合成回归通过，原失败日志保留，不计为通过。
+
+主要日志`/private/tmp/oj-static-range-sum-{baseline,first-targeted,targeted,output-evidence,output-evidence-fixed,output-evidence-verified,sandbox-build-check,probe-cleanup-regression,backend}.log`区分失败与最终通过；Linux与Darwin制品分目录。policy689、完整diff/链接与离线Gitleaks通过，Astra针对性设计/实现/驱动门禁及最终文档复核无剩余阻断，AI不代替人工审批。候选实现提交为`852c43f46ca7c6f12ea53adc06a41f33d1b8187f`，验证前工作区干净，精确测试清单和22文件源码/两宿主制品哈希固定。
+
+首轮协议于`2026-11-03T21:25:50.329091Z`登记，`/private/tmp/oj-static-range-sum-trial-protocol.json` SHA `1634b72c61f3118b6f6d6758f418acc278a02a090e672cff52583bae24708fce`；固定Kernel7.0.14-linuxkit/aarch64、Docker Engine29.8.1和原medium CID/镜像/owner/配置，三槽停止/PID0、私有空锁无占用、旧native/固定槽控制进程零。外置脚本绑定同一固定bundle/制品/源码/脚本/材料哈希，一次性标记与必要输出在Popen前创建；日志写失败继续drain，证据/收尾失败非零。未自动启动旧来源回归，未改期限或槽。
+
+一次顶层测试0.109秒失败：首组在槽启动确认阶段返回command_exit，随后Stop为`inspect_before/evidence_unavailable`，未取得停止确认，dirty保留。未进入可信探针编译/运行或完整11点CLI，没有新报告目录，也没有执行报告中的Plan/Profile或判题usage。只读回读原CID仍exited/PID0、StartedAt/FinishedAt为原`20:43:19.412924422Z`/`20:43:35.72820843Z`，Docker状态ExitCode128，非paused/restarting；错误投影仅记录创建任务/启动shim/fork-exec/资源暂不可用固定片段及SHA `272f0fd5f6fc16511271b29c6bdd52afde421c668789dad33993a3216c61e425`，不保留原错误。旧生命周期一致不等同普通Stop所需的运行中进程与消失证据；本次Stop未进入枚举/kill，不能追认成功。
+
+26工件和22源码逐哈希封存`/private/tmp/oj-static-range-sum-failed-start-archive-20261104/manifest.json`，SHA `29c67f384f15eabc6208c177abd883a3ec4cb790a29758aa3bbccc335f8a9388`，保留失败前后状态和原制品。Astra复核启动调用明确非零返回、控制进程退出、唯一控制者无并发操作、原CID两次同一旧生命周期停止/PID0满足本次外部排空前提后，使用既有`recover-reference library-checker:static_range_sum <原CID>`正常返回；CLI独占锁重新核验身份/配置/同一生命周期停止后清marker。三原槽再读均停止/PID0、私有空锁无占用。恢复只确认当前安全，不证明VM健康、不追认Stop或试验，不授权重试；没有再次启动或执行后续回归。
+
+后续只读快照在`21:32:52Z`得到5个运行容器的PIDS计数49761/7/5/11/14；其中高计数对象后续归属元数据指向本项目持久`oj-local-dev`的localdev服务，不在本试验停启范围。PIDS包括进程及内核线程，字段含义按[Docker官方文档](https://docs.docker.com/reference/cli/docker/container/stats/)核对；Docker的8319504384B是总内存容量而非使用量。一次有界Docker top仅见一个可见oj-localdev进程，容器内固定status读取以退出128失败，未取得Threads值；这些不同口径和失败后的样本尚不证明线程泄漏、僵尸积累或shim失败根因。未读取环境/业务文件/参数，未停启该持久服务；源码与聚合投影归`/private/tmp/oj-static-range-sum-`工件，临时归档不是独立备份。
+
+追加失败文档后的最终本地Gitleaks未取得成功，Docker run退出127；该检查结果单独保留，不记为扫描通过。候选实现提交前的完整扫描已通过，全部Go源码及两宿主制品仍与原试验哈希一致；最终head安全CI另核验，不能用旧扫描替代。
+
+真实16MiB/8MiB边界和完整11点、旧五来源实际回归均未执行，候选保持草稿/未准入；精确head远端CI另核验。本地未重跑PG/Redis、前端/浏览器或完整M0。主线仍五来源，#114/#119旧失败/草稿、not-run/生产null/publication blocked保持，整体P4未完成，未部署。
+
 ## 2026-11-04：Host控制失败的阶段与本地启动证据
 
 成功fetch后从`origin/main 31474f2a19280f7b9d53a64ca6987cb0ba5af6dc`建立独立`codex/host-control-evidence`。唯一目标为Host.RoundTrip失败证据：既有execution条目可选`host_trace`记录admission/prepare/inspect/command/response_validation固定前缀、失败/最后完成位置、单调耗时、进入时context与剩余期限，以及直接本地命令启动证据；原顺序、错误/取消、预算、清理、Stop及零重试语义保持。它不修改来源准入、Runtime/Profile/Plan、数据库或发布状态，也不修复/解释#114/#119旧故障。完整字段及缺失语义归[参考验证](reference-validation.md#执行失败诊断)。
