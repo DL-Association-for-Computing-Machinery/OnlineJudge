@@ -74,7 +74,7 @@ func TestStaticRangeSumPayloadExhaustionStillAllowsOwnedCleanup(t *testing.T) {
 }
 
 func TestStaticRangeSumRuntimeCannotBeBorrowedByExistingTiers(t *testing.T) {
-	tiers := []experiment.ReferenceTier{experiment.ReferenceSmall, experiment.ReferenceMedium, experiment.ReferencePrimality, experiment.ReferenceStaticRangeSum}
+	tiers := []experiment.ReferenceTier{experiment.ReferenceSmall, experiment.ReferenceMedium, experiment.ReferencePrimality, experiment.ReferenceStaticRangeSum, experiment.ReferenceAssociativeArray}
 	for _, tier := range tiers {
 		for _, other := range tiers {
 			if tier == other {

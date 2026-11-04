@@ -15,6 +15,8 @@ const (
 	ReferencePrimality ReferenceTier = 4
 	// ReferenceStaticRangeSum admits one complete source with larger raw output.
 	ReferenceStaticRangeSum ReferenceTier = 6
+	// ReferenceAssociativeArray admits the fixed complete large-input source.
+	ReferenceAssociativeArray ReferenceTier = 7
 )
 
 // ReferenceConfiguration binds runtime and both file-transport budget ledgers.
@@ -30,7 +32,7 @@ func ResolveReferenceTier(tier ReferenceTier) (ReferenceConfiguration, error) {
 	switch tier {
 	case ReferenceSmall:
 		return ReferenceConfiguration{Runtime: PinnedReferenceEnvironment(), Files: PinnedReferenceFiles()}, nil
-	case ReferenceMedium, ReferencePrimality, ReferenceStaticRangeSum:
+	case ReferenceMedium, ReferencePrimality, ReferenceStaticRangeSum, ReferenceAssociativeArray:
 		p := PinnedReferenceEnvironment()
 		p.ID = "p4-reference-medium-gnu17-desktop-arm64-v1"
 		p.OutputBytes = 4 << 20
@@ -51,6 +53,13 @@ func ResolveReferenceTier(tier ReferenceTier) (ReferenceConfiguration, error) {
 			p.OutputBytes = 8 << 20
 			f.ID = "p4-gojudge-cached-static-range-sum-v1"
 			f.PayloadBytes = 512 << 20
+		}
+		if tier == ReferenceAssociativeArray {
+			p.ID = "p4-associative-array-gnu17-desktop-arm64-v1"
+			p.OutputBytes = 8 << 20
+			p.Run = Limits{CPU: 5000000000, Wall: 10000000000, Memory: 128 << 20, Processes: 16}
+			f.ID = "p4-gojudge-cached-associative-array-v1"
+			f.PayloadBytes = 1 << 30
 		}
 		if tier == ReferencePrimality {
 			p.ID = "p4-primality-gnu17-desktop-arm64-v1"
