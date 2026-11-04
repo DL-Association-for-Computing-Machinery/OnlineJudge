@@ -1,5 +1,11 @@
 # 工程交付记录
 
+## 2026-11-04：staticrmq 吸收已交付八来源与停止修复（待验收）
+
+[PR #114](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/114)最终head `86fe1311707b1a94569e3381f8eb6c86eaf8ad3c`的九项CI全部成功后，正常squash为main提交`b20900b2567f959879657d18a196dd6aba86b41a`；已fetch并核对squash树与最终head相等。#119随后普通合入该main，完整吸收八来源及[Stop修复#123](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/123)交付SHA `5411cebc283fc1d3f358f36c72be4058ae2c812d`，不重写历史。
+
+staticrmq保持独立枚举5、原Plan/Profile、材料/传输/运行预算和原两组；不得因与Bulk共用medium物理槽或同为payload512MiB而归一化身份。未知档位仅保留0/255；明确验证Medium/Bulk的相同Runtime合法，同时保持staticrmq对Bulk及依赖编译入口的拒绝。完整28文件差异经主代理及Astra复核无阻断；离线Docker完整backend格式/vet/静态/race/七Linux构建、sandbox vet和Darwin CLI/驱动构建全部通过，日志`/private/tmp/oj-staticrmq-readmission-final-backend-20261104.log`。本轮九来源独立接纳尚未执行；旧`ee524a…`失败与单次未复现观测保持，不能提前宣称staticrmq通过、已交付或历史根因修复。
+
 ## 2026-11-04：staticrmq 候选整合七来源主线（未验收）
 
 候选#119普通合入`origin/main 2499cc3`，保留主线已交付七来源与全部停止/执行/Host诊断，以及staticrmq枚举5的原Plan/Profile和预算；尚未引入#114的point_add_range_sum档位3。可信16MiB探针仅将Verify包装期限收紧为10秒，原两组顺序、Compile/Run/独立制品清理期限与所有字节断言保持。本轮完整backend首次因static_range_sum旧测试仍将staticrmq视为未准入而失败；修正后定向problemvalidation race、sandbox vet及七Linux命令构建通过（`/private/tmp/oj-staticrmq-readmission-integration-{backend,fix}-20261104.log`），仓库policy通过。未执行本轮真实题源验证，后续仍须吸收新的Stop修复与已交付前置；不得据整合、旧27AC或普通CI解除原失败阻断。
@@ -31,6 +37,61 @@
 随后只读采集原CID本轮启动至报告结束+2秒窗口（262144B/15秒/1000行封顶）：18030B、59条HTTP全200、未截断。脱敏投影`/private/tmp/oj-staticrmq-investigation-failed-staticrmq-timeline.json`只存时间/方法/封闭route/状态/latency/匿名对象序号，不存raw日志/缓存ID/材料；原流只保留SHA `850857971df2b4a0513d34f5e497f6d8d02b13666259a730f3efff1516e5c332`。第56条input回读19:30:28.640200969Z后，第57条POST/run直到19:30:53.093324883Z记录，相隔约24.453秒，但handler latency仅0.019172042秒；第58条另一对象DELETE先于第59条input DELETE。另一对象可条件推断为exe，未直接绑定角色。此次service/Docker时间差最大0.000439167秒，没有旧#114的23.787秒记录时间差形态，仍不能排除更上层共同原因。HTTP200不证明客户端完成；大间隔可能在回读返回、inspect、exec派发或宿主等待，不能定性VM暂停、日志背压或TLE。
 
 后续旧五来源真实回归未启动，没有重跑/退款/提高期限；失败报告/制品保持。下一项独立工作应补Host固定inspect/command/response_validation阶段与最后完成位置、单调耗时/context/真实本地进程启动证据，以有界失败字段保留各独立错误且不含参数/ID/内容；先确定性本地验证，再另行预注册调查。当前没有已证实可直接修复的因果链。#114同样保持草稿，P4和开发目标未完成，未部署。
+
+## 2026-11-04：point_add_range_sum 八来源固定环境接纳
+
+候选HEAD `0cd63e3ddacb3be00e3f693f1d0797a2f02d4e42`已普通吸收[停止预算修复#123](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/123)的主线提交`5411cebc283fc1d3f358f36c72be4058ae2c812d`。该修复只在原10秒Stop总预算内为终止及确认预留时间，不宣称定位旧运行阻塞。point_add_range_sum仍为原MediumBulk枚举3和原Plan/Profile/预算；本轮只支持新版本在固定环境下准入，精确head CI及#114合并尚待核验，不记为已交付或部署。
+
+离线backend整合发现旧`primality_test.go`仍将枚举3视为未知，修为仍未准入的5后，完整backend与必要静态/构建检查通过。缓存stdin驱动保留完整21点CLI后接原8MiB+1/16MiB两次输入的两组顺序，首组失败即停；Verify10秒、Compile wall+5、每次Run wall+5及独立Background5秒制品清理与Runner合同一致。上传SHA-256回读、程序count/sum和资源阶段样本保持；期限收紧不扩大预算，count/sum不单独证明顺序回显，资源样本不代表连续峰值。
+
+一次协议`/private/tmp/oj-point-add-readmission-20261104-protocol.json` SHA-256 `3b2be2abd855cd51a7ca5679465d8c126d81cc16466165f2a42476031267bf26`冻结最终HEAD、全部Go源码/配置/两制品、完整八来源旧Plan/Profile、草稿版本/来源/有序点集及416个唯一材料对象925125315B。worker与driver SHA分别为`03fcaabfb0f557ae345e9899b67719a04d7ea78da33ecf4c2c2f32d87ca5818d`、`37821c6c671e1ac61693ca120c0c33238b8f5d8a5a59546b83aa5facb93cbd89`。显式核验Stop交付SHA为main与候选祖先，共享独占token、各真实canonical锁、三原槽完整配置/停止/PID0/私有空锁及无占用均通过前置核验。
+
+固定Desktop LinuxKit7.0.14/arm64、Engine29.8.1、原go-judge v1.13.3/GCC15.3.0下，顺序point_add_range_sum、suffixarray、A+B、unionfind、zalgorithm、primality_test、static_range_sum、associative_array，各仅一次`count=1/failfast/timeout5m`，无重试、恢复或预算追加。全部174点AC/Stop，八个顶层及22个原子子测试的RUN/PASS清单精确匹配；每套完整Plan/Profile与历史报告逐字段相等，报告0700/0600、无INCOMPLETE、成功诊断省略、publication blocked。
+
+| 来源 | 点数 | 整套耗时（秒） | report.json SHA-256 |
+| --- | --- | --- | --- |
+| point_add_range_sum | 21 | 13.25 | `790cbed00fc8eeacdc4ca6591b565dfcce676fb6443c2e92586b8b048bcf317b` |
+| suffixarray | 50 | 20.10 | `c90f693abe1156d222e20d67de341e32fbe0c6ac9a0bdec8435c2d26a7a0bc8b` |
+| A+B | 12 | 18.10 | `04554090e3b1280905d5bb0f419a6705ab27537ccd8ed081b9ca908569a48d5d` |
+| unionfind | 18 | 10.09 | `dd038602004a852d8b1e2106ce062cd8f570b2083495ad18096dca04e743fdd6` |
+| zalgorithm | 29 | 16.22 | `f18fbc43bcc912f4a6fd01598bb9b549f16b9f721ff26b6fc525670f4011a22c` |
+| primality_test | 13 | 10.15 | `9863dac1b2414e8b565a4ab69d1df66e77b2ba844ae4e067e16cd5527c8932e6` |
+| static_range_sum | 11 | 9.95 | `9da602d5e049d37250c75a3a23e05dd91ecc5fa1ec549afa47d18596c2833dce` |
+| associative_array | 20 | 21.74 | `390ceb0b3f69ac6c3d7e9685c277aa1ea24e83e9c40b6601e611305106ebbd2c` |
+
+各来源报告位于`/private/tmp/oj-point-add-readmission-20261104-<source>-report/report.json`；日志、observer结果/错误、独立postflight及验证记录同前缀。汇总`/private/tmp/oj-point-add-readmission-20261104-summary.json` SHA-256 `53659e0e515021b0fe0ac0827b28ec740eaf4cde16b03d902309c59742ff1d6b`；全部observer无错误/截断，最终源码/制品未变，三原槽停止/PID0/私有空锁且无占用。此后仅同步六页文档，不修改Go源码或重跑真实验收。
+
+原suffixarray失败`19513bf823e8cd40bf5ba13fedcc5f2a3e9f6f073cc843246568ee2f2e14eb36`和既有调查保持，根因及长期稳定性未知，新接纳不追认历史失败。当前八来源通过固定环境维护入口接纳，其余两题仍待独立准入，#119仍待验收；不更新草稿not-run、生产null、publication blocked，不等于持久化验证任务/质量审核/题目发布/整体P4或M0通过。CI与合并状态后续按精确head核验；临时证据不构成独立备份。
+
+## 2026-11-04：停止阶段预留终止与确认时间
+
+原Stop枚举与kill共享整个10秒期限，枚举耗尽后可出现kill调用已尝试但本地进程未启动。独立修复仅调整内部时间分配：枚举与kill各最多2秒且不超过进入阶段时剩余总期限一半，串行返回后取消子context；drain/生命周期验证、总10秒、零重试、PID确认和失败隔离不变。枚举失败后kill成功仍不能通过停止验收。这是可复现的预算分配改进，不宣称定位旧#114/#119首次运行阻塞。
+
+四包race回归通过：workerhost、execution、problemvalidation、cmd/worker；新增受信shell证明枚举子期限到期后kill仍实际启动，短父期限与独立取消、kill超时保持失败。原整体期限耗尽诊断继续覆盖本地收尾消耗所有剩余时间。完整backend格式/vet/静态/race/七Linux命令构建、sandbox vet和Darwin专项构建通过；Astra针对性实现/测试/协议复核无阻断，AI不替代人工审批。
+
+原固定secondary槽、完整材料/源码/制品冻结并登记一次兼容协议后，A+B九组18.62秒全部通过（完整12点CLI、AC/WA/CE/RE/TLE/MLE/OLE/取消），每组停止确认；完整Plan/Profile保持。报告`/private/tmp/oj-stop-reserve-observation-20261104-report/report.json` SHA-256 `4f890571dc0e8a2f7ab706e4c918abba3a839d07e56d8496c188b77c38c33fae`，协议/完整日志/结果/后置/验证摘要同前缀；观察器无错误/截断，三原槽停止/PID0/私有空锁且无占用。未制造真实Docker故障或追加试验，未改服务配置、来源预算或原失败结论。最终CI/合并状态以远端精确head为准；两来源仍须吸收修复后各自完成新接纳，历史根因与长期稳定未知。
+
+## 2026-11-04：point_add_range_sum 候选整合主线（未验收）
+
+为恢复候选PR #114与现行主线的兼容，整合已交付七来源及停止/执行/Host诊断；保留枚举3的MediumBulk和原预算，不引入尚未合并的staticrmq档位5。缓存stdin驱动改为Verify10秒、Compile wall+5秒、每次Run wall+5秒及独立5秒制品清理，沿用原两组与8MiB+1/16MiB输入及断言。此处仅记录整合方向；本轮测试和真实专项待执行，不能据此解除下述suffixarray历史失败阻断或宣称已交付。
+
+## 2026-11-04：point_add_range_sum 实现与停止故障阻断
+
+成功fetch后从`origin/main b7f18f1d393abf7859a10321dbd628ff5910eb8b`建立`codex/point-add-reference`。新增固定point_add_range_sum完整21点与独立profile `p4-lc-point-add-range-sum-reference-desktop-arm64-v1`；仅该来源input16MiB、快照total256MiB，source64KiB/answer4MiB/64点保持。封闭`ReferenceMediumBulk`仅新增文件协议ID及payload512MiB，Runtime逐字段等于Medium；slot仍映射原medium容器/锁且保留原tier，Host与Cached两端分别计量。所有旧四profile golden保持；共享一份快照、实际锁互斥、132MiB匿名快照/16MiB输入读回与超限、坏末点零执行、来源借用拒绝、21点保守传输133操作及失败清理回归通过。512MiB边界使用预充值账本单测，不宣称实际传输512MiB或恰好256MiB快照成功。
+
+固定来源锁不变；重新逐件哈希源码、catalog和全部input/answer。`data_structure/point_add_range_sum/sol/correct.cpp`为1382B、SHA-256 `3d57829f581030f3f97c7f282ffbb51a6a30247e4d28d540d663da139b9aacfe`，仅iostream/vector/cassert。input总105680358B/answer总29352240B，最大13501012B/3852936B；含source/catalog总135038029B，超过旧128MiB。按请求上限计费最坏299443885B/133逻辑操作，超过旧256MiB，在512MiB内。
+
+固定Desktop LinuxKit7.0.14/arm64、go-judge v1.13.3/GCC15.3.0与原镜像下，新题首次两组15.40秒通过（`/private/tmp/oj-point-add-real.log`）：完整21点CLI12.86秒全AC并确认停止，最大执行CPU111100000ns/内存8388608B，编译CPU178704000ns/内存77594624B。报告`/private/tmp/oj-point-add-reference-report-20261104/report.json` SHA-256为`ece7b44eaec8ee29a18897eaf5a658eccd4b965f8cb6a7818a2af739bb753966`，plan `bb4f397db3d3e56d86d209c60ec0480f6d4e2314389728ef37e3a9539831e08b`，profile `5ab143ba3de72e53f361724db7c65ceca51d770dd81dd94be7495e2c286264c1`；0700/0600、无INCOMPLETE。
+
+原8MiB输出RLIMIT下，缓存stdin8388609B/16777216B上传SHA-256回读成功，程序count/sum分别`8388609 1069547520`/`16777216 2139095040`，均AC；count/sum不单独证明字节顺序。资源分计：完整CLI wait4 Maxrss97697792B，不是Go heap或并发总RSS；16MiB输入回读时Go HeapAlloc46908648/HeapInuse48193536/Sys85727512B，shm已用16850944B、tmp0、容量各134217728B，outer memory.peak133808128B；清理后tmp/shm采样0。这些是阶段样本，不含全部宿主/沙箱并发内存，也不证明连续存储峰值。
+
+随后旧suffixarray回归首次26.31秒失败（`/private/tmp/oj-point-add-suffixarray-real.log`）：首10点AC，第11点无usage的SE，其后NOT_RUN；Stop为`kill/deadline/observed=0/confirmed=0`且原medium容器仍运行，构成交付阻断。失败报告`/private/tmp/oj-point-add-suffixarray-regression-20261104/report.json` SHA-256 `19513bf823e8cd40bf5ba13fedcc5f2a3e9f6f073cc843246568ee2f2e14eb36`，旧plan/profile不变。至第11点完整成功路径载荷上界50352261B、含最终清理73操作，普通累计额度不足不能解释失败；不能据SE判断程序超时，或据kill/deadline推断kill已派发并运行10秒。现有报告无法区分上传/回读/运行/输出读取/清理，Stop又共用10秒并优先保留kill错误，根因尚未定位。
+
+停止失败后立即停止后续实测，保留7字节marker；外部仅停止原full CID `f050f360e93733f021f5102fc52532ccedf2416301e0686d2ca8ad0377c16082`到stopped/PID0，OOMKilled=false、Dead=false、ExitCode0、无restart，不能由停止后状态还原失败时资源峰值。已知旧宿主/控制命令匹配0；固定owner/隔离配置及原ID回读后，使用既有`recover-reference library-checker:suffixarray <CID>`成功受控解封（`oj-point-add-recovery.log`）。故障窗口Docker events返回0，未提供派发时序证据；环境/二进制哈希记录在`oj-point-add-{suffixarray-failure-environment,failure-state}.json`。没有手清marker或重试失败题；恢复仅确认当时安全，不追认原报告。
+
+恢复后只继续尚未运行的三个独立专项：zalgorithm三组19.54秒（29点CLI14.07秒、4MiB collector/8MiB文件边界）、unionfind两组12.52秒（18点CLI9.74秒、256KiB边界）、A+B九组22.10秒（12点CLI6.30秒、AC/WA/CE/RE/TLE/MLE/OLE/取消）均通过并确认停止。报告目录`/private/tmp/oj-point-add-{zalgorithm,unionfind,aplusb}-regression-20261104`，SHA-256依次`80f04bb0824c863cfeb137063b0c1b9f14027390b78692d2005f6d7a3dba895c`、`051bb1ddac106dad969d24d453b50498973116f28c880fd8ca50a36290ec4c15`、`2279bb186b32beb032cbf425019933ea42ee599654a05336179dcad76b8d9883`，旧摘要保持。这些独立通过不替代失败的suffixarray回归。
+
+Docker离线Go1.26.10六相关包基线/定向race/vet、完整backend模块/格式/静态/root race/七命令构建与cmd sandbox标签lint通过（`oj-point-add-{baseline,targeted,backend}.log`）。无新依赖、SQL/schema、公共HTTP/UI变化；本地未重跑PG/Redis、浏览器或完整M0，远端精确head检查另核验。Astra/high实现复核无阻断，故障复核确认当前差异未改Cached执行、Host I/O或Stop，未发现明显旧配置回归，但不能证明运行等价；AI不代替人工审批。新增来源保持草稿、未交付，普通CI或新题通过不能抵消旧回归失败。下一步独立补齐脱敏执行阶段、Stop各步耗时及kill派发前deadline证据，保持原时限/停止门禁，再调查故障。原始私有材料、草稿not-run/生产null/publication blocked保持，未部署；临时日志/报告不构成独立备份。
 
 ## 2026-11-04：associative_array完整20点与旧六来源回归
 

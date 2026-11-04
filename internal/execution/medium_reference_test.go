@@ -11,7 +11,7 @@ import (
 func TestMediumReferenceCompleteTransferBudgetAndClosedFactory(t *testing.T) {
 	ctx := context.Background()
 	f := &cacheFixture{t: t, data: map[string][]byte{}, reference: true, referenceOutput: 4 << 20}
-	for _, tier := range []experiment.ReferenceTier{0, 3, 255} {
+	for _, tier := range []experiment.ReferenceTier{0, 255} {
 		if g, err := NewReferenceGoJudgeForTier(f, func(context.Context, experiment.ExecutionProfile) error { return nil }, f, tier); err == nil || g != nil {
 			t.Fatal("unknown tier constructed")
 		}

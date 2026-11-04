@@ -27,8 +27,14 @@ func TestStaticRMQProfilePreservesOldProfilesAndSourceBinding(t *testing.T) {
 		t.Fatal("old source borrowed staticrmq profile")
 	}
 	_, current := referenceRunnerFixture(t, problemfixture.NewStaticRMQ(t), []byte("5\n"))
-	if _, err := problemvalidation.New(s).ValidateSource(context.Background(), current, "library-checker:suffixarray"); err == nil || len(s.calls) != 0 {
-		t.Fatal("staticrmq borrowed another source")
+	for _, source := range []string{"library-checker:suffixarray", "library-checker:point_add_range_sum"} {
+		if _, err := problemvalidation.New(s).ValidateSource(context.Background(), current, source); err == nil || len(s.calls) != 0 {
+			t.Fatal("staticrmq borrowed another source", source)
+		}
+	}
+	_, bulk := referenceRunnerFixture(t, problemfixture.NewPointAddRangeSum(t), []byte("5\n"))
+	if _, err := problemvalidation.New(s).ValidateSource(context.Background(), bulk, "library-checker:staticrmq"); err == nil || len(s.calls) != 0 {
+		t.Fatal("bulk source borrowed staticrmq admission")
 	}
 }
 

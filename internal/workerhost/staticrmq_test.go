@@ -25,7 +25,7 @@ func TestStaticRMQHostKeepsTierAndItsCumulativePayload(t *testing.T) {
 	if err != nil || h.tier != experiment.ReferenceStaticRMQ || !reflect.DeepEqual(runtime, want.Runtime) || files != want.Files || files.PayloadBytes != 512<<20 {
 		t.Fatal("host normalized tier or disagreed with cache budget")
 	}
-	for _, tier := range []experiment.ReferenceTier{experiment.ReferenceSmall, experiment.ReferenceMedium, experiment.ReferencePrimality, experiment.ReferenceStaticRangeSum, experiment.ReferenceAssociativeArray} {
+	for _, tier := range []experiment.ReferenceTier{experiment.ReferenceSmall, experiment.ReferenceMedium, experiment.ReferenceMediumBulk, experiment.ReferencePrimality, experiment.ReferenceStaticRangeSum, experiment.ReferenceAssociativeArray} {
 		old, _ := experiment.ResolveReferenceTier(tier)
 		if err := h.Verify(context.Background(), old.Runtime); err == nil {
 			t.Fatal("host accepted another runtime")
@@ -47,5 +47,33 @@ func TestStaticRMQHostKeepsTierAndItsCumulativePayload(t *testing.T) {
 	}
 	if _, err := h.ReadFile(context.Background(), "owned", 1); err == nil || transfers != 2 || h.fileBusy.Load() || len(h.active) != 0 {
 		t.Fatal("host overflow dispatched or retained activity")
+	}
+}
+
+func TestMediumAndBulkHostsAcceptTheirSharedRuntime(t *testing.T) {
+	for _, pair := range [][2]experiment.ReferenceTier{{experiment.ReferenceMedium, experiment.ReferenceMediumBulk}, {experiment.ReferenceMediumBulk, experiment.ReferenceMedium}} {
+		slot, err := ReferenceSlotForTier(pair[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		f := &fakeHost{s: mediumState(t)}
+		h, err := openConfiguredSlot(context.Background(), f.run, slot.ContainerName(), pair[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		other, err := experiment.ResolveReferenceTier(pair[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := h.Verify(context.Background(), other.Runtime); err != nil {
+			t.Fatal("shared medium runtime rejected", err)
+		}
+		static, err := experiment.ResolveReferenceTier(experiment.ReferenceStaticRMQ)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := h.Verify(context.Background(), static.Runtime); err == nil {
+			t.Fatal("medium or bulk host borrowed staticrmq runtime")
+		}
 	}
 }

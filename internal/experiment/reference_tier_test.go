@@ -7,7 +7,7 @@ import (
 )
 
 func TestReferenceTierClosedFreshConfiguration(t *testing.T) {
-	for _, tier := range []ReferenceTier{0, 3, 255} {
+	for _, tier := range []ReferenceTier{0, 255} {
 		if _, err := ResolveReferenceTier(tier); err == nil {
 			t.Fatal("unknown tier accepted", tier)
 		}
@@ -25,6 +25,20 @@ func TestReferenceTierClosedFreshConfiguration(t *testing.T) {
 	}
 	if medium.Files.PayloadBytes != 256<<20 || medium.Runtime.OutputBytes != 4<<20 || !reflect.DeepEqual(medium.Runtime.SandboxArgs, []string{"/opt/go-judge"}) {
 		t.Fatal("medium bounds")
+	}
+	bulk, err := ResolveReferenceTier(ReferenceMediumBulk)
+	if err != nil || !reflect.DeepEqual(bulk.Runtime, medium.Runtime) {
+		t.Fatal("bulk changed runtime", err)
+	}
+	wantFiles := medium.Files
+	wantFiles.ID, wantFiles.PayloadBytes = "p4-gojudge-cached-files-medium-bulk-v1", 512<<20
+	if bulk.Files != wantFiles {
+		t.Fatal("bulk widened unrelated file bounds")
+	}
+	bulk.Runtime.CompileArgs[0] = "modified"
+	bulkAgain, _ := ResolveReferenceTier(ReferenceMediumBulk)
+	if !reflect.DeepEqual(bulkAgain.Runtime, medium.Runtime) {
+		t.Fatal("bulk shares mutable runtime")
 	}
 	args := medium.Runtime.SandboxCmd
 	output, copyOut := "", ""

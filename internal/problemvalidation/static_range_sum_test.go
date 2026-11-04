@@ -20,12 +20,12 @@ func TestStaticRangeSumSourceBindingRejectsBorrowedMaterial(t *testing.T) {
 		t.Fatal("old source borrowed larger output/material limits")
 	}
 	_, current := referenceRunnerFixture(t, problemfixture.NewStaticRangeSum(t), []byte("5\n"))
-	for _, source := range []string{"library-checker:unionfind", "library-checker:zalgorithm", "library-checker:suffixarray", "library-checker:primality_test", "library-checker:staticrmq", "library-checker:associative_array"} {
+	for _, source := range []string{"library-checker:unionfind", "library-checker:zalgorithm", "library-checker:suffixarray", "library-checker:primality_test", "library-checker:staticrmq", "library-checker:point_add_range_sum", "library-checker:associative_array"} {
 		if _, err := problemvalidation.New(s).ValidateSource(context.Background(), current, source); err == nil || len(s.calls) != 0 {
 			t.Fatal("new source borrowed a different admission", source)
 		}
 	}
-	for _, source := range []string{"library-checker:point_add_range_sum", "library-checker:convolution_mod", "library-checker:unknown"} {
+	for _, source := range []string{"library-checker:convolution_mod", "library-checker:unknown"} {
 		if _, _, err := problemvalidation.ResolveSource(source); err == nil {
 			t.Fatal("unadmitted source accepted by new tier", source)
 		}

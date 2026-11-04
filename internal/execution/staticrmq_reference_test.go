@@ -71,10 +71,15 @@ func TestStaticRMQPayloadExactCapStillAllowsOwnedCleanup(t *testing.T) {
 }
 
 func TestStaticRMQRuntimeCannotBeBorrowedByExistingTiers(t *testing.T) {
-	tiers := []experiment.ReferenceTier{experiment.ReferenceSmall, experiment.ReferenceMedium, experiment.ReferencePrimality, experiment.ReferenceStaticRMQ, experiment.ReferenceStaticRangeSum, experiment.ReferenceAssociativeArray}
+	tiers := []experiment.ReferenceTier{experiment.ReferenceSmall, experiment.ReferenceMedium, experiment.ReferenceMediumBulk, experiment.ReferencePrimality, experiment.ReferenceStaticRMQ, experiment.ReferenceStaticRangeSum, experiment.ReferenceAssociativeArray}
 	for _, tier := range tiers {
 		for _, other := range tiers {
 			if tier == other {
+				continue
+			}
+			// Medium and Bulk intentionally share runtime identity; only their
+			// transport ledgers differ. The positive case is checked below.
+			if tier == experiment.ReferenceMedium && other == experiment.ReferenceMediumBulk || tier == experiment.ReferenceMediumBulk && other == experiment.ReferenceMedium {
 				continue
 			}
 			f := &cacheFixture{t: t, data: map[string][]byte{}}
@@ -89,6 +94,27 @@ func TestStaticRMQRuntimeCannotBeBorrowedByExistingTiers(t *testing.T) {
 			if err := g.Verify(context.Background(), c.Runtime); err == nil || f.compiles != 0 || f.uploads != 0 {
 				t.Fatal("runtime identity widened")
 			}
+		}
+	}
+}
+
+func TestMediumAndBulkAdaptersAcceptTheirSharedRuntime(t *testing.T) {
+	for _, pair := range [][2]experiment.ReferenceTier{{experiment.ReferenceMedium, experiment.ReferenceMediumBulk}, {experiment.ReferenceMediumBulk, experiment.ReferenceMedium}} {
+		f := &cacheFixture{t: t, data: map[string][]byte{}}
+		verified := 0
+		g, err := NewReferenceGoJudgeForTier(f, func(context.Context, experiment.ExecutionProfile) error {
+			verified++
+			return nil
+		}, f, pair[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		other, err := experiment.ResolveReferenceTier(pair[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := g.Verify(context.Background(), other.Runtime); err != nil || verified != 1 || f.compiles != 0 || f.uploads != 0 {
+			t.Fatal("shared medium runtime rejected or verification dispatched execution", err)
 		}
 	}
 }

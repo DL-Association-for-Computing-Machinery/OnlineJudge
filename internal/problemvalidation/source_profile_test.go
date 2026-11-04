@@ -31,6 +31,10 @@ func TestSourceProfilesPreserveOldDigestsAndRejectBorrowing(t *testing.T) {
 	if suffix.Digest() != "0082bb2f961c1f1c082c0ed671881bca49cdaae72d9587bb76d8424ff5e661e7" {
 		t.Fatal("suffixarray profile changed")
 	}
+	point, pointTier, err := problemvalidation.ResolveSource("library-checker:point_add_range_sum")
+	if err != nil || pointTier != experiment.ReferenceMediumBulk || point.Materials.TotalBytes != 256<<20 || point.Materials.InputBytes != 16<<20 || point.Files.PayloadBytes != 512<<20 {
+		t.Fatal("bulk source admission", err)
+	}
 	static, _, err := problemvalidation.ResolveSource("library-checker:static_range_sum")
 	if err != nil || static.Digest() != "501331a58bd9dfe76059e79701c80b7e7ba4d8096f1c93252f38c20d199cb028" {
 		t.Fatal("static_range_sum profile changed", err)
@@ -52,5 +56,9 @@ func TestSourceProfilesPreserveOldDigestsAndRejectBorrowing(t *testing.T) {
 	_, zalg := referenceRunnerFixture(t, problemfixture.NewZAlgorithm(t), []byte("5\n"))
 	if _, err := problemvalidation.New(s).ValidateSource(context.Background(), zalg, "library-checker:suffixarray"); err == nil || len(s.calls) != 0 {
 		t.Fatal("zalgorithm borrowed larger snapshot profile")
+	}
+	_, suffixPrepared := referenceRunnerFixture(t, problemfixture.NewSuffixArray(t), []byte("5\n"))
+	if _, err := problemvalidation.New(s).ValidateSource(context.Background(), suffixPrepared, "library-checker:point_add_range_sum"); err == nil || len(s.calls) != 0 {
+		t.Fatal("suffixarray borrowed bulk material profile")
 	}
 }
