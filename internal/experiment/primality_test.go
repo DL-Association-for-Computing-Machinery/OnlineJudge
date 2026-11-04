@@ -19,7 +19,7 @@ func TestPrimalityTierHasIndependentIdentityAndBoundedCompilation(t *testing.T) 
 	if again.Runtime.CompileArgs[4] != "sol/correct.cpp" {
 		t.Fatal("mutable compile args shared")
 	}
-	if _, err := ResolveReferenceTier(5); err == nil {
+	if _, err := ResolveReferenceTier(255); err == nil {
 		t.Fatal("unadmitted tier accepted")
 	}
 }

@@ -1,5 +1,67 @@
 # 工程交付记录
 
+## 2026-11-04：staticrmq 九来源固定环境接纳
+
+候选HEAD `e777ae2b985193ddaf1ec8d647d8697aa13c5964`已吸收主线前置：停止预算修复#123提交`5411cebc283fc1d3f358f36c72be4058ae2c812d`，以及已正常合并#114的squash提交`b20900b2567f959879657d18a196dd6aba86b41a`。完整28文件差异已审查；完整backend、sandbox vet与Darwin构建通过，日志`/private/tmp/oj-staticrmq-readmission-final-backend-20261104.log`。静态/合成回归明确验证Medium与MediumBulk相同Runtime合法互验，同时StaticRMQ与Bulk/其他来源双向拒绝、单文件档位拒绝借用Primality依赖入口，未知档位为0/255。StaticRMQ原Plan/Profile及材料、运行、传输、清理与Stop预算保持；AI审查不代替人工审批。
+
+一次协议`/private/tmp/oj-staticrmq-readmission-20261104-protocol.json` SHA-256 `0672c032000893190783ba9c35487413eaa9b2c5c3ed7c8fb67cf6a051da6573`冻结最终HEAD、全Go源码/配置/制品、九来源旧完整Plan/Profile及草稿版本/来源/有序点集与材料，核验两个交付SHA均为main和最终HEAD祖先。使用共享独占token、真实canonical锁与三原槽完整配置/停止/PID0/私有空锁前后检查；固定Desktop LinuxKit7.0.14/arm64、Engine29.8.1及原go-judge v1.13.3/GCC15.3.0不变。
+
+顺序先staticrmq原两组（可信16MiB stdin、完整27点），再point_add_range_sum原两组及其余七来源完整原suite。每套只运行一次`count=1/failfast/timeout5m`；无重试、恢复或预算追加。全部201点AC/Stop，九顶层/24原子子测试RUN/PASS精确匹配；旧完整Plan/Profile逐字段相等，报告0700/0600、无INCOMPLETE、成功诊断省略、publication blocked。
+
+| 来源 | 点数 | 整套耗时（秒） | report.json SHA-256 |
+| --- | --- | --- | --- |
+| staticrmq | 27 | 16.51 | `5ef7de916e34de90a92cebe7d1951b6e632a5527a2db4b272a4de0f35ae6fed0` |
+| point_add_range_sum | 21 | 12.47 | `407bb08095b093f6eab33f9b78c18698d8455b8c714a2930af5210d8d7d5c08b` |
+| suffixarray | 50 | 20.06 | `513a6c5e32e6ecf22ba87445387289e4e04b35be8c25a069fc100f6d6a3d2049` |
+| A+B | 12 | 18.56 | `a77ae4fca7f6d4f4cb3629a6f5c41ab241c754bb47f0306553ae9d00f1d71c6e` |
+| unionfind | 18 | 10.11 | `14ddbd0030d5f0e30817157f9d8a8a8681ae5aef1f9c7dcb2b52ded4fd4a0487` |
+| zalgorithm | 29 | 16.49 | `b95e95e7fd178f694c5d2b56d7a091fa40479213822b774f2f5baab24fa80cd4` |
+| primality_test | 13 | 9.25 | `eea8e1b09338a060c6a55d1edb9e672d6415a2fcc77b971c74852ff5fae1f752` |
+| static_range_sum | 11 | 9.96 | `d6191ad232aacd7b59ec19c769f36252e937513a6e9f08e168b532e4eb7720f1` |
+| associative_array | 20 | 20.97 | `5d5b9c5adb3ed1288c916ea044a6663eea47da55e94df3b3518d3425aedd1557` |
+
+各报告位于`/private/tmp/oj-staticrmq-readmission-20261104-<source>-report/report.json`，日志、observer结果/错误、独立postflight及验证记录同前缀。汇总`/private/tmp/oj-staticrmq-readmission-20261104-summary.json` SHA-256 `cba63461d95c981f872c10debfaa2a1c584e5ada4881dbbfe0836d4b5820fc44`。全部observer无错误/截断，结束时三原槽停止/PID0、私有空锁无占用；冻结Go源码与制品未变，此后仅同步六页文档，未追加真实验收。
+
+原staticrmq失败`ee524a329fbfcc5d654e3ff761ce310dc0f1dee43b089dfa3bb5332a816d2d69`、旧suffixarray失败与历史调查完整保留，根因及长期稳定性仍未知，不因新通过追认旧失败。当前版本九来源通过固定环境维护入口接纳，仅convolution_mod仍待独立准入；最终CI与合并状态见[PR #119](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/119)。不更新草稿not-run、生产null或publication blocked，不等于持久化验证任务/质量审核/题目发布/整体P4或M0通过，未部署；临时证据不是独立备份。
+
+## 2026-11-04：staticrmq 吸收已交付八来源与停止修复（待验收）
+
+[PR #114](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/114)最终head `86fe1311707b1a94569e3381f8eb6c86eaf8ad3c`的九项CI全部成功后，正常squash为main提交`b20900b2567f959879657d18a196dd6aba86b41a`；已fetch并核对squash树与最终head相等。#119随后普通合入该main，完整吸收八来源及[Stop修复#123](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/123)交付SHA `5411cebc283fc1d3f358f36c72be4058ae2c812d`，不重写历史。
+
+staticrmq保持独立枚举5、原Plan/Profile、材料/传输/运行预算和原两组；不得因与Bulk共用medium物理槽或同为payload512MiB而归一化身份。未知档位仅保留0/255；明确验证Medium/Bulk的相同Runtime合法，同时保持staticrmq对Bulk及依赖编译入口的拒绝。完整28文件差异经主代理及Astra复核无阻断；离线Docker完整backend格式/vet/静态/race/七Linux构建、sandbox vet和Darwin CLI/驱动构建全部通过，日志`/private/tmp/oj-staticrmq-readmission-final-backend-20261104.log`。本轮九来源独立接纳尚未执行；旧`ee524a…`失败与单次未复现观测保持，不能提前宣称staticrmq通过、已交付或历史根因修复。
+
+## 2026-11-04：staticrmq 候选整合七来源主线（未验收）
+
+候选#119普通合入`origin/main 2499cc3`，保留主线已交付七来源与全部停止/执行/Host诊断，以及staticrmq枚举5的原Plan/Profile和预算；尚未引入#114的point_add_range_sum档位3。可信16MiB探针仅将Verify包装期限收紧为10秒，原两组顺序、Compile/Run/独立制品清理期限与所有字节断言保持。本轮完整backend首次因static_range_sum旧测试仍将staticrmq视为未准入而失败；修正后定向problemvalidation race、sandbox vet及七Linux命令构建通过（`/private/tmp/oj-staticrmq-readmission-integration-{backend,fix}-20261104.log`），仓库policy通过。未执行本轮真实题源验证，后续仍须吸收新的Stop修复与已交付前置；不得据整合、旧27AC或普通CI解除原失败阻断。
+
+## 2026-11-04：staticrmq单次Host边界观测未复现（仍为草稿）
+
+主线[PR #120](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/120)已交付Host失败诊断。本任务从成功fetch的`origin/main 8e5001063001d670e69e8ebb0a964b0adaab87bc`普通合入原#119分支为`a8aa5fc135b345d35658ce88866ccad93b7a41fa`，只解决README与本页相邻说明冲突，保留双方有效记录，不重写历史。旧候选生产代码未改，主线Host Go文件逐字节一致；完整离线backend模块/格式/vet/静态/root race/七Linux构建、sandbox vet及独立Darwin构建通过，精确顶层测试清单核验，policy688通过。日志`/private/tmp/oj-staticrmq-host-observation-merge-backend.log`；Astra窄整合复核无新增阻断。
+
+原失败16工件/19源码与两宿主制品先哈希核验，旧Go仅接受主线测试keyed literal转换；完整57对象200820493B仍与旧材料证据一致。单次观测先登记H1与支持/不支持/未知条件：只区分Host失败边界和真实CLI启动，不推断daemon派发或根因；进入阶段context/期限不是实际调用瞬间保证。编排日志创建/失败退出和在途Docker命令检查在执行前修正，原v1未执行，修正后经Astra复核。v2协议SHA `1b5995a1274ea83762a45ec0df954d17ebb7759df1f8a410027309df343c2293`，绑定head、两制品及脚本/材料身份，所有预算/期限和原两组顺序保持；一次性标记、新报告目录与首组失败中止生效。
+
+一次双组19.83秒通过：可信16MiB输入2.57秒逐字节/长度核验，CPU4548000ns/Memory1306624B；shm活跃16850944B后0、tmp观测0、outer memory.peak阶段最大111353856B，不等于连续总RSS。完整27点CLI17.25秒全部AC并确认Stop，编译CPU193032000ns/Memory77352960B、逐点最大CPU148162000ns/Memory44752896B、Darwin CLI wait4 maxrss100564992B。新报告`/private/tmp/oj-staticrmq-host-observation-report-20261104/report.json` SHA `3d248ead0bd03e47853c7d53fae6a9ceb5d7fd4c73491349875c913fd012b55c`，完整plan/profile与原失败报告逐字段一致，旧摘要保持；0700/0600、无INCOMPLETE、成功execution/stop诊断省略，publication仍blocked。结束时三原CID均停止/PID0、私有空锁无占用，无重试、恢复或手清marker。
+
+原CID两个固定窗口的有界脱敏日志分别13/169条HTTP全200，无采集截断；最大service/Docker时间差约0.293/0.335ms。前置StartedAt未知，窗口只是从宿主运行开始到目标StartedAt的采集范围；目标使用收尾inspect生命周期，观察到`===RUN`的UTC不是精确子组起点。无失败条目，H1未获支持也未被反驳，仅本条件下未复现；旧报告/失败和根因未知保持。完整协议/窗口/证据限制见[调查](reference-validation-investigation.md#staticrmq单次host边界观测)，工件前缀`/private/tmp/oj-staticrmq-host-observation-`。
+
+#119仍草稿，#114保持；旧五来源真实回归未启动，不追加相同试验或自动解除准入阻断。没有新依赖、SQL/schema、HTTP/UI、预算、数据库验证状态或发布变化；主线仍五来源，P4与开发目标未完成，未部署。此次新应用代码仅来自已交付主线；本地未重跑PG/Redis、前端/浏览器或完整M0，更新后精确head远端CI另核验。以下保留此前各阶段记录。
+
+## 2026-11-04：staticrmq候选与第9点控制期限失败（未交付）
+
+成功fetch后从`origin/main 31474f2a19280f7b9d53a64ca6987cb0ba5af6dc`建立`codex/staticrmq-reference`，目标为固定staticrmq完整27点，独立于草稿#114。本候选真实验证失败，保持草稿、不合并；主线仍仅五来源。没有新依赖、SQL/schema、HTTP/UI、生产预算、数据库验证状态或发布变化。
+
+同一私有bundle的source/catalog/完整27组input-answer共57对象、200820493B逐字节哈希一致；证据`/private/tmp/oj-staticrmq-complete-material-evidence-20261104.json` SHA `55b3afa8c3d29c7e27d11aefb6c092a7f5ce984e7cc6d079ae633e7c093fae3d`。源码1890B SHA `a5586c48fa83887a773876dc5377ab6c5f7b59264051d6484ea7712ca5aafb3c`，仅三个标准头，无私有依赖。input总158223359/最大11723831B；answer总42589939/最大4191169B，距4MiB仅3135B，不能替代实际stdout证据。候选tier5独立Runtime/Files/profile身份，快照256MiB/input16MiB、累计payload512MiB；其他执行/外层/文件预算、单文件编译、3分钟阶段/10秒Run包装及5秒清理/原Stop期限保持。最坏429696733B/169 execution逻辑操作，Host操作口径独立；旧五来源及未准入3保持。
+
+离线Docker Go1.26.10模块核验、六包race基线与定向race/vet、最终完整backend格式/vet/静态/root race/七Linux命令构建、sandbox vet及独立Darwin驱动构建均通过（`/private/tmp/oj-staticrmq-{baseline,targeted,backend}.log`）。新增合成集合实际冻结超过128MiB并读末点、256MiB再加catalog拒绝/共享额度释放、input16MiB和answer4MiB精确/+1、坏末点hash/UTF-8/token零Verify、旧五profile摘要、来源/档位隔离、512MiB账本注入边界/超限后删除及第六来源Stop矩阵；账本边界不等于实际搬运512MiB。Astra/high设计与静态实现审查未发现明确代码缺陷；真实准入仍因第9点失败阻断，不构成通过或人工审批。
+
+原medium CID/镜像/owner/完整配置、停止PID0及私有空锁无占用先核验。一次真实双组共33.29秒：可信16MiB stdin2.28秒通过，沙箱逐块memcmp验证全字节并核对总长，CPU4997000ns/Memory524288B；tmp阶段均0、shm活跃16850944B/清理后0，outer cgroup memory.peak阶段最大112693248B，仅阶段观测、不证明连续峰值/总RSS。完整27点CLI31.02秒失败：首8点AC、第9点SE且无usage，后18点NOT_RUN。compile CPU215782000ns/Memory75915264B；已完成点最大CPU110782000ns/Memory41418752B，不能推断失败点资源。
+
+原报告`/private/tmp/oj-staticrmq-reference-report-20261104/report.json` SHA `ee524a329fbfcc5d654e3ff761ce310dc0f1dee43b089dfa3bb5332a816d2d69`；plan `0d2beed5a725d367ebcd464591e83690e74e1e2371b6702a1a03dafd4196adf7`、profile `f6e3875942ca1b4b57a17124ef758cb9ed922e715a624336b6d19191e8e6d946`。0700/0600、无INCOMPLETE，status failed/publication blocked。execution诊断为第9点control/stdout/deadline、点内delete/input/deadline、最终delete/executable/deadline；两条unknown/deadline是finish附加context，不是另外两次I/O。第9点input4035B/answer8982B；输入上传+回读已完成，control角色stdout不证明输出生成/POST派发。两个cleanup各自独立Background+5秒，不能归因继承过期Run context。StopConfirmed为true、无stop诊断；原槽exited/PID0、私有空锁无占用，无恢复或手清marker。停止成功不追认此前DELETE完成。
+
+随后只读采集原CID本轮启动至报告结束+2秒窗口（262144B/15秒/1000行封顶）：18030B、59条HTTP全200、未截断。脱敏投影`/private/tmp/oj-staticrmq-investigation-failed-staticrmq-timeline.json`只存时间/方法/封闭route/状态/latency/匿名对象序号，不存raw日志/缓存ID/材料；原流只保留SHA `850857971df2b4a0513d34f5e497f6d8d02b13666259a730f3efff1516e5c332`。第56条input回读19:30:28.640200969Z后，第57条POST/run直到19:30:53.093324883Z记录，相隔约24.453秒，但handler latency仅0.019172042秒；第58条另一对象DELETE先于第59条input DELETE。另一对象可条件推断为exe，未直接绑定角色。此次service/Docker时间差最大0.000439167秒，没有旧#114的23.787秒记录时间差形态，仍不能排除更上层共同原因。HTTP200不证明客户端完成；大间隔可能在回读返回、inspect、exec派发或宿主等待，不能定性VM暂停、日志背压或TLE。
+
+后续旧五来源真实回归未启动，没有重跑/退款/提高期限；失败报告/制品保持。下一项独立工作应补Host固定inspect/command/response_validation阶段与最后完成位置、单调耗时/context/真实本地进程启动证据，以有界失败字段保留各独立错误且不含参数/ID/内容；先确定性本地验证，再另行预注册调查。当前没有已证实可直接修复的因果链。#114同样保持草稿，P4和开发目标未完成，未部署。
+
 ## 2026-11-04：point_add_range_sum 八来源固定环境接纳
 
 候选HEAD `0cd63e3ddacb3be00e3f693f1d0797a2f02d4e42`已普通吸收[停止预算修复#123](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/123)的主线提交`5411cebc283fc1d3f358f36c72be4058ae2c812d`。该修复只在原10秒Stop总预算内为终止及确认预留时间，不宣称定位旧运行阻塞。point_add_range_sum仍为原MediumBulk枚举3和原Plan/Profile/预算；本轮只支持新版本在固定环境下准入，精确head CI及#114合并尚待核验，不记为已交付或部署。

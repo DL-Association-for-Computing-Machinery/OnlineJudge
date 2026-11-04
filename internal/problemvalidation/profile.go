@@ -85,8 +85,11 @@ func ResolveSource(sourceID string) (Profile, experiment.ReferenceTier, error) {
 		p.Runtime, p.Files, p.Materials = c.Runtime, c.Files, limits
 		p.Text.Bytes = 512 << 10
 		return p, experiment.ReferencePrimality, nil
-	case "library-checker:zalgorithm", "library-checker:suffixarray", "library-checker:point_add_range_sum", "library-checker:static_range_sum":
+	case "library-checker:zalgorithm", "library-checker:suffixarray", "library-checker:point_add_range_sum", "library-checker:staticrmq", "library-checker:static_range_sum":
 		tier := experiment.ReferenceMedium
+		if sourceID == "library-checker:staticrmq" {
+			tier = experiment.ReferenceStaticRMQ
+		}
 		if sourceID == "library-checker:point_add_range_sum" {
 			tier = experiment.ReferenceMediumBulk
 		}
@@ -105,6 +108,9 @@ func ResolveSource(sourceID string) (Profile, experiment.ReferenceTier, error) {
 		p.ID = "p4-lc-zalgorithm-reference-desktop-arm64-v1"
 		if sourceID == "library-checker:suffixarray" {
 			p.ID = "p4-lc-suffixarray-reference-desktop-arm64-v1"
+		}
+		if sourceID == "library-checker:staticrmq" {
+			p.ID = "p4-lc-staticrmq-reference-desktop-arm64-v1"
 		}
 		if sourceID == "library-checker:point_add_range_sum" {
 			p.ID = "p4-lc-point-add-range-sum-reference-desktop-arm64-v1"

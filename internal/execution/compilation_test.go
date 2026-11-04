@@ -253,7 +253,7 @@ func TestDependencyCleanupFailureRetainsExecutableAndBoundedEvidence(t *testing.
 }
 
 func TestOldTiersCannotBorrowCompilationFiles(t *testing.T) {
-	for _, tier := range []experiment.ReferenceTier{experiment.ReferenceSmall, experiment.ReferenceMedium, experiment.ReferenceMediumBulk, experiment.ReferenceStaticRangeSum, experiment.ReferenceAssociativeArray} {
+	for _, tier := range []experiment.ReferenceTier{experiment.ReferenceSmall, experiment.ReferenceMedium, experiment.ReferenceMediumBulk, experiment.ReferenceStaticRMQ, experiment.ReferenceStaticRangeSum, experiment.ReferenceAssociativeArray} {
 		g, f := evidenceAdapter(t)
 		c, _ := experiment.ResolveReferenceTier(tier)
 		g.runtime, g.limits, g.reference = c.Runtime, c.Files, true

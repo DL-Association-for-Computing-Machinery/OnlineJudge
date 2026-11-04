@@ -25,7 +25,7 @@ func TestStaticRangeSumHostKeepsTierAndPayloadLedger(t *testing.T) {
 	if err != nil || h.tier != experiment.ReferenceStaticRangeSum || !reflect.DeepEqual(runtime, want.Runtime) || files != want.Files || files.PayloadBytes != 512<<20 {
 		t.Fatal("host normalized tier or disagreed with cache accounting")
 	}
-	for _, tier := range []experiment.ReferenceTier{experiment.ReferenceMedium, experiment.ReferencePrimality} {
+	for _, tier := range []experiment.ReferenceTier{experiment.ReferenceMedium, experiment.ReferencePrimality, experiment.ReferenceStaticRMQ} {
 		other, _ := experiment.ResolveReferenceTier(tier)
 		if err := h.Verify(context.Background(), other.Runtime); err == nil {
 			t.Fatal("host accepted another source runtime")

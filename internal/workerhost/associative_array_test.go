@@ -25,7 +25,7 @@ func TestAssociativeArrayHostKeepsTierAndExactPayloadCeiling(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(runtime, want.Runtime) || files != want.Files || files.PayloadBytes != 1<<30 {
 		t.Fatal("host normalized tier or disagreed with cache ledger")
 	}
-	for _, tier := range []experiment.ReferenceTier{experiment.ReferenceMedium, experiment.ReferencePrimality, experiment.ReferenceStaticRangeSum} {
+	for _, tier := range []experiment.ReferenceTier{experiment.ReferenceMedium, experiment.ReferencePrimality, experiment.ReferenceStaticRMQ, experiment.ReferenceStaticRangeSum} {
 		other, _ := experiment.ResolveReferenceTier(tier)
 		if err := h.Verify(context.Background(), other.Runtime); err == nil {
 			t.Fatal("host accepted another runtime")
