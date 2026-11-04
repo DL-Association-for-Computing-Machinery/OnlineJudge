@@ -74,9 +74,9 @@ docker --context desktop-linux run --rm --network none --read-only \
 
 ### 私有草稿参考验证
 
-维护入口已验证固定Library Checker A+B完整12点、unionfind完整18点、zalgorithm完整29点、suffixarray完整50点、primality_test固定依赖/完整13点及static_range_sum完整11点。static_range_sum在用户批准的localdev专项重启后，以原制品/预算通过独立字节边界及完整点集，另一次原五来源回归通过；首次启动失败仍失败，根因未知，不据新通过宣称故障修复或长期稳定，证据归[交付记录](docs/delivery-log.md)。入口不写数据库验证状态或发布。需要已配置且停止的专用槽、已有固定镜像与Docker Desktop、macOS arm64；命令不会自动创建、替换或恢复槽。使用已有Go1.26.10工具链镜像构建独立宿主产物（不与Linux检查共用输出）：
+维护入口已验证固定Library Checker A+B完整12点、unionfind完整18点、zalgorithm完整29点、suffixarray完整50点、primality_test固定依赖/完整13点、static_range_sum完整11点及associative_array完整20点。历史启动/运行故障仍保留，根因未知，不据新通过宣称故障修复或长期稳定，证据归[交付记录](docs/delivery-log.md)。入口不写数据库验证状态或发布。需要已配置且停止的专用槽、已有固定镜像与Docker Desktop、macOS arm64；命令不会自动创建、替换或恢复槽。使用已有Go1.26.10工具链镜像构建独立宿主产物（不与Linux检查共用输出）：
 
-本分支另有`associative_array`完整20点候选：512MiB完整材料总预算、input48MiB、stdout/checker8MiB、payload1GiB，独立CPU5秒/wall10秒，保留更严的整体3分钟和原medium物理槽/锁。真实组合边界和完整CLI尚待执行，未作为第七题准入；[候选合同](docs/reference-validation.md#associative_array候选)与旧失败限制分开记录。
+`associative_array`使用512MiB完整材料总预算、input48MiB、stdout/checker8MiB、payload1GiB，独立CPU5秒/wall10秒，保留更严的整体3分钟和原medium物理槽/锁。同次48MiB输入→8MiB输出、完整20AC/Stop及随后独立原六来源回归已通过；[参考合同](docs/reference-validation.md#associative_array参考验证)与旧失败限制分开记录。
 
 ```sh
 REFERENCE_TOOLCHAIN_IMAGE=YOUR_EXISTING_LOCAL_GO_TOOLCHAIN_IMAGE
@@ -123,7 +123,7 @@ Host控制失败时，执行诊断条目可附带有界`host_trace`，区分入�
   -test.run='^(TestControlTrace.*|TestHostTraceCrossesExecutionTransportWithoutOldCause|TestSuccessfulHostThenDecodeFailureHasNoHostTrace)$' -test.timeout=1m
 ```
 
-维护入口使用独立缓存文件通路：源码/输入上传后回读核对SHA-256，输出原始字节拉取，参考答案留在宿主。默认A+B保留2MiB材料/4KiB输出，unionfind使用64MiB匿名磁盘快照与256KiB运行stdout。zalgorithm使用64MiB快照，suffixarray独立准入128MiB快照；两者共用4MiB stdout及256MiB累计传输档位。primality_test独立冻结32MiB以内材料及固定4个头文件，stdout512KiB、6个缓存对象。static_range_sum使用256MiB完整快照、input16MiB、raw stdout/checker8MiB、payload512MiB。后四者共用原medium槽锁；所有磁盘来源共用进程内一份快照额度，两端账本均按档位计量。编译双流/运行stderr仍各4KiB，磁盘来源的CPU1秒/wall5秒/memory128MiB只作参考试验；其余四题仍待准入，#114/#119保持草稿，生产配置不变。
+维护入口使用独立缓存文件通路：源码/输入上传后回读核对SHA-256，输出原始字节拉取，参考答案留在宿主。默认A+B保留2MiB材料/4KiB输出，unionfind使用64MiB匿名磁盘快照与256KiB运行stdout。zalgorithm使用64MiB快照，suffixarray独立准入128MiB快照；两者共用4MiB stdout及256MiB累计传输档位。primality_test独立冻结32MiB以内材料及固定4个头文件，stdout512KiB、6个缓存对象。static_range_sum使用256MiB完整快照、input16MiB、raw stdout/checker8MiB、payload512MiB。associative_array预算见上段；后五者共用原medium槽锁，所有磁盘来源共用进程内一份快照额度，两端账本均按档位计量。编译双流/运行stderr仍各4KiB；除associative_array外，磁盘来源CPU1秒/wall5秒/memory128MiB保持。其余三题仍待准入，#114/#119保持草稿，生产配置不变。
 
 unionfind使用独立固定`oj-reference-sandbox`及`slot-reference.lock`，拒非空`OJ_WORKER_M0_SLOT`。维护者确认容器不存在后，可用已有固定镜像显式创建停止槽；已有槽不能替换，须核验owner/配置和停止状态：
 
@@ -143,7 +143,7 @@ env -u OJ_WORKER_M0_SLOT OJ_SANDBOX_EXPERIMENT=1 \
 
 全部材料完整哈希、所有答案检查域先验后才调用execution Verify/Compile；槽启动与Host环境探测更早发生。快照并发/关闭、失败报告和独立槽`recover-reference <original-full-container-id>`的前置要求见[受限参考验证](docs/reference-validation.md)。
 
-zalgorithm、suffixarray、primality_test与static_range_sum选择同一固定medium槽及`slot-reference-medium.lock`，串行使用，旧槽不改配置或替换。确认该容器不存在后，用同一已有镜像覆盖entrypoint并传精确固定Cmd，单文件output-limit8MiB、默认copy-out仍1MiB；命令自身不创建槽：
+zalgorithm、suffixarray、primality_test、static_range_sum与associative_array选择同一固定medium槽及`slot-reference-medium.lock`，串行使用，旧槽不改配置或替换。确认该容器不存在后，用同一已有镜像覆盖entrypoint并传精确固定Cmd，单文件output-limit8MiB、默认copy-out仍1MiB；命令自身不创建槽：
 
 ```sh
 docker --context desktop-linux create --pull never --name oj-reference-medium-sandbox \
@@ -161,7 +161,7 @@ env -u OJ_WORKER_M0_SLOT OJ_SANDBOX_EXPERIMENT=1 \
   --output /private/tmp/oj-zalgorithm-reference-report --start-stopped-slot
 ```
 
-suffixarray使用同一命令，将`--source-id`改为`library-checker:suffixarray`并使用新的报告目录；不创建另一槽。其独立profile为`p4-lc-suffixarray-reference-desktop-arm64-v1`，仅完整材料总量提高至128MiB，单点input1MiB/answer4MiB、最多64点保持。medium异常恢复显式指定`worker recover-reference library-checker:zalgorithm <original-full-container-id>`或对应suffixarray/primality_test/static_range_sum来源；省略source仍指原unionfind槽。均需实验opt-in、清空M0槽变量并先确认旧宿主在途操作排空；不能手工清marker。
+suffixarray使用同一命令，将`--source-id`改为`library-checker:suffixarray`并使用新的报告目录；不创建另一槽。其独立profile为`p4-lc-suffixarray-reference-desktop-arm64-v1`，仅完整材料总量提高至128MiB，单点input1MiB/answer4MiB、最多64点保持。medium异常恢复显式指定`worker recover-reference library-checker:zalgorithm <original-full-container-id>`或对应suffixarray/primality_test/static_range_sum/associative_array来源；省略source仍指原unionfind槽。均需实验opt-in、清空M0槽变量并先确认旧宿主在途操作排空；不能手工清marker。
 
 真实专项另覆盖固定12点CLI、合成正确/错误/编译错误/RE/TLE/MLE/OLE和取消后的停止确认。它不需要PG/Redis或控制端，不进入普通CI：
 
@@ -223,7 +223,7 @@ env -u OJ_WORKER_M0_SLOT OJ_SANDBOX_EXPERIMENT=1 OJ_STATIC_RANGE_SUM_REFERENCE=1
   -test.v -test.count=1 -test.run='^TestStaticRangeSumReferenceSandbox$' -test.timeout=5m
 ```
 
-associative_array候选命令选择`--source-id library-checker:associative_array`及新报告目录，不创建另一物理槽。专用驱动先验证同次48MiB完整输入与8MiB完整输出；任一清理/Stop失败则不进入20点CLI。更严整体期限和候选预算先固定，不能失败后自动追加：
+associative_array命令选择`--source-id library-checker:associative_array`及新报告目录，不创建另一物理槽。专用驱动先验证同次48MiB完整输入与8MiB完整输出；任一清理/Stop失败则不进入20点CLI。更严整体期限和来源预算先固定，不能失败后自动追加：
 
 ```sh
 env -u OJ_WORKER_M0_SLOT OJ_SANDBOX_EXPERIMENT=1 OJ_ASSOCIATIVE_ARRAY_REFERENCE=1 \

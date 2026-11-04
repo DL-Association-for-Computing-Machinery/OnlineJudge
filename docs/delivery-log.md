@@ -1,8 +1,22 @@
 # 工程交付记录
 
-## 2026-11-04：associative_array完整20点候选（真实验证待执行）
+## 2026-11-04：associative_array完整20点与旧六来源回归
 
-成功fetch后从`origin/main 7f009bd504a0541cff5b76ad12de4c376e9cc98c`建立独立`codex/associative-array-reference`，不依赖#114/#119。唯一目标为该固定来源的完整参考验证；43对象451132962B逐哈希核对，证据`/private/tmp/oj-associative-array-complete-material-evidence-20261104.json` SHA `4fc147dc30505ca7b5ef93bf4de6a46d6d11e4fe459c75201e04196a0e2ad196`。固定源码474B仅用标准头，input总412885310B/最大39588095B，answer总38242614B/最大4691775B；源码和20点不替换/采样。预算及独立整体期限归[候选合同](reference-validation.md#associative_array候选)。
+候选实现提交`78fb42009f0d462d8354b0c18abb47f43268e76b`完成全部离线检查、Astra完整21文件/驱动/预算/外置协议复核及正常hooks；离线Gitleaks导出的候选HEAD历史119 commits通过。两份Darwin制品SHA分别为worker `88a089836877d4bf20d8e57c5112215f75fb9c84785cce173aeb3d89b067b1f2`、驱动 `946a02491b11b4c77b8f52097dd4dde49dede573696e95a4659ce9161c8a19fe`。最终工作区仅补五页文档，所有Go文件和制品仍匹配本次冻结状态；不重复无变化的应用检查，最终HEAD扫描/仓库门禁与远端CI另核验。
+
+一次协议`/private/tmp/oj-associative-array-trial-20261104-protocol.json` SHA `76c03f7b19c983eab6e4879b920ae16dd495d90b9f8c070eee52a634f4cae36e`冻结21文件/43材料、制品/脚本及导入只读helper哈希；即时复核原Engine29.8.1/Kernel7.0.14-linuxkit/aarch64、原三槽完整配置/owner/停止/PID0/私有空锁、已批准localdev同生命周期健康。无新槽、持久服务变更、恢复、重试或预算追加；旧#114/#119及首次static_range_sum失败保持。
+
+一次顶层21.31秒通过：首组2.37秒以真实单次48MiB完整stdin→8MiB完整stdout/4096B stderr，在同一共享15秒调用期限内逐字节验证，缓存/制品清理和Stop成功；然后独立生命周期的真实完整20点CLI18.90秒全部AC/Stop。raw stdout SHA `7d212b9c884f5c77896de960ae17cc341cda43b14d6a971f34ca29ebd4badf7f`；input存活shm-used50405376B、stdout存活58793984B、清理后0，outer memory-peak283099136B仅为此生命周期计数，不是每个文件系统瞬时峰值或生产总内存。真实题源编译CPU111471000ns/内存45821952B，逐点最大CPU649373000ns/内存65536000B；Darwin CLI wait4 maxrss238583808B不是Go heap或并发总RSS。
+
+私有报告`/private/tmp/oj-associative-array-reference-report-20261104/report.json` SHA `77ed03e7126ef7e35653c6781653aee98600e471b3c0b4067ef5819f488ef3dd`，plan `5c5b515ff32168a8d76f94e594666e9148b650a48623e20bbc8b0f2d75155a17`、profile `abbc0c1081a07c239da97277a7ff8265a64205f847ba26ff606109d0750da519`。主代理独立核对源码、两catalog、版本/来源锁及20对input/answer身份和明确预算；Astra另核对摘要重算、完整日志/协议、全部点/usage和Stop。0700/0600、无INCOMPLETE，成功报告不含执行/停止失败诊断，完整流无截断或observer错误，postflight/result分别落盘；三原槽停止/PID0/私有空锁。
+
+随后独立协议`/private/tmp/oj-associative-array-regression-20261104-protocol.json` SHA `0e34e26b06cc59211667bf136b42920df0a54be002b18725c786f7519daf6474`核对原六报告完整Plan/Profile和264唯一材料对象339670515B，以原六套完整suite串行各一次：A+B九组18.06秒、unionfind两组9.99秒、zalgorithm三组16.28秒、suffixarray一组20.85秒、primality两组9.52秒、static_range_sum两组9.94秒，完整12/18/29/50/13/11点及原故障/边界组全部通过。完整旧Plan/Profile逐项相等；原count1/failfast/5分钟、各内部预算和Stop保持，任一失败停止后组/来源，无恢复或重试。摘要/逐报告哈希归`/private/tmp/oj-associative-array-regression-20261104-summary.json`，最终三槽停止/PID0/私有空锁；不运行#114/#119候选，不解除历史失败或解释根因。
+
+仅准入第七个固定环境维护来源，不更新数据库草稿not-run、生产null或publication blocked。其余三题、持久化验证任务/权限接纳、完整质量/非作者终审发布及整体P4未完成，未部署。以下为实现冻结、真实验证前的历史记录，不能替代本节最终实测及后续精确HEAD CI。
+
+## 2026-11-04：associative_array完整20点候选（首次记录）
+
+成功fetch后从`origin/main 7f009bd504a0541cff5b76ad12de4c376e9cc98c`建立独立`codex/associative-array-reference`，不依赖#114/#119。唯一目标为该固定来源的完整参考验证；43对象451132962B逐哈希核对，证据`/private/tmp/oj-associative-array-complete-material-evidence-20261104.json` SHA `4fc147dc30505ca7b5ef93bf4de6a46d6d11e4fe459c75201e04196a0e2ad196`。固定源码474B仅用标准头，input总412885310B/最大39588095B，answer总38242614B/最大4691775B；源码和20点不替换/采样。预算及独立整体期限归[参考合同](reference-validation.md#associative_array参考验证)。
 
 新tier7/profile仅为此来源设置完整材料512MiB/input48MiB/raw stdout及checker8MiB/payload1GiB及RunCPU5s/wall10s/memory128MiB。CPU选择依据固定info.toml的5.0秒，不宣称本站生产参数或性能成立；阶段3分钟、单Run共享15秒、CLI4分钟/顶层5分钟为独立更严上限，可能先于单点预算耗尽。原六profile、编译、file/live/操作数、medium物理配置与canonical锁、Stop及零重试保持。
 

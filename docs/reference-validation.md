@@ -4,7 +4,7 @@ P4 的首个执行入口是维护者显式调用 `worker validate-reference`。�
 
 ## 当前支持范围
 
-只接收固定来源锁 SHA-256 `fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617`：默认选择 `library-checker:aplusb` 的 `sample/aplusb/sol/correct.cpp` 和完整12点；显式`--source-id library-checker:unionfind`选择`data_structure/unionfind/sol/correct.cpp`和完整18点，`library-checker:zalgorithm`选择`string/zalgorithm/sol/correct.cpp`和完整29点，`library-checker:suffixarray`选择`string/suffixarray/sol/correct.cpp`和完整50点，`library-checker:primality_test`选择`number_theory/primality_test/sol/correct.cpp`、固定4个头文件和完整13点，`library-checker:static_range_sum`选择固定单文件源码与完整11点。各来源绑定独立profile及固定槽；后四者共用medium槽及同一canonical锁。不接收参考程序替换、任意脚本或路径布局。来源锁变更需要重新审查准入；其余四题不截取样例或部分测试点来制造通过。
+只接收固定来源锁 SHA-256 `fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617`：默认选择 `library-checker:aplusb` 的 `sample/aplusb/sol/correct.cpp` 和完整12点；显式`--source-id library-checker:unionfind`选择`data_structure/unionfind/sol/correct.cpp`和完整18点，`library-checker:zalgorithm`选择`string/zalgorithm/sol/correct.cpp`和完整29点，`library-checker:suffixarray`选择`string/suffixarray/sol/correct.cpp`和完整50点，`library-checker:primality_test`选择`number_theory/primality_test/sol/correct.cpp`、固定4个头文件和完整13点，`library-checker:static_range_sum`选择固定单文件源码与完整11点，`library-checker:associative_array`选择固定单文件源码与完整20点。各来源绑定独立profile及固定槽；后五者共用medium槽及同一canonical锁。不接收参考程序替换、任意脚本或路径布局。来源锁变更需要重新审查准入；其余三题不截取样例或部分测试点来制造通过。
 
 限制来自现有实验传输、执行环境和本轮验证配置，不是生产选手限制：
 
@@ -69,17 +69,17 @@ suffixarray仅扩大该固定来源的完整快照总量，Runtime、文件协�
 
 专用驱动先核验完整16 MiB输入及stdout8 MiB/stderr4096的全部字节，再核对stdout cap+1完整窄SIGXFSZ证据和stderr4097的固定collector错误。预期拒绝必须恰为一条`validate/stdout/invalid_evidence`且未截断，任何stdout/input清理错误或附加context都失败；合成实际Cached适配器回归验证此门禁，不能把预期负例与清理失败的join当通过。首组及其Stop成功才进入11点CLI。首轮启动失败与Stop未确认仍保留；受控恢复只确认当时安全。用户批准localdev专项重启后，以原源码/制品/预算登记的新观测通过全部字节边界、11AC/Stop，随后独立原五来源串行回归也通过。该证据只支持当前固定环境维护入口，不解释旧启动根因或证明长期稳定；完整证据见[交付记录](delivery-log.md)。物理copy-out默认1 MiB保持，cached stdout独立拉取与原始字节保真已实测。
 
-其余四题仍需完整快照、累计传输或临时资源的独立准入；#114/#119保持草稿，旧失败不因新来源通过而解除。草稿数据库仍为not-run、生产配置null、publication blocked；本入口不写入这些状态，生产限额保持未定。
+其余三题仍需完整快照、累计传输或临时资源的独立准入；#114/#119保持草稿，旧失败不因新来源通过而解除。草稿数据库仍为not-run、生产配置null、publication blocked；本入口不写入这些状态，生产限额保持未定。
 
-### associative_array候选
+### associative_array参考验证
 
-本分支为固定`library-checker:associative_array`接入独立`ReferenceAssociativeArray=7`，profile `p4-lc-associative-array-reference-desktop-arm64-v1`、Runtime `p4-associative-array-gnu17-desktop-arm64-v1`、Files `p4-gojudge-cached-associative-array-v1`。完整43对象451132962B（源码474B、两个catalog及20组input/answer）逐字节哈希核验；input总412885310B/最大39588095B，answer总38242614B/最大4691775B。固定源码只用cstdio/map，没有私有编译依赖；所有点和原始字节保留。
+固定`library-checker:associative_array`接入独立`ReferenceAssociativeArray=7`，profile `p4-lc-associative-array-reference-desktop-arm64-v1`、Runtime `p4-associative-array-gnu17-desktop-arm64-v1`、Files `p4-gojudge-cached-associative-array-v1`。完整43对象451132962B（源码474B、两个catalog及20组input/answer）逐字节哈希核验；input总412885310B/最大39588095B，answer总38242614B/最大4691775B。固定源码只用cstdio/map，没有私有编译依赖；所有点和原始字节保留。
 
-候选材料预算为source64KiB/input48MiB/answer8MiB/总512MiB含catalog，最多64点；raw stdout/checker8MiB及token/编译双流/运行stderr各4KiB。Runtime Run CPU5秒/wall10秒/memory128MiB/16进程，仅此来源改变CPU/wall，编译与原六来源保持。5秒依据已锁定`info.toml`的timelimit=5.0选为独立候选，不等同生产参数或Desktop性能证明。总阶段仍独立3分钟，包含完整快照、所有答案预检、编译、逐点I/O/执行/比较，可能在各点均未超限时总体失败；CLI4分钟/顶层测试5分钟不变。单次Run的上传/回读/执行/stdout下载共享wall+5秒即15秒，curl20秒/Host25秒不能作为额外时间相加；失败不自动加时或重试。
+独立材料预算为source64KiB/input48MiB/answer8MiB/总512MiB含catalog，最多64点；raw stdout/checker8MiB及token/编译双流/运行stderr各4KiB。Runtime Run CPU5秒/wall10秒/memory128MiB/16进程，仅此来源改变CPU/wall，编译与原六来源保持。5秒依据已锁定`info.toml`的timelimit=5.0预选为独立参考预算，不等同生产参数或普遍Desktop性能证明。总阶段仍独立3分钟，包含完整快照、所有答案预检、编译、逐点I/O/执行/比较，可能在各点均未超限时总体失败；CLI4分钟/顶层测试5分钟不变。单次Run的上传/回读/执行/stdout下载共享wall+5秒即15秒，curl20秒/Host25秒不能作为额外时间相加；失败不自动加时或重试。
 
 物理复用原medium完整配置及canonical锁，global单文件RLIMIT_FSIZE仍8MiB、默认copy-out1MiB，tmpfs/shm/cgroup/Stop与原六profile保持。Files仅此来源payload1GiB；原file48MiB/live64MiB/4对象/512操作不变。最坏累计载荷`2*474 + 2*412885310 + 20*(8388608+1) = 993543748`B，127次execution逻辑操作不等同Host请求数。input48MiB+stdout预留8MiB+1B+exe预留1MiB的逻辑峰值为57MiB+1B，低于64MiB；不等同multipart/缓存/工作目录的物理峰值，也不证明std::map百万节点低于128MiB。
 
-普通测试覆盖含catalog的512MiB精确/+1、实际超过256MiB的匿名冻结、48MiB输入/8MiB答案精确/+1、共享快照quota释放、完整20点计费和1GiB注入边界、已知清理/档位互斥及旧六profile摘要。匿名文件只写源码和逐点材料，物理长度不包含两份已核验catalog；1GiB计数注入不冒充实际搬运。专用驱动必须先同次验证完整48MiB stdin→完整8MiB stdout/4096B stderr，记录存活资源样本并完成清理/Stop，再运行完整20点CLI；原48MiB→小输出和16MiB→8MiB不能替代这一组合。真实两组及后续原六来源独立串行回归尚待执行，不更新数据库、生产配置或发布状态。
+普通测试覆盖含catalog的512MiB精确/+1、实际超过256MiB的匿名冻结、48MiB输入/8MiB答案精确/+1、共享快照quota释放、完整20点计费和1GiB注入边界、已知清理/档位互斥及旧六profile摘要。匿名文件只写源码和逐点材料，物理长度不包含两份已核验catalog；1GiB计数注入不冒充实际搬运。专用驱动先同次验证完整48MiB stdin→完整8MiB stdout/4096B stderr，记录存活资源样本并完成清理/Stop，再运行完整20点CLI；原48MiB→小输出和16MiB→8MiB不能替代这一组合。一次真实两组21.31秒通过，完整20AC/Stop；随后独立原六来源完整点集/边界故障回归通过，完整旧Plan/Profile保持。仅支持该固定环境维护入口，不更新数据库、生产配置或发布状态，不证明历史故障修复或长期稳定；证据归[交付记录](delivery-log.md)。
 
 文件入口cap结合固定tmpfs/cgroup边界，内部账本计量存活缓存、总传输载荷与操作数；没有独立multipart暂存或其峰值计数器，64 MiB存活缓存不等于全部存储/内存峰值。创建前为源码/输入预留实际大小，为未知大小的exe/stdout按上限预留；最多一个大输入。上传和校验回读分别计费，下载按请求上限保守计费，失败不退额度；固定MIME/trailer及控制JSON各自有界。累计操作数限制零字节操作与已删除ID历史，并为已存在对象保留DELETE额度。固定挂载、collector和cgroup的真实容量证据另见交付记录。
 
