@@ -1,5 +1,30 @@
 # 工程交付记录
 
+## 2026-11-04：point_add_range_sum 八来源固定环境接纳
+
+候选HEAD `0cd63e3ddacb3be00e3f693f1d0797a2f02d4e42`已普通吸收[停止预算修复#123](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/123)的主线提交`5411cebc283fc1d3f358f36c72be4058ae2c812d`。该修复只在原10秒Stop总预算内为终止及确认预留时间，不宣称定位旧运行阻塞。point_add_range_sum仍为原MediumBulk枚举3和原Plan/Profile/预算；本轮只支持新版本在固定环境下准入，精确head CI及#114合并尚待核验，不记为已交付或部署。
+
+离线backend整合发现旧`primality_test.go`仍将枚举3视为未知，修为仍未准入的5后，完整backend与必要静态/构建检查通过。缓存stdin驱动保留完整21点CLI后接原8MiB+1/16MiB两次输入的两组顺序，首组失败即停；Verify10秒、Compile wall+5、每次Run wall+5及独立Background5秒制品清理与Runner合同一致。上传SHA-256回读、程序count/sum和资源阶段样本保持；期限收紧不扩大预算，count/sum不单独证明顺序回显，资源样本不代表连续峰值。
+
+一次协议`/private/tmp/oj-point-add-readmission-20261104-protocol.json` SHA-256 `3b2be2abd855cd51a7ca5679465d8c126d81cc16466165f2a42476031267bf26`冻结最终HEAD、全部Go源码/配置/两制品、完整八来源旧Plan/Profile、草稿版本/来源/有序点集及416个唯一材料对象925125315B。worker与driver SHA分别为`03fcaabfb0f557ae345e9899b67719a04d7ea78da33ecf4c2c2f32d87ca5818d`、`37821c6c671e1ac61693ca120c0c33238b8f5d8a5a59546b83aa5facb93cbd89`。显式核验Stop交付SHA为main与候选祖先，共享独占token、各真实canonical锁、三原槽完整配置/停止/PID0/私有空锁及无占用均通过前置核验。
+
+固定Desktop LinuxKit7.0.14/arm64、Engine29.8.1、原go-judge v1.13.3/GCC15.3.0下，顺序point_add_range_sum、suffixarray、A+B、unionfind、zalgorithm、primality_test、static_range_sum、associative_array，各仅一次`count=1/failfast/timeout5m`，无重试、恢复或预算追加。全部174点AC/Stop，八个顶层及22个原子子测试的RUN/PASS清单精确匹配；每套完整Plan/Profile与历史报告逐字段相等，报告0700/0600、无INCOMPLETE、成功诊断省略、publication blocked。
+
+| 来源 | 点数 | 整套耗时（秒） | report.json SHA-256 |
+| --- | --- | --- | --- |
+| point_add_range_sum | 21 | 13.25 | `790cbed00fc8eeacdc4ca6591b565dfcce676fb6443c2e92586b8b048bcf317b` |
+| suffixarray | 50 | 20.10 | `c90f693abe1156d222e20d67de341e32fbe0c6ac9a0bdec8435c2d26a7a0bc8b` |
+| A+B | 12 | 18.10 | `04554090e3b1280905d5bb0f419a6705ab27537ccd8ed081b9ca908569a48d5d` |
+| unionfind | 18 | 10.09 | `dd038602004a852d8b1e2106ce062cd8f570b2083495ad18096dca04e743fdd6` |
+| zalgorithm | 29 | 16.22 | `f18fbc43bcc912f4a6fd01598bb9b549f16b9f721ff26b6fc525670f4011a22c` |
+| primality_test | 13 | 10.15 | `9863dac1b2414e8b565a4ab69d1df66e77b2ba844ae4e067e16cd5527c8932e6` |
+| static_range_sum | 11 | 9.95 | `9da602d5e049d37250c75a3a23e05dd91ecc5fa1ec549afa47d18596c2833dce` |
+| associative_array | 20 | 21.74 | `390ceb0b3f69ac6c3d7e9685c277aa1ea24e83e9c40b6601e611305106ebbd2c` |
+
+各来源报告位于`/private/tmp/oj-point-add-readmission-20261104-<source>-report/report.json`；日志、observer结果/错误、独立postflight及验证记录同前缀。汇总`/private/tmp/oj-point-add-readmission-20261104-summary.json` SHA-256 `53659e0e515021b0fe0ac0827b28ec740eaf4cde16b03d902309c59742ff1d6b`；全部observer无错误/截断，最终源码/制品未变，三原槽停止/PID0/私有空锁且无占用。此后仅同步六页文档，不修改Go源码或重跑真实验收。
+
+原suffixarray失败`19513bf823e8cd40bf5ba13fedcc5f2a3e9f6f073cc843246568ee2f2e14eb36`和既有调查保持，根因及长期稳定性未知，新接纳不追认历史失败。当前八来源通过固定环境维护入口接纳，其余两题仍待独立准入，#119仍待验收；不更新草稿not-run、生产null、publication blocked，不等于持久化验证任务/质量审核/题目发布/整体P4或M0通过。CI与合并状态后续按精确head核验；临时证据不构成独立备份。
+
 ## 2026-11-04：停止阶段预留终止与确认时间
 
 原Stop枚举与kill共享整个10秒期限，枚举耗尽后可出现kill调用已尝试但本地进程未启动。独立修复仅调整内部时间分配：枚举与kill各最多2秒且不超过进入阶段时剩余总期限一半，串行返回后取消子context；drain/生命周期验证、总10秒、零重试、PID确认和失败隔离不变。枚举失败后kill成功仍不能通过停止验收。这是可复现的预算分配改进，不宣称定位旧#114/#119首次运行阻塞。

@@ -4,7 +4,7 @@ P4 的首个执行入口是维护者显式调用 `worker validate-reference`。�
 
 ## 当前支持范围
 
-只接收固定来源锁 SHA-256 `fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617`：默认选择 `library-checker:aplusb` 的 `sample/aplusb/sol/correct.cpp` 和完整12点；显式`--source-id library-checker:unionfind`选择`data_structure/unionfind/sol/correct.cpp`和完整18点，`library-checker:zalgorithm`选择`string/zalgorithm/sol/correct.cpp`和完整29点，`library-checker:suffixarray`选择`string/suffixarray/sol/correct.cpp`和完整50点；候选`library-checker:point_add_range_sum`选择`data_structure/point_add_range_sum/sol/correct.cpp`和完整21点（整合未验收），`library-checker:primality_test`选择`number_theory/primality_test/sol/correct.cpp`、固定4个头文件和完整13点，`library-checker:static_range_sum`选择固定单文件源码与完整11点，`library-checker:associative_array`选择固定单文件源码与完整20点。各来源绑定独立profile及固定槽；后六者共用medium槽及同一canonical锁。不接收参考程序替换、任意脚本或路径布局。来源锁变更需要重新审查准入；point_add_range_sum仍受下述历史失败阻断；其余两题不截取样例或部分测试点来制造通过。
+只接收固定来源锁 SHA-256 `fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617`：默认选择 `library-checker:aplusb` 的 `sample/aplusb/sol/correct.cpp` 和完整12点；显式`--source-id library-checker:unionfind`选择`data_structure/unionfind/sol/correct.cpp`和完整18点，`library-checker:zalgorithm`选择`string/zalgorithm/sol/correct.cpp`和完整29点，`library-checker:suffixarray`选择`string/suffixarray/sol/correct.cpp`和完整50点，`library-checker:point_add_range_sum`选择`data_structure/point_add_range_sum/sol/correct.cpp`和完整21点，`library-checker:primality_test`选择`number_theory/primality_test/sol/correct.cpp`、固定4个头文件和完整13点，`library-checker:static_range_sum`选择固定单文件源码与完整11点，`library-checker:associative_array`选择固定单文件源码与完整20点。各来源绑定独立profile及固定槽；后六者共用medium槽及同一canonical锁。不接收参考程序替换、任意脚本或路径布局。来源锁变更需要重新审查准入；当前版本八来源固定环境接纳已通过，最终CI与合并状态见[PR #114](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/114)；其余两题（含#119）仍待完整准入，不截取样例或部分测试点来制造通过。
 
 限制来自现有实验传输、执行环境和本轮验证配置，不是生产选手限制：
 
@@ -49,7 +49,7 @@ point_add_range_sum独立profile为`p4-lc-point-add-range-sum-reference-desktop-
 
 Medium与MediumBulk共用原容器及`slot-reference-medium.lock`；映射必须保留原tier，使Host与适配器分别绑定正确账本。两者Runtime相同，Verify不区分传输预算；CLI从同一source解析结果构造两端，误配由较小额度一端拒绝，不能据Runtime验证推导预算相同。回归分别验证两端旧256 MiB拒绝、新512 MiB额度及超限拒绝，实际132 MiB快照与16 MiB输入冻结/读回、完整集合超过256 MiB及input cap+1拒绝、共享额度和锁互斥；没有恰好256 MiB快照成功或任意材料组合容量证明。真实缓存stdin专项核验上传SHA-256回读和程序count/sum，在原8 MiB输出RLIMIT下读取8 MiB+1/16 MiB；阶段heap/cgroup/tmpfs样本不代表连续峰值或并发总RSS。
 
-此前point_add_range_sum首次完整21点与大stdin通过，但旧suffixarray回归在第11点SE，Stop为`kill/deadline`、`observed=0`且原容器仍运行，构成交付阻断。外部停止并受控恢复仅确认当时安全，不追认失败报告；首10点AC/后续NOT_RUN保留，根因尚未定位，不能据诊断判断kill命令已执行或程序超时。其他专项或普通CI通过不能抵消此失败；本新增来源正在整合现行主线，尚未通过本轮验收或交付，证据见[交付记录](delivery-log.md#2026-11-04point_add_range_sum-实现与停止故障阻断)。
+此前point_add_range_sum首次21点与大stdin通过，但旧suffixarray回归第11点SE、Stop为`kill/deadline`、`observed=0`且原容器仍运行，曾构成交付阻断。外部停止与受控恢复不追认首10点AC/后续NOT_RUN的失败报告；根因尚未定位。吸收已交付#123停止预算修复后，候选HEAD `0cd63e3ddacb3be00e3f693f1d0797a2f02d4e42`通过一次八来源174点及22个原子子测试的固定环境接纳，全部AC/Stop、完整旧Plan/Profile相等；支持该新版本准入，最终CI与合并状态见[PR #114](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/114)。历史失败不改写、不据此宣称旧根因已修复；[新接纳记录](delivery-log.md#2026-11-04point_add_range_sum-八来源固定环境接纳)与[原失败记录](delivery-log.md#2026-11-04point_add_range_sum-实现与停止故障阻断)分别保留。
 
 `primality_test`使用独立`ReferencePrimality`档位（枚举4），profile为`p4-lc-primality-reference-desktop-arm64-v1`，Runtime为`p4-primality-gnu17-desktop-arm64-v1`。它复用medium容器及同一锁，但Host保留自己的档位和双端文件预算；不借用Medium编译入口。
 
@@ -67,7 +67,7 @@ Medium与MediumBulk共用原容器及`slot-reference-medium.lock`；映射必须
 
 ### static_range_sum参考验证
 
-`ReferenceStaticRangeSum`为独立枚举6，profile为`p4-lc-static-range-sum-reference-desktop-arm64-v1`，Runtime为`p4-static-range-sum-gnu17-desktop-arm64-v1`，Files为`p4-gojudge-cached-static-range-sum-v1`。材料为source64 KiB/input16 MiB/answer8 MiB/总256 MiB含catalog、最多64点；raw stdout及checker每文件8 MiB，token/编译双流/运行stderr仍各4 KiB，payload512 MiB，其余Run资源/3分钟阶段墙钟/单file48 MiB/live64 MiB/4对象/512操作/各期限保持。Host与Cached保留档位6，物理复用原medium容器、Cmd及canonical锁，不替换槽；旧五profile与尚未准入的枚举3/5保持。
+`ReferenceStaticRangeSum`为独立枚举6，profile为`p4-lc-static-range-sum-reference-desktop-arm64-v1`，Runtime为`p4-static-range-sum-gnu17-desktop-arm64-v1`，Files为`p4-gojudge-cached-static-range-sum-v1`。材料为source64 KiB/input16 MiB/answer8 MiB/总256 MiB含catalog、最多64点；raw stdout及checker每文件8 MiB，token/编译双流/运行stderr仍各4 KiB，payload512 MiB，其余Run资源/3分钟阶段墙钟/单file48 MiB/live64 MiB/4对象/512操作/各期限保持。Host与Cached保留档位6，物理复用原medium容器、Cmd及canonical锁，不替换槽；旧五profile保持；枚举3的point_add_range_sum已通过本轮固定环境接纳，枚举5的staticrmq仍待验收。
 
 完整25对象149774419B已逐哈希核验：源码328B、两个catalog与11组input-answer，input总91745127B、answer总58026619B，最大分别11722894B/7636751B。固定源码仅两个标准头，无私有依赖。最坏累计载荷`2*328 + 2*91745127 + 11*(8388608+1) = 275765609`B，超过旧256 MiB，73次execution逻辑操作不等同Host计数。按请求上限收费，512 MiB边界用计数注入测试，不冒充实际搬运该总量；完整材料和16MiB/8MiB真实字节边界已在固定环境通过。
 
@@ -75,7 +75,7 @@ Medium与MediumBulk共用原容器及`slot-reference-medium.lock`；映射必须
 
 专用驱动先核验完整16 MiB输入及stdout8 MiB/stderr4096的全部字节，再核对stdout cap+1完整窄SIGXFSZ证据和stderr4097的固定collector错误。预期拒绝必须恰为一条`validate/stdout/invalid_evidence`且未截断，任何stdout/input清理错误或附加context都失败；合成实际Cached适配器回归验证此门禁，不能把预期负例与清理失败的join当通过。首组及其Stop成功才进入11点CLI。首轮启动失败与Stop未确认仍保留；受控恢复只确认当时安全。用户批准localdev专项重启后，以原源码/制品/预算登记的新观测通过全部字节边界、11AC/Stop，随后独立原五来源串行回归也通过。该证据只支持当前固定环境维护入口，不解释旧启动根因或证明长期稳定；完整证据见[交付记录](delivery-log.md)。物理copy-out默认1 MiB保持，cached stdout独立拉取与原始字节保真已实测。
 
-其余三题仍需完整快照、累计传输或临时资源的独立准入；#114/#119保持草稿，旧失败不因新来源通过而解除。草稿数据库仍为not-run、生产配置null、publication blocked；本入口不写入这些状态，生产限额保持未定。
+其余两题仍需完整快照、累计传输或临时资源的独立准入；#119仍待验收；#114新版本接纳通过，最终CI与合并状态见[PR #114](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/114)，历史失败保持。草稿数据库仍为not-run、生产配置null、publication blocked；本入口不写入这些状态，生产限额保持未定。
 
 ### associative_array参考验证
 
@@ -117,7 +117,7 @@ unionfind运行输出的正常collector溢出按固定协议作窄适配：[v1.1
 
 ## 执行失败诊断
 
-2026-11-04的[停止故障调查](reference-validation-investigation.md)记录新主线独立50点及一次预注册前置序列均未复现，以及旧stdout删除访问日志的异常记录时间差。旧根因仍未确定，HTTP200/新通过不能证明旧客户端成功或解除#114；后续按该页的狭窄假设继续收集证据。
+2026-11-04的[停止故障调查](reference-validation-investigation.md)保留新主线独立50点、预注册前置序列未复现及旧stdout删除访问日志异常时间差的历史证据。旧根因仍未知，HTTP200不能证明旧客户端成功；后续吸收#123的新版本已完成[八来源接纳](delivery-log.md#2026-11-04point_add_range_sum-八来源固定环境接纳)，不追认旧失败。
 
 可选`execution_diagnostic`包含`entries`与可选`truncated`，跨所有调用最多八条；第九条或诊断遍历遗漏才标记截断。成功省略字段，原成功JSON、profile/plan及schema保持。每条有固定`operation`（verify、compile、run、cleanup、snapshot_close、validation或unknown）、`point`（run从1开始，非逐点为0并省略）、`phase`、`role`和`code`。
 
@@ -143,13 +143,13 @@ inspect/command的`call_attempted`只证明调用该函数；`local_process_star
 
 新增数据不进入Profile/Plan；成功JSON/schema和既有错误`Is/As`语义保持。元数据检索与公开投影分别有64槽界限；公开投影在provider终止节点只读其自身类别，裸provider未声明类别时可为unknown，不重开嵌套遍历。总条目仍最多八条，字段不含命令/路径/缓存ID/材料/原错误；外来getter、Unwrap或类别方法自身成本不由槽计数保证。缺少`host_trace`可表示能力不适用、数据无效/歧义或检索受限，不能证明没有Host调用。
 
-范围只覆盖RoundTrip控制请求（GET元数据、POST/run、DELETE），不覆盖Host.Start/Stop/Verify或独立文件传输，也不能回溯已成功返回的输入回读内部耗时。Host成功返回、随后GoJudge JSON decode失败时没有Host trace，不通过成功响应侧通道补造证据。新增字段不是故障修复、题源准入或自动重试授权；#114及staticrmq草稿#119的原失败保持，后续须另行预注册有可检验假设的调查。
+范围只覆盖RoundTrip控制请求（GET元数据、POST/run、DELETE），不覆盖Host.Start/Stop/Verify或独立文件传输，也不能回溯已成功返回的输入回读内部耗时。Host成功返回、随后GoJudge JSON decode失败时没有Host trace，不通过成功响应侧通道补造证据。诊断字段本身不是故障修复、自动准入或重试授权；#114与#119原失败保持，具体版本的准入状态见[最新接纳记录](delivery-log.md#2026-11-04point_add_range_sum-八来源固定环境接纳)。如需继续调查，应另行预注册可检验假设。
 
 ## 槽所有权与停止
 
 Stop总期限仍取调用方期限与10秒中的较早者。drain与首次容器生命周期核验成功后，进程枚举和kill分别使用独立子期限：最多2秒，且最多使用进入该阶段时总剩余时间的一半；每条本地命令返回并取消其子context后，才派发下一条命令。后续状态/PID确认仍受原总期限约束，不重试或增加总预算。此内部时间分配为终止及确认留出机会，可能使原本能在10秒内完成的慢命令提前失败；本地WaitDelay及调度仍可能耗尽预留时间，不保证信号送达或绝对墙钟上界。
 
-首次生命周期核验失败不发信号；枚举失败时对已核验生命周期仍尝试kill，但缺少进程证据始终返回失败、保持隔离，不能仅因容器停止就清除标记。历史#114的kill/deadline没有本地启动分段证据，本改进不认定其旧根因，也不自动解除#114/#119的接纳阻断。
+首次生命周期核验失败不发信号；枚举失败时对已核验生命周期仍尝试kill，但缺少进程证据始终返回失败、保持隔离，不能仅因容器停止就清除标记。历史#114的kill/deadline没有本地启动分段证据，本改进不认定其旧根因；#114另经本轮八来源完整新接纳通过，#119仍待其独立验收。
 
 显式`OJ_SANDBOX_EXPERIMENT=1`和跨checkout文件锁仍是前置条件。默认A+B使用primary/secondary；unionfind使用固定small reference槽，zalgorithm、suffixarray、point_add_range_sum、primality_test、static_range_sum与associative_array共用固定medium reference槽及同一锁，均拒绝非空`OJ_WORKER_M0_SLOT`，不从M0 parser选择新槽。quarantine不自动恢复。命令先持锁并同步dirty标记，再接触沙箱。`--start-stopped-slot`只启动预存在、停止/PID0、固定owner及完整隔离配置匹配的槽，使用原full ID，不创建、替换、重启运行中容器或接管其他项目。返回Host绑定该ID与新StartedAt；运行中每次请求继续校验同一生命周期。
 
@@ -163,4 +163,4 @@ Stop内部仍为10秒总预算，保持原调用顺序和零重试。枚举/解�
 
 数据库中的草稿仍为`not-run`，既有来源准备报告不充当本站运行记录。后续须补齐其余题的大材料/依赖、持久化幂等验证任务及当前权限下的报告接纳、完整质量验证、非作者终审和原子发布。
 
-首轮真实专项曾完整通过，但另两次实测出现停止确认未通过：包括额外12点全部AC后仍返回SE、保留隔离。后续受控recover仅确认当时安全，不追认原报告；旧报告没有新诊断，不能用当前代码反推其失败原因。后来[草稿PR #114](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/114)的旧suffixarray回归又出现第11点SE、Stop kill/deadline且原容器仍运行；外部停止和受控恢复不解除原交付阻断。当前已补停止步骤与执行失败阶段诊断；原根因尚未定位，维护入口仍有可用性限制，不自动重试至绿或放宽Stop。历史与本次证据见[交付记录](delivery-log.md)。
+首轮真实专项曾完整通过，但另两次实测出现停止确认未通过：包括额外12点全部AC后仍返回SE、保留隔离。后续受控recover仅确认当时安全，不追认原报告；旧报告没有新诊断，不能用当前代码反推其失败原因。后来[PR #114](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/114)的旧suffixarray回归又出现第11点SE、Stop kill/deadline且原容器仍运行；外部停止和受控恢复不改变原失败结论。当前已补停止步骤与执行失败阶段诊断；原根因尚未定位，后续新版本已通过八来源固定环境接纳，长期稳定性仍未知，不自动重试至绿或放宽Stop。历史与本次证据见[交付记录](delivery-log.md)。
