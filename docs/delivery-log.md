@@ -1,5 +1,13 @@
 # 工程交付记录
 
+## 2026-11-04：停止阶段预留终止与确认时间
+
+原Stop枚举与kill共享整个10秒期限，枚举耗尽后可出现kill调用已尝试但本地进程未启动。独立修复仅调整内部时间分配：枚举与kill各最多2秒且不超过进入阶段时剩余总期限一半，串行返回后取消子context；drain/生命周期验证、总10秒、零重试、PID确认和失败隔离不变。枚举失败后kill成功仍不能通过停止验收。这是可复现的预算分配改进，不宣称定位旧#114/#119首次运行阻塞。
+
+四包race回归通过：workerhost、execution、problemvalidation、cmd/worker；新增受信shell证明枚举子期限到期后kill仍实际启动，短父期限与独立取消、kill超时保持失败。原整体期限耗尽诊断继续覆盖本地收尾消耗所有剩余时间。完整backend格式/vet/静态/race/七Linux命令构建、sandbox vet和Darwin专项构建通过；Astra针对性实现/测试/协议复核无阻断，AI不替代人工审批。
+
+原固定secondary槽、完整材料/源码/制品冻结并登记一次兼容协议后，A+B九组18.62秒全部通过（完整12点CLI、AC/WA/CE/RE/TLE/MLE/OLE/取消），每组停止确认；完整Plan/Profile保持。报告`/private/tmp/oj-stop-reserve-observation-20261104-report/report.json` SHA-256 `4f890571dc0e8a2f7ab706e4c918abba3a839d07e56d8496c188b77c38c33fae`，协议/完整日志/结果/后置/验证摘要同前缀；观察器无错误/截断，三原槽停止/PID0/私有空锁且无占用。未制造真实Docker故障或追加试验，未改服务配置、来源预算或原失败结论。最终CI/合并状态以远端精确head为准；两来源仍须吸收修复后各自完成新接纳，历史根因与长期稳定未知。
+
 ## 2026-11-04：associative_array完整20点与旧六来源回归
 
 候选实现提交`78fb42009f0d462d8354b0c18abb47f43268e76b`完成全部离线检查、Astra完整21文件/驱动/预算/外置协议复核及正常hooks；离线Gitleaks导出的候选HEAD历史119 commits通过。两份Darwin制品SHA分别为worker `88a089836877d4bf20d8e57c5112215f75fb9c84785cce173aeb3d89b067b1f2`、驱动 `946a02491b11b4c77b8f52097dd4dde49dede573696e95a4659ce9161c8a19fe`。最终工作区仅补五页文档，所有Go文件和制品仍匹配本次冻结状态；不重复无变化的应用检查，最终HEAD扫描/仓库门禁与远端CI另核验。
