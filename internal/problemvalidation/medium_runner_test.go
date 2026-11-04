@@ -10,7 +10,7 @@ import (
 )
 
 func TestMediumSourceRunnerAllAnswersPrecedeExecution(t *testing.T) {
-	for _, source := range []string{"library-checker:zalgorithm", "library-checker:suffixarray", "library-checker:staticrmq"} {
+	for _, source := range []string{"library-checker:zalgorithm", "library-checker:suffixarray", "library-checker:staticrmq", "library-checker:static_range_sum", "library-checker:associative_array"} {
 		t.Run(source, func(t *testing.T) { testMediumSourceRunner(t, source) })
 	}
 }
@@ -27,6 +27,12 @@ func testMediumSourceRunner(t *testing.T, source string) {
 		}
 		if source == "library-checker:staticrmq" {
 			b = problemfixture.NewStaticRMQ(t)
+		}
+		if source == "library-checker:static_range_sum" {
+			b = problemfixture.NewStaticRangeSum(t)
+		}
+		if source == "library-checker:associative_array" {
+			b = problemfixture.NewAssociativeArray(t)
 		}
 		_, p := referenceRunnerFixture(t, b, answer)
 		profile, _, err := problemvalidation.ResolveSource(source)

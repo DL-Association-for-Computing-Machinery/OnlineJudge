@@ -73,7 +73,7 @@
 | P1 持久化与任务协议 | 可用测试数据库及关键组件准入 | M0 | [M0 记录](m0-experiment.md)；额度/公平调度待完成 |
 | P2 GNU++17 文本判题 | P1、可用隔离 Linux 节点 | M0 | [M0 记录](m0-experiment.md)；完整验收待完成 |
 | P3 账号与权限 | P1 数据访问基础；会话实验在 M0 完成 | M0 实验、M1 产品、M2 补齐 | [会话实验](../tests/sessionexperiment/README.md)、[凭据持久化](architecture/session-design.md#72-主体凭据持久化与条件更新)、[浏览器账号](account-browser.md)已有分项；邮箱注册/找回、设备管理、权限及完整恢复验证待完成 |
-| P4 题库与发布 | P1、P2 受限验证、P3 权限 | M1 | 已有十题私有适配/管理/预览；[文本组件](checker-admission.md)、独立字节通路和磁盘快照接入[A+B12点/unionfind18点/zalgorithm29点/suffixarray50点及primality固定依赖/13点参考验证](reference-validation.md)，尚未更新数据库状态/生产配置；其余五题完整材料、质量/验证任务/审核/发布待完成，#114仍草稿；staticrmq原第9点SE，新增诊断后一次27AC未复现，#119仍草稿/未准入 |
+| P4 题库与发布 | P1、P2 受限验证、P3 权限 | M1 | 已有十题私有适配/管理/预览；[文本组件](checker-admission.md)、独立字节通路和磁盘快照接入[A+B12点/unionfind18点/zalgorithm29点/suffixarray50点/primality固定依赖13点/static_range_sum11点/associative_array20点参考验证](reference-validation.md)，尚未更新数据库状态/生产配置；staticrmq27点候选正在整合，原第9点SE及后续单次未复现不解除准入阻断；其余两题完整材料、质量/验证任务/审核/发布待完成，#114/#119仍草稿；新来源通过不追认历史失败或证明长期稳定 |
 | P5 训练前端 | P3、P4 和真实提交接口 | M1 | 未开始 |
 | P6 试用运行与验收 | 日志及预算随 P1/P2 建立；发布验收依赖 P3—P5 | M1，M2 回归 | 未开始 |
 | P7 完整训练补齐 | M1、各语言与检查器准入 | M2 | 未开始 |

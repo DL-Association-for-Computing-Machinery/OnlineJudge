@@ -74,7 +74,11 @@ docker --context desktop-linux run --rm --network none --read-only \
 
 ### 私有草稿参考验证
 
-主线已验证固定Library Checker A+B完整12点、unionfind完整18点、zalgorithm完整29点、suffixarray完整50点及primality_test固定依赖/完整13点。本分支staticrmq候选原27点试验第9点SE、后18点未运行；合入Host诊断后，一次预注册观测完整27点AC/Stop，仅说明该条件下未复现，旧失败与准入阻断保持。证据归[调查](docs/reference-validation-investigation.md#staticrmq单次host边界观测)与[交付记录](docs/delivery-log.md)。维护入口不写数据库验证状态或发布。需要已配置且停止的专用槽、已有固定镜像与Docker Desktop、macOS arm64；命令不会自动创建、替换或恢复槽。使用已有Go1.26.10工具链镜像构建独立宿主产物（不与Linux检查共用输出）：
+维护入口已验证固定Library Checker A+B完整12点、unionfind完整18点、zalgorithm完整29点、suffixarray完整50点、primality_test固定依赖/完整13点、static_range_sum完整11点及associative_array完整20点。历史启动/运行故障仍保留，根因未知，不据新通过宣称故障修复或长期稳定，证据归[交付记录](docs/delivery-log.md)。入口不写数据库验证状态或发布。需要已配置且停止的专用槽、已有固定镜像与Docker Desktop、macOS arm64；命令不会自动创建、替换或恢复槽。使用已有Go1.26.10工具链镜像构建独立宿主产物（不与Linux检查共用输出）：
+
+`associative_array`使用512MiB完整材料总预算、input48MiB、stdout/checker8MiB、payload1GiB，独立CPU5秒/wall10秒，保留更严的整体3分钟和原medium物理槽/锁。同次48MiB输入→8MiB输出、完整20AC/Stop及随后独立原六来源回归已通过；[参考合同](docs/reference-validation.md#associative_array参考验证)与旧失败限制分开记录。
+
+本分支staticrmq候选正在整合现行七来源主线，尚未通过本轮验收：原27点试验第9点SE、后18点未运行；合入Host诊断后的一次预注册完整27AC/Stop仅说明当时未复现，旧失败与准入阻断保持。见[调查](docs/reference-validation-investigation.md#staticrmq单次host边界观测)及[交付记录](docs/delivery-log.md)。
 
 ```sh
 REFERENCE_TOOLCHAIN_IMAGE=YOUR_EXISTING_LOCAL_GO_TOOLCHAIN_IMAGE
@@ -121,7 +125,7 @@ Host控制失败时，执行诊断条目可附带有界`host_trace`，区分入�
   -test.run='^(TestControlTrace.*|TestHostTraceCrossesExecutionTransportWithoutOldCause|TestSuccessfulHostThenDecodeFailureHasNoHostTrace)$' -test.timeout=1m
 ```
 
-维护入口使用独立缓存文件通路：源码/输入上传后回读核对SHA-256，输出原始字节拉取，参考答案留在宿主。默认A+B保留2MiB材料/4KiB输出，unionfind使用64MiB匿名磁盘快照与256KiB运行stdout。zalgorithm使用64MiB快照，suffixarray独立准入128MiB快照；两者共用4MiB stdout及256MiB累计传输档位。primality_test独立冻结32MiB以内材料及固定4个头文件，stdout512KiB、6个缓存对象。staticrmq候选配置为256MiB以内完整材料、单input16MiB、stdout4MiB、累计传输512MiB，原失败的准入阻断保持。后四者共用medium槽锁。所有磁盘来源共用进程内一份快照额度，两端账本均按档位计量。编译双流/运行stderr仍各4KiB，磁盘来源的CPU1秒/wall5秒/memory128MiB只作参考试验；其余五题（含staticrmq和#114）仍待完整准入，生产配置不变。
+维护入口使用独立缓存文件通路：源码/输入上传后回读核对SHA-256，输出原始字节拉取，参考答案留在宿主。默认A+B保留2MiB材料/4KiB输出，unionfind使用64MiB匿名磁盘快照与256KiB运行stdout。zalgorithm使用64MiB快照，suffixarray独立准入128MiB快照；两者共用4MiB stdout及256MiB累计传输档位。primality_test独立冻结32MiB以内材料及固定4个头文件，stdout512KiB、6个缓存对象。staticrmq候选配置为256MiB完整材料、input16MiB、stdout4MiB及payload512MiB，原失败的准入阻断保持。static_range_sum使用256MiB完整快照、input16MiB、raw stdout/checker8MiB、payload512MiB。associative_array预算见上段；后六者共用原medium槽锁，所有磁盘来源共用进程内一份快照额度，两端账本均按档位计量。编译双流/运行stderr仍各4KiB；除associative_array外，磁盘来源CPU1秒/wall5秒/memory128MiB保持。staticrmq候选及其余两题仍待完整准入，#114/#119保持草稿，生产配置不变。
 
 unionfind使用独立固定`oj-reference-sandbox`及`slot-reference.lock`，拒非空`OJ_WORKER_M0_SLOT`。维护者确认容器不存在后，可用已有固定镜像显式创建停止槽；已有槽不能替换，须核验owner/配置和停止状态：
 
@@ -141,7 +145,7 @@ env -u OJ_WORKER_M0_SLOT OJ_SANDBOX_EXPERIMENT=1 \
 
 全部材料完整哈希、所有答案检查域先验后才调用execution Verify/Compile；槽启动与Host环境探测更早发生。快照并发/关闭、失败报告和独立槽`recover-reference <original-full-container-id>`的前置要求见[受限参考验证](docs/reference-validation.md)。
 
-zalgorithm、suffixarray、primality_test与staticrmq选择同一固定medium槽及`slot-reference-medium.lock`，串行使用，旧槽不改配置或替换。确认该容器不存在后，用同一已有镜像覆盖entrypoint并传精确固定Cmd，global output8MiB、copy-out仍1MiB；命令自身不创建槽：
+zalgorithm、suffixarray、primality_test、staticrmq、static_range_sum与associative_array选择同一固定medium槽及`slot-reference-medium.lock`，串行使用，旧槽不改配置或替换。确认该容器不存在后，用同一已有镜像覆盖entrypoint并传精确固定Cmd，单文件output-limit8MiB、默认copy-out仍1MiB；命令自身不创建槽：
 
 ```sh
 docker --context desktop-linux create --pull never --name oj-reference-medium-sandbox \
@@ -159,7 +163,7 @@ env -u OJ_WORKER_M0_SLOT OJ_SANDBOX_EXPERIMENT=1 \
   --output /private/tmp/oj-zalgorithm-reference-report --start-stopped-slot
 ```
 
-suffixarray使用同一命令，将`--source-id`改为`library-checker:suffixarray`并使用新的报告目录；不创建另一槽。其独立profile为`p4-lc-suffixarray-reference-desktop-arm64-v1`，仅完整材料总量提高至128MiB，单点input1MiB/answer4MiB、最多64点保持。medium异常恢复显式指定`worker recover-reference library-checker:zalgorithm <original-full-container-id>`或对应suffixarray/primality_test/staticrmq来源；省略source仍指原unionfind槽。均需实验opt-in、清空M0槽变量并先确认旧宿主在途操作排空；不能手工清marker。
+suffixarray使用同一命令，将`--source-id`改为`library-checker:suffixarray`并使用新的报告目录；不创建另一槽。其独立profile为`p4-lc-suffixarray-reference-desktop-arm64-v1`，仅完整材料总量提高至128MiB，单点input1MiB/answer4MiB、最多64点保持。medium异常恢复显式指定`worker recover-reference library-checker:zalgorithm <original-full-container-id>`或对应suffixarray/primality_test/staticrmq/static_range_sum/associative_array来源；省略source仍指原unionfind槽。均需实验opt-in、清空M0槽变量并先确认旧宿主在途操作排空；不能手工清marker。
 
 真实专项另覆盖固定12点CLI、合成正确/错误/编译错误/RE/TLE/MLE/OLE和取消后的停止确认。它不需要PG/Redis或控制端，不进入普通CI：
 
@@ -219,6 +223,26 @@ env -u OJ_WORKER_M0_SLOT OJ_SANDBOX_EXPERIMENT=1 OJ_STATICRMQ_REFERENCE=1 \
   OJ_STATICRMQ_OUTPUT=/private/tmp/oj-staticrmq-suite-report \
   .local/validation-host/worker-validation.test \
   -test.v -test.count=1 -test.run='^TestStaticRMQReferenceSandbox$' -test.timeout=5m
+```
+
+static_range_sum的维护命令选择`--source-id library-checker:static_range_sum`和新报告目录。以下显式专项先验证完整16MiB输入与8MiB stdout/4KiB stderr、stdout超限的窄SIGXFSZ证据及stderr4097拒绝，再运行完整11点CLI。预期负例只接受一条明确验证错误；任何额外清理/取消/截断错误或Stop失败均中止后组。首次启动失败与后续环境改变后的新通过分开记录，不沿用已消耗的协议重试；固定文件限制/collector区分见[参考合同](docs/reference-validation.md#static_range_sum参考验证)：
+
+```sh
+env -u OJ_WORKER_M0_SLOT OJ_SANDBOX_EXPERIMENT=1 OJ_STATIC_RANGE_SUM_REFERENCE=1 \
+  OJ_REFERENCE_BUNDLE=/private/tmp/oj-library-checker-drafts/bundle \
+  OJ_STATIC_RANGE_SUM_OUTPUT=/private/tmp/oj-static-range-sum-suite-report \
+  .local/validation-host/worker-validation.test \
+  -test.v -test.count=1 -test.run='^TestStaticRangeSumReferenceSandbox$' -test.timeout=5m
+```
+
+associative_array命令选择`--source-id library-checker:associative_array`及新报告目录，不创建另一物理槽。专用驱动先验证同次48MiB完整输入与8MiB完整输出；任一清理/Stop失败则不进入20点CLI。更严整体期限和来源预算先固定，不能失败后自动追加：
+
+```sh
+env -u OJ_WORKER_M0_SLOT OJ_SANDBOX_EXPERIMENT=1 OJ_ASSOCIATIVE_ARRAY_REFERENCE=1 \
+  OJ_REFERENCE_BUNDLE=/private/tmp/oj-library-checker-drafts/bundle \
+  OJ_ASSOCIATIVE_ARRAY_OUTPUT=/private/tmp/oj-associative-array-suite-report \
+  .local/validation-host/worker-validation.test \
+  -test.v -test.count=1 -test.failfast -test.run='^TestAssociativeArrayReferenceSandbox$' -test.timeout=5m
 ```
 
 原始字节与容量专项另外使用已停止的M0 secondary槽，覆盖48MiB边界/超限、空输入、全部字节值、缓存stdin→小输出、清理及数值资源采样；它不更新草稿状态或生产限额：

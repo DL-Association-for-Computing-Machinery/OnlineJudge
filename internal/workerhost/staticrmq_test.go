@@ -25,7 +25,7 @@ func TestStaticRMQHostKeepsTierAndItsCumulativePayload(t *testing.T) {
 	if err != nil || h.tier != experiment.ReferenceStaticRMQ || !reflect.DeepEqual(runtime, want.Runtime) || files != want.Files || files.PayloadBytes != 512<<20 {
 		t.Fatal("host normalized tier or disagreed with cache budget")
 	}
-	for _, tier := range []experiment.ReferenceTier{experiment.ReferenceMedium, experiment.ReferencePrimality} {
+	for _, tier := range []experiment.ReferenceTier{experiment.ReferenceSmall, experiment.ReferenceMedium, experiment.ReferencePrimality, experiment.ReferenceStaticRangeSum, experiment.ReferenceAssociativeArray} {
 		old, _ := experiment.ResolveReferenceTier(tier)
 		if err := h.Verify(context.Background(), old.Runtime); err == nil {
 			t.Fatal("host accepted another runtime")

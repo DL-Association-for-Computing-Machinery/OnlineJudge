@@ -71,8 +71,9 @@ func TestStaticRMQPayloadExactCapStillAllowsOwnedCleanup(t *testing.T) {
 }
 
 func TestStaticRMQRuntimeCannotBeBorrowedByExistingTiers(t *testing.T) {
-	for _, tier := range []experiment.ReferenceTier{experiment.ReferenceMedium, experiment.ReferencePrimality, experiment.ReferenceStaticRMQ} {
-		for _, other := range []experiment.ReferenceTier{experiment.ReferenceMedium, experiment.ReferencePrimality, experiment.ReferenceStaticRMQ} {
+	tiers := []experiment.ReferenceTier{experiment.ReferenceSmall, experiment.ReferenceMedium, experiment.ReferencePrimality, experiment.ReferenceStaticRMQ, experiment.ReferenceStaticRangeSum, experiment.ReferenceAssociativeArray}
+	for _, tier := range tiers {
+		for _, other := range tiers {
 			if tier == other {
 				continue
 			}

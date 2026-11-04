@@ -33,8 +33,11 @@ func TestStaticRMQReferenceSandbox(t *testing.T) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
-		if err := g.Verify(ctx, c.Runtime); err != nil {
-			t.Fatal(err)
+		verifyCtx, verifyDone := context.WithTimeout(ctx, 10*time.Second)
+		verifyErr := g.Verify(verifyCtx, c.Runtime)
+		verifyDone()
+		if verifyErr != nil {
+			t.Fatal(verifyErr)
 		}
 		referenceStorageSample(t, h, "staticrmq-before-upload")
 		compileCtx, compileDone := context.WithTimeout(ctx, time.Duration(c.Runtime.Compile.Wall)+5*time.Second)
