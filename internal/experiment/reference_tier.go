@@ -21,6 +21,8 @@ const (
 	ReferenceStaticRangeSum ReferenceTier = 6
 	// ReferenceAssociativeArray admits the fixed complete large-input source.
 	ReferenceAssociativeArray ReferenceTier = 7
+	// ReferenceConvolution admits the fixed complete source on its own output slot.
+	ReferenceConvolution ReferenceTier = 8
 )
 
 // ReferenceConfiguration binds runtime and both file-transport budget ledgers.
@@ -36,7 +38,7 @@ func ResolveReferenceTier(tier ReferenceTier) (ReferenceConfiguration, error) {
 	switch tier {
 	case ReferenceSmall:
 		return ReferenceConfiguration{Runtime: PinnedReferenceEnvironment(), Files: PinnedReferenceFiles()}, nil
-	case ReferenceMedium, ReferenceMediumBulk, ReferencePrimality, ReferenceStaticRMQ, ReferenceStaticRangeSum, ReferenceAssociativeArray:
+	case ReferenceMedium, ReferenceMediumBulk, ReferencePrimality, ReferenceStaticRMQ, ReferenceStaticRangeSum, ReferenceAssociativeArray, ReferenceConvolution:
 		p := PinnedReferenceEnvironment()
 		p.ID = "p4-reference-medium-gnu17-desktop-arm64-v1"
 		p.OutputBytes = 4 << 20
@@ -46,12 +48,22 @@ func ResolveReferenceTier(tier ReferenceTier) (ReferenceConfiguration, error) {
 		for i := 0; i+1 < len(p.SandboxCmd); i++ {
 			if p.SandboxCmd[i] == "-output-limit" {
 				p.SandboxCmd[i+1] = "8388608"
+				if tier == ReferenceConvolution {
+					p.SandboxCmd[i+1] = "16777216"
+				}
 			}
 		}
 		p.SandboxArgs = []string{"/opt/go-judge"}
 		f := PinnedReferenceFiles()
 		f.ID = "p4-gojudge-cached-files-medium-v1"
 		f.PayloadBytes = 256 << 20
+		if tier == ReferenceConvolution {
+			p.ID = "p4-convolution-gnu17-desktop-arm64-v1"
+			p.OutputBytes = 16 << 20
+			p.Run = Limits{CPU: 5000000000, Wall: 10000000000, Memory: 128 << 20, Processes: 16}
+			f.ID = "p4-gojudge-cached-convolution-v1"
+			f.PayloadBytes = 2 << 30
+		}
 		if tier == ReferenceStaticRMQ {
 			p.ID = "p4-staticrmq-gnu17-desktop-arm64-v1"
 			f.ID = "p4-gojudge-cached-staticrmq-v1"

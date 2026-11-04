@@ -74,7 +74,7 @@ docker --context desktop-linux run --rm --network none --read-only \
 
 ### 私有草稿参考验证
 
-维护入口已验证固定Library Checker A+B完整12点、unionfind完整18点、zalgorithm完整29点、suffixarray完整50点、primality_test固定依赖/完整13点、static_range_sum完整11点、associative_array完整20点、point_add_range_sum完整21点及staticrmq完整27点。历史启动/运行故障仍保留，根因未知，不据新通过宣称故障修复或长期稳定，证据归[交付记录](docs/delivery-log.md)。入口不写数据库验证状态或发布。需要已配置且停止的专用槽、已有固定镜像与Docker Desktop、macOS arm64；命令不会自动创建、替换或恢复槽。使用已有Go1.26.10工具链镜像构建独立宿主产物（不与Linux检查共用输出）：
+维护入口已验证固定Library Checker A+B完整12点、unionfind完整18点、zalgorithm完整29点、suffixarray完整50点、primality_test固定依赖/完整13点、static_range_sum完整11点、associative_array完整20点、point_add_range_sum完整21点、staticrmq完整27点及convolution_mod完整53点。历史启动/运行故障仍保留，根因未知，不据新通过宣称故障修复或长期稳定，证据归[交付记录](docs/delivery-log.md)。入口不写数据库验证状态或发布。需要已配置且停止的专用槽、已有固定镜像与Docker Desktop、macOS arm64；命令不会自动创建、替换或恢复槽。使用已有Go1.26.10工具链镜像构建独立宿主产物（不与Linux检查共用输出）：
 
 `associative_array`使用512MiB完整材料总预算、input48MiB、stdout/checker8MiB、payload1GiB，独立CPU5秒/wall10秒，保留更严的整体3分钟和原medium物理槽/锁。同次48MiB输入→8MiB输出、完整20AC/Stop及随后独立原六来源回归已通过；[参考合同](docs/reference-validation.md#associative_array参考验证)与旧失败限制分开记录。
 
@@ -127,7 +127,7 @@ Host控制失败时，执行诊断条目可附带有界`host_trace`，区分入�
   -test.run='^(TestControlTrace.*|TestHostTraceCrossesExecutionTransportWithoutOldCause|TestSuccessfulHostThenDecodeFailureHasNoHostTrace)$' -test.timeout=1m
 ```
 
-维护入口使用独立缓存文件通路：源码/输入上传后回读核对SHA-256，输出原始字节拉取，参考答案留在宿主。默认A+B保留2MiB材料/4KiB输出，unionfind使用64MiB匿名磁盘快照与256KiB运行stdout。zalgorithm使用64MiB快照，suffixarray独立准入128MiB快照；两者共用4MiB stdout及256MiB累计传输档位。primality_test独立冻结32MiB以内材料及固定4个头文件，stdout512KiB、6个缓存对象。point_add_range_sum使用input16MiB/完整快照256MiB、stdout4MiB及双端payload512MiB，Runtime保持Medium。staticrmq使用原256MiB完整材料、input16MiB、stdout4MiB与payload512MiB，原失败记录保持。static_range_sum使用256MiB完整快照、input16MiB、raw stdout/checker8MiB、payload512MiB。associative_array预算见上段；后七者共用原medium槽锁，所有磁盘来源共用进程内一份快照额度，两端账本均按档位计量。编译双流/运行stderr仍各4KiB；除associative_array外，磁盘来源CPU1秒/wall5秒/memory128MiB保持。当前版本九来源已通过固定环境接纳，最终CI与合并状态见[PR #119](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/119)；仅convolution_mod仍待独立准入，生产配置不变。
+维护入口使用独立缓存文件通路：源码/输入上传后回读核对SHA-256，输出原始字节拉取，参考答案留在宿主。默认A+B保留2MiB材料/4KiB输出，unionfind使用64MiB匿名磁盘快照与256KiB运行stdout。zalgorithm使用64MiB快照，suffixarray独立准入128MiB快照；两者共用4MiB stdout及256MiB累计传输档位。primality_test独立冻结32MiB以内材料及固定4个头文件，stdout512KiB、6个缓存对象。point_add_range_sum使用input16MiB/完整快照256MiB、stdout4MiB及双端payload512MiB，Runtime保持Medium。staticrmq使用原256MiB完整材料、input16MiB、stdout4MiB与payload512MiB，原失败记录保持。static_range_sum使用256MiB完整快照、input16MiB、raw stdout/checker8MiB、payload512MiB。associative_array预算见上段。zalgorithm、suffixarray、point_add_range_sum、primality_test、staticrmq、static_range_sum、associative_array共用原medium槽锁；convolution_mod使用独立16MiB输出槽与独立锁，snapshot512MiB、input/answer及stdout/checker各16MiB、payload2GiB，所有磁盘来源共用进程内一份快照额度，两端账本均按档位计量。编译双流/运行stderr仍各4KiB；associative_array与convolution_mod独立使用CPU5秒/wall10秒，其余磁盘来源CPU1秒/wall5秒保持，memory128MiB不变。当前版本十来源254点已通过固定环境维护接纳，最终CI与合并状态见[交付记录](docs/delivery-log.md#2026-11-04convolution_mod-十来源固定环境接纳)，生产配置不变。
 
 unionfind使用独立固定`oj-reference-sandbox`及`slot-reference.lock`，拒非空`OJ_WORKER_M0_SLOT`。维护者确认容器不存在后，可用已有固定镜像显式创建停止槽；已有槽不能替换，须核验owner/配置和停止状态：
 
@@ -238,6 +238,25 @@ env -u OJ_WORKER_M0_SLOT OJ_SANDBOX_EXPERIMENT=1 OJ_STATICRMQ_REFERENCE=1 \
   .local/validation-host/worker-validation.test \
   -test.v -test.count=1 -test.run='^TestStaticRMQReferenceSandbox$' -test.timeout=5m
 ```
+
+convolution_mod已通过独立16MiB输出槽的同次输入/输出边界与完整53点验证，预算与限制见[维护合同](docs/reference-validation.md#convolution_mod参考验证)，十来源254点/26子测试接纳及最终CI/合并状态见[交付记录](docs/delivery-log.md#2026-11-04convolution_mod-十来源固定环境接纳)。原第四槽已创建一次并完成本次Stop；以下创建命令仅在确认目标不存在时使用，已有槽不得替换：
+
+```sh
+docker --context desktop-linux create --pull never --name oj-reference-convolution-sandbox \
+  --label owner=onlinejudge.desktop-test --privileged --network none --read-only \
+  --tmpfs /tmp:rw,nosuid,size=128m --shm-size=128m --memory=1g --cpus=1 \
+  --pids-limit=128 --cgroupns private --entrypoint /opt/go-judge \
+  sha256:cd40ffdb32619806a8d97e59fe03e890fe4066835f57efa6ae13f919ef3262c5 \
+  -http-addr 127.0.0.1:5050 -parallelism 1 -no-fallback -file-timeout 1m \
+  -tmp-fs-param size=64m,nr_inodes=4k -output-limit 16777216 -copy-out-limit 1048576
+env -u OJ_WORKER_M0_SLOT OJ_SANDBOX_EXPERIMENT=1 OJ_CONVOLUTION_REFERENCE=1 \
+  OJ_REFERENCE_BUNDLE=/private/tmp/oj-library-checker-drafts/bundle \
+  OJ_CONVOLUTION_OUTPUT=/private/tmp/oj-convolution-suite-report \
+  .local/validation-host/worker-validation.test \
+  -test.v -test.count=1 -test.failfast -test.run='^TestConvolutionReferenceSandbox$' -test.timeout=5m
+```
+
+维护命令显式指定`--source-id library-checker:convolution_mod`；异常恢复指定同一来源及原full ID，遵循原在途控制排空、Stop/PID证据和dirty门禁。专项首组或Stop失败时不进入完整53点CLI，不重试到通过。
 
 static_range_sum的维护命令选择`--source-id library-checker:static_range_sum`和新报告目录。以下显式专项先验证完整16MiB输入与8MiB stdout/4KiB stderr、stdout超限的窄SIGXFSZ证据及stderr4097拒绝，再运行完整11点CLI。预期负例只接受一条明确验证错误；任何额外清理/取消/截断错误或Stop失败均中止后组。首次启动失败与后续环境改变后的新通过分开记录，不沿用已消耗的协议重试；固定文件限制/collector区分见[参考合同](docs/reference-validation.md#static_range_sum参考验证)：
 

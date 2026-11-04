@@ -1,5 +1,40 @@
 # 工程交付记录
 
+## 2026-11-04：convolution_mod 十来源固定环境接纳
+
+冻结源码HEAD `f04dfdfe7d3f8fb3abdfcb61518e2fe176577291`已吸收服务器资源约定纯文档PR #124的主线提交`9b144b0cadedccb8f8e7759343801b2937d6c233`，全部Go/config与已完成离线检查的候选保持。完整backend/race/静态、sandbox vet及Darwin构建通过（`/private/tmp/oj-convolution-backend-20261104.log`）。新增独立tier8/profile/runtime/files和第四槽，旧九来源预算与摘要保持；16MiB input/answer/stdout、512MiB含catalog快照及2GiB累计传输只准入该固定来源，不扩张旧medium槽或生产预算。
+
+原始草稿version `152d7b4c5817c9dfc8f58eaaaaf1e40a6707793ae9213345303d9888bb5f1682`，import revision `bcedb2583e67cba2f61d7d62fb377581012a506acbbb98467fccd8c89461e145`。新题133个原始引用对象426871481B，完整运行Plan材料426604858B（含source/catalog）；十来源全部对象按hash去重为597个、1460825722B。独立未执行题源的准备基准`.local/convolution-plan.json` SHA-256 `85e9b6ef6f241ca2e71d0cbaaeead860f427f96a7cdb699d3e0e6f68bd7af4ff`，plan `4077fcf727e1b6238fae27752b6627ccd16ab2adcaa96631097e6b0d2271aa26`、profile `7311e207d680b3be9276a7a57734785551be167aafa8a39b59148c61f7c9544d`。本次新报告与该非运行基准相等，旧九报告完整Plan/Profile逐字段相等；准备基准从未冒充成功运行报告。
+
+一次协议`/private/tmp/oj-convolution-trial-20261104-protocol.json` SHA-256 `2316e399d1b8995fc4fcbc1634afd9e9f311d0321817990f661162077a924236`冻结最终HEAD、全部Go/config/制品、脚本/helpers、准备基准、槽创建回执、十题版本/来源/有序点集与材料。保持固定Desktop LinuxKit7.0.14/arm64、Engine29.8.1、go-judge v1.13.3/GCC15.3.0；共享独占令牌、原驱动canonical锁、每套`count=1/failfast/timeout5m`、原内部期限和Stop总预算，无重试或恢复。先新题两组，再staticrmq、point_add_range_sum、suffixarray、A+B、unionfind、zalgorithm、primality_test、static_range_sum、associative_array完整原suite；十来源254点AC/Stop、十顶层/26原子子测试RUN/PASS清单均精确匹配。
+
+| 来源 | 点数 | 整套耗时（秒） | report.json SHA-256 |
+| --- | --- | --- | --- |
+| convolution_mod | 53 | 31.55 | `9a64657544ca14e9d7c590c60cf83243207b48f2e1ee03749866848d3a644fdc` |
+| staticrmq | 27 | 16.03 | `a3f6e0b53aad1802b1133bb2a91f0c5d8d6e6c7109f8a05bf54bcf8b87f87932` |
+| point_add_range_sum | 21 | 12.97 | `90b9b9790dc3f3f1c0acbc95d4bac20e299fad5ddf56af3257f84e71244aca55` |
+| suffixarray | 50 | 20.53 | `b4a22ff8ca9e77a0dcbdceba2bf9cea6554a548490104e4fa773c75b3e13e965` |
+| A+B | 12 | 18.96 | `a1a91b9466e5c06072a53e1758ce7204b08d8da9d8fdea0ec777cf6a9cc74071` |
+| unionfind | 18 | 10.47 | `339c35554b220023777d3e86302812f84d40876a477d766c46ea52bc87b36520` |
+| zalgorithm | 29 | 16.76 | `3e14871858d1663b9ace651f4ad63f148de929997c546dcb1357f2587df4fc6a` |
+| primality_test | 13 | 9.70 | `881ee8c0bae897a9ddfc2999a9cccf43807ed9932dac3be720f8b3ba022f0c51` |
+| static_range_sum | 11 | 10.11 | `f762f25e56744389dafbbec392963993cf0e3b9597dac41586bd0fd127d7ee42` |
+| associative_array | 20 | 22.12 | `ffe7482af192d1dbf94ac45bd92fe0b95fb91558d90769dab212d604b02c687e` |
+
+所有报告位于`/private/tmp/oj-convolution-trial-20261104-<source>-report/report.json`，日志、observer结果、独立postflight及验证记录同前缀。汇总`/private/tmp/oj-convolution-trial-20261104-summary.json` SHA-256 `515bf641c50b9e0b8391a8ca9b53d3bd2c6476e3a7c00490bfcc0133f68d1798`；报告目录0700/文件0600、无INCOMPLETE/成功诊断，publication blocked，observer无错误/截断。新题字节组同次16MiB输入/16MiB原始输出/stderr4096全字节核验、stdout cap+1完整窄SIGXFSZ证据及stderr4097严格拒绝均通过，再编译一次完成53点。完整CLI逐点CPU最大191141000ns、memory最大23576576B；CLI wait4-maxrss为129236992B，字节组outer memory.peak样本170569728B。这些计数口径不同，不能相加、充当连续总峰值或证明4核4GB同机服务器容量；本次没有服务器部署或资源实测。
+
+第四槽仅创建一次，回执`/private/tmp/oj-convolution-slot-created-20261104.json` SHA-256 `09fd475857819fbe8f4398d8973153ab5a1910b897f9e7240b5927a8a60e01f5`保留；原full CID `7e6784da27313d56d02d778ee368597e3ef3a3411f5561a17a0422d33712691b`经驱动原有start/Stop生命周期完成，本次最终停止/PID0/私有空锁无占用，原三槽ID/固定配置保留且亦确认停止。本次四槽顺序检查均完成成功，不能将顺序采样宣称为原子快照。外置`save_new`未fsync；排他创建、一次标记及本次成功读回不构成断电恢复下的exactly-once保证或独立备份。冻结Go源码与制品未变，此后仅更新五页文档，不追加真实验收。
+
+旧suffixarray/staticrmq失败及全部历史调查保持，根因和长期稳定仍未知，不追认原失败。当前十题254点只完成固定环境维护参考验证；持久化验证任务、权限下报告接纳、题面/数据质量、非作者终审与原子发布仍未完成，草稿not-run/生产null/publication blocked不变。最终CI与合并状态以本条后续交付回读为准，未部署。
+
+## 2026-11-04：convolution_mod完整材料与独立槽候选
+
+成功fetch后从`origin/main eb51ec9f36822a26b4cb1517566858dcdf733560`建立独立`codex/convolution-reference`。固定53点的133个有效对象引用共426871481B逐哈希核验，完整草稿SHA `7531580fa33906de971ff6b887c22c6ed5340ec4009fbbebb007cbadc0d18826`；源码3284B仅标准头，无编译依赖。统计及对象身份见`/private/tmp/oj-convolution-material-audit-20261104.json`，预算推导归[候选合同](reference-validation.md#convolution_mod参考验证)。材料统计不证明程序CPU/内存或整体3分钟足够。
+
+Astra设计及完整20文件差异复核无阻断；独立tier8及16MiB输出槽保持原封闭Host/Cached/Runner和Stop门禁。通用48MiB输入与16MiB输出预留超过原64MiB live，回归核对零POST/run并清理已知input；合法16MiB输入/输出预留为33MiB+1。完整离线Docker backend格式/vet/静态/race/七Linux命令、sandbox vet及独立Darwin CLI/驱动构建通过，日志`/private/tmp/oj-convolution-backend-20261104.log`；旧九profile摘要、完整53点合成账本/325操作、材料512MiB含catalog精确/+1及双端2GiB边界均通过。AI复核不替代人工审批。
+
+独立只读准备工具已实际冻结完整53点并检查全部答案的文本域，Plan摘要`4077fcf727e1b6238fae27752b6627ccd16ab2adcaa96631097e6b0d2271aa26`、Profile摘要`7311e207d680b3be9276a7a57734785551be167aafa8a39b59148c61f7c9544d`，证据`.local/convolution-plan.json` SHA `85e9b6ef6f241ca2e71d0cbaaeead860f427f96a7cdb699d3e0e6f68bd7af4ff`。辅助程序首次编译因LoadBundle锁参数类型错误失败，修为有界/无链接/常规文件读取及固定锁哈希校验，并补结束context/Sync后，原样材料预检通过（`oj-convolution-plan-preflight-fixed-20261104.log`）；未执行题源。真实字节边界、53点和旧九来源回归均待执行，尚未配置新槽。主线九来源及历史失败结论不因候选改变，数据库not-run/生产null/publication blocked保持，未部署。
+
 ## 2026-11-04：staticrmq 九来源固定环境接纳
 
 候选HEAD `e777ae2b985193ddaf1ec8d647d8697aa13c5964`已吸收主线前置：停止预算修复#123提交`5411cebc283fc1d3f358f36c72be4058ae2c812d`，以及已正常合并#114的squash提交`b20900b2567f959879657d18a196dd6aba86b41a`。完整28文件差异已审查；完整backend、sandbox vet与Darwin构建通过，日志`/private/tmp/oj-staticrmq-readmission-final-backend-20261104.log`。静态/合成回归明确验证Medium与MediumBulk相同Runtime合法互验，同时StaticRMQ与Bulk/其他来源双向拒绝、单文件档位拒绝借用Primality依赖入口，未知档位为0/255。StaticRMQ原Plan/Profile及材料、运行、传输、清理与Stop预算保持；AI审查不代替人工审批。

@@ -4,6 +4,8 @@
 
 ## 当前状态
 
+convolution_mod的完整材料/16MiB输入答案、共享快照、封闭tier8及双端2GiB账本、独立槽与错Cmd/跨档位拒绝归普通backend。`TestConvolutionReferenceSandbox`仅在sandbox标签、Darwin arm64、`OJ_CONVOLUTION_REFERENCE=1`与实验opt-in下运行同次16MiB输入/输出边界、窄OLE证据及完整53点；失败或Stop未确认即停止。一次十来源254点/26子测试、独立四槽顺序后置、预备新Plan/Profile与旧九完整Plan/Profile核对均通过；普通CI仍不创建槽或执行题源，不替代这次固定环境证据。最终CI/合并状态与证据限制见[交付记录](delivery-log.md#2026-11-04convolution_mod-十来源固定环境接纳)。
+
 `tests/governance/test_problem_sources.py` 验证离线题源工具的来源哈希、完整集合、安全提取及输出/清理失败边界，随 governance 执行；不下载或执行外部题源程序。十题完整数据生成/validator/checker只由 README 的显式本地 Docker 命令运行，不进入普通 CI，也不构成生产 Worker/SPJ 或 P4 发布验收。
 
 `internal/judging`的独立Library Checker文本组件及M0回归随backend执行；`tests/checkercompat`仅在显式`checkercompat`标签和README专用断网/只读/非root Docker中运行锁定上游wcmp，不进入普通CI。组件差分不改草稿not-run或代替本站受限程序验证；支持域及预算见[准入约定](checker-admission.md)。
@@ -18,7 +20,7 @@ Host控制失败五阶段采样、冻结阶段/整体收尾耗时区分、直接
 
 unionfind完整磁盘快照、Read/Close竞争/配额释放、坏末点零执行、独立profile互斥、诊断/输出分限及collector OLE负例随backend执行；`cmd/worker/unionfind_sandbox_test.go`仅在sandbox标签、darwin/arm64宿主驱动和`OJ_UNIONFIND_VALIDATION=1`下执行完整18点与256KiB真实边界，使用独立reference槽。普通CI不执行此专项，不自动配置/启动新槽，也不据此更新数据库状态或生产预算。
 
-固定来源/封闭Small-Medium-MediumBulk-Primality-StaticRMQ-StaticRangeSum-AssociativeArray档位、未知档位零派发、旧profile摘要与Cmd空值兼容、双端累计配额及九来源停止回归归backend；`cmd/worker/medium_reference_sandbox_test.go`只在sandbox标签、darwin/arm64及`OJ_MEDIUM_REFERENCE=1`下运行完整zalgorithm29点、4MiB collector和8MiB文件边界，使用固定medium槽。`reference_source_sandbox_test.go`共用完整CLI校验，并在`OJ_SUFFIXARRAY_REFERENCE=1`及同样宿主/实验前置条件下验证suffixarray全50点，复用同一槽锁，不创建槽。suffixarray超过64MiB实际磁盘冻结/超过128MiB拒绝、共享额度、坏末点零执行和50点最坏输出/累计计费清理归backend；旧四profile摘要保持。普通CI只检查代码，不执行这些真实专项或自动创建/替换任何槽。
+固定来源/封闭Small-Medium-MediumBulk-Primality-StaticRMQ-StaticRangeSum-AssociativeArray-Convolution档位、未知档位零派发、旧profile摘要与Cmd空值兼容、双端累计配额及十来源停止回归归backend；`cmd/worker/medium_reference_sandbox_test.go`只在sandbox标签、darwin/arm64及`OJ_MEDIUM_REFERENCE=1`下运行完整zalgorithm29点、4MiB collector和8MiB文件边界，使用固定medium槽。`reference_source_sandbox_test.go`共用完整CLI校验，并在`OJ_SUFFIXARRAY_REFERENCE=1`及同样宿主/实验前置条件下验证suffixarray全50点，复用同一槽锁，不创建槽。suffixarray超过64MiB实际磁盘冻结/超过128MiB拒绝、共享额度、坏末点零执行和50点最坏输出/累计计费清理归backend；旧四profile摘要保持。普通CI只检查代码，不执行这些真实专项或自动创建/替换任何槽。
 
 primality固定依赖布局、同文件冻结/关闭竞争、聚合64KiB及路径预检、多文件逐个上传失败/未知回执、原始字节回读、六对象额度、共享独立5秒清理/保留exe及第五来源停止矩阵随backend执行；旧四profile摘要保持。`cmd/worker/primality_sandbox_test.go`仅在sandbox标签、darwin/arm64宿主驱动与`OJ_PRIMALITY_REFERENCE=1`及实验opt-in下运行，先验证可信嵌套include，再验证完整13点；首组失败即停止。它复用medium槽锁但保留独立档位，不进入普通CI或创建/替换槽，不代表数据库验证状态、生产预算或P4发布验收。
 
