@@ -212,9 +212,7 @@ func runReferenceSourceLocked(ctx context.Context, prepared *problem.Prepared, l
 	stopCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	stopErr := host.Stop(stopCtx)
 	cancel()
-	if d := workerhost.StopDetails(stopErr); d != nil {
-		report.StopDiagnostic = &problemvalidation.StopDiagnostic{Stage: d.Stage, Code: d.Code, Observed: d.Observed, Confirmed: d.Confirmed, Probe: d.Probe}
-	}
+	report.StopDiagnostic = referenceStopDiagnostic(workerhost.StopDetails(stopErr))
 	var cleanErr error
 	if stopErr == nil {
 		cleanErr = lock.clean()

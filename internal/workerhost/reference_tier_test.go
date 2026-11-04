@@ -24,7 +24,7 @@ func mediumState(t *testing.T) state {
 
 func TestReferenceTierRejectsUnknownBeforeDispatch(t *testing.T) {
 	ctx := context.Background()
-	for _, tier := range []experiment.ReferenceTier{0, 4, 255} {
+	for _, tier := range []experiment.ReferenceTier{0, 5, 255} {
 		slot, err := ReferenceSlotForTier(tier)
 		if err == nil || slot.ContainerName() != "" || slot.LockName() != "" {
 			t.Fatal("unknown tier became a usable slot")

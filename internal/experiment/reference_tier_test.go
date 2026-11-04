@@ -7,7 +7,7 @@ import (
 )
 
 func TestReferenceTierClosedFreshConfiguration(t *testing.T) {
-	for _, tier := range []ReferenceTier{0, 4, 255} {
+	for _, tier := range []ReferenceTier{0, 5, 255} {
 		if _, err := ResolveReferenceTier(tier); err == nil {
 			t.Fatal("unknown tier accepted", tier)
 		}

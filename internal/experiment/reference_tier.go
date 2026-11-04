@@ -13,6 +13,12 @@ const (
 	ReferenceMedium ReferenceTier = 2
 	// ReferenceMediumBulk retains Medium execution with a larger transfer ledger.
 	ReferenceMediumBulk ReferenceTier = 3
+	// ReferencePrimality admits the fixed dependency-layout trial.
+	ReferencePrimality ReferenceTier = 4
+	// ReferenceStaticRangeSum admits one complete source with larger raw output.
+	ReferenceStaticRangeSum ReferenceTier = 6
+	// ReferenceAssociativeArray admits the fixed complete large-input source.
+	ReferenceAssociativeArray ReferenceTier = 7
 )
 
 // ReferenceConfiguration binds runtime and both file-transport budget ledgers.
@@ -20,14 +26,15 @@ const (
 type ReferenceConfiguration struct {
 	Runtime ExecutionProfile
 	Files   ReferenceFilesProfile
+	Entry   string
 }
 
 // ResolveReferenceTier accepts only the closed set of reviewed configurations.
 func ResolveReferenceTier(tier ReferenceTier) (ReferenceConfiguration, error) {
 	switch tier {
 	case ReferenceSmall:
-		return ReferenceConfiguration{PinnedReferenceEnvironment(), PinnedReferenceFiles()}, nil
-	case ReferenceMedium, ReferenceMediumBulk:
+		return ReferenceConfiguration{Runtime: PinnedReferenceEnvironment(), Files: PinnedReferenceFiles()}, nil
+	case ReferenceMedium, ReferenceMediumBulk, ReferencePrimality, ReferenceStaticRangeSum, ReferenceAssociativeArray:
 		p := PinnedReferenceEnvironment()
 		p.ID = "p4-reference-medium-gnu17-desktop-arm64-v1"
 		p.OutputBytes = 4 << 20
@@ -47,7 +54,28 @@ func ResolveReferenceTier(tier ReferenceTier) (ReferenceConfiguration, error) {
 			f.ID = "p4-gojudge-cached-files-medium-bulk-v1"
 			f.PayloadBytes = 512 << 20
 		}
-		return ReferenceConfiguration{p, f}, nil
+		if tier == ReferenceStaticRangeSum {
+			p.ID = "p4-static-range-sum-gnu17-desktop-arm64-v1"
+			p.OutputBytes = 8 << 20
+			f.ID = "p4-gojudge-cached-static-range-sum-v1"
+			f.PayloadBytes = 512 << 20
+		}
+		if tier == ReferenceAssociativeArray {
+			p.ID = "p4-associative-array-gnu17-desktop-arm64-v1"
+			p.OutputBytes = 8 << 20
+			p.Run = Limits{CPU: 5000000000, Wall: 10000000000, Memory: 128 << 20, Processes: 16}
+			f.ID = "p4-gojudge-cached-associative-array-v1"
+			f.PayloadBytes = 1 << 30
+		}
+		if tier == ReferencePrimality {
+			p.ID = "p4-primality-gnu17-desktop-arm64-v1"
+			p.OutputBytes = 512 << 10
+			p.CompileArgs = []string{"/usr/local/bin/g++", "-std=gnu++17", "-O2", "-pipe", "sol/correct.cpp", "-Icommon", "-o", "main"}
+			f.ID = "p4-gojudge-cached-dependencies-v1"
+			f.Objects = 6 // five compilation files and the reserved executable
+			return ReferenceConfiguration{Runtime: p, Files: f, Entry: "sol/correct.cpp"}, nil
+		}
+		return ReferenceConfiguration{Runtime: p, Files: f}, nil
 	default:
 		return ReferenceConfiguration{}, errors.New("unsupported reference tier")
 	}

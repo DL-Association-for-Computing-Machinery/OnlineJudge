@@ -19,11 +19,13 @@ func TestPointAddReferenceSandbox(t *testing.T) {
 	if os.Getenv("OJ_POINT_ADD_REFERENCE") != "1" || os.Getenv("OJ_SANDBOX_EXPERIMENT") != "1" || os.Getenv("OJ_WORKER_M0_SLOT") != "" || runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
 		t.Fatal("explicit independent Desktop point-add reference experiment required")
 	}
-	t.Run("complete-twenty-one-point-cli", func(t *testing.T) {
+	if !t.Run("complete-twenty-one-point-cli", func(t *testing.T) {
 		referenceSourceCLI(t, "library-checker:point_add_range_sum", "OJ_POINT_ADD_OUTPUT", 21)
-	})
+	}) {
+		return
+	}
 	t.Run("sixteen-MiB-cached-stdin", func(t *testing.T) {
-		h := referenceSandboxHost(t, experiment.ReferenceMediumBulk)
+		h := referenceTierSandboxHost(t, experiment.ReferenceMediumBulk)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 		c, err := experiment.ResolveReferenceTier(experiment.ReferenceMediumBulk)
@@ -35,13 +37,18 @@ func TestPointAddReferenceSandbox(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := g.Verify(ctx, c.Runtime); err != nil {
-			t.Fatal(err)
+		verifyCtx, verifyDone := context.WithTimeout(ctx, 10*time.Second)
+		verifyErr := g.Verify(verifyCtx, c.Runtime)
+		verifyDone()
+		if verifyErr != nil {
+			t.Fatal(verifyErr)
 		}
-		o, err := g.Compile(ctx, c.Runtime, `#include <cstdio>
+		compileCtx, compileDone := context.WithTimeout(ctx, time.Duration(c.Runtime.Compile.Wall)+5*time.Second)
+		o, err := g.Compile(compileCtx, c.Runtime, `#include <cstdio>
 int main(){unsigned char b[65536];unsigned long long n=0,sum=0;size_t k;
 while((k=fread(b,1,sizeof(b),stdin))){n+=k;for(size_t i=0;i<k;i++)sum+=b[i];}
 if(ferror(stdin))return 3;printf("%llu %llu\n",n,sum);}`)
+		compileDone()
 		if err != nil || o.Artifact == "" {
 			t.Fatal("large stdin compile", err)
 		}
@@ -52,7 +59,10 @@ if(ferror(stdin))return 3;printf("%llu %llu\n",n,sum);}`)
 				input[i] = byte(i)
 				sum += uint64(input[i])
 			}
-			out, err := g.Run(ctx, c.Runtime, o.Artifact, input)
+			// Match the Runner's shared upload/readback/run/stdout deadline.
+			runCtx, runDone := context.WithTimeout(ctx, time.Duration(c.Runtime.Run.Wall)+5*time.Second)
+			out, err := g.Run(runCtx, c.Runtime, o.Artifact, input)
+			runDone()
 			v, classifyErr := execution.Classify(out, false)
 			if err != nil || classifyErr != nil || v != "AC" || string(out.Stdout) != fmt.Sprintf("%d %d\n", size, sum) {
 				t.Fatal("large cached stdin under 8MiB output RLIMIT", size, err, classifyErr)
@@ -62,7 +72,9 @@ if(ferror(stdin))return 3;printf("%llu %llu\n",n,sum);}`)
 		if !files.sampled {
 			t.Fatal("large input resource sample missing")
 		}
-		if err := g.Remove(ctx, o.Artifact); err != nil {
+		cleanupCtx, cleanupDone := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cleanupDone()
+		if err := g.Remove(cleanupCtx, o.Artifact); err != nil {
 			t.Fatal(err)
 		}
 		referenceStorageSample(t, h, "bulk-stdin-after-cleanup")

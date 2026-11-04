@@ -47,7 +47,7 @@ func (g *CachedGoJudge) step(payload int64, cleanup bool) error {
 		needed += g.liveObjects
 	} // reserve each existing object's future DELETE
 	if payload < 0 || payload > g.limits.PayloadBytes-g.totalBytes || g.operations+needed > g.limits.Operations {
-		return errors.New("cached operation budget exhausted")
+		return withFailureCode(errors.New("cached operation budget exhausted"), "budget")
 	}
 	g.operations++
 	g.totalBytes += payload
@@ -56,7 +56,7 @@ func (g *CachedGoJudge) step(payload int64, cleanup bool) error {
 
 func (g *CachedGoJudge) reserve(size int64, role string) (*cachedObject, error) {
 	if size < 0 || size > g.limits.FileBytes || size > g.limits.LiveBytes-g.liveBytes || g.liveObjects >= g.limits.Objects {
-		return nil, errors.New("cached live-object budget exhausted")
+		return nil, withFailureCode(errors.New("cached live-object budget exhausted"), "budget")
 	}
 	g.liveBytes += size
 	g.liveObjects++
@@ -65,7 +65,7 @@ func (g *CachedGoJudge) reserve(size int64, role string) (*cachedObject, error) 
 
 func (g *CachedGoJudge) adopt(object *cachedObject, id string) error {
 	if !artifactID.MatchString(id) || g.seen[id] {
-		return errors.New("cached identity unavailable or reused")
+		return withFailureCode(errors.New("cached identity unavailable or reused"), "ownership")
 	}
 	object.id = id
 	g.objects[id] = object
@@ -88,55 +88,66 @@ func (g *CachedGoJudge) release(object *cachedObject) {
 func (g *CachedGoJudge) upload(ctx context.Context, data []byte, role string) (*cachedObject, error) {
 	object, err := g.reserve(int64(len(data)), role)
 	if err != nil {
-		return nil, err
+		return nil, tagFailure(err, "upload", role, "")
 	}
 	if err = g.step(int64(len(data)), false); err != nil {
 		g.release(object)
-		return nil, err
+		return nil, tagFailure(err, "upload", role, "")
 	}
 	id, err := g.files.UploadFile(ctx, data)
 	if err != nil {
-		return object, cachedError(ctx, "cached upload receipt unavailable", err)
+		return object, tagFailure(cachedError(ctx, "cached upload receipt unavailable", err), "upload", role, "")
 	}
 	if err = g.adopt(object, id); err != nil {
-		return object, err
+		return object, tagFailure(err, "upload", role, "")
 	}
 	raw, err := g.read(ctx, object, int64(len(data)))
 	if err != nil {
 		return object, err
 	}
 	if len(raw) != len(data) || sha256.Sum256(raw) != sha256.Sum256(data) {
-		return object, errors.New("cached upload readback integrity failed")
+		return object, failureError("readback", role, "integrity", "cached upload readback integrity failed")
 	}
 	return object, nil
 }
 
 func (g *CachedGoJudge) read(ctx context.Context, object *cachedObject, maximum int64) ([]byte, error) {
+	role, phase := "unknown", "readback"
+	if object != nil {
+		role = object.role
+		if role == "stdout" {
+			phase = "stdout_read"
+		}
+	}
 	if object == nil || g.objects[object.id] != object || maximum < 0 || maximum > object.size {
-		return nil, errors.New("cached read is not owned")
+		return nil, failureError(phase, role, "ownership", "cached read is not owned")
 	}
 	if err := g.step(maximum, false); err != nil {
-		return nil, err
+		return nil, tagFailure(err, phase, role, "")
 	}
 	raw, err := g.files.ReadFile(ctx, object.id, maximum)
 	if err != nil {
-		return nil, cachedError(ctx, "cached read failed", err)
+		return nil, tagFailure(cachedError(ctx, "cached read failed", err), phase, role, "")
 	}
 	if int64(len(raw)) > maximum {
-		return nil, errors.New("cached read exceeds budget")
+		return nil, failureError(phase, role, "invalid_evidence", "cached read exceeds budget")
 	}
 	return raw, nil
 }
 
 func (g *CachedGoJudge) remove(ctx context.Context, object *cachedObject) error {
+	role := "unknown"
+	if object != nil {
+		role = object.role
+	}
 	if object == nil || object.id == "" || g.objects[object.id] != object {
-		return errors.New("cached cleanup is not owned")
+		return failureError("delete", role, "ownership", "cached cleanup is not owned")
 	}
 	if err := g.step(0, true); err != nil {
-		return err
+		return tagFailure(err, "delete", role, "")
 	}
 	if err := g.control.Remove(ctx, object.id); err != nil {
-		return cachedError(ctx, "cached cleanup failed", err)
+		return tagFailure(cachedError(ctx, "cached cleanup failed", err), "delete", role, "")
 	}
 	g.release(object)
 	return nil
@@ -160,5 +171,5 @@ func cachedError(ctx context.Context, label string, err error) error {
 	if cause == nil && errors.Is(err, context.Canceled) {
 		cause = context.Canceled
 	}
-	return errors.Join(errors.New(label), cause)
+	return errors.Join(withFailureMetadata(errors.New(label), err), cause)
 }

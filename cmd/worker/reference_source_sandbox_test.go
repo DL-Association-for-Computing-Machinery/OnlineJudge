@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/workerhost"
 )
@@ -85,40 +84,4 @@ func referenceSourceCLI(t *testing.T, sourceID, outputVariable string, points in
 	}
 	// Darwin bytes; this wait4 counter is not Go heap or concurrent total RSS.
 	t.Logf("complete source=%s draft=%s import=%s plan=%s profile=%s %d AC/stop confirmed; CLI wait4-maxrss-bytes=%d", sourceID, r.Plan.Version, r.Plan.ImportRevision, r.PlanSHA256, r.ProfileSHA256, points, usage.Maxrss)
-}
-
-func referenceSandboxHost(t *testing.T, tier experiment.ReferenceTier) *workerhost.Host {
-	t.Helper()
-	slot, err := workerhost.ReferenceSlotForTier(tier)
-	if err != nil {
-		t.Fatal(err)
-	}
-	lock, err := lockSlotMode(slot.LockName(), false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := lock.dirty(); err != nil {
-		lock.Close()
-		t.Fatal(err)
-	}
-	h, openErr := workerhost.StartReferenceSlot(context.Background(), slot)
-	t.Cleanup(func() {
-		defer lock.Close()
-		if h == nil {
-			return
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-		if err := h.Stop(ctx); err != nil {
-			t.Error("reference stop unconfirmed; preserve quarantine", err)
-			return
-		}
-		if err := lock.clean(); err != nil {
-			t.Error(err)
-		}
-	})
-	if openErr != nil || h == nil {
-		t.Fatal("reference start", openErr)
-	}
-	return h
 }

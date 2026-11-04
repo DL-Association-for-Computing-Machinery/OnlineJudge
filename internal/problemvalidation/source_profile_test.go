@@ -20,6 +20,10 @@ func TestSourceProfilesPreserveOldDigestsAndRejectBorrowing(t *testing.T) {
 	if p.Digest() != "32aa64eb913108ccc089a0548a98cb777f019f37cd4bc349ab87ff0ddd1a515d" {
 		t.Fatal("zalgorithm profile changed")
 	}
+	primality, _, err := problemvalidation.ResolveSource("library-checker:primality_test")
+	if err != nil || primality.Digest() != "68f8cab1263e8c12897c6f0fc3a66ce915ba5296ee3304c03b2a6b5bd3419276" {
+		t.Fatal("primality profile changed", err)
+	}
 	suffix, suffixTier, err := problemvalidation.ResolveSource("library-checker:suffixarray")
 	if err != nil || suffixTier != tier || suffix.Materials.TotalBytes != 128<<20 || p.Materials.TotalBytes != 64<<20 || suffix.Digest() == p.Digest() {
 		t.Fatal("source-specific snapshot admission", err)
@@ -31,11 +35,18 @@ func TestSourceProfilesPreserveOldDigestsAndRejectBorrowing(t *testing.T) {
 	if err != nil || pointTier != experiment.ReferenceMediumBulk || point.Materials.TotalBytes != 256<<20 || point.Materials.InputBytes != 16<<20 || point.Files.PayloadBytes != 512<<20 {
 		t.Fatal("bulk source admission", err)
 	}
+	static, _, err := problemvalidation.ResolveSource("library-checker:static_range_sum")
+	if err != nil || static.Digest() != "501331a58bd9dfe76059e79701c80b7e7ba4d8096f1c93252f38c20d199cb028" {
+		t.Fatal("static_range_sum profile changed", err)
+	}
 	if _, _, err := problemvalidation.ResolveSource("library-checker:unknown"); err == nil {
 		t.Fatal("unknown source accepted")
 	}
 	_, prepared := unionRunnerFixture(t, []byte("5\n"))
 	s := &sandbox{}
+	if _, err := problemvalidation.New(s).ValidateSource(context.Background(), prepared, "library-checker:primality_test"); err == nil || len(s.calls) != 0 {
+		t.Fatal("old source borrowed dependency runtime")
+	}
 	if _, err := problemvalidation.New(s).ValidateSource(context.Background(), prepared, "library-checker:zalgorithm"); err == nil || len(s.calls) != 0 {
 		t.Fatal("source borrowed medium runtime")
 	}
