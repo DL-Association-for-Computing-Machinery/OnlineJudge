@@ -96,7 +96,7 @@ func validationFixture(t *testing.T) *problem.Prepared {
 }
 
 func TestReferenceOwnerStopAndQuarantine(t *testing.T) {
-	for _, sourceID := range []string{"library-checker:aplusb", "library-checker:unionfind", "library-checker:zalgorithm", "library-checker:suffixarray", "library-checker:point_add_range_sum", "library-checker:primality_test", "library-checker:staticrmq", "library-checker:static_range_sum", "library-checker:associative_array"} {
+	for _, sourceID := range []string{"library-checker:aplusb", "library-checker:unionfind", "library-checker:zalgorithm", "library-checker:suffixarray", "library-checker:point_add_range_sum", "library-checker:primality_test", "library-checker:staticrmq", "library-checker:static_range_sum", "library-checker:associative_array", "library-checker:convolution_mod"} {
 		t.Run(sourceID, func(t *testing.T) { testReferenceOwnerStopAndQuarantine(t, sourceID) })
 	}
 }
@@ -127,6 +127,9 @@ func testReferenceOwnerStopAndQuarantine(t *testing.T, sourceID string) {
 				}
 				if sourceID == "library-checker:associative_array" {
 					b = problemfixture.NewAssociativeArray(t)
+				}
+				if sourceID == "library-checker:convolution_mod" {
+					b = problemfixture.NewConvolution(t)
 				}
 				sourcePath := b.Document["provenance"].(map[string]any)["source_path"].(string)
 				b.AddOriginal(t, sourcePath+"/sol/correct.cpp", []byte("int main(){}"))

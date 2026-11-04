@@ -1,5 +1,13 @@
 # 工程交付记录
 
+## 2026-11-04：convolution_mod完整材料与独立槽候选
+
+成功fetch后从`origin/main eb51ec9f36822a26b4cb1517566858dcdf733560`建立独立`codex/convolution-reference`。固定53点的133个有效对象引用共426871481B逐哈希核验，完整草稿SHA `7531580fa33906de971ff6b887c22c6ed5340ec4009fbbebb007cbadc0d18826`；源码3284B仅标准头，无编译依赖。统计及对象身份见`/private/tmp/oj-convolution-material-audit-20261104.json`，预算推导归[候选合同](reference-validation.md#convolution_mod候选)。材料统计不证明程序CPU/内存或整体3分钟足够。
+
+Astra设计及完整20文件差异复核无阻断；独立tier8及16MiB输出槽保持原封闭Host/Cached/Runner和Stop门禁。通用48MiB输入与16MiB输出预留超过原64MiB live，回归核对零POST/run并清理已知input；合法16MiB输入/输出预留为33MiB+1。完整离线Docker backend格式/vet/静态/race/七Linux命令、sandbox vet及独立Darwin CLI/驱动构建通过，日志`/private/tmp/oj-convolution-backend-20261104.log`；旧九profile摘要、完整53点合成账本/325操作、材料512MiB含catalog精确/+1及双端2GiB边界均通过。AI复核不替代人工审批。
+
+独立只读准备工具已实际冻结完整53点并检查全部答案的文本域，Plan摘要`4077fcf727e1b6238fae27752b6627ccd16ab2adcaa96631097e6b0d2271aa26`、Profile摘要`7311e207d680b3be9276a7a57734785551be167aafa8a39b59148c61f7c9544d`，证据`.local/convolution-plan.json` SHA `85e9b6ef6f241ca2e71d0cbaaeead860f427f96a7cdb699d3e0e6f68bd7af4ff`。辅助程序首次编译因LoadBundle锁参数类型错误失败，修为有界/无链接/常规文件读取及固定锁哈希校验，并补结束context/Sync后，原样材料预检通过（`oj-convolution-plan-preflight-fixed-20261104.log`）；未执行题源。真实字节边界、53点和旧九来源回归均待执行，尚未配置新槽。主线九来源及历史失败结论不因候选改变，数据库not-run/生产null/publication blocked保持，未部署。
+
 ## 2026-11-04：staticrmq 九来源固定环境接纳
 
 候选HEAD `e777ae2b985193ddaf1ec8d647d8697aa13c5964`已吸收主线前置：停止预算修复#123提交`5411cebc283fc1d3f358f36c72be4058ae2c812d`，以及已正常合并#114的squash提交`b20900b2567f959879657d18a196dd6aba86b41a`。完整28文件差异已审查；完整backend、sandbox vet与Darwin构建通过，日志`/private/tmp/oj-staticrmq-readmission-final-backend-20261104.log`。静态/合成回归明确验证Medium与MediumBulk相同Runtime合法互验，同时StaticRMQ与Bulk/其他来源双向拒绝、单文件档位拒绝借用Primality依赖入口，未知档位为0/255。StaticRMQ原Plan/Profile及材料、运行、传输、清理与Stop预算保持；AI审查不代替人工审批。

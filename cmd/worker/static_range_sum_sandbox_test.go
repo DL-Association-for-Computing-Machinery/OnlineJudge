@@ -35,20 +35,32 @@ func TestStaticRangeSumReferenceSandbox(t *testing.T) {
 }
 
 func testStaticRangeSumOutputBoundary(t *testing.T) {
-	h := referenceTierSandboxHost(t, experiment.ReferenceStaticRangeSum)
-	c, err := experiment.ResolveReferenceTier(experiment.ReferenceStaticRangeSum)
+	testReferenceOutputBoundary(t, experiment.ReferenceStaticRangeSum, 8<<20, "static-range-sum")
+}
+
+func testReferenceOutputBoundary(t *testing.T, tier experiment.ReferenceTier, outputBytes int, samplePrefix string) {
+	t.Helper()
+	h := referenceTierSandboxHost(t, tier)
+	c, err := experiment.ResolveReferenceTier(tier)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	wire, files := &staticRangeSumProbeTransport{host: h}, &staticRangeSumMeasuredFiles{host: h, t: t}
-	g, err := execution.NewReferenceGoJudgeForTier(wire, h.Verify, files, experiment.ReferenceStaticRangeSum)
+	wire, files := &staticRangeSumProbeTransport{host: h}, &staticRangeSumMeasuredFiles{host: h, t: t, outputBytes: outputBytes, samplePrefix: samplePrefix}
+	g, err := execution.NewReferenceGoJudgeForTier(wire, h.Verify, files, tier)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := g.Verify(ctx, c.Runtime); err != nil {
-		t.Fatal(err)
+	verifyBudget := time.Minute
+	if tier == experiment.ReferenceConvolution {
+		verifyBudget = 10 * time.Second
+	}
+	verifyCtx, verifyDone := context.WithTimeout(ctx, verifyBudget)
+	verifyErr := g.Verify(verifyCtx, c.Runtime)
+	verifyDone()
+	if verifyErr != nil {
+		t.Fatal(verifyErr)
 	}
 	compileCtx, compileDone := context.WithTimeout(ctx, time.Duration(c.Runtime.Compile.Wall)+5*time.Second)
 	o, err := g.Compile(compileCtx, c.Runtime, `#include <cstdio>
@@ -71,10 +83,10 @@ while(n){int k=n;if(k>65536)k=65536;if(write(1,b,k)!=k)return 8;n-=k;}}
 	for i := range pattern {
 		pattern[i] = byte(i)
 	}
-	want := bytes.Repeat(pattern, (8<<20)/len(pattern))
+	want := bytes.Repeat(pattern, outputBytes/len(pattern))
 	for _, q := range []struct{ stdout, stderr, input int }{
-		{8 << 20, 4096, 16 << 20},
-		{(8 << 20) + 1, 4096, 0},
+		{outputBytes, 4096, 16 << 20},
+		{outputBytes + 1, 4096, 0},
 		{1, 4097, 0},
 	} {
 		input := []byte(strconv.Itoa(q.stdout) + " " + strconv.Itoa(q.stderr) + " " + strconv.Itoa(q.input) + "\n")
@@ -106,9 +118,9 @@ while(n){int k=n;if(k>65536)k=65536;if(write(1,b,k)!=k)return 8;n-=k;}}
 		if err != nil || classifyErr != nil || !bytes.Equal(out.Stdout, want) || actual.errorPresent || actual.fileErrors != 0 || out.OutputTruncated {
 			t.Fatal("raw boundary bytes or complete evidence", execution.FailureDetails(err))
 		}
-		if q.stdout == 8<<20 {
+		if q.stdout == outputBytes {
 			if verdict != "AC" || !actual.accepted || actual.exit != 0 || !files.inputSample || !files.outputSample {
-				t.Fatal("exact stdout8MiB/stderr4KiB/input16MiB boundary")
+				t.Fatal("exact stdout/stderr4KiB/input16MiB boundary")
 			}
 		} else if verdict != "OLE" || !actual.ole || actual.exit != 25 || out.Exit != 25 {
 			t.Fatal("SIGXFSZ boundary lacks complete narrow evidence")
@@ -120,7 +132,7 @@ while(n){int k=n;if(k>65536)k=65536;if(write(1,b,k)!=k)return 8;n-=k;}}
 	if err := g.Remove(cleanupCtx, o.Artifact); err != nil {
 		t.Fatal("trusted executable cleanup", execution.FailureDetails(err))
 	}
-	referenceStorageSample(t, h, "static-range-sum-after-cleanup")
+	referenceStorageSample(t, h, samplePrefix+"-after-cleanup")
 }
 
 type staticRangeSumWireEvidence struct {
@@ -185,24 +197,26 @@ type staticRangeSumMeasuredFiles struct {
 	inputSample, outputSample bool
 	lastSize                  int
 	lastSHA                   [32]byte
+	outputBytes               int
+	samplePrefix              string
 }
 
 func (f *staticRangeSumMeasuredFiles) UploadFile(ctx context.Context, raw []byte) (string, error) {
 	id, err := f.host.UploadFile(ctx, raw)
 	if err == nil && len(raw) == 16<<20 {
 		f.inputSample = true
-		referenceStorageSample(f.t, f.host, "static-range-sum-input-live")
+		referenceStorageSample(f.t, f.host, f.samplePrefix+"-input-live")
 	}
 	return id, err
 }
 
 func (f *staticRangeSumMeasuredFiles) ReadFile(ctx context.Context, id string, maximum int64) ([]byte, error) {
 	raw, err := f.host.ReadFile(ctx, id, maximum)
-	if err == nil && maximum == (8<<20)+1 {
+	if err == nil && maximum == int64(f.outputBytes)+1 {
 		f.lastSize, f.lastSHA = len(raw), sha256.Sum256(raw)
-		if len(raw) == 8<<20 && !f.outputSample {
+		if len(raw) == f.outputBytes && !f.outputSample {
 			f.outputSample = true
-			referenceStorageSample(f.t, f.host, "static-range-sum-output-live")
+			referenceStorageSample(f.t, f.host, f.samplePrefix+"-output-live")
 		}
 	}
 	return raw, err

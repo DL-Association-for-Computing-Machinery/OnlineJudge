@@ -56,6 +56,20 @@ func ResolveSource(sourceID string) (Profile, experiment.ReferenceTier, error) {
 		return PinnedProfile(), 0, nil
 	case "library-checker:unionfind":
 		return UnionFindProfile(), experiment.ReferenceSmall, nil
+	case "library-checker:convolution_mod":
+		c, err := experiment.ResolveReferenceTier(experiment.ReferenceConvolution)
+		if err != nil {
+			return Profile{}, 0, err
+		}
+		limits, err := problem.DiskReferenceLimits(sourceID)
+		if err != nil {
+			return Profile{}, 0, err
+		}
+		p := UnionFindProfile()
+		p.ID = "p4-lc-convolution-reference-desktop-arm64-v1"
+		p.Runtime, p.Files, p.Materials = c.Runtime, c.Files, limits
+		p.Text.Bytes = 16 << 20
+		return p, experiment.ReferenceConvolution, nil
 	case "library-checker:associative_array":
 		c, err := experiment.ResolveReferenceTier(experiment.ReferenceAssociativeArray)
 		if err != nil {

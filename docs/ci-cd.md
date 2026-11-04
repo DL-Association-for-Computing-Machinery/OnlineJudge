@@ -4,6 +4,8 @@
 
 ## 当前状态
 
+convolution_mod候选的完整材料/16MiB输入答案、共享快照、封闭tier8及双端2GiB账本、独立槽与错Cmd/跨档位拒绝归普通backend。`TestConvolutionReferenceSandbox`仅在sandbox标签、Darwin arm64、`OJ_CONVOLUTION_REFERENCE=1`与实验opt-in下运行同次16MiB输入/输出边界、窄OLE证据及完整53点；失败或Stop未确认即停止。普通CI不创建独立槽或执行此题源，当前实现与实际准入结果分开记录；旧九来源仍须完整回归。
+
 `tests/governance/test_problem_sources.py` 验证离线题源工具的来源哈希、完整集合、安全提取及输出/清理失败边界，随 governance 执行；不下载或执行外部题源程序。十题完整数据生成/validator/checker只由 README 的显式本地 Docker 命令运行，不进入普通 CI，也不构成生产 Worker/SPJ 或 P4 发布验收。
 
 `internal/judging`的独立Library Checker文本组件及M0回归随backend执行；`tests/checkercompat`仅在显式`checkercompat`标签和README专用断网/只读/非root Docker中运行锁定上游wcmp，不进入普通CI。组件差分不改草稿not-run或代替本站受限程序验证；支持域及预算见[准入约定](checker-admission.md)。

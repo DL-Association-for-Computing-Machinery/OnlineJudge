@@ -133,6 +133,14 @@ unionfind运行输出的正常collector溢出按固定协议作窄适配：[v1.1
 
 输出目录必须是新的绝对路径。解析已有父目录链接后，按目录实际身份检查祖先，拒绝输入bundle内的符号链接及大小写别名路径。目录0700、文件0600；先放置`INCOMPLETE`，最终报告使用排他创建并同步，再移除标记和同步目录。失败/中断保留已有成果，不覆盖、修复或自动删除；写入/同步失败属于未知报告完成状态，须检查命令退出结果和标记，不仅凭JSON中出现passed决定接纳。依赖可信稳定的父目录，不承诺文件系统硬时限、掉电恢复或独立备份。
 
+### convolution_mod候选
+
+固定来源`library-checker:convolution_mod`的完整53点材料已逐哈希核对；输入合计211547577B、最大10485774B，答案合计215043482B、最大10369461B，参考源码3284B且仅使用标准头。候选`ReferenceConvolution=8`使用独立profile/runtime/files身份：含catalog完整材料512MiB、input/answer各16MiB、stdout/checker16MiB，source64KiB/64点及诊断/token4KiB保持。Run CPU5秒（固定info.toml的5.0秒）、wall10秒、memory128MiB/16进程；总阶段3分钟和每Run共享wall+5秒仍可先行拒绝，不代表53次最大wall均能完成。
+
+单file48MiB/live64MiB/4对象/512操作不变，payload仅此档位为2GiB。按请求cap最坏累计`2*3284 + 2*211547577 + 53*(16777216+1) = 1312294223`B、325次execution逻辑操作。合法input16MiB+stdout预留16MiB+1+exe预留1MiB为33MiB+1；通用48MiB输入与该输出预留超过64MiB，应在运行前拒绝，不扩大存活预算。
+
+该候选使用独立`oj-reference-convolution-sandbox`与`slot-reference-convolution.lock`，固定Cmd的output-limit为16MiB，其余镜像和隔离不变。旧medium槽的8MiB全局文件上限不能容纳此题，不修改其配置。真实专项先核验同次16MiB输入/16MiB原始输出（含非UTF-8字节）/stderr4096，再检查stdout cap+1的完整SIGXFSZ窄证据与stderr4097拒绝，任意附加清理/取消错误失败；停止确认后才运行完整53点。实现/合成检查与真实准入分开，当前候选尚未完成真实验收，不改变上述主线九来源结论或数据库not-run/生产null/publication blocked。
+
 ## 执行失败诊断
 
 2026-11-04的[停止故障调查](reference-validation-investigation.md)保留新主线独立50点、预注册前置序列未复现及旧stdout删除访问日志异常时间差的历史证据。旧根因仍未知，HTTP200不能证明旧客户端成功；后续吸收#123的新版本已完成[八来源接纳](delivery-log.md#2026-11-04point_add_range_sum-八来源固定环境接纳)，不追认旧失败。

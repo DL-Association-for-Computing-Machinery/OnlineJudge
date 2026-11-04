@@ -11,6 +11,8 @@ type referenceDependencyAdmission struct{ original, target string }
 
 func referenceDiskAdmission(sourceID string) (diskReferenceAdmission, error) {
 	switch sourceID {
+	case "library-checker:convolution_mod":
+		return diskReferenceAdmission{path: "convolution/convolution_mod", limits: ReferenceLimits{SourceBytes: 64 << 10, InputBytes: 16 << 20, AnswerBytes: 16 << 20, TotalBytes: 512 << 20, Cases: 64}}, nil
 	case "library-checker:unionfind":
 		return diskReferenceAdmission{path: "data_structure/unionfind", limits: UnionFindReferenceLimits()}, nil
 	case "library-checker:zalgorithm":

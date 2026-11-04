@@ -45,6 +45,8 @@ func (s ReferenceTierSlot) configuration() (name, lock string, tier experiment.R
 	switch s.tier {
 	case experiment.ReferenceSmall:
 		return ReferenceSlot{}.ContainerName(), ReferenceSlot{}.LockName(), s.tier, nil
+	case experiment.ReferenceConvolution:
+		return "oj-reference-convolution-sandbox", "slot-reference-convolution.lock", s.tier, nil
 	case experiment.ReferenceMedium, experiment.ReferenceMediumBulk, experiment.ReferencePrimality, experiment.ReferenceStaticRMQ, experiment.ReferenceStaticRangeSum, experiment.ReferenceAssociativeArray:
 		return "oj-reference-medium-sandbox", "slot-reference-medium.lock", s.tier, nil
 	default:

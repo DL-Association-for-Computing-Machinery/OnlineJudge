@@ -239,6 +239,25 @@ env -u OJ_WORKER_M0_SLOT OJ_SANDBOX_EXPERIMENT=1 OJ_STATICRMQ_REFERENCE=1 \
   -test.v -test.count=1 -test.run='^TestStaticRMQReferenceSandbox$' -test.timeout=5m
 ```
 
+convolution_mod候选需要独立16MiB输出槽，当前尚未完成真实验收，预算与限制见[候选合同](docs/reference-validation.md#convolution_mod候选)。仅确认目标容器不存在后，使用已有固定镜像显式创建停止槽；后续使用原full ID和完整隔离核验，不替换旧槽：
+
+```sh
+docker --context desktop-linux create --pull never --name oj-reference-convolution-sandbox \
+  --label owner=onlinejudge.desktop-test --privileged --network none --read-only \
+  --tmpfs /tmp:rw,nosuid,size=128m --shm-size=128m --memory=1g --cpus=1 \
+  --pids-limit=128 --cgroupns private --entrypoint /opt/go-judge \
+  sha256:cd40ffdb32619806a8d97e59fe03e890fe4066835f57efa6ae13f919ef3262c5 \
+  -http-addr 127.0.0.1:5050 -parallelism 1 -no-fallback -file-timeout 1m \
+  -tmp-fs-param size=64m,nr_inodes=4k -output-limit 16777216 -copy-out-limit 1048576
+env -u OJ_WORKER_M0_SLOT OJ_SANDBOX_EXPERIMENT=1 OJ_CONVOLUTION_REFERENCE=1 \
+  OJ_REFERENCE_BUNDLE=/private/tmp/oj-library-checker-drafts/bundle \
+  OJ_CONVOLUTION_OUTPUT=/private/tmp/oj-convolution-suite-report \
+  .local/validation-host/worker-validation.test \
+  -test.v -test.count=1 -test.failfast -test.run='^TestConvolutionReferenceSandbox$' -test.timeout=5m
+```
+
+维护命令显式指定`--source-id library-checker:convolution_mod`；异常恢复指定同一来源及原full ID，遵循原在途控制排空、Stop/PID证据和dirty门禁。专项首组或Stop失败时不进入完整53点CLI，不重试到通过。
+
 static_range_sum的维护命令选择`--source-id library-checker:static_range_sum`和新报告目录。以下显式专项先验证完整16MiB输入与8MiB stdout/4KiB stderr、stdout超限的窄SIGXFSZ证据及stderr4097拒绝，再运行完整11点CLI。预期负例只接受一条明确验证错误；任何额外清理/取消/截断错误或Stop失败均中止后组。首次启动失败与后续环境改变后的新通过分开记录，不沿用已消耗的协议重试；固定文件限制/collector区分见[参考合同](docs/reference-validation.md#static_range_sum参考验证)：
 
 ```sh
