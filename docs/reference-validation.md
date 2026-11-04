@@ -147,6 +147,10 @@ inspect/command的`call_attempted`只证明调用该函数；`local_process_star
 
 ## 槽所有权与停止
 
+Stop总期限仍取调用方期限与10秒中的较早者。drain与首次容器生命周期核验成功后，进程枚举和kill分别使用独立子期限：最多2秒，且最多使用进入该阶段时总剩余时间的一半；每条本地命令返回并取消其子context后，才派发下一条命令。后续状态/PID确认仍受原总期限约束，不重试或增加总预算。此内部时间分配为终止及确认留出机会，可能使原本能在10秒内完成的慢命令提前失败；本地WaitDelay及调度仍可能耗尽预留时间，不保证信号送达或绝对墙钟上界。
+
+首次生命周期核验失败不发信号；枚举失败时对已核验生命周期仍尝试kill，但缺少进程证据始终返回失败、保持隔离，不能仅因容器停止就清除标记。历史#114的kill/deadline没有本地启动分段证据，本改进不认定其旧根因，也不自动解除#114/#119的接纳阻断。
+
 显式`OJ_SANDBOX_EXPERIMENT=1`和跨checkout文件锁仍是前置条件。默认A+B使用primary/secondary；unionfind使用固定small reference槽，zalgorithm、suffixarray、point_add_range_sum、primality_test、static_range_sum与associative_array共用固定medium reference槽及同一锁，均拒绝非空`OJ_WORKER_M0_SLOT`，不从M0 parser选择新槽。quarantine不自动恢复。命令先持锁并同步dirty标记，再接触沙箱。`--start-stopped-slot`只启动预存在、停止/PID0、固定owner及完整隔离配置匹配的槽，使用原full ID，不创建、替换、重启运行中容器或接管其他项目。返回Host绑定该ID与新StartedAt；运行中每次请求继续校验同一生命周期。
 
 正常退出和失败均在独立context中停止并排空Host，核验容器停止及已观察PID消失；只有确认后才清理marker。启动回执未知时仍尝试确认原生命周期停止；拿不到绑定Host、停止未确认或marker同步失败则保留隔离。启动/验证报错后若已确认停止且清标记成功，可以解除marker，但本次报告仍失败。原[受控恢复](../README.md#worker-异常后的受控解封)步骤继续适用。取消发生在Run、制品清理或Stop期间都不得生成通过状态。不会为了保存报告恢复旧槽或再次执行未知操作。

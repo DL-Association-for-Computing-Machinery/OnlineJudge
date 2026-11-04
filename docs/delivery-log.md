@@ -1,5 +1,13 @@
 # 工程交付记录
 
+## 2026-11-04：停止阶段预留终止与确认时间
+
+原Stop枚举与kill共享整个10秒期限，枚举耗尽后可出现kill调用已尝试但本地进程未启动。独立修复仅调整内部时间分配：枚举与kill各最多2秒且不超过进入阶段时剩余总期限一半，串行返回后取消子context；drain/生命周期验证、总10秒、零重试、PID确认和失败隔离不变。枚举失败后kill成功仍不能通过停止验收。这是可复现的预算分配改进，不宣称定位旧#114/#119首次运行阻塞。
+
+四包race回归通过：workerhost、execution、problemvalidation、cmd/worker；新增受信shell证明枚举子期限到期后kill仍实际启动，短父期限与独立取消、kill超时保持失败。原整体期限耗尽诊断继续覆盖本地收尾消耗所有剩余时间。完整backend格式/vet/静态/race/七Linux命令构建、sandbox vet和Darwin专项构建通过；Astra针对性实现/测试/协议复核无阻断，AI不替代人工审批。
+
+原固定secondary槽、完整材料/源码/制品冻结并登记一次兼容协议后，A+B九组18.62秒全部通过（完整12点CLI、AC/WA/CE/RE/TLE/MLE/OLE/取消），每组停止确认；完整Plan/Profile保持。报告`/private/tmp/oj-stop-reserve-observation-20261104-report/report.json` SHA-256 `4f890571dc0e8a2f7ab706e4c918abba3a839d07e56d8496c188b77c38c33fae`，协议/完整日志/结果/后置/验证摘要同前缀；观察器无错误/截断，三原槽停止/PID0/私有空锁且无占用。未制造真实Docker故障或追加试验，未改服务配置、来源预算或原失败结论。最终CI/合并状态以远端精确head为准；两来源仍须吸收修复后各自完成新接纳，历史根因与长期稳定未知。
+
 ## 2026-11-04：point_add_range_sum 候选整合主线（未验收）
 
 为恢复候选PR #114与现行主线的兼容，整合已交付七来源及停止/执行/Host诊断；保留枚举3的MediumBulk和原预算，不引入尚未合并的staticrmq档位5。缓存stdin驱动改为Verify10秒、Compile wall+5秒、每次Run wall+5秒及独立5秒制品清理，沿用原两组与8MiB+1/16MiB输入及断言。此处仅记录整合方向；本轮测试和真实专项待执行，不能据此解除下述suffixarray历史失败阻断或宣称已交付。
