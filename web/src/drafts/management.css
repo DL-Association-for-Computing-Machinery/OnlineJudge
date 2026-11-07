@@ -1,9 +1,10 @@
-.management-page section { margin-block: 32px; }
-.management-page h2 { font-size: 22px; }
+.management-page section { margin-block: 28px; }
+.management-page h2 { font-size: 20px; margin: 0; }
 .management-page h3 { margin: 0; font-size: 17px; overflow-wrap: anywhere; }
 .management-notice { min-height: 2em; }
-.management-list { padding: 0; list-style: none; border-top: 1px solid var(--line); }
-.management-list > li { display: flex; align-items: start; justify-content: space-between; gap: 24px; padding-block: 22px; border-bottom: 1px solid var(--line); }
+.management-list { padding: 0; margin: 12px 0 0; list-style: none; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden; }
+.management-list > li { display: flex; align-items: start; justify-content: space-between; gap: 24px; padding: 20px 24px; border-bottom: 1px solid var(--line); }
+.management-list > li:last-child { border-bottom: 0; }
 .management-list > li > div:first-child { min-width: 0; }
 .management-list code { overflow-wrap: anywhere; font-size: 13px; }
 .management-list details { margin-block: 8px; color: var(--muted); }

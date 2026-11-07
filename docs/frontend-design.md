@@ -19,7 +19,7 @@
 | `/preview/problems/:id` | 本地合成题面、CodeMirror C++ 编辑、键盘/拖动分栏、文件导入和下载；提交禁用 |
 | `/submissions` | 明确提示正式提交记录尚未开放 |
 
-首页不放统计卡片、侧栏或营销区域。白底、深色正文、克制的橙色操作色，系统字体不请求外部字体。按钮、输入框、导航和表格共用 CSS 变量及可见键盘焦点；只有 150ms 状态过渡和 160ms 折叠内容淡入，遵守 `prefers-reduced-motion`。参考 [shadcn/ui](https://github.com/shadcn-ui/ui) 的基础控件层次与 [Radix 动画指南](https://www.radix-ui.com/primitives/docs/guides/animation)，没有复制其实现或新增动画依赖；Tailwind/shadcn 的后续技术路线不因此改变。当前保留窄窗口基本可用性回归，不代表新的移动端设计已验收。
+首页不放统计卡片、侧栏或营销区域。暖灰页面底色上用白色描边卡片承载内容（题库表格、登录、账号、管理列表、样例、编辑器面板），难度为绿/橙胶囊，页头吸顶；深色正文、克制的橙色操作色，系统字体不请求外部字体。令牌（`--page`、`--line-strong`、`--radius-lg`、语义色）集中在 `styles.css`。按钮、输入框、导航和表格共用 CSS 变量及可见键盘焦点；只有 150ms 状态过渡和 160ms 折叠内容淡入，遵守 `prefers-reduced-motion`。参考 [shadcn/ui](https://github.com/shadcn-ui/ui) 的基础控件层次与 [Radix 动画指南](https://www.radix-ui.com/primitives/docs/guides/animation)，没有复制其实现或新增动画依赖；Tailwind/shadcn 的后续技术路线不因此改变。当前保留窄窗口基本可用性回归，不代表新的移动端设计已验收。
 
 ## 生命周期与依赖
 
