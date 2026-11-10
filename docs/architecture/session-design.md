@@ -185,7 +185,7 @@ SCS 的官方 goredisstore 文档示例采用 go-redis/v9，默认键含 token�
 
 这些方法**不是公开账号管理或完整登录/自动升级服务**。`enabled` 只是账号开关，不代表邮箱已验证、训练访问或管理权限。`RehashCAS` 无法证明新旧记录属于同一密码：受信用例必须先成功验证旧快照，再以同一密码生成 Current，全部 KDF 在事务/行锁外进行，最后提交 CAS。重置令牌消费、操作人授权、审计、真实发会话前复核及 Redis 撤权联动仍待实现；不能凭旧 `Get`/`State` 结果发放权限。
 
-主体表由迁移 3 引入；当前 API 严格要求 schema 10，邮箱模型始于5（第 7.7 节），最新迁移与回退见[参考申请合同](../reference-requests.md#迁移与回退)。旧二进制按各自精确版本检查拒绝新schema，不支持滚动混跑。实际启用须停止旧实例、独立迁移、启动匹配新版，本次没有部署。迁移 3 的 Down 仍按身份表→submissions 的固定顺序取得排他表锁；仅当 `identity_credentials` 与 `submissions` 均为空才允许移除主体表，不要求材料表或 Worker 表也为空。迁移 4/5 的回退另受第 7.6/7.7 节保护。跨多个迁移的 `DownTo` 不承诺整体原子，不能用回退现有用户/提交库代替前滚修复。数据库旧备份还会回退账号事实及版本，两代次 CAS 不替代维护隔离、恢复代次与最新安全状态核对。
+主体表由迁移 3 引入；当前 API 严格要求 schema 11，邮箱模型始于5（第 7.7 节），最新迁移与回退见[参考申请合同](../reference-requests.md#迁移与回退)。旧二进制按各自精确版本检查拒绝新schema，不支持滚动混跑。实际启用须停止旧实例、独立迁移、启动匹配新版，本次没有部署。迁移 3 的 Down 仍按身份表→submissions 的固定顺序取得排他表锁；仅当 `identity_credentials` 与 `submissions` 均为空才允许移除主体表，不要求材料表或 Worker 表也为空。迁移 4/5 的回退另受第 7.6/7.7 节保护。跨多个迁移的 `DownTo` 不承诺整体原子，不能用回退现有用户/提交库代替前滚修复。数据库旧备份还会回退账号事实及版本，两代次 CAS 不替代维护隔离、恢复代次与最新安全状态核对。
 
 仅新增主键索引：支持主体读取及版本条件 UPDATE 的点查，代价是每行索引存储及初始化/更新的维护，不为版本字段另建二级索引。两模块从同一权威迁移生成各自的查询包；关闭未使用模型生成，避免将身份私有模型散入提交模块；生成差异检查同时覆盖两包。[PostgreSQL 14 READ COMMITTED](https://www.postgresql.org/docs/14/transaction-iso.html#XACT-READ-COMMITTED) 的等待后条件重查由真实锁实验验证，实际计划与边界结果归交付日志，不据此宣称容量或完整账号验收。
 
@@ -253,7 +253,7 @@ Begin/Finish 是维护原语，**不执行或证明**旧 API 隔离、Redis 清�
 
 `PersonalByID` 与 `LookupPersonalByEmail` 只返回无密码 State、Email 和 EmailVerified 的时点元数据；通用主体没有邮箱时返回 NotFound。它们不验证密码、不发会话、不授权训练。Enabled 与 EmailVerified 独立，验证不能复活封禁；本次只验证事实分离，未接入“未验证不能提交”的业务门禁，不代表 AC25 已完成。公开注册前仍须解决未验证占位保留/清理、重复注册安全恢复/重发、防枚举、令牌原子消费、邮件任务与最终权限复核，不能直接暴露 InitializePersonal 为 signup。
 
-邮箱模型始于schema5，当前 API 要求 schema 10（后续[积压准入](../submission-backlog.md)、[私有草稿](../problem-drafts.md#私有草稿入库与本人读取)及[参考申请](../reference-requests.md#迁移与回退)）；旧二进制按各自精确版本检查在启动时拒绝新schema，运行中旧进程不会自动停止，须排空/停旧实例、独立迁移后启动匹配新版，无滚动混跑或部署。迁移不为旧主体补邮箱或角色。Down5按凭据→邮箱顺序加排他表锁并拒绝任何非空映射（包括未验证/禁用），需前滚修复；只有邮箱表为空才可移除，保留既有通用凭据、全局恢复及提交数据。此锁序与初始化一致，避免先锁邮箱再删除外键触发器时反向请求凭据锁；不承诺任意并发读取/DDL无死锁，迁移仍须在维护期协调。多个Down不整体原子，Down5成功不豁免迁移4/3的保护。实际初始化分别在第一写/第二写后等待，与Down的提交/回滚交错、原始显示、唯一竞争和无孤儿证据见[交付日志](../delivery-log.md)。
+邮箱模型始于schema5，当前 API 要求 schema 11（后续[积压准入](../submission-backlog.md)、[私有草稿](../problem-drafts.md#私有草稿入库与本人读取)及[参考申请](../reference-requests.md#迁移与回退)）；旧二进制按各自精确版本检查在启动时拒绝新schema，运行中旧进程不会自动停止，须排空/停旧实例、独立迁移后启动匹配新版，无滚动混跑或部署。迁移不为旧主体补邮箱或角色。Down5按凭据→邮箱顺序加排他表锁并拒绝任何非空映射（包括未验证/禁用），需前滚修复；只有邮箱表为空才可移除，保留既有通用凭据、全局恢复及提交数据。此锁序与初始化一致，避免先锁邮箱再删除外键触发器时反向请求凭据锁；不承诺任意并发读取/DDL无死锁，迁移仍须在维护期协调。多个Down不整体原子，Down5成功不豁免迁移4/3的保护。实际初始化分别在第一写/第二写后等待，与Down的提交/回滚交错、原始显示、唯一竞争和无孤儿证据见[交付日志](../delivery-log.md)。
 
 ### 7.8 个人凭据到会话门禁的认证路径
 
@@ -279,7 +279,7 @@ Redis 只存令牌 SHA-256 摘要。七个 Lua 文件组成六个脚本入口，
 
 客户端锁定 `go-redis/v9 v9.23.0`（BSD-2-Clause），沿用实验锁定版本；所需 cpuid/v2 从 2.3.0 提升至 2.4.0，其他传递版本归 go.mod/go.sum。配置显式超时/物理连接上限，禁止隐式命令重试及额外 pipeline 池，一次拨号，禁用维护通知和身份 SETINFO。相关固定版[选项源码](https://github.com/redis/go-redis/blob/v9.23.0/options.go)、[依赖](https://github.com/redis/go-redis/blob/v9.23.0/go.mod)、[许可证](https://github.com/redis/go-redis/blob/v9.23.0/LICENSE)与 [SETINFO 历史公告](https://github.com/redis/go-redis/security/advisories/GHSA-92cp-5422-2mw7)已核对；完整依赖漏洞检查继续由 CI 执行。调用方共享实例并负责关闭客户端、多 API 总预算及整个调用期限。
 
-构造检查当前服务为 Redis 7.2.x standalone primary、noeviction，持续配置和恢复隔离由运维保证；启动检查不能证明后续自动切换/时钟/回档安全。CI隔离夹具固定Redis7.2.17镜像摘要，真实PG迁移到当前 schema 10，协议本身不新增权威会话表。测试含双客户端并发三名额、精确重试、实际TTL、坏字段/索引、超时/OOM、PG锁等待/连接终止与未知结果，以及私有草稿消费者在材料持久化后重新读取会话；注入丢回执、TIME错误和改写测试脚本后的部分写入须与真实网络故障区分。[参考申请](../reference-requests.md)的服务/PG组合测试使用合成会话观察，不借用这些会话专项结果声称申请已接通真实Redis/HTTP。命令见[README](../../README.md)，实测归[交付记录](../delivery-log.md)。协议回退须先停止依赖调用方并隔离/换代次处理旧会话空间，schema各自按所属合同回退，不盲目复用旧数据。完整HTTP/SCS生命周期、验证邮箱与训练权限、轮换/其他策略、恢复编排、生产容量及完整AC23/M0均待验收。
+构造检查当前服务为 Redis 7.2.x standalone primary、noeviction，持续配置和恢复隔离由运维保证；启动检查不能证明后续自动切换/时钟/回档安全。CI隔离夹具固定Redis7.2.17镜像摘要，真实PG迁移到当前 schema 11，协议本身不新增权威会话表。测试含双客户端并发三名额、精确重试、实际TTL、坏字段/索引、超时/OOM、PG锁等待/连接终止与未知结果，以及私有草稿消费者在材料持久化后重新读取会话；注入丢回执、TIME错误和改写测试脚本后的部分写入须与真实网络故障区分。[参考申请](../reference-requests.md)的服务/PG组合测试使用合成会话观察，不借用这些会话专项结果声称申请已接通真实Redis/HTTP。命令见[README](../../README.md)，实测归[交付记录](../delivery-log.md)。协议回退须先停止依赖调用方并隔离/换代次处理旧会话空间，schema各自按所属合同回退，不盲目复用旧数据。完整HTTP/SCS生命周期、验证邮箱与训练权限、轮换/其他策略、恢复编排、生产容量及完整AC23/M0均待验收。
 
 ### 7.10 已有普通会话的 HTTPS 适配
 
@@ -369,7 +369,7 @@ DatabaseConfig 不接受任意 DSN/callback/备用端点：显式 Host/Port/Data
 
 PG/Redis 分别显式选择 PrivateTransport 或 VerifiedTLS。前者要求无 TLS config，仅适用于已验证的受信私网/本地连接，本组件不自动证明网络私密；后者要求 MinVersion 至少 TLS1.2、明确 ServerName、非 InsecureSkipVerify，克隆 TLS 和 RootCAs，无明文 fallback。调用方仍须管理并保持 TLS backing material 不变。Config/DatabaseConfig 的值和指针支持已测试的 16 种合法值格式（含数值动词）及 JSON 固定脱敏；非法 `%w` 等 Go 诊断、反射和主动字段访问不在此保证内，原始 Config 禁止进入日志或无关编码器。公开启动错误为固定配置/密钥/不可用分类或 context 取消/期限，不暴露路径、凭据或 driver cause。
 
-Open 只读检查当前 schema 10、有效 open 恢复状态、原 Redis 7.2 standalone/primary/noeviction 条件及已存在且匹配的限流 marker；失败释放自有资源，不迁移、不初始化 marker、不 Begin/FinishRecovery、不轮换 key。精确schema切换须在维护窗口排空并停止旧API、Worker及维护写入，不混跑；Down10 仅允许空计划表回退；Down9 仅在参考申请历史与policy均为空时允许，详见[迁移与回退](../reference-requests.md#迁移与回退)。本次没有迁移现有持久化localdev或部署服务器。成功描述启动时的观察，不证明持续可用、备份连续、生产参数或外部恢复隔离；每个请求仍执行原权威/限流门禁。
+Open 只读检查当前 schema 11、有效 open 恢复状态、原 Redis 7.2 standalone/primary/noeviction 条件及已存在且匹配的限流 marker；失败释放自有资源，不迁移、不初始化 marker、不 Begin/FinishRecovery、不轮换 key。精确schema切换须在维护窗口排空并停止旧API、Worker及维护写入，不混跑；Down11 仅允许空预留表回退；Down10 仅允许空计划表回退；Down9 仅在参考申请历史与policy均为空时允许，详见[迁移与回退](../reference-requests.md#迁移与回退)。本次没有迁移现有持久化localdev或部署服务器。成功描述启动时的观察，不证明持续可用、备份连续、生产参数或外部恢复隔离；每个请求仍执行原权威/限流门禁。
 
 可选`PrivateDrafts`使用同一PG池/Redis会话权威组装[私有草稿HTTP](../problem-drafts.md#私有草稿入库与本人读取)，显式预载受信候选与独立来源锁、打开Linux私有材料根；不暴露底层客户端。全部资源随同一Runtime排空后关闭，启动部分失败释放已加载的Prepared/Local。省略能力保持原路由集，不自动授予出题权或创建目录。
 

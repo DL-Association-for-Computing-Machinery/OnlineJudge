@@ -1,0 +1,156 @@
+package postgres
+
+import (
+	"bytes"
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"time"
+
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference/postgres/referencedb"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
+	"github.com/jackc/pgx/v5"
+)
+
+// ReferenceClaimer binds a single trusted node and source lock to the ledger.
+type ReferenceClaimer struct {
+	store      *Store
+	lockNode   func(context.Context, pgx.Tx, submission.NodeIdentity) error
+	nodeID     string
+	sourceLock string
+}
+
+// NewReferenceClaimer uses explicit trusted configuration, not Worker input.
+func NewReferenceClaimer(s *Store, lockNode func(context.Context, pgx.Tx, submission.NodeIdentity) error, nodeID, sourceLock string) (*ReferenceClaimer, error) {
+	if s == nil || lockNode == nil || !problemreference.ValidReferenceNodeID(nodeID) || !problem.ValidImportRevision(sourceLock) {
+		return nil, problemreference.ErrInvalid
+	}
+	return &ReferenceClaimer{s, lockNode, nodeID, sourceLock}, nil
+}
+
+// ClaimReference locks node, author, draft, request, plan and reservation in
+// that order. It performs no object I/O and never changes the queued request.
+func (c *ReferenceClaimer) ClaimReference(ctx context.Context, node submission.NodeIdentity, input problemreference.ClaimInput) (problemreference.WorkerClaim, error) {
+	var zero problemreference.WorkerClaim
+	if c == nil || ctx == nil || !input.Valid() {
+		return zero, problemreference.ErrInvalid
+	}
+	if node.ID != c.nodeID || node.CredentialVersion < 1 {
+		return zero, submission.ErrNode
+	}
+	profile, _, err := problemvalidation.ResolveSource(input.SourceID)
+	if err != nil {
+		return zero, problemreference.ErrClaimUnavailable
+	}
+	raw, err := json.Marshal(profile)
+	if err != nil {
+		return zero, storageError{err}
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	tx, err := c.store.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if err != nil {
+		return zero, storageError{err}
+	}
+	defer rollback(tx)
+	if err := c.lockNode(ctx, tx, node); err != nil {
+		return zero, err
+	}
+	q := referencedb.New(tx)
+	request, err := c.lockClaimRequest(ctx, tx, q, input, raw)
+	if err != nil {
+		return zero, err
+	}
+	row, err := q.ReferenceExpectedPlanForShare(ctx, request.ID)
+	if err != nil {
+		return zero, referenceClaimError(err)
+	}
+	plan := problemreference.ExpectedPlan{Encoding: row.PlanEncoding, SHA256: row.PlanSha256}
+	if plan.SHA256 != input.PlanSHA256 || !plan.ValidFor(request.Specification) {
+		return zero, problemreference.ErrClaimUnavailable
+	}
+	var nonce [32]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		return zero, storageError{err}
+	}
+	token := hex.EncodeToString(nonce[:])
+	until, err := q.ReserveReferenceWorkerClaim(ctx, referencedb.ReserveReferenceWorkerClaimParams{
+		RequestID: request.ID, NodeID: node.ID, CredentialVersion: node.CredentialVersion, LeaseToken: token, PlanSha256: plan.SHA256,
+	})
+	if err != nil {
+		return zero, referenceClaimError(err)
+	}
+	if !until.Valid || until.InfinityModifier != 0 {
+		return zero, storageError{problemreference.ErrInvalid}
+	}
+	if err := commitTx(ctx, tx, true); err != nil {
+		return zero, err
+	}
+	if err := ctx.Err(); err != nil {
+		return zero, errors.Join(problemreference.ErrCommitUnknown, err)
+	}
+	return problemreference.WorkerClaim{RequestID: request.ID, SourceID: input.SourceID,
+		PlanSHA256: plan.SHA256, Token: token, Until: until.Time}, nil
+}
+
+func (c *ReferenceClaimer) lockClaimRequest(ctx context.Context, tx pgx.Tx, q *referencedb.Queries, input problemreference.ClaimInput, profile []byte) (problemreference.Request, error) {
+	var zero problemreference.Request
+	// Read only to discover the original actor before taking predecessor locks.
+	row, err := q.ReferenceRequestByID(ctx, input.RequestID)
+	if err != nil {
+		return zero, referenceClaimError(err)
+	}
+	original, err := readRequest(row)
+	if err != nil {
+		return zero, err
+	}
+	if original.State != problemreference.Queued || original.Specification.Identity.SourceID != input.SourceID {
+		return zero, problemreference.ErrClaimUnavailable
+	}
+	actor := original.Authorization.Actor
+	authority, err := c.store.access.LockAuthorSnapshot(ctx, tx, actor)
+	if err != nil {
+		return zero, referenceClaimError(err)
+	}
+	if authority != original.Authorization {
+		return zero, problemreference.ErrClaimUnavailable
+	}
+	draft, err := c.store.access.LockOwnDraftIdentity(ctx, tx, actor, original.DraftID)
+	if err != nil {
+		return zero, referenceClaimError(err)
+	}
+	row, err = q.ReferenceRequestByIDForUpdate(ctx, original.ID)
+	if err != nil {
+		return zero, referenceClaimError(err)
+	}
+	current, err := readRequest(row)
+	if err != nil {
+		return zero, err
+	}
+	i := current.Specification.Identity
+	if current.State != problemreference.Queued || current.Authorization != authority ||
+		current.ID != original.ID || current.Owner != actor.SubjectID || current.DraftID != original.DraftID ||
+		i != original.Specification.Identity || i.SourceLockSHA256 != c.sourceLock ||
+		!bytes.Equal(current.Specification.ProfileJSON, original.Specification.ProfileJSON) ||
+		!bytes.Equal(current.Specification.ProfileJSON, profile) ||
+		draft.ID != current.DraftID || draft.Owner != actor.SubjectID || draft.SourceID != i.SourceID ||
+		draft.Version != i.Version || draft.ImportRevision != i.ImportRevision {
+		return zero, problemreference.ErrClaimUnavailable
+	}
+	return current, nil
+}
+
+func referenceClaimError(err error) error {
+	if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, identity.ErrConflict) ||
+		errors.Is(err, identity.ErrForbidden) || errors.Is(err, identity.ErrRecovering) ||
+		errors.Is(err, problem.ErrNotFound) {
+		return problemreference.ErrClaimUnavailable
+	}
+	return storageError{err}
+}

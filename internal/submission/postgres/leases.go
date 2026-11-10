@@ -225,6 +225,14 @@ func authorizeNode(ctx context.Context, q *submissiondb.Queries, node submission
 	return row, nil
 }
 
+// LockReferenceNode checks node state and credential version in the caller's
+// transaction. The reference endpoint separately authenticates its own URI SAN
+// and configured node before calling this shared node authority check.
+func LockReferenceNode(ctx context.Context, tx pgx.Tx, node submission.NodeIdentity) error {
+	_, err := authorizeNode(ctx, submissiondb.New(tx), node)
+	return err
+}
+
 func rollback(tx pgx.Tx) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()

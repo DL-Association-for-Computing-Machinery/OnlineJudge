@@ -19,6 +19,9 @@ func dispatch(ctx context.Context, args []string, logger *slog.Logger, drain <-c
 	if args[0] == "validate-reference" {
 		return validateReference(ctx, args[1:], logger)
 	}
+	if args[0] == "claim-reference" {
+		return claimReference(ctx, args[1:], logger)
+	}
 	reference := args[0] == "recover-reference"
 	sourceID, id := "library-checker:unionfind", ""
 	if reference && len(args) == 3 {

@@ -162,6 +162,8 @@ func TestExpectedReferencePlanLifecycleAndSchema(t *testing.T) {
 	if _, err := f.provider.DownTo(f.ctx, 9); err == nil || !strings.Contains(err.Error(), "cannot discard expected reference plans") {
 		t.Fatalf("Down10 did not protect plan history: %v", err)
 	}
+	_, err = f.provider.Up(f.ctx)
+	must(t, err)
 	must(t, db.CheckSchema(f.ctx, f.a))
 	f.planCount(t, 1)
 	f.counts(t, 1, 0)
@@ -356,4 +358,24 @@ func TestExpectedPlanQueryUsesRequestPrimaryKey(t *testing.T) {
 		t.Fatal("expected bounded primary key lookup", evidence)
 	}
 	t.Log(evidence)
+
+	claimSQL, err := os.ReadFile("../../db/queries/problemreference/worker_claim.sql")
+	must(t, err)
+	mustAnalyzeClaimLookup := func(name, param, index string) {
+		t.Helper()
+		chunks := strings.Split(string(claimSQL), "-- name: "+name+" :one\n")
+		if len(chunks) != 2 {
+			t.Fatal("missing authoritative claim query", name)
+		}
+		query := strings.Split(chunks[1], "\n-- name:")[0]
+		must(t, tx.QueryRow(f.ctx, "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) "+strings.ReplaceAll(query, param, "$1"), f.request.ID).Scan(&evidence))
+		if !strings.Contains(evidence, index) || !strings.Contains(evidence, "Index Cond") {
+			t.Fatal("claim lookup lost its primary-key bound", name, evidence)
+		}
+		t.Log(evidence)
+	}
+	_, err = tx.Exec(f.ctx, `ANALYZE problem_reference_requests`)
+	must(t, err)
+	mustAnalyzeClaimLookup("ReferenceRequestByIDForUpdate", "@id", "problem_reference_requests_pkey")
+	mustAnalyzeClaimLookup("ReferenceExpectedPlanForShare", "@request_id", "problem_reference_expected_plans_pkey")
 }

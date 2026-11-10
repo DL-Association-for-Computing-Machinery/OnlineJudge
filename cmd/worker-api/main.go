@@ -71,8 +71,13 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		defer func() { _ = reader.Close() }()
 		materialService = materials.New(store, reader)
 	}
+	handler, err := configureReferenceClaims(workerapi.NewHandler(store, tlsConfig.ClientCAs, materialService),
+		pool, tlsConfig.ClientCAs, os.Getenv("OJ_WORKER_REFERENCE_NODE_ID"))
+	if err != nil {
+		return err
+	}
 	server := &http.Server{
-		Addr: addr, Handler: workerapi.NewHandler(store, tlsConfig.ClientCAs, materialService), TLSConfig: tlsConfig,
+		Addr: addr, Handler: handler, TLSConfig: tlsConfig,
 		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second,
 		WriteTimeout: 15 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 8192,
 	}
