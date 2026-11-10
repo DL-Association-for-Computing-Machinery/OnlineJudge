@@ -25,6 +25,8 @@ func TestExpectedPlanDown10WaitsForReaderAndWriter(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			f := newExpectedPlanFixture(t)
+			_, err := f.provider.DownTo(f.ctx, 10)
+			must(t, err)
 			holder, err := f.b.Begin(f.ctx)
 			must(t, err)
 			defer func() { _ = holder.Rollback(f.ctx) }()
@@ -69,6 +71,8 @@ func TestExpectedPlanDown10WaitsForReaderAndWriter(t *testing.T) {
 				if err := <-down; !errors.As(err, &e) || e.Code != "P0001" || !strings.Contains(e.Message, "cannot discard expected reference plans") {
 					t.Fatalf("Down10 did not preserve the committed plan: %v", err)
 				}
+				_, err := f.provider.Up(f.ctx)
+				must(t, err)
 				must(t, db.CheckSchema(f.ctx, f.a))
 				f.planCount(t, 1)
 			} else {

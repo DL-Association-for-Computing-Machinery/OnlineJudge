@@ -1,5 +1,13 @@
 # 工程交付记录
 
+## 2026-11-10：专用参考 Worker 受权领取
+
+基于 `origin/main dcededd`，[专用节点领取](reference-requests.md#专用-worker-领取)通过默认关闭的 mTLS 路由登记一次 30 秒预留。命令先取得宿主和固定槽锁；最终事务复核节点、申请状态、原授权、草稿、当前固定配置及预期 Plan。活预留不重写，过期后才可用新令牌；未知回执不自动重试。schema 11 只保存一条预留，历史非空时拒绝回退。
+
+离线 Docker 完整 backend、四包 sqlc 生成一致性、真实临时 PostgreSQL/双 API、OpenAPI YAML 解析与仓库规则通过。真实 mTLS 验证专用证书领取、普通证书与参考证书双向拒绝、无配置不开路由；数据库验证撤权重授、取消行锁交错、错误 Plan/配置、单预留竞争和过期换令牌、实际丢 COMMIT 回包及 Down11 等待后拒绝非空。2001 行合成分布中申请/Plan 锁查询命中主键索引；Darwin arm64 两项原生受信用例验证占槽零请求及十来源槽映射。首轮集成夹具编译问题修正后整套通过。Astra 复核无阻断。日志：`/private/tmp/oj-reference-worker-claim-final-{backend,db}.log`、`/private/tmp/oj-reference-worker-claim-darwin.log`。
+
+领取命令退出后释放本地锁，不启动沙箱、下发材料、续租或接收报告。没有运行真实题源、改动既有持久数据库或部署。
+
 ## 2026-11-10：判题与参考验证默认共享宿主执行槽
 
 基于 `origin/main 6712da3`，[宿主门禁](architecture/api-worker-design.md#同机共享执行槽)覆盖判题、参考验证（含 A+B）及恢复 CLI。默认先持有同账号宿主独占锁，再检查五个物理槽并取得目标锁；进程退出后仍以原槽持久标记阻断正常执行。默认恢复只清理已确认停止的目标。历史双 Worker / 槽恢复专项显式使用双槽模式；忙且空或未知标记不视为兼容。

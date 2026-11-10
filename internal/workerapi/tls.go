@@ -43,6 +43,10 @@ func LoadTLS(caFile, certFile, keyFile string) (*tls.Config, error) {
 }
 
 func authenticate(state *tls.ConnectionState, roots *x509.CertPool, now time.Time) (submission.NodeIdentity, error) {
+	return authenticateURI(state, roots, now, identityURI)
+}
+
+func authenticateURI(state *tls.ConnectionState, roots *x509.CertPool, now time.Time, uri *regexp.Regexp) (submission.NodeIdentity, error) {
 	if state == nil || len(state.VerifiedChains) == 0 || len(state.PeerCertificates) == 0 || roots == nil {
 		return submission.NodeIdentity{}, submission.ErrNode
 	}
@@ -58,7 +62,7 @@ func authenticate(state *tls.ConnectionState, roots *x509.CertPool, now time.Tim
 	if err != nil || len(leaf.URIs) != 1 {
 		return submission.NodeIdentity{}, submission.ErrNode
 	}
-	parts := identityURI.FindStringSubmatch(leaf.URIs[0].String())
+	parts := uri.FindStringSubmatch(leaf.URIs[0].String())
 	if len(parts) != 3 {
 		return submission.NodeIdentity{}, submission.ErrNode
 	}
