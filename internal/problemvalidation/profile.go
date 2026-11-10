@@ -32,7 +32,7 @@ type Profile struct {
 
 // PinnedProfile returns fresh trial values; it never updates draft configuration.
 func PinnedProfile() Profile {
-	return Profile{ID: "p4-lc-reference-files-small-desktop-arm64-v1", Runtime: experiment.PinnedEnvironment(), Files: experiment.PinnedReferenceFiles(), Materials: problem.ReferenceLimits{SourceBytes: 64 << 10, InputBytes: 16 << 10, AnswerBytes: 4096, TotalBytes: 2 << 20, Cases: 64}, Checker: judging.LibraryCheckerTextVersion, Text: judging.TextLimits{Bytes: 4096, TokenBytes: 4096}, Wall: 2 * time.Minute}
+	return Profile{ID: "p4-lc-reference-files-small-desktop-arm64-v1", Runtime: experiment.PinnedEnvironment(), Files: experiment.PinnedReferenceFiles(), Materials: problem.SmallReferenceLimits(), Checker: judging.LibraryCheckerTextVersion, Text: judging.TextLimits{Bytes: 4096, TokenBytes: 4096}, Wall: 2 * time.Minute}
 }
 
 // UnionFindProfile admits the complete unionfind maintenance trial only. Its

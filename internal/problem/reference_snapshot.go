@@ -2,15 +2,11 @@ package problem
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"io"
 	"os"
 	"sync"
 	"sync/atomic"
-
-	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materialstore"
 )
 
 // UnionFindReferenceLimits bounds the independently admitted disk snapshot.
@@ -24,13 +20,13 @@ var referenceSnapshotActive atomic.Bool
 type referenceSpan struct{ offset, size int64 }
 
 // ReferenceSnapshot owns one fully verified anonymous disk file. At most one
-// may be active in this process, and its Prepared remains occupied until Close.
-// No original bundle file is read after preparation returns successfully.
+// may be active in this process. A bundle's Prepared remains occupied until Close.
+// Neither the bundle nor the object store is read after preparation succeeds.
 type ReferenceSnapshot struct {
 	mu        sync.Mutex
 	file      *os.File
 	ctx       context.Context
-	owner     *Prepared
+	release   func()
 	plan      ReferencePlan
 	spans     []referenceSpan // primary source, dependencies, then ordered point pairs
 	caseStart int             // compilation files precede point spans
@@ -60,26 +56,43 @@ func (p *Prepared) PrepareDiskReference(ctx context.Context) (*ReferenceSnapshot
 	return p.prepareDiskReference(ctx, p.content.SourceID, a)
 }
 
-func (p *Prepared) prepareDiskReference(ctx context.Context, sourceID string, admission diskReferenceAdmission) (_ *ReferenceSnapshot, err error) {
+func (p *Prepared) prepareDiskReference(ctx context.Context, sourceID string, admission diskReferenceAdmission) (*ReferenceSnapshot, error) {
 	if err := p.acquire(); err != nil {
 		return nil, err
 	}
+	return freezeReferenceSnapshot(ctx, p.content, sourceID, admission, p.openReference, p.release)
+}
+
+func freezeReferenceSnapshot(ctx context.Context, content Content, sourceID string, admission diskReferenceAdmission, open referenceOpen, release func()) (_ *ReferenceSnapshot, err error) {
 	if !referenceSnapshotActive.CompareAndSwap(false, true) {
-		p.release()
+		if release != nil {
+			release()
+		}
 		return nil, ErrBusy
 	}
-	s := &ReferenceSnapshot{ctx: ctx, owner: p}
+	s := &ReferenceSnapshot{ctx: ctx, release: func() {
+		if release != nil {
+			release()
+		}
+		referenceSnapshotActive.Store(false)
+	}}
 	defer func() {
 		if err != nil {
 			err = errors.Join(err, s.Close())
 		}
 	}()
-	plan, d, err := p.referenceMetadata(ctx, admission.limits, sourceID, admission.path)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	plan, d, err := referenceMetadata(content, admission.limits, sourceID, admission.path)
 	if err != nil {
 		return nil, err
 	}
 	dependencies, err := bindReferenceDependencies(&plan, d, admission)
 	if err != nil {
+		return nil, err
+	}
+	if err := open.validateCatalog(ctx, d, admission.limits.Cases); err != nil {
 		return nil, err
 	}
 	s.plan = plan
@@ -99,7 +112,7 @@ func (p *Prepared) prepareDiskReference(ctx context.Context, sourceID string, ad
 	}
 	var offset int64
 	for _, ref := range refs {
-		if err := s.append(ctx, ref); err != nil {
+		if err := open.copy(ctx, s.file, ref); err != nil {
 			return nil, err
 		}
 		s.spans = append(s.spans, referenceSpan{offset, ref.Size})
@@ -109,26 +122,6 @@ func (p *Prepared) prepareDiskReference(ctx context.Context, sourceID string, ad
 		return nil, err
 	}
 	return s, nil
-}
-
-func (s *ReferenceSnapshot) append(ctx context.Context, ref fileReference) error {
-	f, err := s.owner.openFile(ref.Path, ref.Size)
-	if err != nil {
-		return err
-	}
-	h := sha256.New()
-	n, copyErr := io.Copy(io.MultiWriter(s.file, h), io.LimitReader(referenceContextReader{ctx, f}, ref.Size+1))
-	closeErr := f.Close()
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-	if copyErr != nil || closeErr != nil {
-		return errors.New("reference snapshot copy failed")
-	}
-	if n != ref.Size || hex.EncodeToString(h.Sum(nil)) != ref.SHA256 {
-		return materialstore.ErrIntegrity
-	}
-	return nil
 }
 
 // Plan returns detached identities only; byte ranges and private data stay owned.
@@ -205,8 +198,9 @@ func (s *ReferenceSnapshot) Close() error {
 		if s.file != nil && s.file.Close() != nil {
 			s.err = errors.New("reference snapshot close failed")
 		}
-		s.owner.release()
-		referenceSnapshotActive.Store(false)
+		if s.release != nil {
+			s.release()
+		}
 	}
 	return s.err
 }
