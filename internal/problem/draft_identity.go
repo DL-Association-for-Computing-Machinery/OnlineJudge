@@ -1,5 +1,13 @@
 package problem
 
+import (
+	"bytes"
+	"slices"
+	"strings"
+
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
+)
+
 // ImportIdentity binds the complete configured import and its trusted source
 // lock. It says nothing about material health or successful program execution.
 type ImportIdentity struct {
@@ -26,4 +34,48 @@ func (p *Prepared) ImportIdentity() (ImportIdentity, error) {
 // transaction, without returning documents or material/download references.
 type DraftIdentity struct {
 	ID, Owner, SourceID, Version, ImportRevision string
+}
+
+// BindReferenceContent matches a detached persisted draft to the exact import
+// selected by the trusted catalog when the request was accepted. It checks
+// metadata only; callers still need current authority and verified object bytes.
+func (d Draft) BindReferenceContent(id, owner string, expected ImportIdentity) (Content, error) {
+	if !identity.ValidID(id) || !identity.ValidID(owner) || d.ID != id || d.Owner != owner ||
+		d.State != "private-draft" || d.ValidationState != "not-run" ||
+		d.SourceID != expected.SourceID || d.Version != expected.Version || d.ImportRevision != expected.ImportRevision ||
+		len(d.References) == 0 || len(d.References) > 8192 {
+		return Content{}, ErrInvalid
+	}
+	doc, err := parseDocument(d.Document, d.SourceID)
+	if err != nil || doc.Version != expected.Version || doc.Provenance.SourceLockSHA256 != expected.SourceLockSHA256 {
+		return Content{}, ErrInvalid
+	}
+	// PostgreSQL ordering can depend on collation; the original import used
+	// Go's byte order. Sort a copy so the caller keeps its own snapshot intact.
+	refs := slices.Clone(d.References)
+	slices.SortFunc(refs, func(a, b Reference) int { return strings.Compare(a.Name, b.Name) })
+	for i, ref := range refs {
+		if !validPath(ref.Name) || !validHash(ref.Object.SHA256) || ref.Object.Size < 0 || ref.Object.Size > maxObject ||
+			(i > 0 && refs[i-1].Name == ref.Name) {
+			return Content{}, ErrInvalid
+		}
+	}
+	revision, err := importRevision(d.Document, refs)
+	if err != nil || revision != expected.ImportRevision {
+		return Content{}, ErrInvalid
+	}
+	return Content{SourceID: d.SourceID, Version: d.Version, RequestSHA256: revision,
+		Document: bytes.Clone(d.Document), References: refs}, nil
+}
+
+// Both import and rebinding hash the complete references in bytewise name order.
+func importRevision(raw []byte, refs []Reference) (string, error) {
+	request, err := canonical(struct {
+		DocumentSHA256 string      `json:"document_sha256"`
+		References     []Reference `json:"references"`
+	}{hash(raw), refs})
+	if err != nil {
+		return "", err
+	}
+	return hash(request), nil
 }
