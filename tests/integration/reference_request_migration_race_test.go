@@ -37,6 +37,8 @@ func (a referenceBeforeDraft) LockOwnDraftIdentity(ctx context.Context, tx pgx.T
 
 func TestReferenceRequestRollbackRace(t *testing.T) {
 	f := newReferenceRequestFixture(t)
+	_, err := f.provider.DownTo(f.ctx, 9)
+	must(t, err)
 	f.limits(t, 1, 1)
 	base, err := problempg.NewReferenceAccess(f.access)
 	must(t, err)
@@ -85,12 +87,16 @@ func TestReferenceRequestRollbackRace(t *testing.T) {
 	if !errors.As(err, &pgerr) || pgerr.Code != "P0001" || pgerr.Message != "cannot discard reference requests or configured admission; use a forward migration" {
 		t.Fatalf("rollback did not safely refuse retained history: %v", err)
 	}
+	_, err = f.provider.Up(f.ctx)
+	must(t, err)
 	must(t, db.CheckSchema(f.ctx, f.a))
 	f.counts(t, 1, 1)
 }
 
 func TestReferenceRequestEmptyRollbackAfterAuthor(t *testing.T) {
 	f := newReferenceRequestFixture(t)
+	_, err := f.provider.DownTo(f.ctx, 9)
+	must(t, err)
 	// No configured policy or requests: Down must reach DROP, including removal
 	// of FK triggers on credentials. A nonempty policy would mask this lock edge.
 	base, err := problempg.NewReferenceAccess(f.access)

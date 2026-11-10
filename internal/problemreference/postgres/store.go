@@ -71,13 +71,20 @@ func (s *Store) begin(ctx context.Context, actor identity.ProblemActor) (pgx.Tx,
 }
 
 func commit(ctx context.Context, tx pgx.Tx, result problemreference.Request, wrote bool) (problemreference.Request, error) {
-	if err := tx.Commit(ctx); err != nil {
-		if wrote && !errors.Is(err, pgx.ErrTxCommitRollback) {
-			return problemreference.Request{}, errors.Join(problemreference.ErrCommitUnknown, storageError{err})
-		}
-		return problemreference.Request{}, storageError{err}
+	if err := commitTx(ctx, tx, wrote); err != nil {
+		return problemreference.Request{}, err
 	}
 	return result, nil
+}
+
+func commitTx(ctx context.Context, tx pgx.Tx, wrote bool) error {
+	if err := tx.Commit(ctx); err != nil {
+		if wrote && !errors.Is(err, pgx.ErrTxCommitRollback) {
+			return errors.Join(problemreference.ErrCommitUnknown, storageError{err})
+		}
+		return storageError{err}
+	}
+	return nil
 }
 
 // Configure changes only the explicit queued-request policy. It is a trusted
