@@ -32,7 +32,7 @@ func dispatch(ctx context.Context, args []string, logger *slog.Logger, drain <-c
 	if os.Getenv("OJ_SANDBOX_EXPERIMENT") != "1" {
 		return errors.New("explicit OJ_SANDBOX_EXPERIMENT=1 required")
 	}
-	if reference && os.Getenv("OJ_WORKER_M0_SLOT") != "" {
+	if reference && (os.Getenv("OJ_WORKER_M0_SLOT") != "" || os.Getenv(dualModeEnv) != "") {
 		return errors.New("reference recovery has its own fixed slot")
 	}
 	slot, err := workerhost.ParseM0Slot(os.Getenv("OJ_WORKER_M0_SLOT"))
@@ -52,7 +52,7 @@ func dispatch(ctx context.Context, args []string, logger *slog.Logger, drain <-c
 		}
 		lock, err = lockSlotMode(referenceSlot.LockName(), true)
 	} else {
-		lock, err = lockM0Mode(slot, true)
+		lock, err = lockM0Execution(slot, true, os.Getenv(dualModeEnv))
 	}
 	if err != nil {
 		return err

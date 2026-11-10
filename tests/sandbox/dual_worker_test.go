@@ -115,7 +115,7 @@ func testDualWorkerRecovery(t *testing.T, crash bool) {
 	endpoints := [2]string{dualController(t, ca, certs[0], root), dualController(t, ca, certs[1], root)}
 	workers := [2]*dualProcess{}
 	for i := range workers {
-		workers[i] = dualWorker(t, ca, certFiles[i], keys[i], endpoints[i], slots[i])
+		workers[i] = dualExperimentalWorker(t, ca, certFiles[i], keys[i], endpoints[i], slots[i])
 	}
 	accept := func(key, source string) string {
 		t.Helper()
@@ -255,7 +255,7 @@ func testDualWorkerRecovery(t *testing.T, crash bool) {
 		// Restart is an explicit test-driver action after confirmed recovery;
 		// the command itself must leave the container stopped.
 		restartDrainedSandbox(t, ids[failed])
-		workers[failed] = dualWorker(t, ca, certFiles[failed], keys[failed], endpoints[failed], slots[failed])
+		workers[failed] = dualExperimentalWorker(t, ca, certFiles[failed], keys[failed], endpoints[failed], slots[failed])
 		waitResult(accept("dual-recovered-slot-reused", ac), "AC")
 		workers[failed].stop(t)
 		dualStopped(t, ids[failed], "")

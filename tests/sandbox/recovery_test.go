@@ -23,7 +23,7 @@ func recoverWorkerSlot(t *testing.T, ctx context.Context, worker *dualProcess, s
 			env = append(env, item)
 		}
 	}
-	env = append(env, "OJ_SANDBOX_EXPERIMENT=1", "OJ_WORKER_M0_SLOT="+slot)
+	env = append(env, "OJ_SANDBOX_EXPERIMENT=1", "OJ_WORKER_M0_DUAL_EXPERIMENT=1", "OJ_WORKER_M0_SLOT="+slot)
 	recover := func(expectedID string) (string, error) {
 		t.Helper()
 		bounded, cancel := context.WithTimeout(ctx, 25*time.Second)

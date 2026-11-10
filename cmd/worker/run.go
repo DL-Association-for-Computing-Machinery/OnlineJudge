@@ -27,7 +27,7 @@ func run(ctx context.Context, logger *slog.Logger, drain <-chan struct{}) error 
 	if err != nil {
 		return err
 	}
-	lock, err := lockM0(c.slot)
+	lock, err := lockM0Execution(c.slot, false, os.Getenv(dualModeEnv))
 	if err != nil {
 		return err
 	}

@@ -4,6 +4,8 @@
 
 ## 当前状态
 
+同机执行槽的普通后端测试使用私有临时目录、受信测试子进程和实际文件锁，验证判题/参考互斥、退出遗留隔离、所选槽恢复和双槽实验边界；不启动 Docker 沙箱。历史 `dual-worker`、`slot-recovery` 专项显式启用双槽模式，保留真实沙箱的独立验收边界。
+
 [持久化参考验证申请](reference-requests.md)的可信目录、冻结配置副本、新鲜会话身份及取消/未知回执边界归普通backend单元测试；真实临时PostgreSQL用例归integration，覆盖owner隔离、同键恢复、并发最后额度、policy等待后的原键复查、取消竞争、撤权锁、事务/COMMIT回包故障、历史摘要完整性、权威 SQL 查询计划及 schema9 回退；schema10 验证冻结后二次会话观察、授权修订/取消竞争、计划幂等及未知回执、非空历史回退拒绝。服务与真实PG组合用例使用合成会话观察，不代表申请能力的真实Redis/HTTP、Worker消费或大材料验收；草稿not-run、生产配置null及发布阻断保持。执行结果以本次head的[交付记录](delivery-log.md)为准。
 
 convolution_mod的完整材料/16MiB输入答案、共享快照、封闭tier8及双端2GiB账本、独立槽与错Cmd/跨档位拒绝归普通backend。`TestConvolutionReferenceSandbox`仅在sandbox标签、Darwin arm64、`OJ_CONVOLUTION_REFERENCE=1`与实验opt-in下运行同次16MiB输入/输出边界、窄OLE证据及完整53点；失败或Stop未确认即停止。一次十来源254点/26子测试、独立四槽顺序后置、预备新Plan/Profile与旧九完整Plan/Profile核对均通过；普通CI仍不创建槽或执行题源，不替代这次固定环境证据。最终CI/合并状态与证据限制见[交付记录](delivery-log.md#2026-11-04convolution_mod-十来源固定环境接纳)。
