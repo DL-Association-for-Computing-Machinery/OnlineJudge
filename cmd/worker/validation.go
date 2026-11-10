@@ -30,6 +30,9 @@ func validateReference(ctx context.Context, args []string, logger *slog.Logger) 
 	if os.Getenv("OJ_SANDBOX_EXPERIMENT") != "1" {
 		return errors.New("explicit OJ_SANDBOX_EXPERIMENT=1 required")
 	}
+	if os.Getenv(dualModeEnv) != "" {
+		return errors.New("reference validation requires the shared single host slot")
+	}
 	options := flag.NewFlagSet("validate-reference", flag.ContinueOnError)
 	options.SetOutput(io.Discard)
 	bundle := options.String("bundle", "", "private complete bundle")

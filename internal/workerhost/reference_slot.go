@@ -15,7 +15,7 @@ type ReferenceSlot struct{}
 func (ReferenceSlot) ContainerName() string { return "oj-reference-sandbox" }
 
 // LockName is shared across checkouts and distinct from both M0 locks.
-func (ReferenceSlot) LockName() string { return "slot-reference.lock" }
+func (ReferenceSlot) LockName() string { return referenceLock }
 
 // OpenReference checks an already running fixed reference slot. The caller must
 // hold its clean canonical lock for the complete lifetime and independently Stop.
@@ -46,9 +46,9 @@ func (s ReferenceTierSlot) configuration() (name, lock string, tier experiment.R
 	case experiment.ReferenceSmall:
 		return ReferenceSlot{}.ContainerName(), ReferenceSlot{}.LockName(), s.tier, nil
 	case experiment.ReferenceConvolution:
-		return "oj-reference-convolution-sandbox", "slot-reference-convolution.lock", s.tier, nil
+		return "oj-reference-convolution-sandbox", convolutionLock, s.tier, nil
 	case experiment.ReferenceMedium, experiment.ReferenceMediumBulk, experiment.ReferencePrimality, experiment.ReferenceStaticRMQ, experiment.ReferenceStaticRangeSum, experiment.ReferenceAssociativeArray:
-		return "oj-reference-medium-sandbox", "slot-reference-medium.lock", s.tier, nil
+		return "oj-reference-medium-sandbox", mediumLock, s.tier, nil
 	default:
 		return "", "", 0, errors.New("unsupported reference slot")
 	}

@@ -24,6 +24,7 @@ import (
 type dualProcess struct {
 	cmd     *exec.Cmd
 	done    chan error
+	logPath string
 	stopped bool
 }
 
@@ -37,7 +38,7 @@ func startDualProcess(t *testing.T, name string, env []string) *dualProcess {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := &dualProcess{cmd: exec.Command(binary), done: make(chan error, 1)}
+	p := &dualProcess{cmd: exec.Command(binary), done: make(chan error, 1), logPath: log.Name()}
 	p.cmd.Env, p.cmd.Stdout, p.cmd.Stderr = env, log, log
 	if err := p.cmd.Start(); err != nil {
 		_ = log.Close() // Cleanup; the operation outcome is checked separately.
@@ -117,11 +118,36 @@ func dualController(t *testing.T, ca *testpki.Authority, clientCert tls.Certific
 
 func dualWorker(t *testing.T, ca *testpki.Authority, cert, key, endpoint, slot string) *dualProcess {
 	t.Helper()
+	return startWorkerProcess(t, ca, cert, key, endpoint, slot, false)
+}
+
+func dualExperimentalWorker(t *testing.T, ca *testpki.Authority, cert, key, endpoint, slot string) *dualProcess {
+	t.Helper()
+	p := startWorkerProcess(t, ca, cert, key, endpoint, slot, true)
+	// A busy peer without its marker is rejected. Wait until the first worker
+	// has persisted the dual marker and completed preflight before launching another.
+	for deadline := time.Now().Add(20 * time.Second); time.Now().Before(deadline); {
+		p.alive(t)
+		raw, err := os.ReadFile(p.logPath)
+		if err == nil && strings.Contains(string(raw), "Worker 已就绪") {
+			return p
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	t.Fatal("dual experiment worker readiness timeout")
+	return nil
+}
+
+func startWorkerProcess(t *testing.T, ca *testpki.Authority, cert, key, endpoint, slot string, dual bool) *dualProcess {
+	t.Helper()
 	var env []string
 	for _, item := range os.Environ() {
 		if !strings.HasPrefix(item, "OJ_") {
 			env = append(env, item)
 		}
+	}
+	if dual {
+		env = append(env, "OJ_WORKER_M0_DUAL_EXPERIMENT=1")
 	}
 	return startDualProcess(t, "worker", append(env,
 		"OJ_SANDBOX_EXPERIMENT=1", "OJ_WORKER_CONTROLLER_URL="+endpoint,

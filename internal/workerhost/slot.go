@@ -2,6 +2,20 @@ package workerhost
 
 import "errors"
 
+const (
+	primaryLock     = "slot.lock"
+	secondaryLock   = "slot-secondary.lock"
+	referenceLock   = "slot-reference.lock"
+	mediumLock      = "slot-reference-medium.lock"
+	convolutionLock = "slot-reference-convolution.lock"
+)
+
+// ExecutionLockNames lists every canonical sandbox lock on one control host.
+// Tiers sharing a physical slot appear only once.
+func ExecutionLockNames() [5]string {
+	return [5]string{primaryLock, secondaryLock, referenceLock, mediumLock, convolutionLock}
+}
+
 // M0Slot selects a pre-provisioned sandbox and its canonical ownership lock.
 // The zero value preserves the original primary slot, including its lock file.
 // Arbitrary container aliases and lock paths are deliberately unsupported.
@@ -30,7 +44,7 @@ func (s M0Slot) ContainerName() string {
 // LockName returns the stable lock filename shared by all command checkouts.
 func (s M0Slot) LockName() string {
 	if s.secondary {
-		return "slot-secondary.lock"
+		return secondaryLock
 	}
-	return "slot.lock"
+	return primaryLock
 }
