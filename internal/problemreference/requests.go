@@ -48,10 +48,14 @@ type Request struct {
 // BindDraft verifies persisted metadata against this queued receipt's frozen
 // import. A receipt is not a live queue read or an authorization grant.
 func (r Request) BindDraft(draft problem.Draft) (problem.Content, error) {
-	if r.State != Queued || r.CancelledAt != nil || !r.Specification.Valid() {
+	if !r.bindable() {
 		return problem.Content{}, ErrInvalid
 	}
 	return draft.BindReferenceContent(r.DraftID, r.Owner, r.Specification.Identity)
+}
+
+func (r Request) bindable() bool {
+	return r.State == Queued && r.CancelledAt == nil && r.Specification.Valid()
 }
 
 // Limits bounds queued requests, not active sandbox slots or historical rows.

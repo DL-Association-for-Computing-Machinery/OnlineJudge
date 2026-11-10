@@ -1,7 +1,10 @@
 package problem
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -24,7 +27,15 @@ type ReferenceLimits struct {
 
 // Valid caps the small-material protocol independently of its caller's profile.
 func (l ReferenceLimits) Valid() bool {
-	return l.SourceBytes > 0 && l.SourceBytes <= 64<<10 && l.InputBytes > 0 && l.InputBytes <= 16<<10 && l.AnswerBytes > 0 && l.AnswerBytes <= 4096 && l.TotalBytes > 0 && l.TotalBytes <= 2<<20 && l.Cases > 0 && l.Cases <= 64
+	maximum := SmallReferenceLimits()
+	return l.SourceBytes > 0 && l.SourceBytes <= maximum.SourceBytes && l.InputBytes > 0 && l.InputBytes <= maximum.InputBytes &&
+		l.AnswerBytes > 0 && l.AnswerBytes <= maximum.AnswerBytes && l.TotalBytes > 0 && l.TotalBytes <= maximum.TotalBytes &&
+		l.Cases > 0 && l.Cases <= maximum.Cases
+}
+
+// SmallReferenceLimits bounds the legacy A+B materials and its persisted equivalent.
+func SmallReferenceLimits() ReferenceLimits {
+	return ReferenceLimits{SourceBytes: 64 << 10, InputBytes: 16 << 10, AnswerBytes: 4096, TotalBytes: 2 << 20, Cases: 64}
 }
 
 // ReferenceCase binds one ordered point to exact frozen private bytes.
@@ -64,6 +75,16 @@ type ReferencePlan struct {
 	SourceData       []byte                `json:"-"`
 }
 
+type referenceOpen func(context.Context, fileReference) (io.ReadCloser, error)
+
+func (p *Prepared) openReference(_ context.Context, ref fileReference) (io.ReadCloser, error) {
+	f, err := p.openFile(ref.Path, ref.Size)
+	if err != nil {
+		return nil, err
+	}
+	return f, nil
+}
+
 // Digest binds source, draft/import identities and the complete ordered case
 // list. It is SHA-256 of compact encoding/json bytes, without a trailing newline.
 func (p ReferencePlan) Digest() string { raw, _ := json.Marshal(p); return hash(raw) }
@@ -81,20 +102,24 @@ func (p *Prepared) PrepareReference(ctx context.Context, limits ReferenceLimits)
 		return plan, err
 	}
 	defer p.release()
-	plan, d, err := p.referenceMetadata(ctx, limits, "library-checker:aplusb", "sample/aplusb")
+	plan, d, err := referenceMetadata(p.content, limits, "library-checker:aplusb", "sample/aplusb")
 	if err != nil {
 		return plan, err
 	}
-	plan.SourceData, err = p.readReference(ctx, d.Provenance.OriginalFiles["source/sample/aplusb/sol/correct.cpp"])
+	open := referenceOpen(p.openReference)
+	if err := open.validateCatalog(ctx, d, limits.Cases); err != nil {
+		return plan, err
+	}
+	plan.SourceData, err = open.read(ctx, d.Provenance.OriginalFiles["source/sample/aplusb/sol/correct.cpp"])
 	if err != nil {
 		return plan, err
 	}
 	for i, c := range d.TestCases {
-		input, e := p.readReference(ctx, c.Input)
+		input, e := open.read(ctx, c.Input)
 		if e != nil {
 			return plan, e
 		}
-		answer, e := p.readReference(ctx, c.Answer)
+		answer, e := open.read(ctx, c.Answer)
 		if e != nil {
 			return plan, e
 		}
@@ -103,13 +128,13 @@ func (p *Prepared) PrepareReference(ctx context.Context, limits ReferenceLimits)
 	return plan, ctx.Err()
 }
 
-func (p *Prepared) referenceMetadata(ctx context.Context, limits ReferenceLimits, sourceID, sourcePath string) (ReferencePlan, document, error) {
+func referenceMetadata(content Content, limits ReferenceLimits, sourceID, sourcePath string) (ReferencePlan, document, error) {
 	var plan ReferencePlan
-	d, err := parseDocument(p.content.Document, p.content.SourceID)
+	d, err := parseDocument(content.Document, content.SourceID)
 	if err != nil {
 		return plan, d, err
 	}
-	plan = ReferencePlan{SourceID: p.content.SourceID, Version: p.content.Version, ImportRevision: p.content.RequestSHA256, SourceLockSHA256: d.Provenance.SourceLockSHA256}
+	plan = ReferencePlan{SourceID: content.SourceID, Version: content.Version, ImportRevision: content.RequestSHA256, SourceLockSHA256: d.Provenance.SourceLockSHA256}
 	for _, c := range d.TestCases {
 		plan.Cases = append(plan.Cases, ReferenceCase{ID: c.ID, Input: c.Input.object(), Answer: c.Answer.object()})
 	}
@@ -141,35 +166,49 @@ func (p *Prepared) referenceMetadata(ctx context.Context, limits ReferenceLimits
 			total += size
 		}
 	}
-	info, err := p.readReference(ctx, definition)
-	if err != nil {
-		return plan, d, err
-	}
-	hashList, err := p.readReference(ctx, hashes)
-	if err != nil {
-		return plan, d, err
-	}
-	if err := validateReferenceCatalog(d, info, hashList, limits.Cases); err != nil {
-		return plan, d, err
-	}
-	return plan, d, ctx.Err()
+	return plan, d, nil
 }
 
-func (p *Prepared) readReference(ctx context.Context, ref fileReference) ([]byte, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	f, err := p.openFile(ref.Path, ref.Size)
+func (open referenceOpen) validateCatalog(ctx context.Context, d document, maximum int) error {
+	prefix := "source/" + d.Provenance.SourcePath + "/"
+	info, err := open.read(ctx, d.Provenance.OriginalFiles[prefix+"info.toml"])
 	if err != nil {
+		return err
+	}
+	hashList, err := open.read(ctx, d.Provenance.OriginalFiles[prefix+"hash.json"])
+	if err != nil {
+		return err
+	}
+	return validateReferenceCatalog(d, info, hashList, maximum)
+}
+
+func (open referenceOpen) read(ctx context.Context, ref fileReference) ([]byte, error) {
+	raw := bytes.NewBuffer(make([]byte, 0, int(ref.Size)))
+	if err := open.copy(ctx, raw, ref); err != nil {
 		return nil, err
 	}
-	raw, readErr := io.ReadAll(io.LimitReader(f, ref.Size+1))
-	closeErr := f.Close()
-	if readErr != nil || closeErr != nil || int64(len(raw)) != ref.Size || hash(raw) != ref.SHA256 {
-		return nil, materialstore.ErrIntegrity
-	}
+	return raw.Bytes(), nil
+}
+
+func (open referenceOpen) copy(ctx context.Context, dst io.Writer, ref fileReference) error {
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return err
 	}
-	return raw, nil
+	f, err := open(ctx, ref)
+	if err != nil {
+		return err
+	}
+	h := sha256.New()
+	n, copyErr := io.Copy(io.MultiWriter(dst, h), io.LimitReader(referenceContextReader{ctx, f}, ref.Size+1))
+	closeErr := f.Close()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if copyErr != nil || closeErr != nil {
+		return errors.New("reference snapshot copy failed")
+	}
+	if n != ref.Size || hex.EncodeToString(h.Sum(nil)) != ref.SHA256 {
+		return materialstore.ErrIntegrity
+	}
+	return nil
 }
