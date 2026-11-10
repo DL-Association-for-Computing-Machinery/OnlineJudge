@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 )
 
 var (
@@ -42,6 +43,15 @@ type Request struct {
 	State         string
 	CreatedAt     time.Time
 	CancelledAt   *time.Time
+}
+
+// BindDraft verifies persisted metadata against this queued receipt's frozen
+// import. A receipt is not a live queue read or an authorization grant.
+func (r Request) BindDraft(draft problem.Draft) (problem.Content, error) {
+	if r.State != Queued || r.CancelledAt != nil || !r.Specification.Valid() {
+		return problem.Content{}, ErrInvalid
+	}
+	return draft.BindReferenceContent(r.DraftID, r.Owner, r.Specification.Identity)
 }
 
 // Limits bounds queued requests, not active sandbox slots or historical rows.

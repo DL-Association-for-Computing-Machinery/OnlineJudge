@@ -208,14 +208,11 @@ func LoadBundle(directory, sourceID string, expectedSourceLock []byte) (*Prepare
 	for _, f := range p.files {
 		p.content.References = append(p.content.References, f.ref)
 	}
-	request, err := canonical(struct {
-		DocumentSHA256 string      `json:"document_sha256"`
-		References     []Reference `json:"references"`
-	}{hash(p.content.Document), p.content.References})
+	revision, err := importRevision(p.content.Document, p.content.References)
 	if err != nil {
 		return nil, err
 	}
-	p.content.RequestSHA256 = hash(request)
+	p.content.RequestSHA256 = revision
 	ok = true
 	return p, nil
 }

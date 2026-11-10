@@ -156,6 +156,42 @@ func TestReferenceRequestsLifecycleAndOwnership(t *testing.T) {
 	}
 }
 
+func TestReferenceRequestBindsPersistedDraftMaterials(t *testing.T) {
+	f := newReferenceRequestFixture(t)
+	f.limits(t, 1, 1)
+	const key = "reference-bind-materials-01"
+	_, err := f.store.Enqueue(f.ctx, f.actor, key, f.draft.ID, f.catalog)
+	must(t, err)
+	want := f.prepared.Content()
+	must(t, f.prepared.Close())
+
+	request, err := f.store.Receipt(f.ctx, f.actor, key)
+	must(t, err)
+	stored, err := f.repository.GetOwn(f.ctx, f.actor, f.draft.ID)
+	must(t, err)
+	bound, err := request.BindDraft(stored)
+	must(t, err)
+	if !reflect.DeepEqual(bound, want) {
+		t.Fatal("metadata reloaded from PostgreSQL differs from the original import")
+	}
+
+	// Lose evidence without changing the row's version or import revision.
+	result, err := f.a.Exec(f.ctx, `DELETE FROM problem_draft_materials WHERE draft_id=$1 AND logical_name=$2`,
+		f.draft.ID, "provenance/source-validation.json")
+	must(t, err)
+	if result.RowsAffected() != 1 {
+		t.Fatal("expected one evidence reference in the fixture")
+	}
+	stored, err = f.repository.GetOwn(f.ctx, f.actor, f.draft.ID)
+	must(t, err)
+	if stored.Version != want.Version || stored.ImportRevision != want.RequestSHA256 {
+		t.Fatal("fixture changed more than the evidence reference")
+	}
+	if bound, err = request.BindDraft(stored); !errors.Is(err, problem.ErrInvalid) || !reflect.DeepEqual(bound, problem.Content{}) {
+		t.Fatal("missing evidence was accepted by the frozen revision", err)
+	}
+}
+
 func TestReferenceRequestsConcurrentKeys(t *testing.T) {
 	t.Run("same key fills final slot", func(t *testing.T) {
 		f := newReferenceRequestFixture(t)

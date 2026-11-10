@@ -1,5 +1,13 @@
 # 工程交付记录
 
+## 2026-11-10：参考验证申请绑定已入库草稿引用
+
+从 `origin/main 1615d66` 建立独立任务分支。[内部绑定](reference-requests.md#有界排队与未完成边界)重新计算原始文档与完整引用的导入修订，按逻辑名的字节顺序排序副本，保持既有导入算法。草稿 ID、所有者、版本、来源锁或引用不符时拒绝；回执不代表当前授权或队列状态。
+
+现有 Docker 工具链离线运行改前两个相关包的 race 基线、完整 `toolchain backend` 和 `toolchain db`，均退出 0。真实临时 PostgreSQL 验证回执和草稿重读后仍可匹配已关闭的导入准备；仅移除来源验证证据引用，保留版本与修订字段，绑定即拒绝。单测另覆盖引用乱序、别名、文档变更、引用增删替换、取消及规格损坏。仓库检查通过，Astra 针对性只读复核无阻断。日志为 `/private/tmp/oj-reference-draft-material-{baseline,backend,db}.log`。
+
+本项不新增 SQL、迁移或 HTTP；持久化对象读取、冻结 Plan、受权消费和可信报告仍待实现，草稿验证状态与发布阻断保持，未部署。
+
 ## 2026-11-04：持久化参考验证申请
 
 从成功fetch的`origin/main 26a9882d0aebc4b60392a8b93f143e9559704303`建立独立`codex/persistent-reference-requests`。新增[内部申请用例](reference-requests.md)及独立PG/sqlc包，固定本人草稿、完整导入/来源锁、Profile原始字节及原授权快照；提供原键回执和queued→cancelled幂等取消。schema9默认空policy，只有显式维护配置才可申请；恢复→账号→角色→草稿→policy→申请行锁，原键在目录/额度检查前恢复，policy锁后重查避免最后额度竞争误拒绝。读/取消不更新旧权限，未知写回执保持原键恢复；无HTTP、消费、Plan/attempt/判定字段，草稿not-run及发布阻断保持。
