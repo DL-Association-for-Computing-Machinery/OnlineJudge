@@ -73,14 +73,9 @@ func (s *Service) call(ctx context.Context, credential redisstore.Credential, wr
 	if err := ctx.Err(); err != nil {
 		return Request{}, err
 	}
-	view, err := s.sessions.Read(ctx, credential)
-	if err = errors.Join(err, ctx.Err()); err != nil {
+	actor, err := observeActor(ctx, s.sessions, credential)
+	if err != nil {
 		return Request{}, err
-	}
-	actor := identity.ProblemActor{SubjectID: view.SubjectID,
-		SessionVersion: identity.SessionVersion{AuthGeneration: view.AuthGeneration, RecoveryID: view.RecoveryID}}
-	if !actor.Valid() {
-		return Request{}, ErrInvalid
 	}
 	result, err := operation(actor)
 	if err != nil {
@@ -93,4 +88,17 @@ func (s *Service) call(ctx context.Context, credential redisstore.Credential, wr
 		return Request{}, err
 	}
 	return result, nil
+}
+
+func observeActor(ctx context.Context, sessions SessionReader, credential redisstore.Credential) (identity.ProblemActor, error) {
+	view, err := sessions.Read(ctx, credential)
+	if err = errors.Join(err, ctx.Err()); err != nil {
+		return identity.ProblemActor{}, err
+	}
+	actor := identity.ProblemActor{SubjectID: view.SubjectID,
+		SessionVersion: identity.SessionVersion{AuthGeneration: view.AuthGeneration, RecoveryID: view.RecoveryID}}
+	if !actor.Valid() {
+		return identity.ProblemActor{}, ErrInvalid
+	}
+	return actor, nil
 }

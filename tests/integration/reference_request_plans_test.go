@@ -17,7 +17,7 @@ func TestReferenceRequestMigrationSafety(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			f := newReferenceRequestFixture(t)
 			if mode == "empty upgrade and rollback" {
-				_, err := f.provider.Down(f.ctx)
+				_, err := f.provider.DownTo(f.ctx, 8)
 				must(t, err)
 				if db.CheckSchema(f.ctx, f.a) == nil {
 					t.Fatal("schema gate accepted old version 8")
@@ -41,9 +41,11 @@ func TestReferenceRequestMigrationSafety(t *testing.T) {
 					must(t, err)
 				}
 			}
-			if _, err := f.provider.Down(f.ctx); err == nil {
+			if _, err := f.provider.DownTo(f.ctx, 8); err == nil {
 				t.Fatal("rollback discarded configured admission or request history")
 			}
+			_, err := f.provider.Up(f.ctx)
+			must(t, err)
 			must(t, db.CheckSchema(f.ctx, f.a))
 			total, queued := 1, 1
 			if mode == "configured" {

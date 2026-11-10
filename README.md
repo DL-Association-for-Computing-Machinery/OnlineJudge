@@ -303,7 +303,7 @@ python3 -B -m unittest discover -s tests/governance -p test_problem_drafts.py -v
 
 ### 出题角色维护与草稿入库服务
 
-出题角色始于schema 7，当前schema 9仍默认不给任何账号授予角色。受信维护者先独立迁移，再用 Docker 工具链构建的命令明确授予/撤销；`OJ_DATABASE_URL` 通过既有私有环境注入，不把真实连接信息写入命令或日志：
+出题角色始于schema 7，当前 schema 10仍默认不给任何账号授予角色。受信维护者先独立迁移，再用 Docker 工具链构建的命令明确授予/撤销；`OJ_DATABASE_URL` 通过既有私有环境注入，不把真实连接信息写入命令或日志：
 
 ```sh
 .local/bin/migrate up
@@ -316,7 +316,7 @@ python3 -B -m unittest discover -s tests/governance -p test_problem_drafts.py -v
 
 `internal/problem.Service` 的创建/本人读取必须传真实普通会话凭据；授权后把选定草稿的全部材料写入私有Store，再读会话，并在同一PG事务核对恢复/账号/角色及写元数据。`LoadBundle`的expectedSourceLock来自受信配置原字节；材料根与bundle均由维护者预建。可选HTTP接入见下节；管理页面、审核和发布仍待完成，完整边界、幂等、迁移与实测归[草稿合同](docs/problem-drafts.md#私有草稿入库与本人读取)。
 
-`internal/problemreference.Service`提供[持久化参考验证申请](docs/reference-requests.md)：绑定实际会话及本人草稿，保存受信来源、完整导入修订、Profile原字节和原授权快照，并支持原键回执与取消。schema9默认没有准入policy，须受信维护显式配置后才接受新申请；没有HTTP入口或Worker消费者，不读取大材料或执行程序，草稿not-run及发布阻断保持。精确升级与Down9空历史/空policy条件见[迁移与回退](docs/reference-requests.md#迁移与回退)。
+`internal/problemreference.Service`提供[持久化参考验证申请](docs/reference-requests.md)：绑定实际会话及本人草稿，保存受信来源、完整导入修订、Profile原字节和原授权快照，并支持原键回执与取消。参考申请默认没有准入 policy，须受信维护显式配置后才接受新申请；内部计划准备可冻结对象材料，重新核对实时授权与申请状态后写入预期计划；没有 HTTP 入口或 Worker 消费者，不执行程序，草稿not-run及发布阻断保持。精确升级与回退条件见[迁移与回退](docs/reference-requests.md#迁移与回退)。
 
 ### 显式启用私有草稿 HTTP
 
@@ -417,7 +417,7 @@ API 镜像的 `/usr/local/bin/oj-api` 在非空 `OJ_SESSION_CONFIG_FILE` 下切�
 
 数据库及 Redis 的密码来源各自显式选择 `auth: "none"` 或 `"env"`。后者只读取固定的 `OJ_SESSION_DATABASE_PASSWORD` / `OJ_SESSION_REDIS_PASSWORD`，必须非空；前者拒绝对应非空残留环境。密码、登录 key、TLS 私钥均不写入配置 JSON、镜像或命令行。数据库不消费 `OJ_DATABASE_URL`，连接类 PG 环境变量须按运行时合同清理；服务不修改进程环境。
 
-启动前须由受信维护流程完成当前 schema 9（邮箱模型始于5、积压准入始于6、私有草稿始于7、列表索引始于8、参考申请始于9）、恢复状态开门、共享密钥分发及匹配的限流 marker 初始化；命令只检查，不自动迁移、初始化或修复。schema切换须在维护窗口排空/停止旧API、Worker及维护写入后执行，再启动匹配新版；运行中旧进程不会因版本变化自动停止，不混跑。精确回退条件见[参考申请迁移](docs/reference-requests.md#迁移与回退)及[草稿历史迁移](docs/problem-drafts.md#入库版本与迁移)。本次没有迁移现有持久化localdev或部署服务器。配置与公开证书可只读挂载，登录密钥及 TLS 私钥必须满足 0400/0600、root/进程 euid 所有等约束。非 root 容器须能遍历并读取这些文件。不要把完整配置或秘密对象输出到日志。
+启动前须由受信维护流程完成当前 schema 10（邮箱模型始于5、积压准入始于6、私有草稿始于7、列表索引始于8、参考申请始于9、预期计划始于10）、恢复状态开门、共享密钥分发及匹配的限流 marker 初始化；命令只检查，不自动迁移、初始化或修复。schema切换须在维护窗口排空/停止旧API、Worker及维护写入后执行，再启动匹配新版；运行中旧进程不会因版本变化自动停止，不混跑。精确回退条件见[参考申请迁移](docs/reference-requests.md#迁移与回退)及[草稿历史迁移](docs/problem-drafts.md#入库版本与迁移)。本次没有迁移现有持久化localdev或部署服务器。配置与公开证书可只读挂载，登录密钥及 TLS 私钥必须满足 0400/0600、root/进程 euid 所有等约束。非 root 容器须能遍历并读取这些文件。不要把完整配置或秘密对象输出到日志。
 
 direct 模式要求客户端直接 TLS；proxy 模式要求同一监听器的已验证客户端证书和允许的叶证书指纹，健康检查也须经 mTLS。现有 Compose/Nginx 的明文 backend 和浏览器页面尚未配置该入口；部署、生产阈值、真实证书/存储 TLS 和完整账号权限另行验收。回退先停服务并移除显式配置环境，不把旧明文路径接到会话 Handler。
 
@@ -521,7 +521,7 @@ python3 scripts/test-worker.py browser-loop \
   --output-dir /absolute/new/path/m0-browser
 ```
 
-Chromium参数可省略以使用该Playwright已安装的浏览器。产物必须为仓库外新目录，含检查JSON、私有日志及桌面/390px截图；测试以真实POST提交成功后丢弃响应验证未知/原键恢复，在浏览器确认queued且数据库无attempt后才启动真实Worker。查询503及提交BACKLOG_LIMIT/ADMISSION_UNAVAILABLE展示另由浏览器路由注入，不冒充真实数据库故障；共享准入后端另有真实PostgreSQL/双API验证。回退页面可关闭开关；数据库当前schema9按[参考申请合同](docs/reference-requests.md#迁移与回退)、历史schema8/7/6按草稿/积压合同升级与回退，不能直接混跑旧版进程；已接受提交仍按原Worker协议处理。
+Chromium参数可省略以使用该Playwright已安装的浏览器。产物必须为仓库外新目录，含检查JSON、私有日志及桌面/390px截图；测试以真实POST提交成功后丢弃响应验证未知/原键恢复，在浏览器确认queued且数据库无attempt后才启动真实Worker。查询503及提交BACKLOG_LIMIT/ADMISSION_UNAVAILABLE展示另由浏览器路由注入，不冒充真实数据库故障；共享准入后端另有真实PostgreSQL/双API验证。回退页面可关闭开关；数据库当前 schema 10按[参考申请合同](docs/reference-requests.md#迁移与回退)、历史schema8/7/6按草稿/积压合同升级与回退，不能直接混跑旧版进程；已接受提交仍按原Worker协议处理。
 
 ### 沙箱资源预算专项
 
