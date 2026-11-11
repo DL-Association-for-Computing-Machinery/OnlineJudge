@@ -1,7 +1,17 @@
-"""Fixed input validator controls for the pinned Library Checker sources."""
+"""Fixed quality controls for the pinned Library Checker sources."""
 
 from problem_source_common import digest
 
+
+INPUT_CONTROL_SCHEMA = "oj.source-validation.v2"
+WRONG_SOLUTION_SCHEMA = "oj.source-validation.v3"
+
+# Only the locked, stand-alone programs that upstream declares expect=WA.
+WRONG_SOLUTIONS = {
+    "sample/aplusb": "wa.cpp",
+    "data_structure/static_range_sum": "wa.cpp",
+    "number_theory/primality_test": "insufficient_random_bases.cpp",
+}
 
 # Each pair changes one field at a documented input boundary. Keep these bytes
 # fixed for source-validation.v2 so reports can be checked and reproduced.
@@ -36,3 +46,27 @@ def input_controls(source_id):
 
 def control_result(name, payload, exit_code):
     return {"id": name, "input_sha256": digest(payload), "exit_code": exit_code}
+
+
+def wrong_solution_result(problem, position, inventory):
+    """Bind an observed WA to one formal point in the original case order."""
+    path = problem["path"]
+    solution = WRONG_SOLUTIONS[path]
+    if type(position) is not int or not 1 <= position <= len(problem["cases"]):
+        raise ValueError("invalid wrong-solution case position")
+    case = problem["cases"][position - 1]
+    if case["sample"]:
+        raise ValueError("wrong-solution witness must be a formal point")
+    name = case["id"]
+    data = f"problems/{path.rsplit('/', 1)[-1]}"
+    return {
+        "solution": solution,
+        "solution_sha256": inventory[f"source/{path}/sol/{solution}"]["sha256"],
+        "checker_sha256": inventory[f"source/{path}/checker.cpp"]["sha256"],
+        "case_id": name,
+        "case_position": position,
+        "input_sha256": inventory[f"{data}/in/{name}.in"]["sha256"],
+        "answer_sha256": inventory[f"{data}/out/{name}.out"]["sha256"],
+        "candidate_exit": 0,
+        "checker_exit": 1,
+    }
