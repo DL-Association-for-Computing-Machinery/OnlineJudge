@@ -38,7 +38,7 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	c := runtimeConfig(t, f, namespace(t), true)
 	c.PrivateDrafts = &sessionruntime.PrivateDraftsConfig{MaterialRoot: root, BundleDirectory: bundle.Directory, SourceLockFile: lock,
 		SourceIDs: []string{"library-checker:aplusb"}, Timeout: 3 * time.Second, MaxInFlight: 1,
-		ReferenceRequests: true, ReviewIntake: true, ReviewAccess: true}
+		ReferenceRequests: true, ReviewIntake: true, ReviewAccess: true, ReviewReturns: true}
 	ca := testpki.New(t)
 	var proxyCert tls.Certificate
 	if mode == "proxy" {
@@ -56,6 +56,9 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	x := endpoint(a)
 	other := c
 	other.Database.ApplicationName += "_b"
+	readOnly := *c.PrivateDrafts
+	readOnly.ReviewReturns = false
+	other.PrivateDrafts = &readOnly
 	b := entryStart(t, binary, entryConfig(t, other, ca, 3*time.Second), "127.0.0.1:0")
 	y := endpoint(b)
 	if mode == "proxy" {
@@ -148,7 +151,7 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	cChanged.Database.ApplicationName += "_changed"
 	dChanged := *c.PrivateDrafts
 	dChanged.BundleDirectory = changed.Directory
-	dChanged.ReferenceRequests, dChanged.ReviewIntake, dChanged.ReviewAccess = false, false, false
+	dChanged.ReferenceRequests, dChanged.ReviewIntake, dChanged.ReviewAccess, dChanged.ReviewReturns = false, false, false, false
 	cChanged.PrivateDrafts = &dChanged
 	third := entryStart(t, binary, entryConfig(t, cChanged, ca, 3*time.Second), "127.0.0.1:0")
 	thirdEndpoint := endpoint(third)

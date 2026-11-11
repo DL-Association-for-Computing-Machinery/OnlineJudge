@@ -4,7 +4,7 @@ info:
   version: 0.1.0
   description: >-
     默认关闭的独立审核读取能力。使用普通 HTTPS 会话及当前审核资格；
-    每次只按明确分配读取一项的固定验证结论或审核材料。不提供审核决定或发布。
+    每次只按明确分配读取一项的固定验证结论或审核材料。退回另需显式开启；不提供批准或发布。
 security:
   - ordinarySession: []
 paths:
@@ -61,14 +61,95 @@ paths:
         '405': { $ref: '#/components/responses/Failure' }
         '409': { $ref: '#/components/responses/Failure' }
         '503': { $ref: '#/components/responses/Failure' }
+  /api/v1/problem-review/{review_id}/return:
+    parameters:
+      - $ref: './problem-draft-management.openapi.yaml#/components/parameters/ExpectedSubject'
+      - $ref: '#/components/parameters/ReviewID'
+    post:
+      operationId: returnAssignedReview
+      description: >-
+        需要 review_returns 和当前非作者分配。新决定绑定证据响应中的 assignment_revision、
+        import_revision 与 evidence_sha256；任一变化返回 409。相同材料最多退回一次，
+        即使已有多个送审 ID。理由为首尾无空白的非空 UTF-8，最多 512 字节，无控制字符。
+        请求最多 4096 字节；未知提交使用原请求键查询。所有响应 no-store/nosniff。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReturnIntent' }
+      responses:
+        '200': { $ref: '#/components/responses/ReturnReceipt' }
+        '400': { $ref: '#/components/responses/Failure' }
+        '401': { $ref: '#/components/responses/Failure' }
+        '403': { $ref: '#/components/responses/Failure' }
+        '404': { $ref: '#/components/responses/Failure' }
+        '405': { $ref: '#/components/responses/Failure' }
+        '409': { $ref: '#/components/responses/Failure' }
+        '413': { $ref: '#/components/responses/Failure' }
+        '415': { $ref: '#/components/responses/Failure' }
+        '503': { $ref: '#/components/responses/Failure' }
+  /api/v1/problem-review/{review_id}/return/{request_key}:
+    parameters:
+      - $ref: './problem-draft-management.openapi.yaml#/components/parameters/ExpectedSubject'
+      - $ref: '#/components/parameters/ReviewID'
+      - name: request_key
+        in: path
+        required: true
+        schema: { $ref: './problem-draft-imports.openapi.yaml#/components/schemas/RequestKey' }
+    get:
+      operationId: getAssignedReviewReturnReceipt
+      description: 仅查看当前仍有分配的审核人本人写入的原键回执。404 不证明没有在途写入。
+      responses:
+        '200': { $ref: '#/components/responses/ReturnReceipt' }
+        '400': { $ref: '#/components/responses/Failure' }
+        '401': { $ref: '#/components/responses/Failure' }
+        '403': { $ref: '#/components/responses/Failure' }
+        '404': { $ref: '#/components/responses/Failure' }
+        '405': { $ref: '#/components/responses/Failure' }
+        '409': { $ref: '#/components/responses/Failure' }
+        '503': { $ref: '#/components/responses/Failure' }
 components:
   securitySchemes:
     ordinarySession: { $ref: './session.openapi.yaml#/components/securitySchemes/ordinarySession' }
+  parameters:
+    ReviewID:
+      name: review_id
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ID' }
   responses:
     Failure: { $ref: './problem-draft-imports.openapi.yaml#/components/responses/Failure' }
+    ReturnReceipt:
+      description: 已提交的退回回执
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [review_id, request_key, assignment_revision, import_revision, evidence_sha256, reason, returned_at]
+            properties:
+              review_id: { $ref: '#/components/schemas/ID' }
+              request_key: { $ref: './problem-draft-imports.openapi.yaml#/components/schemas/RequestKey' }
+              assignment_revision: { $ref: '#/components/schemas/AssignmentRevision' }
+              import_revision: { $ref: '#/components/schemas/SHA256' }
+              evidence_sha256: { $ref: '#/components/schemas/SHA256' }
+              reason: { $ref: '#/components/schemas/ReturnReason' }
+              returned_at: { type: string, format: date-time }
   schemas:
     ID: { type: string, pattern: '^[0-9a-f]{32}$' }
     SHA256: { type: string, pattern: '^[0-9a-f]{64}$' }
+    AssignmentRevision: { type: integer, format: int64, minimum: 1 }
+    ReturnReason: { type: string, minLength: 1, maxLength: 512 }
+    ReturnIntent:
+      type: object
+      additionalProperties: false
+      required: [request_key, assignment_revision, import_revision, evidence_sha256, reason]
+      properties:
+        request_key: { $ref: './problem-draft-imports.openapi.yaml#/components/schemas/RequestKey' }
+        assignment_revision: { $ref: '#/components/schemas/AssignmentRevision' }
+        import_revision: { $ref: '#/components/schemas/SHA256' }
+        evidence_sha256: { $ref: '#/components/schemas/SHA256' }
+        reason: { $ref: '#/components/schemas/ReturnReason' }
     ReviewMaterials:
       type: object
       additionalProperties: false
@@ -97,12 +178,13 @@ components:
     ReviewEvidence:
       type: object
       additionalProperties: false
-      required: [review_id, draft_id, source_id, content_version, import_revision, source_lock_sha256,
+      required: [review_id, assignment_revision, draft_id, source_id, content_version, import_revision, source_lock_sha256,
         reference_request_id, formal_plan_sha256, profile_sha256, evidence_sha256, formal_verdict]
       dependentRequired:
         comparison_outcome: [comparison_plan_sha256]
       properties:
         review_id: { $ref: '#/components/schemas/ID' }
+        assignment_revision: { $ref: '#/components/schemas/AssignmentRevision' }
         draft_id: { $ref: '#/components/schemas/ID' }
         source_id: { type: string, minLength: 1, maxLength: 128 }
         content_version: { $ref: '#/components/schemas/SHA256' }

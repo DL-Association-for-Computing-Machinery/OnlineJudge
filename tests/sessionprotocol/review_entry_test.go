@@ -104,6 +104,7 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 	loginStatus(t, reviewMaterialsGET(x, receipt.ID, authorCookies, owner), 404)
 	loginStatus(t, reviewReadGET(y, receipt.ID+"/materials?hash="+got.EvidenceSHA256, cookies, reviewer.ID), 400)
 	loginStatus(t, reviewReadGET(y, receipt.ID+"/materials/"+got.EvidenceSHA256, cookies, reviewer.ID), 404)
+	testEntryReviewReturn(t, x, y, receipt, got, cookies, authorCookies, reviewer.ID, owner)
 	grant(reviewer.ID, 1, false)
 	loginStatus(t, reviewEvidenceGET(x, receipt.ID, cookies, reviewer.ID), 403)
 	loginStatus(t, reviewMaterialsGET(x, receipt.ID, cookies, reviewer.ID), 403)

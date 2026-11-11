@@ -25,6 +25,10 @@ type reviewIntakeStub struct {
 	want  problemreference.ReviewReceipt
 }
 
+func (s *reviewIntakeStub) AuthorReturnForSubject(context.Context, redisstore.Credential, string, string) (problemreference.ReviewReturnStatus, error) {
+	return problemreference.ReviewReturnStatus{}, problemreference.ErrNotFound
+}
+
 func (s *reviewIntakeStub) SubmitForSubject(ctx context.Context, c redisstore.Credential, subject string, intent problemreference.ReviewIntent) (problemreference.ReviewReceipt, error) {
 	if intent != s.want.ReviewIntent {
 		return problemreference.ReviewReceipt{}, problemreference.ErrInvalid

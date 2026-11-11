@@ -46,7 +46,7 @@ func (c ReviewAssignmentChange) Valid() bool {
 // This projection does not imply satisfaction of any review policy.
 type ReviewEvidence struct {
 	Reviewer           string `json:"-"`
-	AssignmentRevision int64  `json:"-"`
+	AssignmentRevision int64  `json:"assignment_revision"`
 	ReviewID           string `json:"review_id"`
 	DraftID            string `json:"draft_id"`
 	SourceID           string `json:"source_id"`

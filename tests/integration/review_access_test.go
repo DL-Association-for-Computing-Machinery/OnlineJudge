@@ -114,9 +114,15 @@ func TestReviewAccessAssignmentAndRevocation(t *testing.T) {
 	if a.Revision != 3 || a.ReviewerSubjectID != "" {
 		t.Fatal("withdrawal did not preserve a visible revision")
 	}
+	_, err = f.provider.DownTo(f.ctx, 16)
+	must(t, err)
 	if _, err := f.provider.DownTo(f.ctx, 15); err == nil || !strings.Contains(err.Error(), "cannot discard review access history") {
 		t.Fatalf("nonempty review access history could be dropped: %v", err)
 	}
+	// DownTo is not atomic across versions. Reapply the empty newer ledger
+	// before checking the current binary's exact startup version.
+	_, err = f.provider.Up(f.ctx)
+	must(t, err)
 	must(t, db.CheckSchema(f.ctx, f.a))
 }
 
@@ -189,6 +195,8 @@ func TestReviewAccessRollbackWaitsForWithdrawal(t *testing.T) {
 	f := newReviewFixture(t)
 	f.grant(t, f.reader, 0, true)
 	_, err := f.reviews.SetAssignment(f.ctx, f.change(0, f.reader.SubjectID, 1))
+	must(t, err)
+	_, err = f.provider.DownTo(f.ctx, 16)
 	must(t, err)
 	tx, err := f.a.Begin(f.ctx)
 	must(t, err)
