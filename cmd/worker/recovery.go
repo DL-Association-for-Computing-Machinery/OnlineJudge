@@ -19,6 +19,9 @@ func dispatch(ctx context.Context, args []string, logger *slog.Logger, drain <-c
 	if args[0] == "validate-reference" {
 		return validateReference(ctx, args[1:], logger)
 	}
+	if args[0] == "validate-checker-candidate" {
+		return validateCheckerCandidate(ctx, args[1:], logger)
+	}
 	if args[0] == "validate-convolution-differential" {
 		return validateConvolutionDifferential(ctx, args[1:], logger)
 	}

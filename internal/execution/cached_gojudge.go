@@ -158,11 +158,24 @@ func (g *CachedGoJudge) compileSources(ctx context.Context, p experiment.Executi
 
 // Run uses only its compiled executable, a verified cached input and one raw
 // stdout object. Both point objects are deleted before this method completes.
-func (g *CachedGoJudge) Run(ctx context.Context, p experiment.ExecutionProfile, id string, input []byte) (o Observation, err error) {
+func (g *CachedGoJudge) Run(ctx context.Context, p experiment.ExecutionProfile, id string, input []byte) (Observation, error) {
+	return g.run(ctx, p, id, input, false)
+}
+
+// RunCheckerTrial requires complete byte evidence from the reference cache.
+// It deliberately does not widen the output rules of the other run methods.
+func (g *CachedGoJudge) RunCheckerTrial(ctx context.Context, p experiment.ExecutionProfile, id string, input []byte) (Observation, error) {
+	return g.run(ctx, p, id, input, true)
+}
+
+func (g *CachedGoJudge) run(ctx context.Context, p experiment.ExecutionProfile, id string, input []byte, checkerTrial bool) (o Observation, err error) {
 	if err = g.acquire(ctx, false); err != nil {
 		return o, tagFailure(err, "validate", "executable", "")
 	}
 	defer func() { err = g.finish(ctx, err) }()
+	if checkerTrial && !g.reference {
+		return o, failureError("validate", "stdout", "invalid_evidence", "checker trial requires the reference cache")
+	}
 	if !g.verified || !g.compiled || id != g.executable || g.objects[id] == nil || !reflect.DeepEqual(p, g.runtime) {
 		return o, failureError("validate", "executable", "ownership", "cached execution rejected")
 	}
@@ -217,6 +230,9 @@ func (g *CachedGoJudge) Run(ctx context.Context, p experiment.ExecutionProfile, 
 	text := string(raw)
 	r.Files["stdout"] = &text
 	r.IDs = nil
+	if checkerTrial && !checkerTrialOutputEvidence(r, p) {
+		return o, failureError("validate", "stdout", "invalid_evidence", "contradictory checker trial output evidence")
+	}
 	o, err = g.observation(r, p, false)
 	if err == nil {
 		_, err = Classify(o, false)

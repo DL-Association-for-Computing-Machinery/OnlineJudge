@@ -87,6 +87,20 @@ go run ./cmd/checker-candidate --bundle "$PRIVATE_BUNDLE" \
 
 成功时输出候选配置和摘要。命令只检查冻结答案，既不运行题源程序，也不采纳生产限额；见[预检契约](docs/checker-admission.md#生产检查器候选预检)。
 
+### 候选检查器原始输出试跑
+
+在已配置且停止的专用参考槽上，可用上一步生成、另行核验的候选摘要试跑 A+B。沿用下节构建的宿主 `worker`，将来源锁、题包和输出目录写成绝对路径；输出目录必须新建且在题包之外。此固定槽的采集上限是 262144 字节，候选必须明确指定同一上限和自己的 token 限额；这些不是生产默认值。
+
+```sh
+env -u OJ_WORKER_M0_SLOT -u OJ_WORKER_M0_DUAL_EXPERIMENT OJ_SANDBOX_EXPERIMENT=1 \
+  .local/validation-host/worker validate-checker-candidate --start-stopped-slot \
+  --bundle "$PRIVATE_BUNDLE" --source-lock "$PWD/config/problem-sources/library-checker.json" \
+  --expected-plan "$TRUSTED_FORMAL_PLAN_SHA256" --expected-candidate "$TRUSTED_CANDIDATE_SHA256" \
+  --bytes "$CANDIDATE_BYTES" --token-bytes "$CANDIDATE_TOKEN_BYTES" --output "$NEW_TRIAL_REPORT"
+```
+
+报告只含候选、计划和档位绑定及运行结果，不含原始输出。运行或停止未确认时保留 `INCOMPLETE`，启动失败可能没有报告；如需恢复，只按现有参考槽恢复流程核对同一容器身份。见[试跑契约](docs/checker-admission.md#候选检查器原始输出试跑)。
+
 ### 私有草稿参考验证
 
 [#151 新题包](docs/delivery-log.md#2026-11-11新版题包十题参考复验与卷积报告接纳)的十题254点均通过固定环境维护参考验证并确认停止。最初批次因素性测试宿主超时中止，受控恢复后以新报告完成余下六题；[原失败](docs/delivery-log.md#2026-11-11新版题包维护参考复验中止)仍保留，根因未知。维护入口不写数据库验证状态或发布。需要已配置且停止的专用槽、已有固定镜像与 Docker Desktop、macOS arm64；命令不会自动创建、替换或恢复槽。使用已有 Go 1.26.11 工具链镜像构建独立宿主产物（不与 Linux 检查共用输出）：
