@@ -16,12 +16,13 @@ var referenceIdentityURI = regexp.MustCompile(`^spiffe://onlinejudge/reference-w
 
 // WithReferenceClaims adds the opt-in route without accepting reference
 // credentials on submission routes or regular credentials on reference claims.
-func WithReferenceClaims(next http.Handler, claims problemreference.WorkerClaimer, roots *x509.CertPool) http.Handler {
+func WithReferenceClaims(next http.Handler, claims problemreference.WorkerClaimer, roots *x509.CertPool, materials ...*problemreference.ReferenceMaterials) http.Handler {
 	if claims == nil {
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != referenceClaimPath {
+		materialPath := r.URL.Path == referenceDescribePath || r.URL.Path == referenceMaterialPath
+		if r.URL.Path != referenceClaimPath && !materialPath {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -38,6 +39,14 @@ func WithReferenceClaims(next http.Handler, claims problemreference.WorkerClaime
 		if r.Method != http.MethodPost {
 			w.Header().Set("Allow", http.MethodPost)
 			problem(w, 405, "METHOD_NOT_ALLOWED", "请求方法不支持")
+			return
+		}
+		if materialPath {
+			if len(materials) == 0 || materials[0] == nil {
+				problem(w, 404, "NOT_FOUND", "接口不存在")
+				return
+			}
+			serveReferenceMaterials(w, r, materials[0], node, roots)
 			return
 		}
 		var input problemreference.ClaimInput

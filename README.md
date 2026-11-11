@@ -325,7 +325,7 @@ env -u OJ_WORKER_M0_SLOT -u OJ_WORKER_M0_DUAL_EXPERIMENT OJ_SANDBOX_EXPERIMENT=1
   .local/bin/worker claim-reference REQUEST_ID SOURCE_ID EXPECTED_PLAN_SHA256
 ```
 
-命令获取同机槽后只发送一次领取，确认后退出并释放本地锁；数据库预留按其时钟在 30 秒后失效。无材料下发、题源执行、续租或回报；未知响应不自动重试。见[参考领取合同](docs/reference-requests.md#专用-worker-领取)。
+命令获取同机槽后只发送一次领取，再在同一锁内下载并校验冻结计划的全部材料，关闭匿名快照后退出；数据库预留仍按原时钟在 30 秒后失效。控制端还须配置 `OJ_WORKER_REFERENCE_MATERIAL_ROOT`，使用草稿入库的已存在私有对象根（Linux、当前 UID、0700；上限 128 MiB/对象，同时一个快照），与 M0 的 `OJ_MATERIAL_ROOT` 含义不同。无题源执行、续租或回报；未知响应和下载失败不自动重试，低带宽下载大题可能超时。见[参考材料合同](docs/reference-requests.md#有效预留内的材料下发)。
 
 
 ### 显式启用私有草稿 HTTP

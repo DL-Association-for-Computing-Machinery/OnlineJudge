@@ -64,6 +64,28 @@ func (p *Prepared) prepareDiskReference(ctx context.Context, sourceID string, ad
 }
 
 func freezeReferenceSnapshot(ctx context.Context, content Content, sourceID string, admission diskReferenceAdmission, open referenceOpen, release func()) (_ *ReferenceSnapshot, err error) {
+	return freezeSnapshot(ctx, open, release, func() (ReferencePlan, []fileReference, error) {
+		plan, d, err := referenceMetadata(content, admission.limits, sourceID, admission.path)
+		if err != nil {
+			return plan, nil, err
+		}
+		dependencies, err := bindReferenceDependencies(&plan, d, admission)
+		if err != nil {
+			return plan, nil, err
+		}
+		if err := open.validateCatalog(ctx, d, admission.limits.Cases); err != nil {
+			return plan, nil, err
+		}
+		refs := []fileReference{d.Provenance.OriginalFiles["source/"+admission.path+"/sol/correct.cpp"]}
+		refs = append(refs, dependencies...)
+		for _, c := range d.TestCases {
+			refs = append(refs, c.Input, c.Answer)
+		}
+		return plan, refs, nil
+	})
+}
+
+func freezeSnapshot(ctx context.Context, open referenceOpen, release func(), prepare func() (ReferencePlan, []fileReference, error)) (_ *ReferenceSnapshot, err error) {
 	if !referenceSnapshotActive.CompareAndSwap(false, true) {
 		if release != nil {
 			release()
@@ -84,19 +106,12 @@ func freezeReferenceSnapshot(ctx context.Context, content Content, sourceID stri
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	plan, d, err := referenceMetadata(content, admission.limits, sourceID, admission.path)
+	plan, refs, err := prepare()
 	if err != nil {
-		return nil, err
-	}
-	dependencies, err := bindReferenceDependencies(&plan, d, admission)
-	if err != nil {
-		return nil, err
-	}
-	if err := open.validateCatalog(ctx, d, admission.limits.Cases); err != nil {
 		return nil, err
 	}
 	s.plan = plan
-	s.caseStart = 1 + len(dependencies)
+	s.caseStart = 1 + len(plan.Dependencies)
 	f, err := os.CreateTemp("", "oj-reference-snapshot-*")
 	if err != nil {
 		return nil, errors.New("reference snapshot unavailable")
@@ -104,11 +119,6 @@ func freezeReferenceSnapshot(ctx context.Context, content Content, sourceID stri
 	s.file = f
 	if err := os.Remove(f.Name()); err != nil {
 		return nil, errors.New("reference snapshot anonymity unavailable")
-	}
-	refs := []fileReference{d.Provenance.OriginalFiles["source/"+admission.path+"/sol/correct.cpp"]}
-	refs = append(refs, dependencies...)
-	for _, c := range d.TestCases {
-		refs = append(refs, c.Input, c.Answer)
 	}
 	var offset int64
 	for _, ref := range refs {

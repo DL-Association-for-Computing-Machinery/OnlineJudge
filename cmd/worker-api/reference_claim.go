@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	identitypg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/postgres"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 	problempg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem/postgres"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
 	referencepg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference/postgres"
@@ -14,7 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func configureReferenceClaims(next http.Handler, pool *pgxpool.Pool, roots *x509.CertPool, nodeID string) (http.Handler, error) {
+func configureReferenceClaims(next http.Handler, pool *pgxpool.Pool, roots *x509.CertPool, nodeID string, objects ...problem.ReferenceObjectReader) (http.Handler, error) {
 	if nodeID == "" {
 		return next, nil
 	}
@@ -25,7 +26,14 @@ func configureReferenceClaims(next http.Handler, pool *pgxpool.Pool, roots *x509
 	if err != nil {
 		return nil, err
 	}
-	return workerapi.WithReferenceClaims(next, claims, roots), nil
+	var materials *problemreference.ReferenceMaterials
+	if len(objects) > 0 && objects[0] != nil {
+		materials, err = problemreference.NewReferenceMaterials(claims, objects[0])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return workerapi.WithReferenceClaims(next, claims, roots, materials), nil
 }
 
 func referenceClaimer(pool *pgxpool.Pool, nodeID string) (*referencepg.ReferenceClaimer, error) {

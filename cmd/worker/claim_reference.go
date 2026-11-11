@@ -30,10 +30,16 @@ func claimReference(ctx context.Context, args []string, logger *slog.Logger) err
 		return err
 	}
 	defer client.Close()
-	if err := claimWithHostSlot(ctx, input, func() (*slotLock, error) { return lockSlotMode(name, false) }, client.ClaimReference); err != nil {
+	if err := claimWithHostSlot(ctx, input, func() (*slotLock, error) { return lockSlotMode(name, false) }, client.ClaimReference, func(ctx context.Context, claim problemreference.WorkerClaim) error {
+		materials, err := client.FetchReference(ctx, claim)
+		if err != nil {
+			return err
+		}
+		return materials.Close()
+	}); err != nil {
 		return err
 	}
-	logger.Info("参考验证领取已确认；本命令不执行题源")
+	logger.Info("参考验证材料已完整领取并校验；本命令不执行题源")
 	return nil
 }
 
@@ -53,7 +59,7 @@ func referenceClaimSlot(input problemreference.ClaimInput) (string, error) {
 }
 
 func claimWithHostSlot(ctx context.Context, input problemreference.ClaimInput, acquire func() (*slotLock, error),
-	claim func(context.Context, problemreference.ClaimInput) (problemreference.WorkerClaim, error)) error {
+	claim func(context.Context, problemreference.ClaimInput) (problemreference.WorkerClaim, error), fetch ...func(context.Context, problemreference.WorkerClaim) error) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -62,11 +68,14 @@ func claimWithHostSlot(ctx context.Context, input problemreference.ClaimInput, a
 		return err
 	}
 	defer lock.Close()
-	// No sandbox is opened: the kernel lock covers this one request, and no
-	// dirty marker is written. Any future execution must retain the same lock.
+	// The same kernel lock covers the reservation and all material I/O. No
+	// sandbox is opened, so no execution dirty marker is written.
 	result, err := claim(ctx, input)
 	if err == nil && !result.ValidFor(input) {
 		return workerclient.ErrClaimUnknown
+	}
+	if err == nil && len(fetch) > 0 {
+		return fetch[0](ctx, result)
 	}
 	return err
 }

@@ -15,6 +15,8 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/db"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materials"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materialstore"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/workerapi"
 )
@@ -71,8 +73,20 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		defer func() { _ = reader.Close() }()
 		materialService = materials.New(store, reader)
 	}
+	var referenceObjects problem.ReferenceObjectReader
+	if root := os.Getenv("OJ_WORKER_REFERENCE_MATERIAL_ROOT"); root != "" {
+		if os.Getenv("OJ_WORKER_REFERENCE_NODE_ID") == "" {
+			return errors.New("reference material root requires a reference node")
+		}
+		objects, err := materialstore.OpenLocal(materialstore.Config{Root: root, MaxObjectBytes: 128 << 20, MaxInFlight: 1})
+		if err != nil {
+			return err
+		}
+		defer func() { _ = objects.Close() }()
+		referenceObjects = objects
+	}
 	handler, err := configureReferenceClaims(workerapi.NewHandler(store, tlsConfig.ClientCAs, materialService),
-		pool, tlsConfig.ClientCAs, os.Getenv("OJ_WORKER_REFERENCE_NODE_ID"))
+		pool, tlsConfig.ClientCAs, os.Getenv("OJ_WORKER_REFERENCE_NODE_ID"), referenceObjects)
 	if err != nil {
 		return err
 	}

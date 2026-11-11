@@ -43,6 +43,20 @@ func TestReferenceClaimHoldsSharedHostAndTargetThroughRequest(t *testing.T) {
 	if err := claimWithHostSlot(t.Context(), input, guard, claim); err != nil || calls != 1 {
 		t.Fatal("expected one guarded claim", err)
 	}
+	// A distinct successful claim stub lets us assert the entire download stays
+	// within the SAME host + target lock, including its error path.
+	fetches := 0
+	goodClaim := func(ctx context.Context, i problemreference.ClaimInput) (problemreference.WorkerClaim, error) {
+		return problemreference.WorkerClaim{RequestID: i.RequestID, SourceID: i.SourceID, PlanSHA256: i.PlanSHA256, Token: strings.Repeat("b", 64), Until: time.Now().Add(time.Minute)}, nil
+	}
+	if err := claimWithHostSlot(t.Context(), input, guard, goodClaim, func(context.Context, problemreference.WorkerClaim) error {
+		fetches++
+		rejectHostSlot(t, dir, judge, false, false)
+		rejectHostSlot(t, dir, slot, true, false)
+		return workerclient.ErrMaterials
+	}); !errors.Is(err, workerclient.ErrMaterials) || fetches != 1 {
+		t.Fatal("material fetch escaped its host guard", err)
+	}
 	if err := claimWithHostSlot(t.Context(), input, guard, claim); !errors.Is(err, workerclient.ErrClaimUnknown) || calls != 2 {
 		t.Fatal("unknown response was retried or suppressed", err)
 	}
