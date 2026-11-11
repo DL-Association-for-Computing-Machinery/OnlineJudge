@@ -33,22 +33,23 @@ type Config struct {
 }
 
 type handler struct {
-	store           Store
-	config          Config
-	host            string
-	protection      http.CrossOriginProtection
-	login           *redisstore.Login
-	proxy           *proxyTrust
-	passwordChange  *redisstore.PasswordChange
-	drafts          Drafts
-	draftTimeout    time.Duration
-	references      ReferenceRequests
-	preparation     ReferencePreparation
-	reviewIntake    ReviewIntake
-	reviewEvidence  ReviewEvidenceReader
-	reviewSolution  AuthorReviewSolution
-	reviewMaterials ReviewMaterialsReader
-	reviewReturns   ReviewReturns
+	store                  Store
+	config                 Config
+	host                   string
+	protection             http.CrossOriginProtection
+	login                  *redisstore.Login
+	proxy                  *proxyTrust
+	passwordChange         *redisstore.PasswordChange
+	drafts                 Drafts
+	draftTimeout           time.Duration
+	references             ReferenceRequests
+	preparation            ReferencePreparation
+	reviewIntake           ReviewIntake
+	reviewEvidence         ReviewEvidenceReader
+	reviewSolution         AuthorReviewSolution
+	reviewMaterials        ReviewMaterialsReader
+	reviewReturns          ReviewReturns
+	statementConfirmations StatementConfirmations
 }
 
 // New builds three explicit endpoints without registering any application route:
@@ -87,6 +88,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	reviewMethod, reviewKey, authorAction := reviewIntakeRoute(r.URL.Path)
 	reviewID, reviewRead := reviewReadRoute(r.URL.Path)
 	returnID, returnKey, returnMethod := reviewReturnRoute(r.URL.Path)
+	statementID, statementKey, statementMethod := reviewActionRoute(r.URL.Path, statementConfirmationAction)
 	switch r.URL.Path {
 	case "/api/v1/session":
 		method = http.MethodGet
@@ -105,6 +107,14 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		method = http.MethodPost
 	default:
+		if statementMethod != "" {
+			if h.statementConfirmations == nil {
+				problem(w, http.StatusNotFound, "NOT_FOUND", "接口不存在")
+				return
+			}
+			method = statementMethod
+			break
+		}
 		if returnMethod != "" {
 			if h.reviewReturns == nil {
 				problem(w, http.StatusNotFound, "NOT_FOUND", "接口不存在")
@@ -188,6 +198,10 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if returnMethod != "" {
 		h.serveReviewReturn(w, r, returnID, returnKey)
+		return
+	}
+	if statementMethod != "" {
+		h.serveStatementConfirmation(w, r, statementID, statementKey)
 		return
 	}
 	if reviewID != "" {

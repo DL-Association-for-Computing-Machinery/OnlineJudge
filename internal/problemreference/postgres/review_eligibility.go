@@ -34,6 +34,19 @@ func (s *ReviewStore) ReviewEligibilitySnapshot(ctx context.Context, actor ident
 	if _, err := loadHistoricalReviewEvidence(ctx, q, item.owner, item.evidence); err != nil {
 		return zero, storageError{err}
 	}
+	statement, err := q.StatementConfirmationByAssignment(ctx, referencedb.StatementConfirmationByAssignmentParams{
+		ReviewID: id, AssignmentRevision: item.evidence.AssignmentRevision,
+	})
+	statementConfirmed := err == nil
+	if statementConfirmed {
+		if _, err := checkedStatementConfirmation(statement, item); err != nil {
+			return zero, err
+		}
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return zero, storageError{err}
+	}
+	// Check returns after confirmations: a return that precedes an observed
+	// confirmation can never be missed by this read-committed transaction.
 	digest := item.materialDigest()
 	_, err = q.ReviewReturnByMaterial(ctx, hex.EncodeToString(digest[:]))
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
@@ -55,5 +68,6 @@ func (s *ReviewStore) ReviewEligibilitySnapshot(ctx context.Context, actor ident
 	if err := ctx.Err(); err != nil {
 		return zero, err
 	}
-	return problemreference.ReviewEligibilitySnapshot{Evidence: item.evidence, Returned: returned, SolutionConfirmed: confirmed}, nil
+	return problemreference.ReviewEligibilitySnapshot{Evidence: item.evidence, Returned: returned, SolutionConfirmed: confirmed,
+		StatementConfirmed: statementConfirmed && !returned}, nil
 }

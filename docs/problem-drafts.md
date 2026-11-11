@@ -119,9 +119,17 @@ schema 16 新增两张只追加的历史表。主体／项和修订的复合主�
 
 这是作者对标程的确认。独立非作者终审仍必需，已退回的材料仍阻止批准。确认不会改草稿状态、验证结论或发布状态。schema 18 只追加确认账本，保存首次确认对应的送审项及当时的作者资格、会话代次和时间。主键支撑同绑定去重和查找，另有送审外键索引；每次新确认增加两个索引条目及相应 WAL。停机后只允许空账本回退；已有确认应前滚。
 
+### 审核人确认题面语义
+
+显式启用 `private_drafts.statement_confirmations`（需要 `review_access`）后，当前指定非作者可用同源 `POST /api/v1/problem-review/{review_id}/statement-confirmation` 记录对冻结题意、约束、输入输出定义及样例解释的四项核对。使用证据响应的分配修订、完整导入修订和证据摘要，并传原请求键及 `checklist_version: "oj.statement-semantics.v1"` 以明确声明四项均已人工核对。系统校验引用字节，不替人作出判断。
+
+新增记录前在共享材料槽核验题面、样例及选中图片，随后重读真实会话；写事务复核相同主体、会话代次、角色、分配和冻结清单。事务以身份、送审项、同材料锁为顺序，已退回材料不能新增确认，确认后仍可退回；同材料其他送审项的退回也会使该确认不再用于准入。单次分配只追加一条确认，换人或撤权重授后不继承。已写成的历史保留；分配不变时可用 `GET /api/v1/problem-review/{review_id}/statement-confirmation/{request_key}` 回读原键，不重新读材料或写入。确认未知时用原键回读，404 不表示没有在途写入。
+
+准入只在当前分配有有效确认且材料未退回时返回 `statement_semantics_confirmed: true`。还须具有同冻结绑定的可信渲染证据才解除 `statement_quality_missing`。题面确认不改变草稿、正式结果、批准或发布状态。schema 19 增加两条唯一索引：审核项＋分配修订用于查当前确认，审核人＋原键用于回执；每次新确认维护两个 B-tree 条目并增加相应 WAL。维护窗口停新版后仅允许空账本回退，非空须前滚。
+
 ### 批准准入状态
 
-`GET /api/v1/problem-review/{review_id}/eligibility` 沿用审核开关、普通会话和预期主体头。仅当前被分配的非作者可读；同一短事务核验完整导入修订、冻结计划及已接纳报告，查询同材料是否已退回及同绑定的作者确认。响应包含固定证据摘要、策略版本 `oj.review-approval.v4`、`eligible: false` 及阻断码。读取不写决定，不能作为批准凭证。
+`GET /api/v1/problem-review/{review_id}/eligibility` 沿用审核开关、普通会话和预期主体头。仅当前被分配的非作者可读；同一短事务核验完整导入修订、冻结计划及已接纳报告，查询同材料是否已退回及同绑定的作者确认。响应包含固定证据摘要、策略版本 `oj.review-approval.v5`、`eligible: false` 及阻断码。读取不写决定，不能作为批准凭证。
 
 | 阻断码 | 需要处理的事项 |
 | --- | --- |
@@ -130,12 +138,12 @@ schema 16 新增两张只追加的历史表。主体／项和修订的复合主�
 | `formal_failed` | 正式验证结论不是 AC |
 | `comparison_missing`、`comparison_mismatch` | 卷积缺已接纳的本站对拍通过证据，或记录了差异 |
 | `independent_correctness_missing` | 非卷积题未命中可信独立正确性证据 |
-| `statement_quality_missing`、`test_coverage_missing` | 尚无完整修订的题面质量或足以通过准入的正式数据覆盖证据 |
+| `statement_quality_missing`、`test_coverage_missing` | 当前题面尚缺有效人工确认或可信渲染证据，或尚缺足以通过准入的正式数据覆盖证据 |
 | `input_validator_missing` | 当前绑定没有受信输入校验证据 |
 | `checker_admission_missing`、`target_runtime_missing` | 尚无该修订的生产检查器或目标节点资源准入证据 |
 | `solution_confirmation_missing` | 尚无作者对该完整修订及正式计划的标程确认 |
 
-题面质量、完整数据覆盖、生产检查器和目标环境仍阻止批准。即使正式点、卷积对拍、输入校验及作者确认都通过，也不会开放批准。不接收客户端指定的规则版本或证据；报告绑定不一致则返回 503，不返回部分结果。
+未核对的题面、完整数据覆盖、生产检查器和目标环境仍阻止批准。即使正式点、卷积对拍、输入校验及作者确认都通过，也不会开放批准。不接收客户端指定的规则版本或证据；报告绑定不一致则返回 503，不返回部分结果。
 
 仅当现行 Profile、来源锁、题目来源、内容版本、完整导入修订和正式计划摘要同时命中已审查的 Library Checker v6 绑定，才返回 `input_validator_evidence`。其字段为报告摘要 `report_sha256`、该题已校验输入数 `inputs` 和对照数 `controls`（每题一个接受、三个拒绝）。完整修订绑定报告和材料；正式计划绑定送审用例的顺序与字节摘要。旧修订、替换材料、陌生报告或未命中绑定继续阻断，响应省略证据对象。此证据记录题源准备阶段已完成的校验，不证明当前目标节点、生产检查器或数据覆盖。
 
@@ -143,7 +151,7 @@ schema 16 新增两张只追加的历史表。主体／项和修订的复合主�
 
 十题 v6 以同样的精确绑定返回 `wrong_solution_evidence`：报告摘要、候选来源（上游或本地）、候选标识、原 checker 拒绝的点号，以及拒绝前已记录为接受的点号。点号从 1 开始，对应冻结正式计划的完整顺序（编号包含样例，证据只取非样例点）；接受点按探测顺序排列。空数组表示报告没有此类记录。每题仅证明一种固定错误可被发现，`test_coverage_missing` 及其他阻断保持。响应不包含输入、答案或候选源码。
 
-十题 v6 以同样的精确绑定返回 `statement_rendering_evidence`，包含历史浏览器报告摘要及本题样例、渲染公式和输入输出格式块的数量。[桌面与窄屏验证](delivery-log.md#2026-11-11六题输入输出格式逐行排版)使用的是旧导入修订，但十题的内容版本、Markdown 和有序样例字节与 v6 一致。接口只展示已核实的历史观测；`statement_quality_missing` 保持。非作者仍须核对题意、约束、输入输出语义和样例解释；当前没有记录该人工确认的入口。
+十题 v6 以同样的精确绑定返回 `statement_rendering_evidence`，包含历史浏览器报告摘要及本题样例、渲染公式和输入输出格式块的数量。[桌面与窄屏验证](delivery-log.md#2026-11-11六题输入输出格式逐行排版)使用的是旧导入修订，但十题的内容版本、Markdown 和有序样例字节与 v6 一致。接口只展示已核实的历史观测。`statement_quality_missing` 只有在同时具有[当前非作者题面确认](#审核人确认题面语义)和可信渲染证据时才解除。
 
 ### 审核材料读取
 
@@ -173,9 +181,9 @@ schema 17 增加只追加的退回账本。送审主键、完整材料唯一索�
 
 PG事务同一次提交owner、稳定ID、不可变文档/版本、全部引用及请求回执。同owner同键同内容返回原记录，不同内容为`ErrConflict`。`ErrCommitUnknown`后保持原键/原bundle核验；不得用新键制造重复记录。Put失败/未知不提交引用，已成功的无引用对象保留，当前没有全局磁盘额度或孤儿GC。业务读取限本人元数据/题面样例、授权配置候选摘要、本人导入回执和分页列表；不提供改写、删除、转让、共享或一般材料下载，状态结构性固定`private-draft/not-run`。
 
-角色/审计及草稿/材料关联表始于schema7，不为历史账号授予权限；schema8新增`problem_drafts_owner_created_id_idx(owner_subject_id,created_at DESC,id COLLATE "C" DESC)`，使首屏和深页owner+seek查询不扫描/排序全部历史。每次新草稿多维护一个B-tree条目及相应WAL/磁盘，实际占用依数据分布而变；12000行合成查询计划及索引大小见交付记录，不将该样本当生产容量估算。原owner/key唯一索引支持幂等定位，主键支持本人ID读取，材料复合主键支持按草稿读取；不为列表附带大document或冗余覆盖字段。schema9 另增[参考申请账本与默认空policy](reference-requests.md)，schema 10 增加预期计划表，schema 11 增加参考领取预留，schema 12 增加参考报告和申请终态，schema 13 增加参考调度，schema 14 增加卷积对拍预期计划，schema 15 增加作者送审账本，schema 16 增加审核资格和分配，schema 17 增加退回账本，schema 18 增加作者确认账本；均不修改既有草稿、角色或材料引用。
+角色/审计及草稿/材料关联表始于schema7，不为历史账号授予权限；schema8新增`problem_drafts_owner_created_id_idx(owner_subject_id,created_at DESC,id COLLATE "C" DESC)`，使首屏和深页owner+seek查询不扫描/排序全部历史。每次新草稿多维护一个B-tree条目及相应WAL/磁盘，实际占用依数据分布而变；12000行合成查询计划及索引大小见交付记录，不将该样本当生产容量估算。原owner/key唯一索引支持幂等定位，主键支持本人ID读取，材料复合主键支持按草稿读取；不为列表附带大document或冗余覆盖字段。schema9 另增[参考申请账本与默认空policy](reference-requests.md)，schema 10 增加预期计划表，schema 11 增加参考领取预留，schema 12 增加参考报告和申请终态，schema 13 增加参考调度，schema 14 增加卷积对拍预期计划，schema 15 增加作者送审账本，schema 16 增加审核资格和分配，schema 17 增加退回账本，schema 18 增加作者确认账本，schema 19 增加审核人题面确认账本；均不修改既有草稿、角色或材料引用。
 
-升级在维护窗口排空并停止旧版 API/Worker 及维护写入，独立 `migrate up` 至当前 schema 18 后启动匹配二进制。API 不自动迁移，新二进制拒绝其他 schema。迁移不会停止旧进程，不混跑；本次没有迁移已有持久化 localdev 或服务器。回退先停新版，[Down18](#作者确认标程) 只允许空标程确认账本；[Down17](#审核退回与重送) 只允许空退回账本；[Down16](#审核人分配与证据摘要) 只允许空访问历史；Down15 见[作者送审回执](#作者送审回执)；历史 Down14/Down13/Down12/Down11/Down10/Down9 的锁序与条件见[参考申请迁移](reference-requests.md#迁移与回退)。
+升级在维护窗口排空并停止旧版 API/Worker 及维护写入，独立 `migrate up` 至当前 schema 19 后启动匹配二进制。API 不自动迁移，新二进制拒绝其他 schema。迁移不会停止旧进程，不混跑；本次没有迁移已有持久化 localdev 或服务器。回退先停新版，[Down19](#审核人确认题面语义) 只允许空题面确认账本；[Down18](#作者确认标程) 只允许空标程确认账本；[Down17](#审核退回与重送) 只允许空退回账本；[Down16](#审核人分配与证据摘要) 只允许空访问历史；Down15 见[作者送审回执](#作者送审回执)；历史 Down14/Down13/Down12/Down11/Down10/Down9 的锁序与条件见[参考申请迁移](reference-requests.md#迁移与回退)。
 
 历史schema8的普通CREATE INDEX在事务中建索引，需要协调写入，不使用CONCURRENTLY。Down8仅删列表索引并保留全部草稿/权限，重Up8保留资料；回到8后须匹配要求8的二进制，继续Down8至7后才可启动要求7的旧版。继续Down7至6仍仅允许角色、审计、草稿均空，存在数据则向前修复；Down6也保留原积压保护，不清表绕过。
 

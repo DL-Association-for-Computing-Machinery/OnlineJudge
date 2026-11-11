@@ -9,6 +9,7 @@ import (
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
+	problempg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem/postgres"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
 	referencepg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference/postgres"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/redisstore"
@@ -64,5 +65,18 @@ func TestV6IndependentCorrectnessThroughReview(t *testing.T) {
 	if rendering == nil || rendering.Examples != 2 || rendering.Formulas != 6 || rendering.FormatBlocks != 2 ||
 		!slices.Contains(got.Blockers, "statement_quality_missing") {
 		t.Fatalf("browser evidence must remain separate from semantic review: %+v", got)
+	}
+	confirmations, err := referencepg.NewReviewMaterialStore(store, problempg.ReadBoundReviewDraft)
+	must(t, err)
+	before, err := confirmations.ReviewMaterialSnapshot(f.ctx, reviewer, item.ID)
+	must(t, err)
+	_, err = confirmations.RecordStatementConfirmation(f.ctx, reviewer, item.ID,
+		statementIntent(before.Evidence, "v6-statement-confirmation"), before)
+	must(t, err)
+	confirmed, err := access.EligibilityForSubject(f.ctx, f.credential, reviewer.SubjectID, item.ID)
+	must(t, err)
+	want := slices.DeleteFunc(slices.Clone(got.Blockers), func(blocker string) bool { return blocker == "statement_quality_missing" })
+	if !confirmed.StatementSemanticsConfirmed || confirmed.Eligible || !slices.Equal(confirmed.Blockers, want) {
+		t.Fatalf("confirmed semantics and rendering did not clear only statement quality: %+v", confirmed)
 	}
 }

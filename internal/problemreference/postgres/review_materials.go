@@ -49,6 +49,21 @@ func (s *ReviewMaterialStore) ReviewMaterialSnapshot(ctx context.Context, actor 
 	if err != nil {
 		return zero, err
 	}
+	snapshot, err := s.materialSnapshot(ctx, tx, item)
+	if err != nil {
+		return zero, err
+	}
+	if err := commitTx(ctx, tx, false); err != nil {
+		return zero, err
+	}
+	if err := ctx.Err(); err != nil {
+		return zero, err
+	}
+	return snapshot, nil
+}
+
+func (s *ReviewMaterialStore) materialSnapshot(ctx context.Context, tx pgx.Tx, item assignedReview) (problemreference.ReviewMaterialSnapshot, error) {
+	var zero problemreference.ReviewMaterialSnapshot
 	draft, err := s.drafts(ctx, tx, item.evidence.DraftID, item.owner)
 	if err != nil {
 		return zero, storageError{err}
@@ -64,12 +79,6 @@ func (s *ReviewMaterialStore) ReviewMaterialSnapshot(ctx context.Context, actor 
 	manifest, err := draft.PrepareReviewMaterials(item.evidence.DraftID, item.owner, frozen.bound, plan)
 	if err != nil {
 		return zero, storageError{err}
-	}
-	if err := commitTx(ctx, tx, false); err != nil {
-		return zero, err
-	}
-	if err := ctx.Err(); err != nil {
-		return zero, err
 	}
 	return problemreference.ReviewMaterialSnapshot{Evidence: item.evidence, Owner: item.owner,
 		RoleRevision: item.roleRevision, Manifest: manifest}, nil

@@ -90,7 +90,7 @@ func (m ReviewMaterialManifest) Read(ctx context.Context, store ReferenceObjectR
 	if !m.validSolutionRead(ctx, store) {
 		return Preview{}, ReviewSolution{}, ErrInvalid
 	}
-	preview, err := readPreview(ctx, store, m.statement)
+	preview, err := m.ReadStatement(ctx, store)
 	if err != nil {
 		return Preview{}, ReviewSolution{}, err
 	}
@@ -99,6 +99,12 @@ func (m ReviewMaterialManifest) Read(ctx context.Context, store ReferenceObjectR
 		return Preview{}, ReviewSolution{}, err
 	}
 	return preview, solution, nil
+}
+
+// ReadStatement verifies only the selected statement, samples and images.
+// The caller holds the material slot and must recheck authority after this read.
+func (m ReviewMaterialManifest) ReadStatement(ctx context.Context, store ReferenceObjectReader) (Preview, error) {
+	return readPreview(ctx, store, m.statement)
 }
 
 // ReadSolution verifies only the pinned solution closure. The caller supplies

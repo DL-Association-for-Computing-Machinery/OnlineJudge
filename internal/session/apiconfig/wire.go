@@ -21,16 +21,17 @@ type document struct {
 }
 
 type privateDraftsWire struct {
-	MaterialRoot      string   `json:"material_root"`
-	BundleDirectory   string   `json:"bundle_directory"`
-	SourceLockFile    string   `json:"source_lock_file"`
-	SourceIDs         []string `json:"source_ids"`
-	Timeout           string   `json:"timeout"`
-	MaxInFlight       int      `json:"max_in_flight"`
-	ReferenceRequests bool     `json:"reference_requests"`
-	ReviewIntake      bool     `json:"review_intake"`
-	ReviewAccess      bool     `json:"review_access"`
-	ReviewReturns     bool     `json:"review_returns"`
+	MaterialRoot           string   `json:"material_root"`
+	BundleDirectory        string   `json:"bundle_directory"`
+	SourceLockFile         string   `json:"source_lock_file"`
+	SourceIDs              []string `json:"source_ids"`
+	Timeout                string   `json:"timeout"`
+	MaxInFlight            int      `json:"max_in_flight"`
+	ReferenceRequests      bool     `json:"reference_requests"`
+	ReviewIntake           bool     `json:"review_intake"`
+	ReviewAccess           bool     `json:"review_access"`
+	ReviewReturns          bool     `json:"review_returns"`
+	StatementConfirmations bool     `json:"statement_confirmations"`
 }
 
 type passwordChangeWire struct {

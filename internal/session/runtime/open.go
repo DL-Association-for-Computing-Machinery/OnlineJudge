@@ -132,10 +132,14 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 		}
 		if drafts.evidence != nil {
 			var returns httptransport.ReviewReturns
+			var statements httptransport.StatementConfirmations
 			if drafts.returns != nil {
 				returns = drafts.returns
 			}
-			handler, err = httptransport.WithReviewEvidence(handler, drafts.evidence, drafts.materials, returns)
+			if drafts.statements != nil {
+				statements = drafts.statements
+			}
+			handler, err = httptransport.WithReviewEvidence(handler, drafts.evidence, drafts.materials, returns, statements)
 			if err != nil {
 				return nil, ErrConfig
 			}

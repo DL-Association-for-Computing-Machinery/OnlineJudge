@@ -160,6 +160,52 @@ paths:
         '405': { $ref: '#/components/responses/Failure' }
         '409': { $ref: '#/components/responses/Failure' }
         '503': { $ref: '#/components/responses/Failure' }
+  /api/v1/problem-review/{review_id}/statement-confirmation:
+    parameters:
+      - $ref: './problem-draft-management.openapi.yaml#/components/parameters/ExpectedSubject'
+      - $ref: '#/components/parameters/ReviewID'
+    post:
+      operationId: confirmAssignedStatementSemantics
+      description: >-
+        需要 statement_confirmations、当前非作者分配和同源 POST。明确声明已核对题意、约束、
+        输入输出定义及样例解释。服务端校验冻结题面、样例及图片，在写事务内复核授权和证据。
+        已退回或变更分配不能写入新确认。请求至多 4096 字节；提交未知时使用原键查询。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StatementConfirmationIntent' }
+      responses:
+        '200': { $ref: '#/components/responses/StatementConfirmationReceipt' }
+        '400': { $ref: '#/components/responses/Failure' }
+        '401': { $ref: '#/components/responses/Failure' }
+        '403': { $ref: '#/components/responses/Failure' }
+        '404': { $ref: '#/components/responses/Failure' }
+        '405': { $ref: '#/components/responses/Failure' }
+        '409': { $ref: '#/components/responses/Failure' }
+        '413': { $ref: '#/components/responses/Failure' }
+        '415': { $ref: '#/components/responses/Failure' }
+        '503': { $ref: '#/components/responses/Failure' }
+  /api/v1/problem-review/{review_id}/statement-confirmation/{request_key}:
+    parameters:
+      - $ref: './problem-draft-management.openapi.yaml#/components/parameters/ExpectedSubject'
+      - $ref: '#/components/parameters/ReviewID'
+      - name: request_key
+        in: path
+        required: true
+        schema: { $ref: './problem-draft-imports.openapi.yaml#/components/schemas/RequestKey' }
+    get:
+      operationId: getAssignedStatementConfirmationReceipt
+      description: 在原分配仍有效时只读查询本人原键回执。404 不证明没有在途写入。
+      responses:
+        '200': { $ref: '#/components/responses/StatementConfirmationReceipt' }
+        '400': { $ref: '#/components/responses/Failure' }
+        '401': { $ref: '#/components/responses/Failure' }
+        '403': { $ref: '#/components/responses/Failure' }
+        '404': { $ref: '#/components/responses/Failure' }
+        '405': { $ref: '#/components/responses/Failure' }
+        '409': { $ref: '#/components/responses/Failure' }
+        '503': { $ref: '#/components/responses/Failure' }
 components:
   securitySchemes:
     ordinarySession: { $ref: './session.openapi.yaml#/components/securitySchemes/ordinarySession' }
@@ -171,6 +217,22 @@ components:
       schema: { $ref: '#/components/schemas/ID' }
   responses:
     Failure: { $ref: './problem-draft-imports.openapi.yaml#/components/responses/Failure' }
+    StatementConfirmationReceipt:
+      description: 已提交的原分配确认回执
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [review_id, request_key, assignment_revision, import_revision, evidence_sha256, checklist_version, confirmed_at]
+            properties:
+              review_id: { $ref: '#/components/schemas/ID' }
+              request_key: { $ref: './problem-draft-imports.openapi.yaml#/components/schemas/RequestKey' }
+              assignment_revision: { $ref: '#/components/schemas/AssignmentRevision' }
+              import_revision: { $ref: '#/components/schemas/SHA256' }
+              evidence_sha256: { $ref: '#/components/schemas/SHA256' }
+              checklist_version: { const: 'oj.statement-semantics.v1' }
+              confirmed_at: { type: string, format: date-time }
     ReturnReceipt:
       description: 已提交的退回回执
       content:
@@ -202,14 +264,27 @@ components:
         import_revision: { $ref: '#/components/schemas/SHA256' }
         evidence_sha256: { $ref: '#/components/schemas/SHA256' }
         reason: { $ref: '#/components/schemas/ReturnReason' }
+    StatementConfirmationIntent:
+      type: object
+      additionalProperties: false
+      required: [request_key, assignment_revision, import_revision, evidence_sha256, checklist_version]
+      properties:
+        request_key: { $ref: './problem-draft-imports.openapi.yaml#/components/schemas/RequestKey' }
+        assignment_revision: { $ref: '#/components/schemas/AssignmentRevision' }
+        import_revision: { $ref: '#/components/schemas/SHA256' }
+        evidence_sha256: { $ref: '#/components/schemas/SHA256' }
+        checklist_version: { const: 'oj.statement-semantics.v1' }
     ReviewEligibility:
       type: object
       additionalProperties: false
       required: [evidence, policy_version, eligible, blockers]
       properties:
         evidence: { $ref: '#/components/schemas/ReviewEvidence' }
-        policy_version: { const: 'oj.review-approval.v4' }
+        policy_version: { const: 'oj.review-approval.v5' }
         eligible: { const: false }
+        statement_semantics_confirmed:
+          const: true
+          description: 仅当前分配有有效确认且材料未退回时返回。题面质量仍要求可信渲染证据。
         input_validator_evidence:
           type: object
           additionalProperties: false
