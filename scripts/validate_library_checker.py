@@ -12,6 +12,7 @@ import time
 import tomllib
 import types
 
+from library_checker_quality import control_result, input_controls
 from problem_source_common import digest, expected_materials, load_lock, read_regular, snapshot
 
 
@@ -22,6 +23,16 @@ def checked(command, **kwargs):
     kwargs.setdefault("stderr", subprocess.DEVNULL)
     kwargs.setdefault("check", True)
     return subprocess.run(command, **kwargs)
+
+
+def run_input_controls(verifier, source_id):
+    observations = []
+    for name, payload, expected_exit in input_controls(source_id):
+        result = checked([str(verifier)], input=payload, check=False)
+        if result.returncode != expected_exit:
+            raise ValueError(f"{source_id}: input validator control {name} exited {result.returncode}, expected {expected_exit}")
+        observations.append(control_result(name, payload, result.returncode))
+    return observations
 
 
 def main():
@@ -64,10 +75,11 @@ def main():
                           str(empty), str(base / "out" / (sample + ".out"))], check=False)
         if result.returncode != 1:
             raise ValueError("negative checker control did not return WA")
+        controls = run_input_controls(base / "verifier", item["source_id"])
         report.append({"source_id": item["source_id"], "cases": len(item["cases"]),
                        "input_validator": "passed-all", "reference_checker": "passed-all",
-                       "invalid_output_checker_exit": result.returncode})
-        print(item["source_id"], len(item["cases"]), "cases validated", flush=True)
+                       "invalid_output_checker_exit": result.returncode, "input_controls": controls})
+        print(item["source_id"], len(item["cases"]), "cases and", len(controls), "input controls validated", flush=True)
     export = Path("/work/export")
     export.mkdir()
     for path, entry in expected.items():
@@ -85,7 +97,7 @@ def main():
         target.parent.mkdir(parents=True, exist_ok=True)
         # Hard links avoid a second copy of the generated data in bounded tmpfs.
         target.hardlink_to(original)
-    validation = {"schema": "oj.source-validation.v1", "commit": lock["commit"],
+    validation = {"schema": "oj.source-validation.v2", "commit": lock["commit"],
                   "elapsed_seconds": round(time.monotonic() - start, 3),
                   "compiler": subprocess.check_output(["g++", "--version"], text=True).splitlines()[0],
                   "python": sys.version.split()[0], "problems": report}

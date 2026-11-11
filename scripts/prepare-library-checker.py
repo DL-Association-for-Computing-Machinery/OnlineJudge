@@ -106,7 +106,7 @@ def run(args):
         (inputs / "source-lock.json").write_bytes(lock_bytes)
         drivers = staging / "driver"
         drivers.mkdir()
-        for script in ("problem_source_common.py", "validate_library_checker.py"):
+        for script in ("problem_source_common.py", "library_checker_quality.py", "validate_library_checker.py"):
             shutil.copyfile(ROOT / "scripts" / script, drivers / script)
         for directory in (inputs, drivers):
             directory.chmod(0o755)
@@ -149,7 +149,7 @@ def run(args):
             candidate = output / "materials.partial"
             candidate.mkdir(mode=0o700)
             report, size = extract(archive, candidate, expected)
-            validate_report(report, lock, catalog)
+            validate_report(report, lock, catalog, require_controls=True)
             document = {"schema": "oj.private-source-corpus.v1", "status": "private-unpublished",
                         "repository": lock["repository"], "commit": lock["commit"],
                         "source_lock_sha256": digest(lock_bytes),
@@ -157,6 +157,7 @@ def run(args):
                         "image_architecture": image["Architecture"],
                         "validation_driver_sha256": digest((drivers / "validate_library_checker.py").read_bytes()),
                         "source_reader_sha256": digest((drivers / "problem_source_common.py").read_bytes()),
+                        "input_controls_driver_sha256": digest((drivers / "library_checker_quality.py").read_bytes()),
                         "compiler_flags": "-O2 -std=c++17 -Wall -Wextra -Werror -Wno-unused-result -I common",
                         "isolation": {"network": "none", "user": "65532:65532", "cpus": 2,
                                       "memory_bytes": 4 << 30, "pids": 128, "read_only_root": True,
@@ -165,7 +166,7 @@ def run(args):
                         "hashes_host_verified": True,
                         "execution_report_trust": "pinned-reviewed-source; not an adversarial-code attestation",
                         "notices": ["source/LICENSE", "source/common/testlib.h", "source/*/checker.cpp"],
-                        "validation_scope": "pinned hashes, all input validators, reference and negative checker controls",
+                        "validation_scope": "pinned hashes, all input validators, input boundary controls, reference and negative checker controls",
                         "publication_blockers": ["P4 import/authorization/review/publish not implemented",
                                                  "statement templates not converted or rendered",
                                                  "checker and resource limits not admitted to production"],

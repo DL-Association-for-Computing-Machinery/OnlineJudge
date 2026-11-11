@@ -1,5 +1,11 @@
 # 工程交付记录
 
+## 2026-11-11：固定十题输入校验对照
+
+基于 `origin/main ea7a827`，在[断网题源准备](problem-sources.md#输出与验证边界)中对每题增加合法边界、越界、截断末尾换行和尾随数据对照。真实 arm64 Docker 既有镜像（SHA-256 `fbfd84489b660f3cacaa8b211999116291589211abbacdf6f7d894f53f013afa`，GNU C++ 12.2.0、Python 3.11.2）重新生成并核验十题 254 个正式点，十个合法对照退出 0，三十个非法对照退出 3，原有 checker 对照通过。容器阶段生成与验证耗时 103.234 秒。
+
+报告为 `oj.source-validation.v2`，SHA-256 `04cd50727ca84f8253b9e2c219d41ccd3818b35df30803f5e5f897574d88181b`。运行日志在 `/private/tmp/oj-quality-controls-real.log`，私有产物在 `/private/tmp/oj-quality-controls-corpus/materials`。实际草稿转换和独立复验保留原报告摘要，十题内容版本与原 v1 产物相同，报告及完整导入修订可随来源证据变化。103 项治理回归通过，覆盖旧报告兼容、缺失或错误证据和异常退出。无部署或数据库 schema 变化；题面质量、错误解区分度、审核和发布仍需各自证据。
+
 ## 2026-11-11：本人草稿回读参考验证结果
 
 基于 `origin/main 15311be`，[本人预览](reference-requests.md#作者申请入口)按原申请键显式读取终态结果。普通会话和 PostgreSQL 核对当前作者与草稿身份；旧报告按原计划投影，独立对拍只返回一致数和首个生成差异，不公开正式数据、逐点证据或 Worker 资料。
