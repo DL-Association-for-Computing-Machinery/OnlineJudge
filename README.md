@@ -362,6 +362,9 @@ python3 -B scripts/supplement-aplusb.py \
 python3 -B scripts/supplement-unionfind.py \
   --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
   --output /private/tmp/oj-unionfind-singleton
+python3 -B scripts/supplement-static-rmq.py \
+  --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
+  --output /private/tmp/oj-static-rmq-boundary
 python3 -B scripts/supplement-point-add-range-sum.py \
   --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
   --output /private/tmp/oj-point-add-range-sum-boundaries
@@ -432,6 +435,8 @@ OJ_SANDBOX_EXPERIMENT=1 python3 -B tests/integration/live_reference.py \
 验证单题修订时，在同一命令追加 `--zalgorithm-local-data`（31 点）、`--aplusb-local-data`（17 点）、`--unionfind-local-data`（20 点）或 `--static-range-sum-local-data`（13 点），将 `--bundle` 指向对应的单题包，并为 `--output` 另选新目录。专项要求冻结和接纳同一份计划；并查集还核对仅合并用例的零字节答案，静态区间和核对两个整段查询的固定答案。A+B 还核对指定非作者读取覆盖、输入校验和独立小用例摘要，作者和未分配者被拒，退回后覆盖缺项恢复。原 v6 的 A+B 保留原质量摘要且无覆盖摘要。
 
 关联数组的同一专项使用 `--associative-array-local-data`（22 点），额外核对两个边界点的固定答案。
+
+静态区间最小值使用 `--static-rmq-local-data`（28 点），额外核对只查询一次时的上界答案。
 
 单点加与区间求和使用 `--point-add-range-sum-local-data`（23 点），额外核对加零及累加到 3×10⁹ 时的固定答案。
 

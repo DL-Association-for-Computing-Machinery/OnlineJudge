@@ -103,6 +103,10 @@ func TestLiveReferenceReports(t *testing.T) {
 		sources = []fixtureSource{{"aplusb", 17}}
 		versionPin = "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd"
 		suffixSizes = []int64{4, 4, 4, 21, 21}
+	case "staticrmq":
+		sources = []fixtureSource{{"staticrmq", 28}}
+		versionPin = "194da8b53c88aa634cb5c030c684a355a59b224a00c7d74422bc35b333d3a5f0"
+		suffixSizes = []int64{34}
 	case "point_add_range_sum":
 		sources = []fixtureSource{{"point_add_range_sum", 23}}
 		versionPin = "188f392cd74cc6bb2156a0a444d0f232d0ea71ee746cb0523fba2c914d79dc25"
@@ -152,6 +156,9 @@ func TestLiveReferenceReports(t *testing.T) {
 					formal.Cases[14].Answer.SHA256 != liveReferenceDigest([]byte("No\n")) {
 					t.Fatal("persisted primality test plan lost its single-query answers")
 				}
+			}
+			if source.id == "staticrmq" && versionPin != "" && formal.Cases[27].Answer.SHA256 != liveReferenceDigest([]byte("1000000000\n")) {
+				t.Fatal("persisted static RMQ plan lost its boundary answer")
 			}
 			if source.id == "static_range_sum" && versionPin != "" {
 				if formal.Cases[11].Answer.SHA256 != liveReferenceDigest([]byte("0\n")) ||
