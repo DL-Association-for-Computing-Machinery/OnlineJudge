@@ -50,9 +50,14 @@ func TestV6IndependentCorrectnessThroughReview(t *testing.T) {
 	got, err := access.EligibilityForSubject(f.ctx, f.credential, reviewer.SubjectID, item.ID)
 	must(t, err)
 	ev := got.IndependentCorrectness
+	wrong := got.WrongSolution
 	if got.Eligible || ev == nil || ev.Suite != "lc-small-oracles.v1" || ev.Cases != 25 ||
 		!slices.Contains(got.Blockers, "formal_failed") || !slices.Contains(got.Blockers, "test_coverage_missing") ||
 		slices.Contains(got.Blockers, "independent_correctness_missing") {
 		t.Fatalf("review did not retain separate formal and coverage blockers: %+v", got)
+	}
+	if wrong == nil || wrong.Origin != "upstream" || wrong.Candidate != "wa.cpp" || wrong.RejectedCasePosition != 4 ||
+		wrong.AcceptedCasePositions == nil || len(wrong.AcceptedCasePositions) != 0 || wrong.ReportSHA256 != ev.ReportSHA256 {
+		t.Fatalf("assigned review did not return the v6 wrong solution witness: %+v", wrong)
 	}
 }

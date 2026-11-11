@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -28,6 +29,12 @@ func TestAdmittedInputValidatorRequiresExactBinding(t *testing.T) {
 	if !ok || independent.Cases != 25 || independent.Suite != "lc-small-oracles.v1" || independent.ReportSHA256 != ev.ReportSHA256 {
 		t.Fatalf("known complete v6 binding was not admitted for independent correctness: %+v", independent)
 	}
+	wrong, ok := AdmittedWrongSolution(want, plan)
+	if !ok || wrong.Origin != "upstream" || wrong.Candidate != "wa.cpp" ||
+		wrong.RejectedCasePosition != 4 || wrong.AcceptedCasePositions == nil ||
+		len(wrong.AcceptedCasePositions) != 0 || wrong.ReportSHA256 != ev.ReportSHA256 {
+		t.Fatalf("known complete v6 binding did not expose its wrong solution: %+v", wrong)
+	}
 	other := strings.Repeat("f", 64)
 	for _, tc := range []struct {
 		name   string
@@ -47,6 +54,9 @@ func TestAdmittedInputValidatorRequiresExactBinding(t *testing.T) {
 			}
 			if ev, ok := AdmittedIndependentCorrectness(got, hash); ok || ev != (IndependentCorrectnessEvidence{}) {
 				t.Fatalf("different binding inherited independent correctness evidence: %+v", ev)
+			}
+			if ev, ok := AdmittedWrongSolution(got, hash); ok || ev.ReportSHA256 != "" {
+				t.Fatalf("different binding inherited wrong solution evidence: %+v", ev)
 			}
 		})
 	}
@@ -86,10 +96,12 @@ func TestReviewEvidenceBindingsMatchV6Bundle(t *testing.T) {
 					CheckerExit   *int `json:"checker_exit"`
 				} `json:"cases"`
 			} `json:"independent"`
+			UpstreamWrong *wrongSolutionProbe `json:"wrong_solution"`
+			LocalWrong    *wrongSolutionProbe `json:"local_wrong_solution"`
 		} `json:"problems"`
 	}
 	if err := json.Unmarshal(raw, &report); err != nil || report.Schema != "oj.source-validation.v6" ||
-		len(report.Problems) != 10 || len(reviewedV6Bindings) != 10 {
+		len(report.Problems) != 10 || len(reviewedV6Bindings) != 10 || len(reviewedV6WrongSolutions) != 10 {
 		t.Fatal("unexpected source validation inventory", err)
 	}
 	lock, err := os.ReadFile("../../config/problem-sources/library-checker.json")
@@ -121,6 +133,7 @@ func TestReviewEvidenceBindingsMatchV6Bundle(t *testing.T) {
 				}
 			}
 			id, plan := readInputValidatorPlan(t, ctx, dir, row.SourceID, lock)
+			checkWrongSolutionReport(t, id, plan, row.UpstreamWrong, row.LocalWrong)
 			ev, ok := AdmittedInputValidator(id, plan.Digest())
 			if !ok || ev.Inputs != len(plan.Cases) || ev.Inputs != row.Cases || ev.Controls != len(row.Controls) {
 				t.Fatalf("review binding does not match verified source material: %+v", ev)
@@ -151,6 +164,66 @@ func TestReviewEvidenceBindingsMatchV6Bundle(t *testing.T) {
 	}
 	if independentTotal != 198 {
 		t.Fatalf("report contains %d oracle cases, want 198", independentTotal)
+	}
+}
+
+type wrongSolutionPoint struct {
+	Position      int    `json:"case_position"`
+	Input         string `json:"input_sha256"`
+	Answer        string `json:"answer_sha256"`
+	CandidateExit *int   `json:"candidate_exit"`
+	CheckerExit   *int   `json:"checker_exit"`
+}
+
+type wrongSolutionProbe struct {
+	wrongSolutionPoint
+	Solution  string               `json:"solution"`
+	Candidate string               `json:"candidate"`
+	Suite     string               `json:"suite"`
+	Accepted  []wrongSolutionPoint `json:"preceding_ac"`
+}
+
+func checkWrongSolutionReport(t *testing.T, id problem.ImportIdentity, plan problem.ReferencePlan, upstream, local *wrongSolutionProbe) {
+	t.Helper()
+	var probe *wrongSolutionProbe
+	var origin, candidate string
+	switch {
+	case upstream != nil && local == nil:
+		probe, origin, candidate = upstream, "upstream", upstream.Solution
+	case upstream == nil && local != nil && local.Suite == "lc-formal-wrong.v1":
+		probe, origin, candidate = local, "local", local.Candidate
+	default:
+		t.Fatal("expected exactly one recorded wrong solution")
+	}
+	verifyPoint := func(point wrongSolutionPoint, checkerExit int) {
+		t.Helper()
+		if point.Position < 1 || point.Position > len(plan.Cases) {
+			t.Fatal("wrong solution position outside the frozen plan")
+		}
+		c := plan.Cases[point.Position-1]
+		if c.Input.SHA256 != point.Input || c.Answer.SHA256 != point.Answer ||
+			point.CandidateExit == nil || *point.CandidateExit != 0 || point.CheckerExit == nil || *point.CheckerExit != checkerExit {
+			t.Fatal("wrong solution result does not bind the point and observed exits")
+		}
+	}
+	verifyPoint(probe.wrongSolutionPoint, 1)
+	var accepted []int
+	for _, point := range probe.Accepted {
+		verifyPoint(point, 0)
+		accepted = append(accepted, point.Position)
+	}
+	hash := plan.Digest()
+	got, ok := AdmittedWrongSolution(id, hash)
+	if !ok || got.ReportSHA256 != admittedInputValidatorReport || got.Origin != origin ||
+		got.Candidate != candidate || got.RejectedCasePosition != probe.Position || !slices.Equal(got.AcceptedCasePositions, accepted) {
+		t.Fatalf("wrong solution projection does not match reviewed report: %+v", got)
+	}
+	if len(accepted) > 0 {
+		got.AcceptedCasePositions[0] = -1
+		again, ok := AdmittedWrongSolution(id, hash)
+		if !ok || !slices.Equal(again.AcceptedCasePositions, accepted) {
+			t.Fatal("caller mutated the reviewed positions")
+		}
 	}
 }
 

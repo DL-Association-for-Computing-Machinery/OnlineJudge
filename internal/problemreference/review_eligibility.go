@@ -28,6 +28,7 @@ type ReviewEligibility struct {
 	Blockers               []string                                          `json:"blockers"`
 	InputValidator         *problemvalidation.InputValidatorEvidence         `json:"input_validator_evidence,omitempty"`
 	IndependentCorrectness *problemvalidation.IndependentCorrectnessEvidence `json:"independent_correctness_evidence,omitempty"`
+	WrongSolution          *problemvalidation.WrongSolutionEvidence          `json:"wrong_solution_evidence,omitempty"`
 }
 
 func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
@@ -68,9 +69,13 @@ func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
 	// neither statement quality nor coverage or production readiness.
 	blockers = append(blockers, "statement_quality_missing", "test_coverage_missing")
 	var validator *problemvalidation.InputValidatorEvidence
+	var wrongSolution *problemvalidation.WrongSolutionEvidence
 	if policyCurrent {
 		if admitted, ok := problemvalidation.AdmittedInputValidator(id, e.FormalPlanSHA256); ok {
 			validator = &admitted
+		}
+		if admitted, ok := problemvalidation.AdmittedWrongSolution(id, e.FormalPlanSHA256); ok {
+			wrongSolution = &admitted
 		}
 	}
 	if validator == nil {
@@ -81,7 +86,7 @@ func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
 		blockers = append(blockers, "solution_confirmation_missing")
 	}
 	return ReviewEligibility{Evidence: e, PolicyVersion: ReviewPolicyVersion, Eligible: len(blockers) == 0,
-		Blockers: blockers, InputValidator: validator, IndependentCorrectness: independent}
+		Blockers: blockers, InputValidator: validator, IndependentCorrectness: independent, WrongSolution: wrongSolution}
 }
 
 // EligibilityForSubject returns the current policy's blockers for one assignment.

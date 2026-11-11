@@ -228,6 +228,21 @@ components:
             report_sha256: { $ref: '#/components/schemas/SHA256' }
             suite: { const: 'lc-small-oracles.v1' }
             cases: { type: integer, minimum: 1 }
+        wrong_solution_evidence:
+          type: object
+          additionalProperties: false
+          description: 仅精确匹配已审查 v6 绑定时返回。记录一个错误解的正式点对照，不能证明完整覆盖。
+          required: [report_sha256, origin, candidate, rejected_case_position, accepted_case_positions]
+          properties:
+            report_sha256: { $ref: '#/components/schemas/SHA256' }
+            origin: { type: string, enum: [upstream, local] }
+            candidate: { type: string, minLength: 1 }
+            rejected_case_position: { type: integer, minimum: 1 }
+            accepted_case_positions:
+              type: array
+              description: 拒绝前已记录为接受的点，按探测顺序排列。空数组表示报告没有此类记录。
+              uniqueItems: true
+              items: { type: integer, minimum: 1 }
         blockers:
           type: array
           minItems: 1
