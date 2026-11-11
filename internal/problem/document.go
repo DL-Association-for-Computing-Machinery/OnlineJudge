@@ -42,6 +42,7 @@ type document struct {
 	State     string `json:"state"`
 	Version   string `json:"version"`
 	Title     string `json:"title"`
+	LocalData string `json:"local_data,omitempty"`
 	Statement struct {
 		fileReference
 		Language string                   `json:"language"`
@@ -235,16 +236,22 @@ func parseDocument(raw []byte, sourceID string) (document, error) {
 	if j.Mode != "tokens" || !j.CaseSensitive || j.NumericEquivalence || j.TokenComparison != "exact-bytes" || j.Compatibility != "configured-not-validated" || string(j.Limits) != "null" || string(j.ProductionProfile) != "null" || d.Validation.Status != "not-run" || !reflect.DeepEqual(d.Validation.Blockers, publicationBlockers) {
 		return d, ErrInvalid
 	}
-	if !validFile(d.Statement.fileReference) || d.Statement.Language != "en" || len(d.TestCases) < 1 || len(d.TestCases) > 1024 || len(p.Mapping) != len(d.TestCases) || len(p.OriginalFiles) < 1 || len(p.OriginalFiles) > 2048 {
+	if !validFile(d.Statement.fileReference) || d.Statement.Language != "en" || len(d.TestCases) < 1 || len(d.TestCases) > 1024 || !validDocumentCaseMapping(d) || len(p.OriginalFiles) < 1 || len(p.OriginalFiles) > 2048 {
 		return d, ErrInvalid
 	}
 	var examples []string
 	seen := map[string]bool{}
 	for i, c := range d.TestCases {
-		if c.ID != fmt.Sprintf("case-%04d", i+1) || !validFile(c.Input) || !validFile(c.Answer) || c.Input.Path != "objects/sha256/"+c.Input.SHA256 || c.Answer.Path != "objects/sha256/"+c.Answer.SHA256 || p.Mapping[i].CaseID != c.ID || !validPath(p.Mapping[i].UpstreamCase) || strings.Contains(p.Mapping[i].UpstreamCase, "/") || seen[p.Mapping[i].UpstreamCase] {
+		if c.ID != fmt.Sprintf("case-%04d", i+1) || !validFile(c.Input) || !validFile(c.Answer) || c.Input.Path != "objects/sha256/"+c.Input.SHA256 || c.Answer.Path != "objects/sha256/"+c.Answer.SHA256 {
 			return d, ErrInvalid
 		}
-		seen[p.Mapping[i].UpstreamCase] = true
+		if i < len(p.Mapping) {
+			mapping := p.Mapping[i]
+			if mapping.CaseID != c.ID || !validPath(mapping.UpstreamCase) || strings.Contains(mapping.UpstreamCase, "/") || seen[mapping.UpstreamCase] {
+				return d, ErrInvalid
+			}
+			seen[mapping.UpstreamCase] = true
+		}
 		if c.Sample {
 			examples = append(examples, c.ID)
 		}

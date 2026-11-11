@@ -17,7 +17,7 @@ const maxReferenceCatalog = 64 << 10
 // sequence rather than trusting a re-versioned draft's declared subset/order.
 func validateReferenceCatalog(d document, info, rawHashes []byte, maximum int) error {
 	expected, hashes, err := referenceCatalog(info, rawHashes, maximum)
-	if err != nil || len(d.TestCases) != len(expected) || len(d.Provenance.Mapping) != len(expected) {
+	if err != nil || !validDocumentCaseMapping(d) || len(d.Provenance.Mapping) != len(expected) {
 		return ErrReferenceUnsupported
 	}
 	for i, c := range expected {

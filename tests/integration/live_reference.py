@@ -108,7 +108,7 @@ def stop_fixture(fixture, cidfile, owner):
     fixture.wait(timeout=25)
 
 
-def run(bundle, toolchain, out):
+def run(bundle, toolchain, out, local_zalgorithm):
     subprocess.run([sys.executable, "-B", ROOT / "scripts/import-library-checker.py",
                     "--verify-bundle", bundle], cwd=ROOT, check=True)
     (out / "slots-before.txt").write_text(inspect_slots())
@@ -134,12 +134,13 @@ def run(bundle, toolchain, out):
                                     *bind(build, "/build"), *bind(bundle.parent, "/inputs"),
                                     *bind(reports, "/reports", False), "--workdir", "/src/tests/integration",
                                     "-e", "OJ_LIVE_REFERENCE_FIXTURE=1", "-e", "OJ_LIVE_REFERENCE_OUTPUT=/reports",
+                                    "-e", "OJ_LIVE_ZALGORITHM_LOCAL_DATA=" + ("1" if local_zalgorithm else "0"),
                                     "-e", "OJ_PRIVATE_DRAFT_BUNDLE_DIR=/inputs/" + bundle.name,
                                     "--entrypoint", "/bin/sh", image, "-ec", FIXTURE],
                                    stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
         try:
             result = []
-            for source in SOURCES:
+            for source in (("zalgorithm",) if local_zalgorithm else SOURCES):
                 ready = await_file(reports / f"ready-{source}.json", fixture)
                 port = docker("port", name, "18443/tcp")
                 require(re.fullmatch(r"127\.0\.0\.1:[0-9]+", port), "fixture must publish only to loopback")
@@ -166,7 +167,8 @@ def run(bundle, toolchain, out):
             (out / "slots-after.txt").write_text(inspect_slots())
             require(not docker("ps", "-a", "--filter", "label=run=" + owner, "--format", "{{.ID}}"),
                     "temporary fixture container was not removed")
-            require(sum(row["formal_ac"] for row in result) == 254 and sum(row["comparison_matched"] for row in result) == 24,
+            formal, comparison = (31, 0) if local_zalgorithm else (254, 24)
+            require(sum(row["formal_ac"] for row in result) == formal and sum(row["comparison_matched"] for row in result) == comparison,
                     "incomplete accepted coverage")
             (out / "summary.json").write_text(json.dumps({
                 "index_sha256": hashlib.sha256((bundle / "index.json").read_bytes()).hexdigest(),
@@ -185,6 +187,8 @@ def main():
     parser.add_argument("--toolchain-image", required=True)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--start-stopped-slots", required=True, action="store_true")
+    parser.add_argument("--zalgorithm-local-data", action="store_true",
+                        help="run only the pinned 31-point local Z-algorithm revision")
     args = parser.parse_args()
     require(platform.system() == "Darwin" and platform.machine() == "arm64", "requires macOS arm64")
     require(os.environ.get("OJ_SANDBOX_EXPERIMENT") == "1", "requires OJ_SANDBOX_EXPERIMENT=1")
@@ -199,7 +203,7 @@ def main():
     require(not out.is_relative_to(ROOT) and not out.is_relative_to(bundle.parent),
             "output must be outside the repository and prepared bundle parent")
     out.mkdir(mode=0o700)
-    run(bundle, args.toolchain_image, out)
+    run(bundle, args.toolchain_image, out, args.zalgorithm_local_data)
 
 
 if __name__ == "__main__":
