@@ -245,7 +245,7 @@ Begin/Finish 是维护原语，**不执行或证明**旧 API 隔离、Redis 清�
 
 2026-10-31 用户确认整个邮箱忽略字母大小写匹配，原始地址保留显示；点号、加号等服务商别名不自动合并。`identity.ParseEmail` 返回私有字段的 Email 值对象，以完整地址的小写形式作 Key，Original 保留精确接受的输入。零值无效，不隐式 trim、不以昵称或 `mail.Address.String()` 代替地址。邮箱是个人信息，不能将完整值或数据库错误详情写入日志。
 
-首版工程支持范围为 ASCII 裸 addr-spec：先用锁定 Go 1.26.10 的 [net/mail](https://raw.githubusercontent.com/golang/go/go1.26.10/src/net/mail/message.go) 解析，再要求无显示名/注释/列表/引号/地址字面量、无空白/控制字节，local 最多 64 字节、完整地址最多 254 字节；域名采用 1—63 字节的字母/数字/连字符标签，不允许空标签、首尾连字符或尾点。没有 DNS/MX 或实际投递验证。标准库解析邮件头且不做 Unicode 规范化，不能直接当产品匹配策略。Unicode 域名输入/IDNA 转换及 SMTPUTF8 暂不支持；符合 ASCII 标签规则的 `xn--` 输入可接受，但不验证 IDNA 合法性。这是实现限制，不是用户取消国际化邮箱需求；不能随意 Unicode 小写或仅折叠域名来替代整址匹配决定。
+首版工程支持范围为 ASCII 裸 addr-spec：先用锁定 Go 1.26.11 的 [net/mail](https://raw.githubusercontent.com/golang/go/go1.26.11/src/net/mail/message.go) 解析，再要求无显示名/注释/列表/引号/地址字面量、无空白/控制字节，local 最多 64 字节、完整地址最多 254 字节；域名采用 1—63 字节的字母/数字/连字符标签，不允许空标签、首尾连字符或尾点。没有 DNS/MX 或实际投递验证。标准库解析邮件头且不做 Unicode 规范化，不能直接当产品匹配策略。Unicode 域名输入/IDNA 转换及 SMTPUTF8 暂不支持；符合 ASCII 标签规则的 `xn--` 输入可接受，但不验证 IDNA 合法性。这是实现限制，不是用户取消国际化邮箱需求；不能随意 Unicode 小写或仅折叠域名来替代整址匹配决定。
 
 迁移 5 新增 `identity_personal_emails`：subject_id 主键/外键绑定 credentials；email_key 为 `text COLLATE "C" UNIQUE`，original_email 保留原地址，email_verified 默认 false。数据库限制 ASCII 可见字符、总长度及 Key 与原地址的小写一致，完整产品语法由 Email 值对象检查；读取时重新验证，坏元数据失败关闭。两份唯一索引用于主体和邮箱点查/冲突裁决，新增写入、唯一性检查及索引存储成本；自然 EXPLAIN/BUFFERS 在合成填充上检查两索引和凭据主键，不代表生产容量。昵称不参与唯一性，本次无昵称字段/profile。
 
@@ -287,7 +287,7 @@ Redis 只存令牌 SHA-256 摘要。七个 Lua 文件组成六个脚本入口，
 
 构造器冻结无路径的可信 HTTPS origin 和大于零、至多五秒的合作调用期限；每个请求必须直接 TLS 且 Host 精确等于配置 authority。直连模式忽略 `Forwarded`/`X-Forwarded-*`，当前反代终止 TLS 的默认 Nginx 不兼容此约束；可选单跳 mTLS 入口见第 7.14 节，不得伪造 `r.TLS` 绕过。所有结果（含 401/403/404/405/503）为 `Cache-Control: no-store`，无 CORS 许可。安全方法只允许明确的 GET，HEAD/OPTIONS/写接口的 GET 不触库。
 
-POST 在触库前调用标准库 [CrossOriginProtection.Check](https://pkg.go.dev/net/http@go1.26.10#CrossOriginProtection.Check)，并额外要求至少一个正向来源证据：唯一、非空、精确匹配配置的 `Origin`，或唯一 `Sec-Fetch-Site: same-origin`。任一出现的头都须合法，拒绝跨站、same-site、none、null、空值、多值及相互矛盾的组合；两头皆无也拒绝。非浏览器客户端须显式提供来源，头本身不证明身份。该防护仅覆盖本 Handler 两个 POST，不代表全站 CSRF 或真实浏览器验收通过。
+POST 在触库前调用标准库 [CrossOriginProtection.Check](https://pkg.go.dev/net/http@go1.26.11#CrossOriginProtection.Check)，并额外要求至少一个正向来源证据：唯一、非空、精确匹配配置的 `Origin`，或唯一 `Sec-Fetch-Site: same-origin`。任一出现的头都须合法，拒绝跨站、same-site、none、null、空值、多值及相互矛盾的组合；两头皆无也拒绝。非浏览器客户端须显式提供来源，头本身不证明身份。该防护仅覆盖本 Handler 两个 POST，不代表全站 CSRF 或真实浏览器验收通过。
 
 仅从 Cookie 读取 `__Host-oj_session`；标准库逐行严格 ParseCookie，再跨所有行要求恰一个同名 Cookie，凭据须为规范 256-bit base64url。其他畸形 Cookie 同样失败关闭，不接受 query/body/Authorization 替代凭据。读取和活动响应仅含主体 ID 与创建/空闲/绝对期限，不暴露令牌、认证代次或恢复标识，不发送 Set-Cookie；身份时点观察不授予验证邮箱、训练、角色或资源权限。活动是显式 POST，后台轮询不能调用它无限保活；实际产品活动识别、采样和限流另验。
 
@@ -299,7 +299,7 @@ POST 在触库前调用标准库 [CrossOriginProtection.Check](https://pkg.go.de
 
 `redisstore.NewLogin(store, LoginConfig)` 在同一权威 Store 上增加两步恢复。`Prepare` 完成既有邮箱密码认证、捕获原恢复代次和完整凭据版本、Redis TIME 冻结原 tuple，**不写会话或名额**；只有最终 PostgreSQL 门禁成功且 context 有效才封装返回。首次响应丢失可以重新准备，因为没有会话写入；已提交同密码升级仍可能保留。`Complete` 解封原候选后只执行原样 Retry，再独立 Check；仅两次成功且 context 有效后发放普通 Cookie。错误不新建 token、不重贴恢复代次、不补偿或重试一个新的 Create。相同候选并发确认可重复返回同一 token；HTTP 无法保证响应或 Cookie 恰好发送一次。
 
-候选用锁定 Go 1.26.10 标准库 `crypto/aes` 与 [`cipher.NewGCMWithRandomNonce`](https://pkg.go.dev/crypto/cipher#NewGCMWithRandomNonce) 做 AES-256-GCM，随机 96-bit nonce 随密文保存。明文仅含私有 Attempt tuple、原凭据及冻结截止，不含密码；Redis 继续只保存 token 摘要。封装认证绑定用途/格式版本、外层 key ID、namespace、精确 HTTPS origin、idle/absolute 策略与 Window。只接受规范 base64url、受限 key ID、至多 1536 字节封装；解析浏览器语法不证明密文有效或身份授权。没有公开可填充的 Attempt snapshot，也不是 JWT 或第二份权威 Session。
+候选用锁定 Go 1.26.11 标准库 `crypto/aes` 与 [`cipher.NewGCMWithRandomNonce`](https://pkg.go.dev/crypto/cipher#NewGCMWithRandomNonce) 做 AES-256-GCM，随机 96-bit nonce 随密文保存。明文仅含私有 Attempt tuple、原凭据及冻结截止，不含密码；Redis 继续只保存 token 摘要。封装认证绑定用途/格式版本、外层 key ID、namespace、精确 HTTPS origin、idle/absolute 策略与 Window。只接受规范 base64url、受限 key ID、至多 1536 字节封装；解析浏览器语法不证明密文有效或身份授权。没有公开可填充的 Attempt snapshot，也不是 JWT 或第二份权威 Session。
 
 密钥必须是跨副本/进程共享的 32-byte 材料，不在启动时自动生成或回退。仅当前 key 用于封装，最多四个 key 可解封，构造器复制 key map/材料并拒绝全零材料；文件加载见下节，不提供环境变量回退、分发或自动轮换。操作者负责每个 key 的跨副本累计封装次数不超过标准库规定的 `2^32`，以及安全配置。保留旧解密 key 才能恢复/放弃旧候选；如需保留原期限内协议允许的清理能力，应覆盖该候选期限保留旧 key。提前丢钥不等于撤销，会使候选失败关闭；已经写入但未收到 Cookie 的会话仍按原 idle/absolute 自然失效，不能承诺立即释放名额。
 
