@@ -225,6 +225,10 @@ func runReferenceSourceLocked(ctx context.Context, prepared *problem.Prepared, l
 }
 
 func persistReferenceReport(directory string, report problemvalidation.Report) error {
+	return persistPrivateValidationReport(directory, report, true)
+}
+
+func persistPrivateValidationReport(directory string, report any, complete bool) error {
 	raw, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
 		return err
@@ -246,6 +250,9 @@ func persistReferenceReport(directory string, report problemvalidation.Report) e
 	defer func() { _ = dir.Close() }()
 	if err := dir.Sync(); err != nil {
 		return err
+	}
+	if !complete {
+		return nil
 	}
 	if err := os.Remove(filepath.Join(directory, "INCOMPLETE")); err != nil {
 		return err
