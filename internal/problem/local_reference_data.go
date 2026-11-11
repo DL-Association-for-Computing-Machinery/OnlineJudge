@@ -4,6 +4,7 @@ import "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/m
 
 const (
 	localReferenceSourceLock = "fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617"
+	primalityLocalVersion    = "d40e4fd4d8881a0bf693e4095a32693b75ca6e51203a480c57873b5fba5e2659"
 	zAlgorithmLocalVersion   = "965239246cbdbd63f1641cfcf551d9c8f3a65cd558e194668ad845cac1e39711"
 	aPlusBLocalVersion       = "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd"
 	unionFindLocalVersion    = "42e62825925bf727c394f3435c2b50f850758576c392d082fb628f7219e4f07d"
@@ -125,6 +126,24 @@ var localReferenceRevisions = map[string]localReferenceRevision{
 				ID:     "case-0020",
 				Input:  materialstore.Object{SHA256: "5b12ce47a7cd1d0c27176fd80881c7d8676b680b86626b9df12d4e78095744e3", Size: 10},
 				Answer: materialstore.Object{SHA256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", Size: 0},
+			},
+		},
+	},
+	primalityLocalVersion: {
+		label: "oj-local:primality-test-single-query-v1", sourceID: "library-checker:primality_test", upstream: 13,
+		source:     materialstore.Object{SHA256: "714746e38b42e97ce8cad7dbb5ef80df4ff39094cf62d3f4945ebb82a2f49e3b", Size: 319},
+		definition: materialstore.Object{SHA256: "16e765394c1a6f5e9d5a1719bed206be16ff98ef656a598761600faae97330a4", Size: 872},
+		hashes:     materialstore.Object{SHA256: "2ab8372c583ae8a830dd5dd6116b2d5c958494cd19574dc0e90f360c443f17d2", Size: 2349},
+		suffix: []ReferenceCase{
+			{
+				ID:     "case-0014",
+				Input:  materialstore.Object{SHA256: "4c3ddf14acab614b355ee7b183972eb70f6dcec0f2368084e9c7d52998cf6d69", Size: 13},
+				Answer: materialstore.Object{SHA256: "927580bf287560d4a26a5d6e129f91ffa9cb63031b1a8c772be6ec584e65e82b", Size: 4},
+			},
+			{
+				ID:     "case-0015",
+				Input:  materialstore.Object{SHA256: "c825fa0c23f31d19a898b85229a1c7be262b64f707a2f402f033a7eabb79da51", Size: 22},
+				Answer: materialstore.Object{SHA256: "31375587f8bedb1f33f6eca3d8cee94ab70845a6dd1a7c7eeb929f4aa7dc10ab", Size: 3},
 			},
 		},
 	},

@@ -91,6 +91,10 @@ func TestLiveReferenceReports(t *testing.T) {
 		sources = []fixtureSource{{"associative_array", 22}}
 		versionPin = "4d6dd8e3fe97a0e1ec6585ff538219d811f660bdfff7cc2172bf6092cf858928"
 		suffixSizes = []int64{24, 66}
+	case "primality_test":
+		sources = []fixtureSource{{"primality_test", 15}}
+		versionPin = "d40e4fd4d8881a0bf693e4095a32693b75ca6e51203a480c57873b5fba5e2659"
+		suffixSizes = []int64{13, 22}
 	case "zalgorithm":
 		sources = []fixtureSource{{"zalgorithm", 31}}
 		versionPin = "965239246cbdbd63f1641cfcf551d9c8f3a65cd558e194668ad845cac1e39711"
@@ -142,6 +146,12 @@ func TestLiveReferenceReports(t *testing.T) {
 			}
 			if versionPin != "" && formal.Version != versionPin {
 				t.Fatal("persisted plan lacks the pinned local version")
+			}
+			if source.id == "primality_test" && versionPin != "" {
+				if formal.Cases[13].Answer.SHA256 != liveReferenceDigest([]byte("Yes\n")) ||
+					formal.Cases[14].Answer.SHA256 != liveReferenceDigest([]byte("No\n")) {
+					t.Fatal("persisted primality test plan lost its single-query answers")
+				}
 			}
 			if source.id == "static_range_sum" && versionPin != "" {
 				if formal.Cases[11].Answer.SHA256 != liveReferenceDigest([]byte("0\n")) ||

@@ -168,6 +168,7 @@ def run(bundle, toolchain, out, supplement):
             require(not docker("ps", "-a", "--filter", "label=run=" + owner, "--format", "{{.ID}}"),
                     "temporary fixture container was not removed")
             formal, comparison = {
+                "primality_test": (15, 0),
                 "associative_array": (22, 0), "zalgorithm": (31, 0), "aplusb": (17, 0), "unionfind": (20, 0),
                 "static_range_sum": (13, 0), "point_add_range_sum": (23, 0), "": (254, 24),
             }[supplement]
@@ -191,6 +192,8 @@ def main():
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--start-stopped-slots", required=True, action="store_true")
     local = parser.add_mutually_exclusive_group()
+    local.add_argument("--primality-test-local-data", dest="supplement", action="store_const", const="primality_test",
+                       help="run only the pinned 15-point local primality test revision")
     local.add_argument("--associative-array-local-data", dest="supplement", action="store_const", const="associative_array",
                        help="run only the pinned 22-point local associative-array revision")
     local.add_argument("--zalgorithm-local-data", dest="supplement", action="store_const", const="zalgorithm",
