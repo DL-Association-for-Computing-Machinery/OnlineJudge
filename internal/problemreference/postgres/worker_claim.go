@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
@@ -17,6 +18,8 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
 	"github.com/jackc/pgx/v5"
 )
+
+var errReferenceReservationBusy = fmt.Errorf("%w: active reservation", problemreference.ErrClaimUnavailable)
 
 // ReferenceClaimer binds a single trusted node and source lock to the ledger.
 type ReferenceClaimer struct {
@@ -37,6 +40,10 @@ func NewReferenceClaimer(s *Store, lockNode func(context.Context, pgx.Tx, submis
 // ClaimReference locks node, author, draft, request, plan and reservation in
 // that order. It performs no object I/O and never changes the queued request.
 func (c *ReferenceClaimer) ClaimReference(ctx context.Context, node submission.NodeIdentity, input problemreference.ClaimInput) (problemreference.WorkerClaim, error) {
+	return c.claimReference(ctx, node, input, false)
+}
+
+func (c *ReferenceClaimer) claimReference(ctx context.Context, node submission.NodeIdentity, input problemreference.ClaimInput, firstOnly bool) (problemreference.WorkerClaim, error) {
 	var zero problemreference.WorkerClaim
 	if c == nil || ctx == nil || !input.Valid() {
 		return zero, problemreference.ErrInvalid
@@ -67,6 +74,15 @@ func (c *ReferenceClaimer) ClaimReference(ctx context.Context, node submission.N
 	if err != nil {
 		return zero, err
 	}
+	if firstOnly {
+		already, err := q.HasReferenceDispatch(ctx, request.ID)
+		if err != nil {
+			return zero, storageError{err}
+		}
+		if already {
+			return zero, problemreference.ErrClaimUnavailable
+		}
+	}
 	row, err := q.ReferenceExpectedPlanForShare(ctx, request.ID)
 	if err != nil {
 		return zero, referenceClaimError(err)
@@ -83,11 +99,21 @@ func (c *ReferenceClaimer) ClaimReference(ctx context.Context, node submission.N
 	until, err := q.ReserveReferenceWorkerClaim(ctx, referencedb.ReserveReferenceWorkerClaimParams{
 		RequestID: request.ID, NodeID: node.ID, CredentialVersion: node.CredentialVersion, LeaseToken: token, PlanSha256: plan.SHA256,
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return zero, errReferenceReservationBusy
+	}
 	if err != nil {
 		return zero, referenceClaimError(err)
 	}
 	if !until.Valid || until.InfinityModifier != 0 {
 		return zero, storageError{problemreference.ErrInvalid}
+	}
+	n, err := q.RecordReferenceDispatch(ctx, request.ID)
+	if err != nil {
+		return zero, storageError{err}
+	}
+	if firstOnly && n != 1 {
+		return zero, problemreference.ErrClaimUnavailable
 	}
 	if err := commitTx(ctx, tx, true); err != nil {
 		return zero, err

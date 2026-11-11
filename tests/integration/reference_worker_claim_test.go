@@ -17,6 +17,7 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
 	referencepg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference/postgres"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference/postgres/referencedb"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
 	submissionpg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
@@ -42,6 +43,34 @@ func prepareClaim(t *testing.T, f expectedPlanFixture, key string) {
 	t.Helper()
 	_, err := f.service(t, f.session, f.store).Prepare(f.ctx, f.credential, key)
 	must(t, err)
+}
+
+// legacyReservation exercises the old schema's real SQL for historical Down
+// tests. A current binary cannot start or claim against schema 11 or 12.
+func legacyReservation(f expectedPlanFixture, node submission.NodeIdentity, input problemreference.ClaimInput) (problemreference.WorkerClaim, error) {
+	tx, err := f.a.Begin(f.ctx)
+	if err != nil {
+		return problemreference.WorkerClaim{}, err
+	}
+	defer func() { _ = tx.Rollback(f.ctx) }()
+	if err := submissionpg.LockReferenceNode(f.ctx, tx, node); err != nil {
+		return problemreference.WorkerClaim{}, err
+	}
+	q := referencedb.New(tx)
+	if _, err := q.ReferenceExpectedPlanForShare(f.ctx, input.RequestID); err != nil {
+		return problemreference.WorkerClaim{}, err
+	}
+	token := strings.Repeat("a", 64)
+	until, err := q.ReserveReferenceWorkerClaim(f.ctx, referencedb.ReserveReferenceWorkerClaimParams{
+		RequestID: input.RequestID, NodeID: node.ID, CredentialVersion: node.CredentialVersion, LeaseToken: token, PlanSha256: input.PlanSHA256,
+	})
+	if err != nil {
+		return problemreference.WorkerClaim{}, err
+	}
+	if err := tx.Commit(f.ctx); err != nil {
+		return problemreference.WorkerClaim{}, err
+	}
+	return problemreference.WorkerClaim{RequestID: input.RequestID, SourceID: input.SourceID, PlanSHA256: input.PlanSHA256, Token: token, Until: until.Time}, nil
 }
 
 func noReferenceClaim(t *testing.T, got problemreference.WorkerClaim, err, want error) {
@@ -237,16 +266,16 @@ func TestReferenceWorkerClaimViaRealMTLS(t *testing.T) {
 }
 
 func TestReferenceClaimDown11ProtectsHistory(t *testing.T) {
-	f, claims, node, input := claimFixture(t)
+	f, _, node, input := claimFixture(t)
 	prepareClaim(t, f, expectedPlanKey)
 	_, err := f.provider.DownTo(f.ctx, 10)
 	must(t, err)
 	if db.CheckSchema(f.ctx, f.a) == nil {
 		t.Fatal("startup accepted schema 10")
 	}
-	_, err = f.provider.Up(f.ctx)
+	_, err = f.provider.UpTo(f.ctx, 11)
 	must(t, err)
-	_, err = claims.ClaimReference(f.ctx, node, input)
+	_, err = legacyReservation(f, node, input)
 	must(t, err)
 	_, err = f.a.Exec(f.ctx, `UPDATE problem_reference_worker_claim SET lease_until=clock_timestamp()-interval '1 second'`)
 	must(t, err)

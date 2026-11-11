@@ -379,6 +379,17 @@ func TestExpectedPlanQueryUsesRequestPrimaryKey(t *testing.T) {
 	mustAnalyzeClaimLookup("ReferenceRequestByIDForUpdate", "@id", "problem_reference_requests_pkey")
 	mustAnalyzeClaimLookup("ReferenceExpectedPlanForShare", "@request_id", "problem_reference_expected_plans_pkey")
 
+	dispatchSQL, err := os.ReadFile("../../db/queries/problemreference/worker_dispatch.sql")
+	must(t, err)
+	dispatchQuery := strings.SplitN(strings.SplitN(string(dispatchSQL), "\n", 2)[1], "\n\n", 2)[0]
+	dispatchQuery = strings.NewReplacer("@source_id", "$1", "sqlc.arg(after_id)", "$2").Replace(dispatchQuery)
+	must(t, tx.QueryRow(f.ctx, "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) "+dispatchQuery, f.draft.SourceID, "00000000000000000000000000000000").Scan(&evidence))
+	if !strings.Contains(evidence, "problem_reference_requests_queued_source") || !strings.Contains(evidence, `"Actual Rows": 8`) ||
+		!strings.Contains(evidence, "problem_reference_expected_plans_pkey") {
+		t.Fatal("source dispatch did not bound candidates before plan lookups", evidence)
+	}
+	t.Log(evidence)
+
 	_, err = tx.Exec(f.ctx, `UPDATE problem_reference_requests SET state = 'reported'`)
 	must(t, err)
 	_, err = tx.Exec(f.ctx, `INSERT INTO problem_reference_worker_reports

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OnlineJudge Private Worker API
-  version: 0.7.0
+  version: 0.8.0
   description: >-
     独立 loopback HTTPS 控制端，TLS 1.3 双向认证。判题客户端证书唯一 URI SAN 为
     spiffe://onlinejudge/worker/{node_id}/{credential_version}，不接受请求自报身份。
@@ -57,6 +57,53 @@ paths:
         '403': {$ref: '#/components/responses/Forbidden'}
         '409':
           description: 请求缺失、未准备、取消、失权、计划不匹配或参考容量已占用
+        '413': {$ref: '#/components/responses/TooLarge'}
+        '415': {$ref: '#/components/responses/MediaType'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/v1/worker/reference/dispatch:
+    post:
+      operationId: dispatchPreparedReference
+      description: >-
+        另行显式启用的专用 mTLS 选择入口。客户端在同一宿主及固定槽锁内按固定来源发一次请求。
+        至多检查八条，首领历史与预留同事务写入；已领取或历史不明的计划不会再次自动选择。
+        无可领取时只回继续游标，不表示不存在在途申请；未知结果不自动重试。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [source_id]
+              properties:
+                source_id: {type: string, minLength: 1, maxLength: 128}
+                after: {type: string, pattern: '^(|[0-9a-f]{32})$'}
+      responses:
+        '200':
+          description: 最多一个绑定预留；有预留时游标为空。
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [claim, next_after]
+                additionalProperties: false
+                properties:
+                  claim:
+                    type: [object, 'null']
+                    required: [request_id, source_id, plan_sha256, lease_token, lease_until]
+                    additionalProperties: false
+                    properties:
+                      request_id: {type: string, pattern: '^[0-9a-f]{32}$'}
+                      source_id: {type: string, minLength: 1, maxLength: 128}
+                      plan_sha256: {$ref: '#/components/schemas/Digest'}
+                      lease_token: {$ref: '#/components/schemas/Digest'}
+                      lease_until: {type: string, format: date-time}
+                  next_after: {type: string, pattern: '^(|[0-9a-f]{32})$'}
+        '400': {$ref: '#/components/responses/Invalid'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {description: 未启用参考选择}
+        '409': {description: 预留已占用或来源不可用}
         '413': {$ref: '#/components/responses/TooLarge'}
         '415': {$ref: '#/components/responses/MediaType'}
         '503': {$ref: '#/components/responses/Unavailable'}

@@ -25,6 +25,9 @@ func dispatch(ctx context.Context, args []string, logger *slog.Logger, drain <-c
 	if args[0] == "run-reference" {
 		return executeReference(ctx, args[1:], logger)
 	}
+	if args[0] == "run-next-reference" {
+		return executeNextReference(ctx, args[1:], logger)
+	}
 	reference := args[0] == "recover-reference"
 	sourceID, id := "library-checker:unionfind", ""
 	if reference && len(args) == 3 {

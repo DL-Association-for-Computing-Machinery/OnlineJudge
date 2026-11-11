@@ -24,6 +24,38 @@ func executeReference(ctx context.Context, args []string, logger *slog.Logger) e
 	if err != nil {
 		return err
 	}
+	return executeReferenceSelection(ctx, slot, logger, func(ctx context.Context, client *workerclient.Acquirer) (*problemreference.WorkerClaim, error) {
+		claim, err := client.ClaimReference(ctx, input)
+		return &claim, err
+	})
+}
+
+func executeNextReference(ctx context.Context, args []string, logger *slog.Logger) error {
+	if len(args) < 1 || len(args) > 2 || os.Getenv(dualModeEnv) != "" || os.Getenv("OJ_WORKER_M0_SLOT") != "" {
+		return errors.New("usage: worker run-next-reference <source-id> [after-id]; shared single host slot required")
+	}
+	input := problemreference.DispatchInput{SourceID: args[0]}
+	if len(args) == 2 {
+		input.After = args[1]
+	}
+	if !input.Valid() {
+		return problemreference.ErrInvalid
+	}
+	slot, err := referenceSlotForSource(input.SourceID)
+	if err != nil {
+		return err
+	}
+	return executeReferenceSelection(ctx, slot, logger, func(ctx context.Context, client *workerclient.Acquirer) (*problemreference.WorkerClaim, error) {
+		result, err := client.DispatchReference(ctx, input)
+		if err == nil && result.Claim == nil {
+			logger.Info("该页没有可领取的参考验证申请", "next_after", result.After)
+		}
+		return result.Claim, err
+	})
+}
+
+func executeReferenceSelection(ctx context.Context, slot string, logger *slog.Logger,
+	selectClaim func(context.Context, *workerclient.Acquirer) (*problemreference.WorkerClaim, error)) error {
 	c, err := loadConfig(os.Getenv)
 	if err != nil {
 		return err
@@ -39,15 +71,6 @@ func executeReference(ctx context.Context, args []string, logger *slog.Logger) e
 		return err
 	}
 	defer renewal.Close()
-	lock, err := lockSlotMode(slot, false)
-	if err != nil {
-		return err
-	}
-	defer lock.Close()
-	claim, err := client.ClaimReference(ctx, input)
-	if err != nil {
-		return err
-	}
 	fetch := func(ctx context.Context, claim problemreference.WorkerClaim) (referenceExecutionMaterials, error) {
 		materials, err := client.FetchReferenceForExecution(ctx, claim)
 		if err != nil {
@@ -55,11 +78,33 @@ func executeReference(ctx context.Context, args []string, logger *slog.Logger) e
 		}
 		return referenceExecutionMaterials{snapshot: materials.ReferenceSnapshot, close: materials.Close}, nil
 	}
-	err = runClaimedReference(ctx, lock, claim, fetch, renewal.RenewReference, startClaimedReference, client.ReportReference)
-	if err == nil {
-		logger.Info("参考执行通过，停止已确认，报告已接纳")
+	return runSelectionUnderSlot(ctx, func() (*slotLock, error) { return lockSlotMode(slot, false) },
+		func(ctx context.Context) (*problemreference.WorkerClaim, error) { return selectClaim(ctx, client) },
+		func(ctx context.Context, lock *slotLock, claim problemreference.WorkerClaim) error {
+			err := runClaimedReference(ctx, lock, claim, fetch, renewal.RenewReference, startClaimedReference, client.ReportReference)
+			if err == nil {
+				logger.Info("参考执行通过，停止已确认，报告已接纳")
+			}
+			return err
+		})
+}
+
+func runSelectionUnderSlot(ctx context.Context, acquire func() (*slotLock, error),
+	selectClaim func(context.Context) (*problemreference.WorkerClaim, error),
+	run func(context.Context, *slotLock, problemreference.WorkerClaim) error) error {
+	if err := ctx.Err(); err != nil {
+		return err
 	}
-	return err
+	lock, err := acquire()
+	if err != nil {
+		return err
+	}
+	defer lock.Close()
+	claim, err := selectClaim(ctx)
+	if err != nil || claim == nil {
+		return err
+	}
+	return run(ctx, lock, *claim)
 }
 
 func startClaimedReference(ctx context.Context, sourceID string) (validationHost, error) {
