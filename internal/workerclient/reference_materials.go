@@ -106,10 +106,14 @@ func (a *Acquirer) referencePost(ctx context.Context, action string, value any) 
 }
 
 func (a *Acquirer) referenceObject(ctx context.Context, input problemreference.MaterialInput, o materialstore.Object) (io.ReadCloser, error) {
-	resp, err := a.referencePost(ctx, "reference/material", struct {
+	return a.fetchReferenceObject(ctx, "reference/material", struct {
 		problemreference.MaterialInput
 		Object materialstore.Object `json:"object"`
-	}{input, o})
+	}{input, o}, o)
+}
+
+func (a *Acquirer) fetchReferenceObject(ctx context.Context, path string, input any, o materialstore.Object) (io.ReadCloser, error) {
+	resp, err := a.referencePost(ctx, path, input)
 	if err != nil {
 		return nil, ErrMaterials
 	}

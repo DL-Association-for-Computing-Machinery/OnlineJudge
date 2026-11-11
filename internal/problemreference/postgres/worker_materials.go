@@ -16,7 +16,20 @@ import (
 
 // AuthorizeReferenceMaterials is read-only and never extends the reservation.
 func (c *ReferenceClaimer) AuthorizeReferenceMaterials(ctx context.Context, node submission.NodeIdentity, input problemreference.MaterialInput) (problemreference.MaterialAuthorization, error) {
-	plan, deadline, _, err := c.liveReferenceClaim(ctx, node, input, false)
+	return c.authorizeReferenceMaterials(ctx, node, input, false)
+}
+
+// AuthorizeDifferentialMaterials verifies the additional plan under the same
+// live formal reservation. It never extends the reservation.
+func (c *ReferenceClaimer) AuthorizeDifferentialMaterials(ctx context.Context, node submission.NodeIdentity, input problemreference.MaterialInput) (problemreference.MaterialAuthorization, error) {
+	if input.SourceID != problemvalidation.ConvolutionSourceID {
+		return problemreference.MaterialAuthorization{}, problemreference.ErrClaimUnavailable
+	}
+	return c.authorizeReferenceMaterials(ctx, node, input, true)
+}
+
+func (c *ReferenceClaimer) authorizeReferenceMaterials(ctx context.Context, node submission.NodeIdentity, input problemreference.MaterialInput, differential bool) (problemreference.MaterialAuthorization, error) {
+	plan, deadline, _, err := c.liveReferenceClaim(ctx, node, input, false, differential)
 	if err != nil {
 		return problemreference.MaterialAuthorization{}, err
 	}
@@ -26,7 +39,7 @@ func (c *ReferenceClaimer) AuthorizeReferenceMaterials(ctx context.Context, node
 // RenewReference rechecks live authority and only extends the exact live token.
 // It never marks execution stopped or rebinds an expired reservation.
 func (c *ReferenceClaimer) RenewReference(ctx context.Context, node submission.NodeIdentity, input problemreference.MaterialInput) (problemreference.WorkerClaim, error) {
-	_, _, until, err := c.liveReferenceClaim(ctx, node, input, true)
+	_, _, until, err := c.liveReferenceClaim(ctx, node, input, true, false)
 	if err != nil {
 		return problemreference.WorkerClaim{}, err
 	}
@@ -34,7 +47,7 @@ func (c *ReferenceClaimer) RenewReference(ctx context.Context, node submission.N
 		PlanSHA256: input.PlanSHA256, Token: input.Token, Until: until}, nil
 }
 
-func (c *ReferenceClaimer) liveReferenceClaim(ctx context.Context, node submission.NodeIdentity, input problemreference.MaterialInput, renew bool) (problemreference.ExpectedPlan, time.Time, time.Time, error) {
+func (c *ReferenceClaimer) liveReferenceClaim(ctx context.Context, node submission.NodeIdentity, input problemreference.MaterialInput, renew, differential bool) (problemreference.ExpectedPlan, time.Time, time.Time, error) {
 	var zero problemreference.ExpectedPlan
 	var noTime time.Time
 	if c == nil || ctx == nil || !input.Valid() {
@@ -75,6 +88,23 @@ func (c *ReferenceClaimer) liveReferenceClaim(ctx context.Context, node submissi
 	var parsed problem.ReferencePlan
 	if plan.SHA256 != input.PlanSHA256 || !plan.ValidFor(r.Specification) || json.Unmarshal(plan.Encoding, &parsed) != nil || parsed.ValidateMaterials() != nil {
 		return zero, noTime, noTime, problemreference.ErrClaimUnavailable
+	}
+	if differential {
+		// The formal FOR SHARE above already holds the same plan row.
+		comparison, err := q.ReferenceConvolutionExpectedPlan(ctx, r.ID)
+		if err != nil {
+			return zero, noTime, noTime, referenceClaimError(err)
+		}
+		if !comparison.DifferentialSha256.Valid {
+			return zero, noTime, noTime, problemreference.ErrClaimUnavailable
+		}
+		plan.Differential = &problemreference.DifferentialExpectedPlan{Encoding: comparison.DifferentialEncoding, SHA256: comparison.DifferentialSha256.String}
+		if !plan.ValidForRequest(r) {
+			return zero, noTime, noTime, problemreference.ErrClaimUnavailable
+		}
+		if _, err := plan.Differential.CurrentPlan(plan.SHA256); err != nil {
+			return zero, noTime, noTime, err
+		}
 	}
 	var claim referencedb.ProblemReferenceWorkerClaim
 	if renew {

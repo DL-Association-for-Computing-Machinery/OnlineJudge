@@ -54,8 +54,26 @@ const MaxDifferentialPlanBytes = 2 << 10
 // DifferentialExpectedPlan holds the separate canonical plan for the reviewed
 // fixed convolution comparison. The formal plan digest remains unchanged.
 type DifferentialExpectedPlan struct {
-	Encoding []byte
-	SHA256   string
+	Encoding []byte `json:"plan_encoding"`
+	SHA256   string `json:"differential_sha256"`
+}
+
+// CurrentPlan checks the wire digest, canonical bytes and reviewed trial pins.
+// A current plan alone does not grant access to the reservation or materials.
+func (p DifferentialExpectedPlan) CurrentPlan(formalSHA256 string) (problemvalidation.ConvolutionPlan, error) {
+	var plan problemvalidation.ConvolutionPlan
+	if len(p.Encoding) == 0 || len(p.Encoding) > MaxDifferentialPlanBytes || profileDigest(p.Encoding) != p.SHA256 ||
+		json.Unmarshal(p.Encoding, &plan) != nil {
+		return problemvalidation.ConvolutionPlan{}, ErrClaimUnavailable
+	}
+	canonical, err := json.Marshal(plan)
+	if err != nil || !bytes.Equal(canonical, p.Encoding) {
+		return problemvalidation.ConvolutionPlan{}, ErrClaimUnavailable
+	}
+	if _, err := plan.MaterialObjects(formalSHA256); err != nil {
+		return problemvalidation.ConvolutionPlan{}, ErrClaimUnavailable
+	}
+	return plan, nil
 }
 
 // ExpectsDifferential identifies requests eligible for the reviewed v1

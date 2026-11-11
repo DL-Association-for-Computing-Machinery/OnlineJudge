@@ -221,6 +221,68 @@ paths:
         '413': {$ref: '#/components/responses/TooLarge'}
         '415': {$ref: '#/components/responses/MediaType'}
         '503': {$ref: '#/components/responses/Unavailable'}
+  /api/v1/worker/reference/differential/assignment:
+    post:
+      operationId: describeDifferentialReferenceMaterials
+      description: 仅显式启用参考执行时的专用 mTLS 节点；通过原正式预留读取独立对拍计划，不续期。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - {$ref: '#/components/schemas/DifferentialMaterialInput'}
+                - not: {anyOf: [{required: [object]}, {required: [differential_sha256]}]}
+      responses:
+        '200':
+          description: 绑定原正式计划的独立对拍计划；剩余时间从发出请求时计
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [plan_encoding, differential_sha256, remaining_ms]
+                properties:
+                  plan_encoding: {type: string, contentEncoding: base64, maxLength: 2732}
+                  differential_sha256: {$ref: '#/components/schemas/Digest'}
+                  remaining_ms: {type: integer, minimum: 1, maximum: 30000}
+        '400': {$ref: '#/components/responses/Invalid'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {description: 参考执行或材料未启用}
+        '409': {description: 原预留失效或没有可用对拍计划}
+        '413': {$ref: '#/components/responses/TooLarge'}
+        '415': {$ref: '#/components/responses/MediaType'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/v1/worker/reference/differential/material:
+    post:
+      operationId: downloadDifferentialReferenceMaterial
+      description: 仅允许对拍计划中的一份解法；读取前后复核原预留及两份计划，正式点和答案不可从此路由读取。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - {$ref: '#/components/schemas/DifferentialMaterialInput'}
+                - {required: [object, differential_sha256]}
+      responses:
+        '200':
+          description: 已验证的解法字节；Worker 仍须复核长度及摘要
+          headers:
+            Content-Length: {required: true, schema: {type: integer, minimum: 1, maximum: 65536}}
+            X-Content-SHA256: {required: true, schema: {$ref: '#/components/schemas/Digest'}}
+          content:
+            application/octet-stream:
+              schema: {type: string, format: binary}
+        '400': {$ref: '#/components/responses/Invalid'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {description: 参考执行或材料未启用}
+        '409': {description: 原预留失效或对拍计划、摘要、对象不匹配}
+        '413': {$ref: '#/components/responses/TooLarge'}
+        '415': {$ref: '#/components/responses/MediaType'}
+        '503': {$ref: '#/components/responses/Unavailable'}
   /api/v1/worker/claim:
     post:
       operationId: claimWorkerLease
@@ -419,6 +481,23 @@ components:
           properties:
             sha256: {$ref: '#/components/schemas/Digest'}
             size: {type: integer, minimum: 0, maximum: 50331648}
+    DifferentialMaterialInput:
+      type: object
+      additionalProperties: false
+      required: [request_id, source_id, plan_sha256, lease_token]
+      properties:
+        request_id: {type: string, pattern: '^[0-9a-f]{32}$'}
+        source_id: {const: 'library-checker:convolution_mod'}
+        plan_sha256: {$ref: '#/components/schemas/Digest'}
+        lease_token: {$ref: '#/components/schemas/Digest'}
+        differential_sha256: {$ref: '#/components/schemas/Digest'}
+        object:
+          type: object
+          additionalProperties: false
+          required: [sha256, size]
+          properties:
+            sha256: {$ref: '#/components/schemas/Digest'}
+            size: {type: integer, minimum: 1, maximum: 65536}
     Digest: {type: string, pattern: '^[0-9a-f]{64}$'}
   responses:
     Invalid:

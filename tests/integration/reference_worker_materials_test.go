@@ -195,6 +195,11 @@ func TestReferenceMaterialsThroughRealMTLS(t *testing.T) {
 	if resp.StatusCode != 200 || !bytes.Equal(descriptor.Encoding, f.want.Encoding) || descriptor.RemainingMS <= 0 {
 		t.Fatal("descriptor changed frozen plan")
 	}
+	resp = post("differential/assignment", input)
+	must(t, resp.Body.Close())
+	if resp.StatusCode != 404 {
+		t.Fatal("claims-only mode exposed differential assignment", resp.StatusCode)
+	}
 	var plan problem.ReferencePlan
 	must(t, json.Unmarshal(descriptor.Encoding, &plan))
 	// Source lock is synthetic: independently freeze the actual mTLS object
