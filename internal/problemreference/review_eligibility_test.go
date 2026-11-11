@@ -49,3 +49,29 @@ func TestReviewApprovalRequiresMoreThanReferenceAC(t *testing.T) {
 		})
 	}
 }
+
+func TestReviewApprovalWithTrustedValidatorKeepsOtherBlockers(t *testing.T) {
+	const source = problemvalidation.ConvolutionSourceID
+	profile, _, err := problemvalidation.ResolveSource(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := ReviewEvidence{SourceID: source, SourceLockSHA256: problemvalidation.SourceLockSHA256,
+		ContentVersion:   "7a1079bd0d8be8d2cb57619780d4f519de096fd3bb9655eaa37a9bfe49e19e80",
+		ImportRevision:   "e1c721627cd97dec382d90bfe559e766b7f3811d9257ce89946404befe009975",
+		FormalPlanSHA256: "8a0d5909fce14750a809d59cece1bc0dede3f41c8dce6fba0f1ad92e371471d9",
+		ProfileSHA256:    profile.Digest(), FormalVerdict: "WA", ComparisonOutcome: "mismatch"}
+	s := ReviewEligibilitySnapshot{Evidence: e, Returned: true}
+	got := assessReviewEligibility(s)
+	want := []string{"materials_returned", "formal_failed", "comparison_mismatch", "statement_quality_missing",
+		"test_coverage_missing", "checker_admission_missing", "target_runtime_missing", "solution_confirmation_missing"}
+	if got.Eligible || got.InputValidator == nil || got.InputValidator.Inputs != 53 || !slices.Equal(got.Blockers, want) {
+		t.Fatalf("expected only the validator prerequisite to clear: %+v", got)
+	}
+	s.Evidence.ProfileSHA256 = strings.Repeat("f", 64)
+	stale := assessReviewEligibility(s)
+	if stale.InputValidator != nil || !slices.Contains(stale.Blockers, "policy_unavailable") ||
+		!slices.Contains(stale.Blockers, "input_validator_missing") {
+		t.Fatalf("old profile borrowed current policy evidence: %+v", stale)
+	}
+}

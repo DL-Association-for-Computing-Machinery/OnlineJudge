@@ -108,7 +108,8 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 		var view problemreference.ReviewEligibility
 		must(t, json.Unmarshal(result.body, &view))
 		if len(fields) != 4 || string(fields["evidence"]) != string(assigned.body) || string(fields["eligible"]) != "false" ||
-			view.PolicyVersion != "oj.review-approval.v2" || !slices.Contains(view.Blockers, "independent_correctness_missing") ||
+			view.PolicyVersion != "oj.review-approval.v3" || !slices.Contains(view.Blockers, "independent_correctness_missing") ||
+			view.InputValidator != nil || !slices.Contains(view.Blockers, "input_validator_missing") ||
 			slices.Contains(view.Blockers, "solution_confirmation_missing") == confirmed || slices.Contains(view.Blockers, "formal_failed") ||
 			slices.Contains(view.Blockers, "materials_returned") != returned {
 			t.Fatal("eligibility lost the accepted evidence or incorrectly treated formal AC/return status")
