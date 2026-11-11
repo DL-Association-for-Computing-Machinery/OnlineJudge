@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -109,6 +110,89 @@ func TestDiskReferenceFrozenBytesOwnershipAndClose(t *testing.T) {
 	}
 	if err := s2.Close(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestBorrowedAnswerBoundsLifetimeAndConcurrentClose(t *testing.T) {
+	b, p, _ := unionSnapshotFixture(t)
+	life, stop := context.WithCancel(t.Context())
+	defer stop()
+	s, err := p.PrepareUnionFindReference(life, problem.UnionFindReferenceLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := s.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	call, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	reader, size, err := s.AnswerAt(call, 0)
+	if err != nil || size != 2 {
+		t.Fatal(size, err)
+	}
+	plan := s.Plan()
+	path := filepath.Join(b.Directory, "objects/sha256/"+plan.Cases[0].Answer.SHA256)
+	if err := os.WriteFile(path, []byte("9\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	buf := []byte("xxxx")
+	n, err := reader.ReadAt(buf, 0)
+	if n != 2 || err != io.EOF || string(buf) != "3\nxx" {
+		t.Fatalf("span leaked adjacent bytes or reflected original: n=%d err=%v bytes=%q", n, err, buf)
+	}
+	if n, err := reader.ReadAt(buf, size); n != 0 || err != io.EOF {
+		t.Fatalf("span end was readable: %d %v", n, err)
+	}
+	if _, _, err := s.AnswerAt(t.Context(), -1); !errors.Is(err, problem.ErrInvalid) {
+		t.Fatal(err)
+	}
+	cancel()
+	if n, err := reader.ReadAt(buf, 0); n != 0 || !errors.Is(err, context.Canceled) {
+		t.Fatalf("call cancellation lost: %d %v", n, err)
+	}
+	reader, _, err = s.AnswerAt(t.Context(), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var group sync.WaitGroup
+	for range 10 {
+		group.Go(func() {
+			var dest [2]byte
+			n, err := reader.ReadAt(dest[:], 0)
+			readComplete := n == 2 && err == nil && string(dest[:]) == "3\n"
+			alreadyClosed := n == 0 && errors.Is(err, problem.ErrInvalid)
+			if readComplete || alreadyClosed {
+				return
+			}
+			t.Errorf("read/close returned %d, %v", n, err)
+		})
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	group.Wait()
+	if n, err := reader.ReadAt(buf, 0); n != 0 || !errors.Is(err, problem.ErrInvalid) {
+		t.Fatalf("borrowed reader survived snapshot close: %d %v", n, err)
+	}
+	_, second, _ := unionSnapshotFixture(t)
+	s2, err := second.PrepareUnionFindReference(life, problem.UnionFindReferenceLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := s2.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	r2, _, err := s2.AnswerAt(t.Context(), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stop()
+	if n, err := r2.ReadAt(buf, 0); n != 0 || !errors.Is(err, context.Canceled) {
+		t.Fatalf("snapshot cancellation lost: %d %v", n, err)
 	}
 }
 

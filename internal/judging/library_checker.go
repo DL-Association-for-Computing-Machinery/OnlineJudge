@@ -28,10 +28,15 @@ type TextLimits struct {
 // then valid UTF-8 output token overflow returns ErrOutput.
 // No Testlib execution, draft validation, or publication takes place here.
 func CompareLibraryCheckerText(reference, output []byte, limits TextLimits) (bool, error) {
-	if limits.Bytes < 1 || limits.Bytes > MaxTextBytes || limits.TokenBytes < 1 || limits.TokenBytes > tokenBudget || limits.TokenBytes > limits.Bytes {
+	if !validTextLimits(limits) {
 		return false, ErrTextLimits
 	}
 	return compareText(reference, output, true, limits.Bytes, limits.TokenBytes, libraryCheckerSpace)
+}
+
+func validTextLimits(limits TextLimits) bool {
+	return limits.Bytes >= 1 && limits.Bytes <= MaxTextBytes && limits.TokenBytes >= 1 &&
+		limits.TokenBytes <= tokenBudget && limits.TokenBytes <= limits.Bytes
 }
 
 func libraryCheckerSpace(b byte) bool { return b == ' ' || b == '\t' || b == '\n' || b == '\r' }

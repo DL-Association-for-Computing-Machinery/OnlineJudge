@@ -1,6 +1,7 @@
 package problemvalidation
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"reflect"
@@ -165,11 +166,11 @@ func (r *Runner) validateMaterials(ctx context.Context, profile Profile, sourceI
 		}
 	}
 	for i := range plan.Cases {
-		answer, err := frozen.ReadAnswer(ctx, i)
+		answer, size, err := frozen.AnswerAt(ctx, i)
 		if err != nil {
 			return report, err
 		}
-		if _, err := judging.CompareLibraryCheckerText(answer, nil, profile.Text); err != nil {
+		if err := judging.ValidateLibraryCheckerReferenceAt(ctx, judging.FrozenText{Reader: answer, Size: size}, profile.Text); err != nil {
 			return report, err
 		}
 	}
@@ -241,7 +242,7 @@ func (r *Runner) validateMaterials(ctx context.Context, profile Profile, sourceI
 		if err := ctx.Err(); err != nil {
 			return report, err
 		}
-		input, answer, err := frozen.ReadCase(ctx, i)
+		input, err := frozen.ReadInput(ctx, i)
 		if err != nil {
 			return report, err
 		}
@@ -262,7 +263,13 @@ func (r *Runner) validateMaterials(ctx context.Context, profile Profile, sourceI
 			return report, e
 		}
 		if verdict == "AC" {
-			ok, e := judging.CompareLibraryCheckerText(answer, o.Stdout, profile.Text)
+			answer, size, e := frozen.AnswerAt(ctx, i)
+			if e != nil {
+				return report, e
+			}
+			ok, e := judging.CompareLibraryCheckerTextAt(ctx,
+				judging.FrozenText{Reader: answer, Size: size},
+				judging.FrozenText{Reader: bytes.NewReader(o.Stdout), Size: int64(len(o.Stdout))}, profile.Text)
 			if e != nil {
 				return report, e
 			}

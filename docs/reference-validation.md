@@ -114,7 +114,7 @@ staticrmq使用独立`ReferenceStaticRMQ`档位（枚举5）、profile `p4-lc-st
 
 `Prepared.PrepareReference`沿用bundle私有权限、路径/库存和来源校验，先检查完整材料集合的大小，再从安全打开的同一描述符限长读取、校验大小/哈希并冻结私有字节。每次调用返回独立切片，不在执行期间重开原材料。版本、完整导入修订、来源锁、源码身份和有序逐点身份进入plan；plan摘要为不含原始字节的紧凑`encoding/json` SHA-256，profile摘要绑定完整配置。读取预算和检查器预算分别计量。
 
-磁盘来源使用`Prepared.PrepareDiskReference`按自身固定sourceID选择受信布局/预算；原`PrepareUnionFindReference`保留仅unionfind的兼容入口。先按完整集合扣除总预算，再创建0600临时文件并立即unlink，在同一匿名文件依次存入全部source/input/answer，每个对象从同一安全打开描述符分块哈希并核验完整大小后才返回。所有来源共用进程内最多一份的额度，Prepared占用持续到幂等Close；错误/取消关闭并释放，Close失败阻断报告成功。外部plan为独立身份拷贝，内部span不可修改，执行时通过ReadAt只读当前点，所有答案预检不加载输入。原文件后续修改不影响已冻结字节；不宣称Go堆或文件系统硬时限。匿名unlink失败在写内容前拒绝，极端情况下可能留空0600文件；磁盘准备失败没有完成的plan和逐点列表，报告points可为空，不能解释为已执行零点后通过。
+磁盘来源使用`Prepared.PrepareDiskReference`按自身固定sourceID选择受信布局/预算；原`PrepareUnionFindReference`保留仅unionfind的兼容入口。先按完整集合扣除总预算，再创建0600临时文件并立即unlink，在同一匿名文件依次存入全部source/input/answer，每个对象从同一安全打开描述符分块哈希并核验完整大小后才返回。所有来源共用进程内最多一份的额度，Prepared占用持续到幂等Close；错误/取消关闭并释放，Close失败阻断报告成功。外部plan为独立身份拷贝，内部span不可修改。答案预检和逐点比较通过`AnswerAt`分块读取单个答案，借用范围在快照关闭或取消后失效；预检不加载输入。执行端仍缓存当前点的输入和 stdout。原文件后续修改不影响已冻结字节；不宣称Go堆或文件系统硬时限。匿名unlink失败在写内容前拒绝，极端情况下可能留空0600文件；磁盘准备失败没有完成的plan和逐点列表，报告points可为空，不能解释为已执行零点后通过。
 
 验证器独立读取锁定`info.toml.tests`，按组顺序与组内编号生成完整点集，严格核对草稿映射、sample角色和每点输入/答案SHA；`hash.json`必须恰为这些点的完整配对，无遗漏/额外/重复键。删点后重算合法版本和index仍会在Compile前拒绝，不只检查草稿自称的完整集合，也不按哈希字典排序推导来源顺序。仅复用已锁定的MIT许可`go-toml/v2 v2.2.4`，从间接依赖提升为直接使用；无版本升级、新下载或go.sum变化，不执行生成器/脚本。
 
