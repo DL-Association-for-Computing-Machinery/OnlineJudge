@@ -129,7 +129,10 @@ async function main() {
     await article.getByText('版本 ' + draft.version + ' · 英文题面 · 私有草稿', { exact: true }).waitFor()
     const statement = article.locator('.statement-markdown')
     assert.deepEqual(await statement.locator('h2').allTextContents(), draft.headings)
-    assert.equal(await statement.locator('.katex-error, .statement-image-placeholder, img, script').count(), 0)
+    assert.equal(await statement.locator('.katex-error, .math-budget-error, .statement-image-placeholder, img, script').count(), 0)
+    const displayedMath = await statement.locator('.katex-display annotation[encoding="application/x-tex"]').allTextContents()
+    const formatMath = displayedMath.map(text => text.trim()).filter(text => text.startsWith('\\begin{gathered}')).map(hash)
+    assert.deepEqual(formatMath, draft.format_math)
     const formulas = await statement.locator('.katex').count()
     assert(formulas > 0)
     assert.equal(await page.locator('vite-error-overlay').count(), 0)
@@ -165,7 +168,8 @@ async function main() {
         }
       }
     }
-    report.problems.push({ source_id: draft.source_id, version: draft.version, examples: draft.examples.length, formulas })
+    report.problems.push({ source_id: draft.source_id, version: draft.version, examples: draft.examples.length, formulas,
+      format_blocks: formatMath.length })
   }
   assert.equal(report.problems.reduce((count, draft) => count + draft.examples, 0), 18)
   passed('ten real preview responses and eighteen copied sample pairs match the verified bundle')

@@ -36,6 +36,40 @@ class StatementTests(unittest.TestCase):
         text, _ = statement.convert("@{example.x}", {}, {"x": ("```\n", "x")})
         self.assertIn("````text\n```\n````", text)
 
+    def test_pinned_format_blocks_keep_rows_and_leave_other_fences_literal(self):
+        template = (
+            "````text\n## @{keyword.input}\n\n```\n$literal$\n```\n````\n"
+            "## @{keyword.input}\n\n```\n$N$ $M$\n$a_0$ ... $a_{N-1}$\n```\n"
+            "## @{keyword.output}\n\n```\n$\\textrm{Result}_0$\n:\n$\\vdots$\n```\n"
+            "## @{keyword.sample}\n@{example.x}\n"
+        )
+        markdown, examples = statement.convert(template, {}, {"x": ("$raw$\n", "`value`\n")},
+                                               source_id="library-checker:convolution_mod")
+        self.assertIn("````text\n## Input\n\n```\n$literal$\n```\n````", markdown)
+        self.assertIn(r"\begin{gathered}N\quad M \\ a_0\quad \ldots\quad a_{N-1}\end{gathered}", markdown)
+        self.assertIn(r"\begin{gathered}\textrm{Result}_0 \\ : \\ \vdots\end{gathered}", markdown)
+        self.assertIn("```text\n$raw$\n```", markdown)
+        self.assertEqual(examples, ["x"])
+        self.assertEqual(markdown.count("```math\n"), 2)
+        unchanged, _ = statement.convert(template, {}, {"x": ("$raw$\n", "`value`\n")},
+                                         source_id="library-checker:unionfind")
+        self.assertNotIn("```math\n", unchanged)
+        self.assertIn("```\n$N$ $M$\n", unchanged)
+
+    def test_pinned_format_drift_or_unsupported_math_fails_closed(self):
+        heading = "## @{keyword.input}\n\n"
+        block = "```\n$Q$\n```\n"
+        invalid = [
+            heading, heading + block + heading + block, "````\n" + heading + block + "````\n",
+            heading + "```text\n$Q$\n```\n", heading + "```\n$Q$\n",
+            *(heading + f"```\n{row}\n```\n" for row in (
+                "$a_{N$", "$A$$B$", "$Q$ unexpected", "$\\href{evil}{x}$", "$ $", "$" + "x" * 4096 + "$",
+            )),
+        ]
+        for template in invalid:
+            with self.subTest(template=template[:90]), self.assertRaises(ValueError):
+                statement.convert(template, {}, {}, source_id="library-checker:associative_array")
+
     def test_unknown_malformed_language_and_parameter_changes_fail_closed(self):
         templates = ["@{unknown.x}", "@{param.MISSING}", "@{param.N}",
                      "@{lang.end}\n", "@{lang.en}\n", "@{lang.ja}\n",

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Verify the browser account panel using existing local tools and isolated stores."""
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -15,7 +16,7 @@ import urllib.request
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
-REDIS = "redis:7.2.17@sha256:0312984fbfeb2ff1d4382ecef45b50e7d65478a6a58cf12ce28d6de7a4142e45"
+REDIS = "redis@sha256:0312984fbfeb2ff1d4382ecef45b50e7d65478a6a58cf12ce28d6de7a4142e45"
 # Loading the shared driver must not leave bytecode artifacts in the checkout.
 sys.dont_write_bytecode = True
 from problem_draft_files import verify_bundle
@@ -62,7 +63,7 @@ def arguments():
     parser.add_argument("--context", default="desktop-linux")
     parser.add_argument("--toolchain-image", default="oj-go-quality-toolchain")
     parser.add_argument("--frontend-image", default="oj-browser-frontend-source")
-    parser.add_argument("--redis-image", default=REDIS, choices=[REDIS])
+    parser.add_argument("--redis-image", default=REDIS, choices=[REDIS, REDIS.replace("@", ":7.2.17@", 1)])
     parser.add_argument("--module-cache", type=Path)
     parser.add_argument("--build-cache-volume", default="onlinejudge_toolchain-cache")
     parser.add_argument("--playwright-module", type=Path, required=True)
@@ -125,9 +126,11 @@ def draft_expectations(bundle):
         draft = json.loads(read_regular(bundle, item["draft"]))
         statement = draft["statement"]
         markdown = read_regular(bundle, statement["path"], 131072).decode("utf-8", errors="strict")
+        format_blocks = re.findall(r"^```math\n(\\begin\{gathered\}[^\n]+)\n```$", markdown, re.M)
         samples = {case["id"]: case for case in draft["test_cases"] if case["sample"]}
         drafts.append({"source_id": item["source_id"], "version": item["version"], "title": draft["title"],
                        "markdown_sha256": statement["sha256"], "headings": re.findall(r"^## (.+)$", markdown, re.M),
+                       "format_math": [hashlib.sha256(block.encode()).hexdigest() for block in format_blocks],
                        "examples": [{"id": ident, "input_sha256": samples[ident]["input"]["sha256"],
                                      "output_sha256": samples[ident]["answer"]["sha256"]} for ident in draft["examples"]]})
     if len(drafts) != 10 or sum(len(draft["examples"]) for draft in drafts) != 18:
