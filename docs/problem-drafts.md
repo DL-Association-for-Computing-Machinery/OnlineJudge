@@ -111,9 +111,17 @@ schema 16 新增两张只追加的历史表。主体／项和修订的复合主�
 
 入口只接受送审 ID，拒绝查询参数、请求体和转义别名；结果不一致或超限时不返回部分内容。响应至多 4096 字节。读取不执行程序，不写决定，也不改变草稿或发布状态。
 
+### 作者确认标程
+
+启用 `review_intake` 后，作者用普通会话、预期主体头和本人原送审键请求 `GET /api/v1/problem-draft-management/review-submissions/{request_key}/solution`。只返回冻结计划里的标程原文、固定依赖、完整导入修订及正式计划摘要。源码和依赖合计至多 64 KiB，不返回正式输入、答案或存储地址。读材料不持数据库锁；读完后重新检查同一凭据、作者资格和完整绑定。
+
+核对后，作者以同源 `POST .../{request_key}/solution-confirmation` 提交 `import_revision` 和 `formal_plan_sha256` 两个摘要。服务端再次验证源文件、依赖和当前资格，在写事务内复核绑定。绑定变化返回 409；相同草稿、完整修订及计划并发确认只保存一次，同绑定下的其他送审键可回读同一确认时间。计划或修订变化不能复用旧记录。确认结果未知时，用原键 GET 同一路径回读；404 只表示本次没有观察到。读取或验证成功不会自动确认。
+
+这是作者对标程的确认。独立非作者终审仍必需，已退回的材料仍阻止批准。确认不会改草稿状态、验证结论或发布状态。schema 18 只追加确认账本，保存首次确认对应的送审项及当时的作者资格、会话代次和时间。主键支撑同绑定去重和查找，另有送审外键索引；每次新确认增加两个索引条目及相应 WAL。停机后只允许空账本回退；已有确认应前滚。
+
 ### 批准准入状态
 
-`GET /api/v1/problem-review/{review_id}/eligibility` 沿用审核开关、普通会话和预期主体头。仅当前被分配的非作者可读；同一短事务核验完整导入修订、冻结计划及已接纳报告，并查询同一材料是否已被退回。响应包含固定证据摘要、策略版本 `oj.review-approval.v1`、`eligible: false` 及阻断码。读取不写决定，不能作为批准凭证。
+`GET /api/v1/problem-review/{review_id}/eligibility` 沿用审核开关、普通会话和预期主体头。仅当前被分配的非作者可读；同一短事务核验完整导入修订、冻结计划及已接纳报告，查询同材料是否已退回及同绑定的作者确认。响应包含固定证据摘要、策略版本 `oj.review-approval.v2`、`eligible: false` 及阻断码。读取不写决定，不能作为批准凭证。
 
 | 阻断码 | 需要处理的事项 |
 | --- | --- |
@@ -124,9 +132,9 @@ schema 16 新增两张只追加的历史表。主体／项和修订的复合主�
 | `independent_correctness_missing` | 其他来源暂无经接纳的独立正确性证据或明确适用规则 |
 | `statement_quality_missing`、`test_coverage_missing`、`input_validator_missing` | 尚无绑定完整修订的题面质量、正式数据覆盖或输入校验器证据 |
 | `checker_admission_missing`、`target_runtime_missing` | 尚无该修订的生产检查器或目标节点资源准入证据 |
-| `solution_confirmation_missing` | 尚无人工确认固定标程的记录 |
+| `solution_confirmation_missing` | 尚无作者对该完整修订及正式计划的标程确认 |
 
-末三行目前没有可信证据入口，始终阻止批准。即使正式点和卷积对拍都通过，也不会开放批准。不接收客户端指定的规则版本或证据；报告绑定不一致则返回 503，不返回部分结果。
+题面、数据覆盖、输入校验、生产检查器和目标环境仍没有可信证据入口，始终阻止批准。即使正式点、卷积对拍及作者确认都通过，也不会开放批准。不接收客户端指定的规则版本或证据；报告绑定不一致则返回 503，不返回部分结果。
 
 ### 审核材料读取
 
@@ -156,9 +164,9 @@ schema 17 增加只追加的退回账本。送审主键、完整材料唯一索�
 
 PG事务同一次提交owner、稳定ID、不可变文档/版本、全部引用及请求回执。同owner同键同内容返回原记录，不同内容为`ErrConflict`。`ErrCommitUnknown`后保持原键/原bundle核验；不得用新键制造重复记录。Put失败/未知不提交引用，已成功的无引用对象保留，当前没有全局磁盘额度或孤儿GC。业务读取限本人元数据/题面样例、授权配置候选摘要、本人导入回执和分页列表；不提供改写、删除、转让、共享或一般材料下载，状态结构性固定`private-draft/not-run`。
 
-角色/审计及草稿/材料关联表始于schema7，不为历史账号授予权限；schema8新增`problem_drafts_owner_created_id_idx(owner_subject_id,created_at DESC,id COLLATE "C" DESC)`，使首屏和深页owner+seek查询不扫描/排序全部历史。每次新草稿多维护一个B-tree条目及相应WAL/磁盘，实际占用依数据分布而变；12000行合成查询计划及索引大小见交付记录，不将该样本当生产容量估算。原owner/key唯一索引支持幂等定位，主键支持本人ID读取，材料复合主键支持按草稿读取；不为列表附带大document或冗余覆盖字段。schema9 另增[参考申请账本与默认空policy](reference-requests.md)，schema 10 增加预期计划表，schema 11 增加参考领取预留，schema 12 增加参考报告和申请终态，schema 13 增加参考调度，schema 14 增加卷积对拍预期计划，schema 15 增加作者送审账本，schema 16 增加审核资格和分配，schema 17 增加退回账本；均不修改既有草稿、角色或材料引用。
+角色/审计及草稿/材料关联表始于schema7，不为历史账号授予权限；schema8新增`problem_drafts_owner_created_id_idx(owner_subject_id,created_at DESC,id COLLATE "C" DESC)`，使首屏和深页owner+seek查询不扫描/排序全部历史。每次新草稿多维护一个B-tree条目及相应WAL/磁盘，实际占用依数据分布而变；12000行合成查询计划及索引大小见交付记录，不将该样本当生产容量估算。原owner/key唯一索引支持幂等定位，主键支持本人ID读取，材料复合主键支持按草稿读取；不为列表附带大document或冗余覆盖字段。schema9 另增[参考申请账本与默认空policy](reference-requests.md)，schema 10 增加预期计划表，schema 11 增加参考领取预留，schema 12 增加参考报告和申请终态，schema 13 增加参考调度，schema 14 增加卷积对拍预期计划，schema 15 增加作者送审账本，schema 16 增加审核资格和分配，schema 17 增加退回账本，schema 18 增加作者确认账本；均不修改既有草稿、角色或材料引用。
 
-升级在维护窗口排空并停止旧版 API/Worker 及维护写入，独立 `migrate up` 至当前 schema 17 后启动匹配二进制。API 不自动迁移，新二进制拒绝其他 schema。迁移不会停止旧进程，不混跑；本次没有迁移已有持久化 localdev 或服务器。回退先停新版，[Down17](#审核退回与重送) 只允许空退回账本；[Down16](#审核人分配与证据摘要) 只允许空访问历史；Down15 见[作者送审回执](#作者送审回执)；历史 Down14/Down13/Down12/Down11/Down10/Down9 的锁序与条件见[参考申请迁移](reference-requests.md#迁移与回退)。
+升级在维护窗口排空并停止旧版 API/Worker 及维护写入，独立 `migrate up` 至当前 schema 18 后启动匹配二进制。API 不自动迁移，新二进制拒绝其他 schema。迁移不会停止旧进程，不混跑；本次没有迁移已有持久化 localdev 或服务器。回退先停新版，[Down18](#作者确认标程) 只允许空标程确认账本；[Down17](#审核退回与重送) 只允许空退回账本；[Down16](#审核人分配与证据摘要) 只允许空访问历史；Down15 见[作者送审回执](#作者送审回执)；历史 Down14/Down13/Down12/Down11/Down10/Down9 的锁序与条件见[参考申请迁移](reference-requests.md#迁移与回退)。
 
 历史schema8的普通CREATE INDEX在事务中建索引，需要协调写入，不使用CONCURRENTLY。Down8仅删列表索引并保留全部草稿/权限，重Up8保留资料；回到8后须匹配要求8的二进制，继续Down8至7后才可启动要求7的旧版。继续Down7至6仍仅允许角色、审计、草稿均空，存在数据则向前修复；Down6也保留原积压保护，不清表绕过。
 

@@ -100,7 +100,7 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 	}
 	loginStatus(t, reviewEvidenceGET(x, draftID, cookies, reviewer.ID), 404)
 	loginStatus(t, reviewEvidenceGET(x, receipt.ID, authorCookies, owner), 404)
-	assertEligibility := func(result loginResponse, returned bool) {
+	assertEligibility := func(result loginResponse, returned, confirmed bool) {
 		t.Helper()
 		loginStatus(t, result, 200)
 		var fields map[string]json.RawMessage
@@ -108,16 +108,22 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 		var view problemreference.ReviewEligibility
 		must(t, json.Unmarshal(result.body, &view))
 		if len(fields) != 4 || string(fields["evidence"]) != string(assigned.body) || string(fields["eligible"]) != "false" ||
-			view.PolicyVersion != "oj.review-approval.v1" || !slices.Contains(view.Blockers, "independent_correctness_missing") ||
-			!slices.Contains(view.Blockers, "solution_confirmation_missing") || slices.Contains(view.Blockers, "formal_failed") ||
+			view.PolicyVersion != "oj.review-approval.v2" || !slices.Contains(view.Blockers, "independent_correctness_missing") ||
+			slices.Contains(view.Blockers, "solution_confirmation_missing") == confirmed || slices.Contains(view.Blockers, "formal_failed") ||
 			slices.Contains(view.Blockers, "materials_returned") != returned {
 			t.Fatal("eligibility lost the accepted evidence or incorrectly treated formal AC/return status")
 		}
 	}
-	assertEligibility(eligibility(x, receipt.ID, cookies, reviewer.ID), false)
+	assertEligibility(eligibility(x, receipt.ID, cookies, reviewer.ID), false, false)
 	loginStatus(t, eligibility(y, receipt.ID, authorCookies, owner), 404)
 	loginStatus(t, eligibility(y, referenceID, cookies, reviewer.ID), 404)
 	loginStatus(t, reviewReadGET(y, receipt.ID+"/eligibility?policy=older", cookies, reviewer.ID), 400)
+	var solutionHash string
+	must(t, f.pools[0].QueryRow(f.ctx, `SELECT convert_from(plan_encoding,'UTF8')::jsonb #>> '{source,sha256}'
+		FROM problem_reference_expected_plans WHERE request_id=$1`, referenceID).Scan(&solutionHash))
+	testEntryAuthorSolution(t, x, y, receipt, got, authorCookies, cookies, owner, reviewer.ID,
+		func() func() { return corruptReviewSource(t, root, solutionHash) })
+	assertEligibility(eligibility(y, receipt.ID, cookies, reviewer.ID), false, true)
 	for _, endpoint := range []*loginEndpoint{x, y} {
 		result := comparison(endpoint, receipt.ID, cookies, reviewer.ID)
 		loginStatus(t, result, 200)
@@ -139,10 +145,7 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 	loginStatus(t, material, 200)
 	assertReviewMaterials(t, material, receipt, owner, reviewer.ID)
 	t.Run("corrupt_frozen_source", func(t *testing.T) {
-		var hash string
-		must(t, f.pools[0].QueryRow(f.ctx, `SELECT convert_from(plan_encoding,'UTF8')::jsonb #>> '{source,sha256}'
-			FROM problem_reference_expected_plans WHERE request_id=$1`, referenceID).Scan(&hash))
-		defer corruptReviewSource(t, root, hash)()
+		defer corruptReviewSource(t, root, solutionHash)()
 		failed := reviewMaterialsGET(y, receipt.ID, cookies, reviewer.ID)
 		loginStatus(t, failed, 503)
 		if strings.Contains(string(failed.body), "Synthetic A + B") || strings.Contains(string(failed.body), "standard_solution") {
@@ -155,7 +158,7 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 	loginStatus(t, reviewReadGET(y, receipt.ID+"/materials?hash="+got.EvidenceSHA256, cookies, reviewer.ID), 400)
 	loginStatus(t, reviewReadGET(y, receipt.ID+"/materials/"+got.EvidenceSHA256, cookies, reviewer.ID), 404)
 	testEntryReviewReturn(t, x, y, receipt, got, cookies, authorCookies, reviewer.ID, owner)
-	assertEligibility(eligibility(y, receipt.ID, cookies, reviewer.ID), true)
+	assertEligibility(eligibility(y, receipt.ID, cookies, reviewer.ID), true, true)
 	grant(reviewer.ID, 1, false)
 	loginStatus(t, reviewEvidenceGET(x, receipt.ID, cookies, reviewer.ID), 403)
 	loginStatus(t, reviewMaterialsGET(x, receipt.ID, cookies, reviewer.ID), 403)

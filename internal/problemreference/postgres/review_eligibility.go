@@ -31,7 +31,7 @@ func (s *ReviewStore) ReviewEligibilitySnapshot(ctx context.Context, actor ident
 		return zero, err
 	}
 	q := referencedb.New(tx)
-	if _, err := loadHistoricalReviewEvidence(ctx, q, item); err != nil {
+	if _, err := loadHistoricalReviewEvidence(ctx, q, item.owner, item.evidence); err != nil {
 		return zero, storageError{err}
 	}
 	digest := item.materialDigest()
@@ -40,11 +40,20 @@ func (s *ReviewStore) ReviewEligibilitySnapshot(ctx context.Context, actor ident
 		return zero, storageError{err}
 	}
 	returned := err == nil
+	binding := problemreference.SolutionBinding{ImportRevision: item.evidence.ImportRevision, FormalPlanSHA256: item.evidence.FormalPlanSHA256}
+	row, err := q.SolutionConfirmation(ctx, confirmationParams(item.evidence.DraftID, binding))
+	confirmed := err == nil
+	switch {
+	case confirmed && !validSolutionConfirmation(row, item.owner, item.evidence.DraftID, binding):
+		return zero, storageError{problemreference.ErrInvalid}
+	case err != nil && !errors.Is(err, pgx.ErrNoRows):
+		return zero, storageError{err}
+	}
 	if err := commitTx(ctx, tx, false); err != nil {
 		return zero, err
 	}
 	if err := ctx.Err(); err != nil {
 		return zero, err
 	}
-	return problemreference.ReviewEligibilitySnapshot{Evidence: item.evidence, Returned: returned}, nil
+	return problemreference.ReviewEligibilitySnapshot{Evidence: item.evidence, Returned: returned, SolutionConfirmed: confirmed}, nil
 }

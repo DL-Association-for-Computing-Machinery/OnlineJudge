@@ -87,29 +87,46 @@ type ReviewDependency struct {
 // Read verifies the selected objects and returns only review-visible bytes.
 // The caller must acquire a material slot and recheck authority after Read.
 func (m ReviewMaterialManifest) Read(ctx context.Context, store ReferenceObjectReader) (Preview, ReviewSolution, error) {
-	var zero ReviewSolution
-	if ctx == nil || store == nil || m.solution.Size < 1 || m.solution.Size > SmallReferenceLimits().SourceBytes ||
-		!validHash(m.solution.SHA256) {
-		return Preview{}, zero, ErrInvalid
+	if !m.validSolutionRead(ctx, store) {
+		return Preview{}, ReviewSolution{}, ErrInvalid
 	}
 	preview, err := readPreview(ctx, store, m.statement)
 	if err != nil {
-		return Preview{}, zero, err
+		return Preview{}, ReviewSolution{}, err
+	}
+	solution, err := m.ReadSolution(ctx, store)
+	if err != nil {
+		return Preview{}, ReviewSolution{}, err
+	}
+	return preview, solution, nil
+}
+
+// ReadSolution verifies only the pinned solution closure. The caller supplies
+// the same material slot and post-read authorization as for Read.
+func (m ReviewMaterialManifest) ReadSolution(ctx context.Context, store ReferenceObjectReader) (ReviewSolution, error) {
+	var zero ReviewSolution
+	if !m.validSolutionRead(ctx, store) {
+		return zero, ErrInvalid
 	}
 	source, err := readPreviewText(ctx, store, m.solution)
 	if err != nil {
-		return Preview{}, zero, err
+		return zero, err
 	}
 	solution := ReviewSolution{Source: source}
 	for _, dep := range m.libraries {
 		source, err := readPreviewText(ctx, store, dep.object)
 		if err != nil {
-			return Preview{}, zero, err
+			return zero, err
 		}
 		solution.Dependencies = append(solution.Dependencies, ReviewDependency{Name: dep.name, Source: source})
 	}
 	if err := ctx.Err(); err != nil {
-		return Preview{}, zero, err
+		return zero, err
 	}
-	return preview, solution, nil
+	return solution, nil
+}
+
+func (m ReviewMaterialManifest) validSolutionRead(ctx context.Context, store ReferenceObjectReader) bool {
+	return ctx != nil && store != nil && m.solution.Size >= 1 && m.solution.Size <= SmallReferenceLimits().SourceBytes &&
+		validHash(m.solution.SHA256)
 }

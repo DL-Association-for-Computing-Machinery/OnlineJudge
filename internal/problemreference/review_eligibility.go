@@ -8,13 +8,14 @@ import (
 )
 
 // ReviewPolicyVersion identifies the current requirements for ordinary approval.
-const ReviewPolicyVersion = "oj.review-approval.v1"
+const ReviewPolicyVersion = "oj.review-approval.v2"
 
 // ReviewEligibilitySnapshot is the trusted read of an assigned item's verified
 // historical evidence and whether the same material has already been returned.
 type ReviewEligibilitySnapshot struct {
-	Evidence ReviewEvidence
-	Returned bool
+	Evidence          ReviewEvidence
+	Returned          bool
+	SolutionConfirmed bool
 }
 
 // ReviewEligibility explains what blocks approval at the time of the read.
@@ -55,7 +56,10 @@ func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
 	// Reference reports do not establish any of these requirements. Keep
 	// them blocking until their own revision-bound evidence is connected.
 	blockers = append(blockers, "statement_quality_missing", "test_coverage_missing",
-		"input_validator_missing", "checker_admission_missing", "target_runtime_missing", "solution_confirmation_missing")
+		"input_validator_missing", "checker_admission_missing", "target_runtime_missing")
+	if !s.SolutionConfirmed {
+		blockers = append(blockers, "solution_confirmation_missing")
+	}
 	return ReviewEligibility{Evidence: e, PolicyVersion: ReviewPolicyVersion, Eligible: len(blockers) == 0, Blockers: blockers}
 }
 

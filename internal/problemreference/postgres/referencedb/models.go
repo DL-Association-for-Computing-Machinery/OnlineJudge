@@ -83,3 +83,15 @@ type ProblemReviewSubmission struct {
 	AuthorRevision         int64
 	CreatedAt              pgtype.Timestamptz
 }
+
+type ProblemSolutionConfirmation struct {
+	DraftID          string
+	ImportRevision   string
+	FormalPlanSha256 string
+	ReviewID         string
+	OwnerSubjectID   string
+	AuthorRevision   int64
+	AuthGeneration   int64
+	RecoveryID       string
+	ConfirmedAt      pgtype.Timestamptz
+}

@@ -46,6 +46,7 @@ type handler struct {
 	preparation     ReferencePreparation
 	reviewIntake    ReviewIntake
 	reviewEvidence  ReviewEvidenceReader
+	reviewSolution  AuthorReviewSolution
 	reviewMaterials ReviewMaterialsReader
 	reviewReturns   ReviewReturns
 }
@@ -83,7 +84,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	method := ""
 	isDraft := IsPrivateDraftPath(r.URL.Path)
 	refMethod, refKey := referenceRequestRoute(r.URL.Path)
-	reviewMethod, reviewKey, authorReturn := reviewIntakeRoute(r.URL.Path)
+	reviewMethod, reviewKey, authorAction := reviewIntakeRoute(r.URL.Path)
 	reviewID, reviewRead := reviewReadRoute(r.URL.Path)
 	returnID, returnKey, returnMethod := reviewReturnRoute(r.URL.Path)
 	switch r.URL.Path {
@@ -121,11 +122,14 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		if reviewMethod != "" {
-			if h.reviewIntake == nil {
+			if h.reviewIntake == nil || ((authorAction == "solution" || authorAction == "solution-confirmation") && h.reviewSolution == nil) {
 				problem(w, http.StatusNotFound, "NOT_FOUND", "接口不存在")
 				return
 			}
 			method = reviewMethod
+			if authorAction == "solution-confirmation" && r.Method == http.MethodPost {
+				method = http.MethodPost
+			}
 			break
 		}
 		if refMethod != "" && h.references != nil {
@@ -158,7 +162,11 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if r.Method != method {
-		w.Header().Set("Allow", method)
+		allow := method
+		if authorAction == "solution-confirmation" {
+			allow = "GET, POST"
+		}
+		w.Header().Set("Allow", allow)
 		problem(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "请求方法不支持")
 		return
 	}
@@ -171,7 +179,11 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if reviewMethod != "" {
-		h.serveReviewIntake(w, r, reviewKey, authorReturn)
+		if authorAction == "solution" || authorAction == "solution-confirmation" {
+			h.serveAuthorReviewSolution(w, r, reviewKey, authorAction)
+		} else {
+			h.serveReviewIntake(w, r, reviewKey, authorAction == "return")
+		}
 		return
 	}
 	if returnMethod != "" {
