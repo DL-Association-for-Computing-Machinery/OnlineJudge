@@ -94,7 +94,7 @@ func (r *Runner) validate(ctx context.Context, prepared *problem.Prepared, profi
 		if prepared == nil || prepared.Content().SourceID != sourceID {
 			return problem.ReferencePlan{}, nil, errors.New("reference source identity mismatch")
 		}
-		return freezeReferences(ctx, prepared, profile, sourceID != "library-checker:aplusb")
+		return freezeReferences(ctx, prepared, profile.Materials, sourceID != "library-checker:aplusb")
 	})
 }
 
