@@ -85,6 +85,16 @@
 
 当前固定十题没有图片，离线适配器不会自动推断新来源的图片角色；本次可信合成锁/PNG/JPEG用例只验证协议和授权链。无图文档继续省略清单，文档版本与六字段预览不变。增加清单改变内容版本及完整导入修订，不覆盖已有草稿。无数据库迁移或新依赖；旧Go二进制不认识带清单文档，旧前端不认识带图片响应，回退时这些草稿预览会失败，需恢复支持版本；原无图草稿不受影响。没有公开图片端点、一般材料下载或发布授权。
 
+### 作者送审回执
+
+已登录且当前有出题权限的作者，可以把自己草稿的一份已接纳参考报告提交送审。此入口默认关闭，须启用 `private_drafts.reference_requests` 和 `private_drafts.review_intake`。目前只有 [HTTP 接口](../api/problem-draft-management.openapi.yaml)，没有页面按钮、审核人分配、决定或发布入口。
+
+- `POST /api/v1/problem-draft-management/review-submissions` 接受 `request_key`、`draft_id`、`import_revision`、`reference_request_id` 四个字段。完整修订从本人列表或导入回执取得；报告 ID 是[本人报告](reference-requests.md#作者申请入口)的 `request_id`。请求须同源，带普通会话和 `X-OJ-Expected-Subject`；请求头只约束实际会话主体。
+- 服务端在持有当前作者权限和本人草稿锁的事务中核对修订、已接纳报告和冻结计划，自行保存来源锁、正式 Plan、Profile、报告证据的摘要和结论。有对拍时也固定对应计划和结论。失败报告和没有对拍的历史报告可以留档。草稿仍为 `private-draft / not-run`。
+- 成功返回 ID、原四字段、内容版本和服务器时间。同一作者用同键提交相同材料返回原回执；同键提交另一组有效材料返回 `REVIEW_KEY_CONFLICT`，不同键各自形成回执。遇到断连或 `REVIEW_WRITE_UNKNOWN`，保留原主体和四字段，通过 `GET /api/v1/problem-draft-management/review-submissions/{request_key}` 查看。404 只表示本次未观察到提交；客户端不自动重试 POST 或换键。撤权后不能读取旧回执。
+
+schema 15 增加送审账本，唯一的 owner/key 索引用于回执和并发去重；草稿与报告外键索引避免维护父记录时全表扫描。每条写入维护四个索引条目，增加对应磁盘和 WAL 开销。关闭开关保留记录。维护窗口排空旧进程后独立升级；Down15 仅允许空账本，存在记录须向前修复。
+
 ### 入库、版本与迁移
 
 创建顺序为：新鲜会话读取→短出题授权预检→逐项持久化材料→再次读取同一实际凭据→同一READ COMMITTED事务核对恢复、账号及当前角色并写入草稿。全流程锁序为恢复→账号→角色→草稿，identity公开窄事务适配器，problem不读取identity私有SQL。材料复制/哈希和Redis读取均不在PG锁内。最终Read之前退出、过期或存储故障拒绝写入；Read之后的单token退出遵循普通会话“已接受在途工作不追溯撤销”合同，不宣称Redis与PG跨库原子退出。
@@ -97,9 +107,9 @@
 
 PG事务同一次提交owner、稳定ID、不可变文档/版本、全部引用及请求回执。同owner同键同内容返回原记录，不同内容为`ErrConflict`。`ErrCommitUnknown`后保持原键/原bundle核验；不得用新键制造重复记录。Put失败/未知不提交引用，已成功的无引用对象保留，当前没有全局磁盘额度或孤儿GC。业务读取限本人元数据/题面样例、授权配置候选摘要、本人导入回执和分页列表；不提供改写、删除、转让、共享或一般材料下载，状态结构性固定`private-draft/not-run`。
 
-角色/审计及草稿/材料关联表始于schema7，不为历史账号授予权限；schema8新增`problem_drafts_owner_created_id_idx(owner_subject_id,created_at DESC,id COLLATE "C" DESC)`，使首屏和深页owner+seek查询不扫描/排序全部历史。每次新草稿多维护一个B-tree条目及相应WAL/磁盘，实际占用依数据分布而变；12000行合成查询计划及索引大小见交付记录，不将该样本当生产容量估算。原owner/key唯一索引支持幂等定位，主键支持本人ID读取，材料复合主键支持按草稿读取；不为列表附带大document或冗余覆盖字段。schema9 另增[参考申请账本与默认空policy](reference-requests.md)，schema 10 增加预期计划表，schema 11 增加参考领取预留，schema 12 增加参考报告和申请终态，schema 13 增加参考调度，schema 14 增加卷积对拍预期计划；均不修改既有草稿、角色或材料引用。
+角色/审计及草稿/材料关联表始于schema7，不为历史账号授予权限；schema8新增`problem_drafts_owner_created_id_idx(owner_subject_id,created_at DESC,id COLLATE "C" DESC)`，使首屏和深页owner+seek查询不扫描/排序全部历史。每次新草稿多维护一个B-tree条目及相应WAL/磁盘，实际占用依数据分布而变；12000行合成查询计划及索引大小见交付记录，不将该样本当生产容量估算。原owner/key唯一索引支持幂等定位，主键支持本人ID读取，材料复合主键支持按草稿读取；不为列表附带大document或冗余覆盖字段。schema9 另增[参考申请账本与默认空policy](reference-requests.md)，schema 10 增加预期计划表，schema 11 增加参考领取预留，schema 12 增加参考报告和申请终态，schema 13 增加参考调度，schema 14 增加卷积对拍预期计划，schema 15 增加作者送审账本；均不修改既有草稿、角色或材料引用。
 
-升级在维护窗口排空并停止旧版 API/Worker 及维护写入，独立 `migrate up` 至当前 schema 14 后启动匹配二进制。API 不自动迁移，新二进制拒绝其他 schema。迁移不会停止旧进程，不混跑；本次没有迁移已有持久化 localdev 或服务器。回退先停新版，当前 Down14 和历史 Down13/Down12/Down11/Down10/Down9 的锁序与条件见[参考申请迁移](reference-requests.md#迁移与回退)。
+升级在维护窗口排空并停止旧版 API/Worker 及维护写入，独立 `migrate up` 至当前 schema 15 后启动匹配二进制。API 不自动迁移，新二进制拒绝其他 schema。迁移不会停止旧进程，不混跑；本次没有迁移已有持久化 localdev 或服务器。回退先停新版，Down15 见[作者送审回执](#作者送审回执)；历史 Down14/Down13/Down12/Down11/Down10/Down9 的锁序与条件见[参考申请迁移](reference-requests.md#迁移与回退)。
 
 历史schema8的普通CREATE INDEX在事务中建索引，需要协调写入，不使用CONCURRENTLY。Down8仅删列表索引并保留全部草稿/权限，重Up8保留资料；回到8后须匹配要求8的二进制，继续Down8至7后才可启动要求7的旧版。继续Down7至6仍仅允许角色、审计、草稿均空，存在数据则向前修复；Down6也保留原积压保护，不清表绕过。
 

@@ -131,6 +131,50 @@ paths:
         '405': { $ref: '#/components/responses/Failure' }
         '409': { $ref: '#/components/responses/Failure' }
         '503': { $ref: '#/components/responses/Failure' }
+  /api/v1/problem-draft-management/review-submissions:
+    parameters:
+      - $ref: '#/components/parameters/ExpectedSubject'
+    post:
+      operationId: submitOwnDraftForReview
+      description: >-
+        须显式启用 review_intake。保存本人草稿的精确修订和本人已接纳的参考报告；不产生批准。
+        最多 1024 字节 JSON，拒绝重复字段。相同主体、键和材料返回原回执。
+        若结果未知，保留原参数并查回执，不自动重发。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReviewIntent' }
+      responses:
+        '200': { $ref: '#/components/responses/ReviewReceipt' }
+        '400': { $ref: '#/components/responses/Failure' }
+        '401': { $ref: '#/components/responses/Failure' }
+        '403': { $ref: '#/components/responses/Failure' }
+        '404': { $ref: '#/components/responses/Failure' }
+        '405': { $ref: '#/components/responses/Failure' }
+        '409': { $ref: '#/components/responses/Failure' }
+        '413': { $ref: '#/components/responses/Failure' }
+        '415': { $ref: '#/components/responses/Failure' }
+        '503': { $ref: '#/components/responses/Failure' }
+  /api/v1/problem-draft-management/review-submissions/{request_key}:
+    parameters:
+      - $ref: '#/components/parameters/ExpectedSubject'
+      - name: request_key
+        in: path
+        required: true
+        schema: { $ref: './problem-draft-imports.openapi.yaml#/components/schemas/RequestKey' }
+    get:
+      operationId: getOwnReviewSubmissionReceipt
+      description: 查询本人已提交的回执，须仍有出题权限。404 不证明没有在途 POST。
+      responses:
+        '200': { $ref: '#/components/responses/ReviewReceipt' }
+        '400': { $ref: '#/components/responses/Failure' }
+        '401': { $ref: '#/components/responses/Failure' }
+        '403': { $ref: '#/components/responses/Failure' }
+        '404': { $ref: '#/components/responses/Failure' }
+        '405': { $ref: '#/components/responses/Failure' }
+        '409': { $ref: '#/components/responses/Failure' }
+        '503': { $ref: '#/components/responses/Failure' }
 components:
   securitySchemes:
     ordinarySession: { $ref: './session.openapi.yaml#/components/securitySchemes/ordinarySession' }
@@ -146,3 +190,31 @@ components:
   responses:
     Failure:
       $ref: './problem-draft-imports.openapi.yaml#/components/responses/Failure'
+    ReviewReceipt:
+      description: 已记录送审材料
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [id, request_key, draft_id, import_revision, reference_request_id, content_version, created_at]
+            properties:
+              id: { $ref: '#/components/schemas/ReviewID' }
+              request_key: { $ref: './problem-draft-imports.openapi.yaml#/components/schemas/RequestKey' }
+              draft_id: { $ref: '#/components/schemas/ReviewID' }
+              import_revision: { $ref: '#/components/schemas/ReviewRevision' }
+              reference_request_id: { $ref: '#/components/schemas/ReviewID' }
+              content_version: { $ref: '#/components/schemas/ReviewRevision' }
+              created_at: { type: string, format: date-time }
+  schemas:
+    ReviewIntent:
+      type: object
+      additionalProperties: false
+      required: [request_key, draft_id, import_revision, reference_request_id]
+      properties:
+        request_key: { $ref: './problem-draft-imports.openapi.yaml#/components/schemas/RequestKey' }
+        draft_id: { $ref: '#/components/schemas/ReviewID' }
+        import_revision: { $ref: '#/components/schemas/ReviewRevision' }
+        reference_request_id: { $ref: '#/components/schemas/ReviewID' }
+    ReviewID: { type: string, pattern: '^[0-9a-f]{32}$' }
+    ReviewRevision: { type: string, pattern: '^[0-9a-f]{64}$' }

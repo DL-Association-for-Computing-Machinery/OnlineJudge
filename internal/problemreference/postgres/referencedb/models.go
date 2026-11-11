@@ -48,3 +48,25 @@ type ProblemReferenceWorkerReport struct {
 	EvidenceSha256    string
 	AcceptedAt        pgtype.Timestamptz
 }
+
+type ProblemReviewSubmission struct {
+	ID                     string
+	OwnerSubjectID         string
+	RequestKey             string
+	DraftID                string
+	SourceID               string
+	ContentVersion         string
+	ImportRevision         string
+	SourceLockSha256       string
+	ReferenceRequestID     string
+	FormalPlanSha256       string
+	ProfileSha256          string
+	EvidenceSha256         string
+	FormalVerdict          string
+	DifferentialPlanSha256 string
+	DifferentialOutcome    string
+	AuthGeneration         int64
+	RecoveryID             string
+	AuthorRevision         int64
+	CreatedAt              pgtype.Timestamptz
+}

@@ -11,7 +11,7 @@ func TestPrivateDraftConfigurationExplicitAndBounded(t *testing.T) {
 	if err != nil || absent.Runtime.PrivateDrafts != nil {
 		t.Fatal("default enabled private drafts")
 	}
-	for _, kind := range []string{"valid", "reference-enabled", "invalid-reference", "missing-root", "relative", "overlap", "internal-lock", "duplicate", "empty", "unbounded", "timeout", "write-timeout", "null", "unknown"} {
+	for _, kind := range []string{"valid", "reference-enabled", "review-enabled", "review-without-reference", "invalid-reference", "missing-root", "relative", "overlap", "internal-lock", "duplicate", "empty", "unbounded", "timeout", "write-timeout", "null", "unknown"} {
 		t.Run(kind, func(t *testing.T) {
 			var wire map[string]any
 			if json.Unmarshal([]byte(validDocument), &wire) != nil {
@@ -23,6 +23,10 @@ func TestPrivateDraftConfigurationExplicitAndBounded(t *testing.T) {
 			switch kind {
 			case "reference-enabled":
 				value["reference_requests"] = true
+			case "review-enabled":
+				value["reference_requests"], value["review_intake"] = true, true
+			case "review-without-reference":
+				value["review_intake"] = true
 			case "invalid-reference":
 				value["reference_requests"] = "true"
 			case "missing-root":
@@ -53,9 +57,10 @@ func TestPrivateDraftConfigurationExplicitAndBounded(t *testing.T) {
 				t.Fatal(err)
 			}
 			c, err := Parse(body)
-			if kind == "valid" || kind == "reference-enabled" {
+			if kind == "valid" || kind == "reference-enabled" || kind == "review-enabled" {
 				if err != nil || c.Runtime.PrivateDrafts == nil || c.Runtime.PrivateDrafts.Timeout != time.Second ||
-					c.Runtime.PrivateDrafts.ReferenceRequests != (kind == "reference-enabled") {
+					c.Runtime.PrivateDrafts.ReferenceRequests != (kind != "valid") ||
+					c.Runtime.PrivateDrafts.ReviewIntake != (kind == "review-enabled") {
 					t.Fatal("explicit capability rejected")
 				}
 			} else if err == nil {
