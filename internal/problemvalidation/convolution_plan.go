@@ -28,6 +28,40 @@ type ConvolutionPlan struct {
 // ConvolutionPlanProtocol fixes the encoding and trial contract of this plan.
 const ConvolutionPlanProtocol = "oj.convolution-differential-plan.v1"
 
+// Digest identifies the canonical differential plan encoding.
+func (p ConvolutionPlan) Digest() string { return digest(p) }
+
+// ValidOutcome checks that determinate counts and any first counterexample
+// belong to the fixed corpus. Node attestation still supplies the run outcome.
+func (p ConvolutionPlan) ValidOutcome(status string, matched int, counter *ConvolutionCounterexample) bool {
+	if status == "passed" {
+		return matched == p.Cases && counter == nil
+	}
+	if status != "mismatch" || counter == nil || matched < 0 || matched >= p.Cases ||
+		counter.Case != matched+1 {
+		return false
+	}
+	cases := smallConvolutionCorpus()
+	if counter.Case > len(cases) {
+		return false
+	}
+	c := cases[matched]
+	if counter.Input != string(c.input) || counter.InputSHA256 != convolutionSHA256(c.input) ||
+		len(counter.Expected) != c.coefficients || len(counter.Actual) != c.coefficients ||
+		!convolutionAnchor(matched, counter.Expected) {
+		return false
+	}
+	var differs bool
+	for i, x := range counter.Expected {
+		y := counter.Actual[i]
+		if x >= convolutionModulus || y >= convolutionModulus {
+			return false
+		}
+		differs = differs || x != y
+	}
+	return differs
+}
+
 // ValidIdentity checks the v1 historical record's shape. It does not admit the
 // plan for execution; that requires current pins, corpus, profile and authority.
 func (p ConvolutionPlan) ValidIdentity() bool {

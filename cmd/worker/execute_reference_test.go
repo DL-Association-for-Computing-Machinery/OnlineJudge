@@ -64,7 +64,7 @@ func claimedReferenceFixture(t *testing.T, source []byte) (problemreference.Work
 		if e != nil {
 			return referenceExecutionMaterials{}, e
 		}
-		return referenceExecutionMaterials{s, s.Close}, nil
+		return referenceExecutionMaterials{snapshot: s, close: s.Close}, nil
 	}
 }
 

@@ -3,6 +3,7 @@ package workerclient
 import (
 	"context"
 	"io"
+	"net/http"
 	"time"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materialstore"
@@ -25,6 +26,12 @@ func (a *Acquirer) FetchDifferential(ctx context.Context, claim problemreference
 	resp, err := a.referencePost(ctx, "reference/differential/assignment", input)
 	if err != nil {
 		return zero, ErrMaterials
+	}
+	if resp.StatusCode == http.StatusNoContent {
+		if err := resp.Body.Close(); err != nil || ctx.Err() != nil {
+			return zero, ErrMaterials
+		}
+		return zero, problemreference.ErrDifferentialNotPrepared
 	}
 	var descriptor problemreference.DifferentialDescriptor
 	readErr := readJSON(resp, 2*problemreference.MaxDifferentialPlanBytes, &descriptor)

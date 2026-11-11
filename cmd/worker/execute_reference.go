@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/execution"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
@@ -76,7 +77,20 @@ func executeReferenceSelection(ctx context.Context, slot string, logger *slog.Lo
 		if err != nil {
 			return referenceExecutionMaterials{}, err
 		}
-		return referenceExecutionMaterials{snapshot: materials.ReferenceSnapshot, close: materials.Close}, nil
+		frozen := referenceExecutionMaterials{snapshot: materials.ReferenceSnapshot, close: materials.Close}
+		if claim.SourceID == problemvalidation.ConvolutionSourceID {
+			comparison, err := client.FetchDifferential(ctx, claim)
+			switch {
+			case err == nil:
+				frozen.comparison = &comparison
+			case errors.Is(err, problemreference.ErrDifferentialNotPrepared):
+				// Only an authenticated observation of a historical NULL plan
+				// permits the original formal-only execution.
+			default:
+				return referenceExecutionMaterials{}, errors.Join(err, materials.Close())
+			}
+		}
+		return frozen, nil
 	}
 	return runSelectionUnderSlot(ctx, func() (*slotLock, error) { return lockSlotMode(slot, false) },
 		func(ctx context.Context) (*problemreference.WorkerClaim, error) { return selectClaim(ctx, client) },
@@ -129,8 +143,9 @@ func startClaimedReference(ctx context.Context, sourceID string) (validationHost
 }
 
 type referenceExecutionMaterials struct {
-	snapshot *problem.ReferenceSnapshot
-	close    func() error
+	snapshot   *problem.ReferenceSnapshot
+	close      func() error
+	comparison *problemvalidation.ConvolutionSources
 }
 
 func runClaimedReference(ctx context.Context, lock *slotLock, claim problemreference.WorkerClaim,
@@ -138,7 +153,7 @@ func runClaimedReference(ctx context.Context, lock *slotLock, claim problemrefer
 	renew func(context.Context, problemreference.WorkerClaim) error,
 	start func(context.Context, string) (validationHost, error),
 	send func(context.Context, problemreference.WorkerReportInput) error) error {
-	_, tier, err := problemvalidation.ResolveSource(claim.SourceID)
+	profile, tier, err := problemvalidation.ResolveSource(claim.SourceID)
 	if err != nil {
 		return err
 	}
@@ -148,6 +163,8 @@ func runClaimedReference(ctx context.Context, lock *slotLock, claim problemrefer
 	var host validationHost
 	var marked bool
 	var report problemvalidation.Report
+	var comparison *problemvalidation.ConvolutionReport
+	var comparisonPlan problemvalidation.ConvolutionPlan
 	work := func(ctx context.Context) (err error) {
 		startupFinished := false
 		defer func() {
@@ -160,6 +177,15 @@ func runClaimedReference(ctx context.Context, lock *slotLock, claim problemrefer
 			return err
 		}
 		defer func() { err = errors.Join(err, materials.close()) }()
+		if materials.comparison != nil {
+			if tier != experiment.ReferenceConvolution {
+				return problemreference.ErrInvalid
+			}
+			comparisonPlan, err = materials.comparison.DraftPlan(claim.PlanSHA256)
+			if err != nil {
+				return err
+			}
+		}
 		if err := ctx.Err(); err != nil {
 			return err
 		}
@@ -185,8 +211,29 @@ func runClaimedReference(ctx context.Context, lock *slotLock, claim problemrefer
 				return err
 			}
 		}
+		if materials.comparison != nil {
+			var done context.CancelFunc
+			ctx, done = context.WithTimeout(ctx, profile.Wall)
+			defer done()
+		}
 		report, err = problemvalidation.New(g).ValidateFrozen(ctx, materials.snapshot, claim.SourceID, claim.PlanSHA256)
-		return err
+		if err != nil || report.Verdict != "AC" || materials.comparison == nil {
+			return err
+		}
+		result, err := problemvalidation.RunSmallConvolution(ctx, *materials.comparison, func() (execution.Sandbox, error) {
+			return execution.NewReferenceGoJudgeForTier(host, host.Verify, host, tier)
+		})
+		// A joined mismatch/cleanup error is not determinate.
+		switch err {
+		case nil:
+			result.Status = "passed"
+		case problemvalidation.ErrConvolutionMismatch:
+			result.Status = "mismatch"
+		default:
+			return err
+		}
+		comparison = &result
+		return ctx.Err()
 	}
 	stop := func(ctx context.Context) error {
 		select {
@@ -222,7 +269,14 @@ func runClaimedReference(ctx context.Context, lock *slotLock, claim problemrefer
 	if err := report.Finalize(nil, nil, nil); err != nil {
 		return err
 	}
-	input, err := problemreference.FreezeWorkerReport(claim, report)
+	var input problemreference.WorkerReportInput
+	if comparison == nil {
+		input, err = problemreference.FreezeWorkerReport(claim, report)
+	} else {
+		comparison.StopConfirmed = true
+		comparison.ContainerID, comparison.StartedAt = report.ContainerID, report.StartedAt
+		input, err = problemreference.FreezeWorkerReportWithComparison(claim, report, comparisonPlan, *comparison)
+	}
 	if err != nil {
 		return err
 	}
@@ -231,6 +285,9 @@ func runClaimedReference(ctx context.Context, lock *slotLock, claim problemrefer
 	}
 	if report.Verdict != "AC" {
 		return errors.New("reference validation did not pass")
+	}
+	if comparison != nil && comparison.Status == "mismatch" {
+		return problemvalidation.ErrConvolutionMismatch
 	}
 	return nil
 }

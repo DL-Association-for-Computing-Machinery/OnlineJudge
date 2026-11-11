@@ -90,19 +90,7 @@ func (c *ReferenceClaimer) liveReferenceClaim(ctx context.Context, node submissi
 		return zero, noTime, noTime, problemreference.ErrClaimUnavailable
 	}
 	if differential {
-		// The formal FOR SHARE above already holds the same plan row.
-		comparison, err := q.ReferenceConvolutionExpectedPlan(ctx, r.ID)
-		if err != nil {
-			return zero, noTime, noTime, referenceClaimError(err)
-		}
-		if !comparison.DifferentialSha256.Valid {
-			return zero, noTime, noTime, problemreference.ErrClaimUnavailable
-		}
-		plan.Differential = &problemreference.DifferentialExpectedPlan{Encoding: comparison.DifferentialEncoding, SHA256: comparison.DifferentialSha256.String}
-		if !plan.ValidForRequest(r) {
-			return zero, noTime, noTime, problemreference.ErrClaimUnavailable
-		}
-		if _, err := plan.Differential.CurrentPlan(plan.SHA256); err != nil {
+		if err := loadCurrentComparison(ctx, q, r, &plan); err != nil {
 			return zero, noTime, noTime, err
 		}
 	}
@@ -154,4 +142,22 @@ func (c *ReferenceClaimer) liveReferenceClaim(ctx context.Context, node submissi
 		return zero, noTime, noTime, problemreference.ErrClaimUnavailable
 	}
 	return plan, deadline, noTime, nil
+}
+
+// The caller must already hold the formal plan's row lock. Only both NULL
+// fields mean historical absence; corrupted or retired data never downgrades.
+func loadCurrentComparison(ctx context.Context, q *referencedb.Queries, r problemreference.Request, plan *problemreference.ExpectedPlan) error {
+	row, err := q.ReferenceConvolutionExpectedPlan(ctx, r.ID)
+	if err != nil {
+		return referenceClaimError(err)
+	}
+	if !row.DifferentialSha256.Valid && row.DifferentialEncoding == nil {
+		return nil
+	}
+	plan.Differential = &problemreference.DifferentialExpectedPlan{Encoding: row.DifferentialEncoding, SHA256: row.DifferentialSha256.String}
+	if !plan.ValidForRequest(r) {
+		return problemreference.ErrClaimUnavailable
+	}
+	_, err = plan.Differential.CurrentPlan(plan.SHA256)
+	return err
 }

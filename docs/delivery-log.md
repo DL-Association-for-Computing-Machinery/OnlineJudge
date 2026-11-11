@@ -1,5 +1,13 @@
 # 工程交付记录
 
+## 2026-11-11：持槽卷积对拍与组合报告接纳
+
+基于 `origin/main d182db8`，[持槽运行](reference-requests.md#同机持槽参考执行)在同一次受权运行内顺序执行正式点、朴素解和候选解。已有对拍计划的首次正式 AC 必须携带对应的确定对拍证据；失败差异可审查，旧证据按原字节重放。无 schema 变化。
+
+真实断网卷积槽通过 53 个正式 AC 和 24 个一致对拍，确认停止后才生成组合证据；独立对照在进入对拍时拒绝续期，确认停止且未发报告。最终原槽 `running=false`、PID 0、槽锁标记为空。原生宿主使用续期和报告替身；临时 PostgreSQL／真实 mTLS 专项另以受控结果验证首报缺字段、非法反例拒绝、合法差异落库及精确重放。完整离线后端和 PostgreSQL 集成通过。
+
+日志：`/private/tmp/oj-convolution-worker-evidence-native.log`、`/private/tmp/oj-convolution-worker-evidence-fault.log`、`/private/tmp/oj-convolution-worker-evidence-postgres.log`。两套证据分别验证运行和接纳，未验收真实宿主直接向控制端上报的整链。作者回读、终审与发布未接，草稿仍为 `not-run`；未迁移现有数据库或部署。
+
 ## 2026-11-11：有效预留内下发卷积对拍解法
 
 基于 `origin/main 0ee6ba0`，[专用材料路由](reference-requests.md#有效预留内的卷积对拍材料)沿用正式预留与原授权，在读取前后复核两份计划。Worker 独立核对规范编码、固定语料和两份解法字节，失败时不返回部分材料。正式路由不扩大可读范围。

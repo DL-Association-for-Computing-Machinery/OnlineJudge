@@ -136,6 +136,7 @@ paths:
       operationId: acceptReferenceWorkerEvidence
       description: >-
         仅显式启用执行的专用参考节点。首次接纳须匹配有效预留、原授权、草稿和控制端冻结计划；
+        有已准备卷积对拍计划的正式 AC 首报还须提供可验证的对拍通过或首个合法差异。
         完全相同的历史重放仅确认既有结果，不改变任何预留或发布状态。
       requestBody:
         required: true
@@ -246,11 +247,12 @@ paths:
                   plan_encoding: {type: string, contentEncoding: base64, maxLength: 2732}
                   differential_sha256: {$ref: '#/components/schemas/Digest'}
                   remaining_ms: {type: integer, minimum: 1, maximum: 30000}
+        '204': {description: 原预留仍有效，且历史正式计划没有独立对拍计划}
         '400': {$ref: '#/components/responses/Invalid'}
         '401': {$ref: '#/components/responses/Unauthenticated'}
         '403': {$ref: '#/components/responses/Forbidden'}
         '404': {description: 参考执行或材料未启用}
-        '409': {description: 原预留失效或没有可用对拍计划}
+        '409': {description: 原预留失效或已有对拍计划不可用}
         '413': {$ref: '#/components/responses/TooLarge'}
         '415': {$ref: '#/components/responses/MediaType'}
         '503': {$ref: '#/components/responses/Unavailable'}

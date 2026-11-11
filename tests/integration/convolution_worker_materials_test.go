@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/execution"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materialstore"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
@@ -26,6 +28,7 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/testpki"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/workerapi"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/workerclient"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/workerhost"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/tests/problemfixture"
 )
 
@@ -63,7 +66,7 @@ func testConvolutionTransport(t *testing.T, f referenceRequestFixture, local *ma
 		t.Cleanup(s.Close)
 		return s
 	}
-	enabled := workerapi.WithReferenceExecution(http.NotFoundHandler(), claims, claims, ca.Roots, materials)
+	enabled := workerapi.WithReferenceExecution(http.NotFoundHandler(), claims, claims, ca.Roots, materials, claims)
 	s := newServer(enabled)
 	disabled := newServer(workerapi.WithReferenceClaims(http.NotFoundHandler(), claims, ca.Roots, materials))
 	acquirer, err := workerclient.NewAcquirer(s.URL, ca.Roots, workerCert)
@@ -157,7 +160,8 @@ func testConvolutionTransport(t *testing.T, f referenceRequestFixture, local *ma
 	if strip.Load() || hookFailed.Load() {
 		t.Fatal("comparison plan removal after storage I/O was not exercised")
 	}
-	expectStatus(s, workerCert, "differential/assignment", input, 409)
+	expectStatus(s, workerCert, "differential/assignment", input, 204)
+	expectStatus(s, workerCert, "differential/assignment", wrongToken, 409)
 	expectStatus(s, workerCert, "assignment", input, 200)
 	_, err = f.b.Exec(f.ctx, `UPDATE problem_reference_expected_plans SET differential_encoding=$1,differential_sha256=$2 WHERE request_id=$3`,
 		plan.Differential.Encoding, plan.Differential.SHA256, request.ID)
@@ -177,4 +181,71 @@ func testConvolutionTransport(t *testing.T, f referenceRequestFixture, local *ma
 	if zero != (problemvalidation.ConvolutionSources{}) {
 		t.Fatal("revoked Worker obtained a partial comparison snapshot")
 	}
+
+	_, err = f.a.Exec(f.ctx, `UPDATE problem_reference_worker_claim SET lease_until=clock_timestamp()-interval '1 second'`)
+	must(t, err)
+	newCredential, _, _ := ca.Issue(t, "spiffe://onlinejudge/reference-worker/"+node+"/2", x509.ExtKeyUsageClientAuth, expiry)
+	reportClient, err := workerclient.NewAcquirer(s.URL, ca.Roots, newCredential)
+	must(t, err)
+	defer reportClient.Close()
+	reportClaim, err := reportClient.ClaimReference(f.ctx, input.ClaimInput)
+	must(t, err)
+	testConvolutionReportAdmission(t, f, reportClient, reportClaim, formal, expected, frozen)
+}
+
+// The isolated host test exercises the real execution. This separate database
+// fixture exercises first admission and replay using controlled node evidence.
+func testConvolutionReportAdmission(t *testing.T, f referenceRequestFixture, c *workerclient.Acquirer, claim problemreference.WorkerClaim,
+	formal problem.ReferencePlan, expected problemvalidation.ConvolutionPlan, sources problemvalidation.ConvolutionSources,
+) {
+	t.Helper()
+	profile, _, err := problemvalidation.ResolveSource(claim.SourceID)
+	must(t, err)
+	slot, err := workerhost.ReferenceSlotForTier(experiment.ReferenceConvolution)
+	must(t, err)
+	r := problemvalidation.Report{Schema: "oj.reference-validation.v1", Publication: "blocked", Verdict: "AC",
+		Profile: profile, ProfileSHA256: profile.Digest(), Plan: formal, PlanSHA256: claim.PlanSHA256,
+		CompileUsage: &execution.Usage{}, Slot: slot.ContainerName(), ContainerID: strings.Repeat("a", 64),
+		StartedAt: "2026-11-11T00:00:00Z"}
+	for _, p := range formal.Cases {
+		r.Points = append(r.Points, problemvalidation.Point{ID: p.ID, Verdict: "AC", Usage: &execution.Usage{}})
+	}
+	must(t, r.Finalize(nil, nil, nil))
+	old, err := problemreference.FreezeWorkerReport(claim, r)
+	must(t, err)
+	if err := c.ReportReference(f.ctx, old); !errors.Is(err, problemreference.ErrClaimUnavailable) {
+		t.Fatal("formal AC alone consumed a prepared comparison", err)
+	}
+
+	comparison := problemvalidation.NewConvolutionReport(sources)
+	comparison.ProfileSHA256, comparison.CorpusSHA256 = expected.ProfileSHA256, expected.CorpusSHA256
+	comparison.Status, comparison.OracleParsed, comparison.CandidateEqual = "mismatch", 24, 9
+	comparison.ContainerID, comparison.StartedAt, comparison.StopConfirmed = r.ContainerID, r.StartedAt, true
+	const input = "2 2\n1 2\n3 4\n"
+	comparison.Counterexample = &problemvalidation.ConvolutionCounterexample{Case: 10, Input: input, InputSHA256: problemfixture.Hash([]byte(input)),
+		Expected: []uint32{3, 10, 8}, Actual: []uint32{4, 10, 8}}
+	frozen, err := problemreference.FreezeWorkerReportWithComparison(claim, r, expected, comparison)
+	must(t, err)
+	evidence, err := frozen.DecodeEvidence()
+	must(t, err)
+	bad := frozen
+	evidence.Comparison.Counterexample.Actual[0] = 998244353
+	bad.Evidence, err = json.Marshal(evidence)
+	must(t, err)
+	if err := c.ReportReference(f.ctx, bad); !errors.Is(err, problemreference.ErrClaimUnavailable) {
+		t.Fatal("out-of-field counterexample was admitted", err)
+	}
+	must(t, c.ReportReference(f.ctx, frozen))
+	var state string
+	var stored []byte
+	must(t, f.a.QueryRow(f.ctx, `SELECT r.state, p.evidence FROM problem_reference_requests r
+		JOIN problem_reference_worker_reports p ON p.request_id=r.id WHERE r.id=$1`, claim.RequestID).Scan(&state, &stored))
+	if state != problemreference.Reported || !bytes.Equal(stored, frozen.Evidence) {
+		t.Fatal("did not atomically store the determinate mismatch evidence")
+	}
+	must(t, c.ReportReference(f.ctx, frozen))
+	if err := c.ReportReference(f.ctx, old); !errors.Is(err, problemreference.ErrClaimUnavailable) {
+		t.Fatal("different bytes confirmed as an exact replay", err)
+	}
+	t.Log("mTLS/PG: formal-only AC and invalid counterexample refused; mismatch persisted and replayed exactly")
 }

@@ -36,6 +36,14 @@ func serveReferenceMaterials(w http.ResponseWriter, r *http.Request, s *problemr
 		var err error
 		if r.URL.Path == differentialDescribePath {
 			d, e := s.DescribeDifferential(r.Context(), node, input)
+			if errors.Is(e, problemreference.ErrDifferentialNotPrepared) {
+				if _, err := authenticateURI(r.TLS, roots, time.Now(), referenceIdentityURI); err != nil {
+					referenceMaterialError(w, submission.ErrNode)
+					return
+				}
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
 			body, remaining, err = d, d.RemainingMS, e
 		} else {
 			d, e := s.Describe(r.Context(), node, input)
