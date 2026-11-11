@@ -5,9 +5,12 @@ import "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/m
 const (
 	localReferenceSourceLock = "fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617"
 	suffixArrayLocalVersion  = "7ddd631ac3f2f76e4cf56f85b23ee71fbdc0d5f54c40bdc968d27e933297b777"
+	primalityLocalVersion    = "d40e4fd4d8881a0bf693e4095a32693b75ca6e51203a480c57873b5fba5e2659"
 	zAlgorithmLocalVersion   = "965239246cbdbd63f1641cfcf551d9c8f3a65cd558e194668ad845cac1e39711"
 	aPlusBLocalVersion       = "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd"
 	unionFindLocalVersion    = "42e62825925bf727c394f3435c2b50f850758576c392d082fb628f7219e4f07d"
+	staticRMQLocalVersion    = "194da8b53c88aa634cb5c030c684a355a59b224a00c7d74422bc35b333d3a5f0"
+	pointAddLocalVersion     = "188f392cd74cc6bb2156a0a444d0f232d0ea71ee746cb0523fba2c914d79dc25"
 	staticSumLocalVersion    = "a93676964a96fb5dd0320441307eb0bb11ed41b0a1e1d4441c47d124a644e375"
 )
 
@@ -92,6 +95,37 @@ var localReferenceRevisions = map[string]localReferenceRevision{
 			},
 		},
 	},
+	staticRMQLocalVersion: {
+		label: "oj-local:staticrmq-single-query-max-v1", sourceID: "library-checker:staticrmq", upstream: 27,
+		source:     materialstore.Object{SHA256: "a5586c48fa83887a773876dc5377ab6c5f7b59264051d6484ea7712ca5aafb3c", Size: 1890},
+		definition: materialstore.Object{SHA256: "6efb4f756209387d8046d01b25cd927151205f2b5b074fb171b5c8fc983263cd", Size: 488},
+		hashes:     materialstore.Object{SHA256: "18e6c6649f5a76cb68f0ddf67c1273b43d032b1c17ebbd8a5c002b90b5ab14bb", Size: 4817},
+		suffix: []ReferenceCase{
+			{
+				ID:     "case-0028",
+				Input:  materialstore.Object{SHA256: "30ad661dba75866c8b8ae4977d14abd8081b2cdf190133af4eb4d027cc263fe0", Size: 34},
+				Answer: materialstore.Object{SHA256: "8bd5a23c3aef1243c78bac155b39b9d57a43d8c49665ccf6f42acf2992a94afa", Size: 11},
+			},
+		},
+	},
+	pointAddLocalVersion: {
+		label: "oj-local:point-add-range-sum-boundaries-v1", sourceID: "library-checker:point_add_range_sum", upstream: 21,
+		source:     materialstore.Object{SHA256: "3d57829f581030f3f97c7f282ffbb51a6a30247e4d28d540d663da139b9aacfe", Size: 1382},
+		definition: materialstore.Object{SHA256: "e4bc11b1c68357961379ed2d14344e723bb91aaa85406094c6b75063e054aaf2", Size: 392},
+		hashes:     materialstore.Object{SHA256: "04f182429d0d58a6f30ef60b2c60d4645ed3bbc9ac15a034d9a2ec4565a7091a", Size: 3657},
+		suffix: []ReferenceCase{
+			{
+				ID:     "case-0022",
+				Input:  materialstore.Object{SHA256: "b51a4a556eba251c8884e032eeafbbeb0de410b3da47062c2aab1b55ddf8024a", Size: 12},
+				Answer: materialstore.Object{SHA256: "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa", Size: 2},
+			},
+			{
+				ID:     "case-0023",
+				Input:  materialstore.Object{SHA256: "c97fdf50a506fb3aa94025726ed7b742a343cd68cabff5391a537fee852f6be5", Size: 63},
+				Answer: materialstore.Object{SHA256: "1c8e7642152280a3e5bee17531c30bbbd84003d3cba9fdb220b617a990c8a432", Size: 22},
+			},
+		},
+	},
 	unionFindLocalVersion: {
 		label: "oj-local:unionfind-singleton-v1", sourceID: "library-checker:unionfind", upstream: 18,
 		source:     materialstore.Object{SHA256: "c17d0ae17487b004935e4f9bb4d43738d627bf68f63470239f170e2e9ca42024", Size: 1140},
@@ -125,6 +159,24 @@ var localReferenceRevisions = map[string]localReferenceRevision{
 				ID:     "case-0052",
 				Input:  materialstore.Object{SHA256: "b3df5b80079528a9d60e162107ea7ee7b1145d317c6650a6f308aa88ca2fd490", Size: 19},
 				Answer: materialstore.Object{SHA256: "98716914a6589bd385015f34e08d83dcf1e1f55f9de5c0cc00f930a1711516ab", Size: 44},
+			},
+		},
+	},
+	primalityLocalVersion: {
+		label: "oj-local:primality-test-single-query-v1", sourceID: "library-checker:primality_test", upstream: 13,
+		source:     materialstore.Object{SHA256: "714746e38b42e97ce8cad7dbb5ef80df4ff39094cf62d3f4945ebb82a2f49e3b", Size: 319},
+		definition: materialstore.Object{SHA256: "16e765394c1a6f5e9d5a1719bed206be16ff98ef656a598761600faae97330a4", Size: 872},
+		hashes:     materialstore.Object{SHA256: "2ab8372c583ae8a830dd5dd6116b2d5c958494cd19574dc0e90f360c443f17d2", Size: 2349},
+		suffix: []ReferenceCase{
+			{
+				ID:     "case-0014",
+				Input:  materialstore.Object{SHA256: "4c3ddf14acab614b355ee7b183972eb70f6dcec0f2368084e9c7d52998cf6d69", Size: 13},
+				Answer: materialstore.Object{SHA256: "927580bf287560d4a26a5d6e129f91ffa9cb63031b1a8c772be6ec584e65e82b", Size: 4},
+			},
+			{
+				ID:     "case-0015",
+				Input:  materialstore.Object{SHA256: "c825fa0c23f31d19a898b85229a1c7be262b64f707a2f402f033a7eabb79da51", Size: 22},
+				Answer: materialstore.Object{SHA256: "31375587f8bedb1f33f6eca3d8cee94ab70845a6dd1a7c7eeb929f4aa7dc10ab", Size: 3},
 			},
 		},
 	},

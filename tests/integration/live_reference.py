@@ -169,8 +169,9 @@ def run(bundle, toolchain, out, supplement):
                     "temporary fixture container was not removed")
             formal, comparison = {
                 "suffixarray": (52, 0),
+                "primality_test": (15, 0),
                 "associative_array": (22, 0), "zalgorithm": (31, 0), "aplusb": (17, 0), "unionfind": (20, 0),
-                "static_range_sum": (13, 0), "": (254, 24),
+                "static_range_sum": (13, 0), "point_add_range_sum": (23, 0), "staticrmq": (28, 0), "": (254, 24),
             }[supplement]
             require(sum(row["formal_ac"] for row in result) == formal and sum(row["comparison_matched"] for row in result) == comparison,
                     "incomplete accepted coverage")
@@ -194,6 +195,8 @@ def main():
     local = parser.add_mutually_exclusive_group()
     local.add_argument("--suffixarray-local-data", dest="supplement", action="store_const", const="suffixarray",
                        help="run only the pinned 52-point local suffix array revision")
+    local.add_argument("--primality-test-local-data", dest="supplement", action="store_const", const="primality_test",
+                       help="run only the pinned 15-point local primality test revision")
     local.add_argument("--associative-array-local-data", dest="supplement", action="store_const", const="associative_array",
                        help="run only the pinned 22-point local associative-array revision")
     local.add_argument("--zalgorithm-local-data", dest="supplement", action="store_const", const="zalgorithm",
@@ -202,6 +205,10 @@ def main():
                        help="run only the pinned 17-point local A+B revision")
     local.add_argument("--unionfind-local-data", dest="supplement", action="store_const", const="unionfind",
                        help="run only the pinned 20-point local unionfind revision")
+    local.add_argument("--static-rmq-local-data", dest="supplement", action="store_const", const="staticrmq",
+                       help="run only the pinned 28-point local static range minimum revision")
+    local.add_argument("--point-add-range-sum-local-data", dest="supplement", action="store_const", const="point_add_range_sum",
+                       help="run only the pinned 23-point local point-add range sum revision")
     local.add_argument("--static-range-sum-local-data", dest="supplement", action="store_const", const="static_range_sum",
                        help="run only the pinned 13-point local static range sum revision")
     args = parser.parse_args()

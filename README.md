@@ -356,12 +356,21 @@ python3 -B scripts/supplement-associative-array.py \
 python3 -B scripts/supplement-suffixarray.py \
   --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
   --output /private/tmp/oj-suffixarray-structures
+python3 -B scripts/supplement-primality-test.py \
+  --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
+  --output /private/tmp/oj-primality-single-query
 python3 -B scripts/supplement-aplusb.py \
   --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
   --output /private/tmp/oj-aplusb-boundaries
 python3 -B scripts/supplement-unionfind.py \
   --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
   --output /private/tmp/oj-unionfind-singleton
+python3 -B scripts/supplement-static-rmq.py \
+  --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
+  --output /private/tmp/oj-static-rmq-boundary
+python3 -B scripts/supplement-point-add-range-sum.py \
+  --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
+  --output /private/tmp/oj-point-add-range-sum-boundaries
 python3 -B scripts/supplement-static-range-sum.py \
   --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
   --output /private/tmp/oj-static-range-sum-singleton
@@ -431,6 +440,12 @@ OJ_SANDBOX_EXPERIMENT=1 python3 -B tests/integration/live_reference.py \
 关联数组的同一专项使用 `--associative-array-local-data`（22 点），额外核对两个边界点的固定答案。
 
 后缀数组使用 `--suffixarray-local-data`（52 点），额外核对两个新增点的完整后缀排序。
+
+静态区间最小值使用 `--static-rmq-local-data`（28 点），额外核对只查询一次时的上界答案。
+
+单点加与区间求和使用 `--point-add-range-sum-local-data`（23 点），额外核对加零及累加到 3×10⁹ 时的固定答案。
+
+素性测试使用 `--primality-test-local-data`（15 点），额外核对两个单次查询的 `Yes` 与 `No` 答案。
 
 上述 Darwin 专项产物 `worker-validation.test` 可在专用固定离线槽运行 `-test.run '^TestClaimedReferenceOwnedSandbox$' -test.v`，显式设置 `OJ_REFERENCE_LEASED_SANDBOX_TEST=1 OJ_SANDBOX_EXPERIMENT=1` 并清空槽覆盖；须与其他宿主专项串行。只使用固定合成 A+B 和续期替身，分别验证真实执行与续期拒绝后的停止。
 

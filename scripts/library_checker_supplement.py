@@ -37,10 +37,22 @@ SUPPLEMENTS = {
                               "b7622607e0db239445f7b75b14bc9edc10b7992f1c6b6254fd4f784aa5cb0d97",
                               "7ddd631ac3f2f76e4cf56f85b23ee71fbdc0d5f54c40bdc968d27e933297b777",
                               "93b0f9b3ff0085d288186d4420a8ec97b36bba89f5467ac65359262cb1a9ae18"),
+    "primality_test": Supplement("oj-local:primality-test-single-query-v1",
+                                 "5447e801527926aa5e4b7da82101b30acaa366fdce105123c83384888fcd17af",
+                                 "d40e4fd4d8881a0bf693e4095a32693b75ca6e51203a480c57873b5fba5e2659",
+                                 "8c391e35837ac504d52ceeff004ad3b8aa5939ad0401c7acd35ae000c6a2f58c"),
     "aplusb": Supplement("oj-local:aplusb-boundaries-v1",
                          "87ebb9680aa3abe190b61d4a5ccac1dc83e48b29656364e445e36fabe7467cc9",
                          "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd",
                          "d8426964248ef07e1aae00ab12c8de690a9fdae147117b0251fa853cb4769c7b"),
+    "staticrmq": Supplement("oj-local:staticrmq-single-query-max-v1",
+                            "c5eef70e8f853a4525257371c895f01bd2ac40222d12cc72b83f3782a712186c",
+                            "194da8b53c88aa634cb5c030c684a355a59b224a00c7d74422bc35b333d3a5f0",
+                            "e9efcad95444d941be0bef86d9a9e834b340b69d0f921e6e7b81eedb300257b8"),
+    "point_add_range_sum": Supplement("oj-local:point-add-range-sum-boundaries-v1",
+                                      "e1fb107ff818b642bb5976ff35e7aaff5e8bb2ceb333972cb3acaf1256476bb1",
+                                      "188f392cd74cc6bb2156a0a444d0f232d0ea71ee746cb0523fba2c914d79dc25",
+                                      "9600bfbbfe15014fe911122c764e452b91f1399b428b4bdb4e66ed24e7a3dbd9"),
     "unionfind": Supplement("oj-local:unionfind-singleton-v1",
                             "fd871a02594fcd663790cd0530153df2ad18bf95110559ce552a121c34705bed",
                             "42e62825925bf727c394f3435c2b50f850758576c392d082fb628f7219e4f07d",
@@ -63,12 +75,23 @@ def boundary_cases(problem):
     elif problem == "suffixarray":
         yield b"abacabae" * 2 + b"\n", b"8 0 12 4 10 2 14 6 9 1 13 5 11 3 15 7\n"
         yield b"ab" * 9 + b"\n", b"16 14 12 10 8 6 4 2 0 17 15 13 11 9 7 5 3 1\n"
+    elif problem == "primality_test":
+        yield b"1\n2147483659\n", b"Yes\n"
+        yield b"1\n1000000000000000000\n", b"No\n"
     elif problem == "aplusb":
         for a, b in ((0, 0), (0, 1), (1, 0), (10**9, 10**9 - 1), (10**9 - 1, 10**9)):
             yield f"{a} {b}\n".encode("ascii"), f"{a+b}\n".encode("ascii")
+    elif problem == "point_add_range_sum":
+        maximum = 10**9
+        yield b"1 1\n0\n1 0 1\n", b"0\n"
+        yield (f"1 5\n{maximum}\n0 0 0\n1 0 1\n0 0 {maximum}\n0 0 {maximum}\n1 0 1\n".encode("ascii"),
+               f"{maximum}\n{3*maximum}\n".encode("ascii"))
     elif problem == "unionfind":
         yield b"1 1\n1 0 0\n", b"1\n"
         yield b"1 1\n0 0 0\n", b""
+    elif problem == "staticrmq":
+        maximum = 10**9
+        yield f"4 1\n0 {maximum} {maximum} 1\n1 3\n".encode("ascii"), f"{maximum}\n".encode("ascii")
     elif problem == "static_range_sum":
         for value in (0, 10**9):
             yield f"1 1\n{value}\n0 1\n".encode("ascii"), f"{value}\n".encode("ascii")

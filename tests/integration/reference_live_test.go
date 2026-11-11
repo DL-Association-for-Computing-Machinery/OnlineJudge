@@ -95,6 +95,10 @@ func TestLiveReferenceReports(t *testing.T) {
 		sources = []fixtureSource{{"suffixarray", 52}}
 		versionPin = "7ddd631ac3f2f76e4cf56f85b23ee71fbdc0d5f54c40bdc968d27e933297b777"
 		suffixSizes = []int64{17, 19}
+	case "primality_test":
+		sources = []fixtureSource{{"primality_test", 15}}
+		versionPin = "d40e4fd4d8881a0bf693e4095a32693b75ca6e51203a480c57873b5fba5e2659"
+		suffixSizes = []int64{13, 22}
 	case "zalgorithm":
 		sources = []fixtureSource{{"zalgorithm", 31}}
 		versionPin = "965239246cbdbd63f1641cfcf551d9c8f3a65cd558e194668ad845cac1e39711"
@@ -103,6 +107,14 @@ func TestLiveReferenceReports(t *testing.T) {
 		sources = []fixtureSource{{"aplusb", 17}}
 		versionPin = "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd"
 		suffixSizes = []int64{4, 4, 4, 21, 21}
+	case "staticrmq":
+		sources = []fixtureSource{{"staticrmq", 28}}
+		versionPin = "194da8b53c88aa634cb5c030c684a355a59b224a00c7d74422bc35b333d3a5f0"
+		suffixSizes = []int64{34}
+	case "point_add_range_sum":
+		sources = []fixtureSource{{"point_add_range_sum", 23}}
+		versionPin = "188f392cd74cc6bb2156a0a444d0f232d0ea71ee746cb0523fba2c914d79dc25"
+		suffixSizes = []int64{12, 63}
 	case "unionfind":
 		sources = []fixtureSource{{"unionfind", 20}}
 		versionPin = "42e62825925bf727c394f3435c2b50f850758576c392d082fb628f7219e4f07d"
@@ -143,6 +155,15 @@ func TestLiveReferenceReports(t *testing.T) {
 			if versionPin != "" && formal.Version != versionPin {
 				t.Fatal("persisted plan lacks the pinned local version")
 			}
+			if source.id == "primality_test" && versionPin != "" {
+				if formal.Cases[13].Answer.SHA256 != liveReferenceDigest([]byte("Yes\n")) ||
+					formal.Cases[14].Answer.SHA256 != liveReferenceDigest([]byte("No\n")) {
+					t.Fatal("persisted primality test plan lost its single-query answers")
+				}
+			}
+			if source.id == "staticrmq" && versionPin != "" && formal.Cases[27].Answer.SHA256 != liveReferenceDigest([]byte("1000000000\n")) {
+				t.Fatal("persisted static RMQ plan lost its boundary answer")
+			}
 			if source.id == "static_range_sum" && versionPin != "" {
 				if formal.Cases[11].Answer.SHA256 != liveReferenceDigest([]byte("0\n")) ||
 					formal.Cases[12].Answer.SHA256 != liveReferenceDigest([]byte("1000000000\n")) {
@@ -165,6 +186,12 @@ func TestLiveReferenceReports(t *testing.T) {
 				if formal.Cases[18].Answer.Size != 2 || formal.Cases[19].Answer.Size != 0 ||
 					formal.Cases[19].Answer.SHA256 != liveReferenceDigest(nil) {
 					t.Fatal("persisted unionfind plan lost its singleton answers")
+				}
+			}
+			if source.id == "point_add_range_sum" && versionPin != "" {
+				if formal.Cases[21].Answer.SHA256 != liveReferenceDigest([]byte("0\n")) ||
+					formal.Cases[22].Answer.SHA256 != liveReferenceDigest([]byte("1000000000\n3000000000\n")) {
+					t.Fatal("persisted point-add range sum plan lost its boundary answers")
 				}
 			}
 			if source.id == "associative_array" && versionPin != "" {
