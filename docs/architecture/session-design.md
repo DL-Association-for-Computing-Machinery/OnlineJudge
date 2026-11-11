@@ -404,7 +404,7 @@ Close 在同一 mutex 下停止入口和登记活动请求，503/no-store/无 Co
 | `proxy_fingerprints` | direct 为 `[]`；proxy 为 1—16 个唯一非零、64 字符小写十六进制叶证书 DER SHA-256 |
 | 存储 `tls` | private 模式为 `{}`；tls 模式须有 `ca_file`、`server_name`，可另给成对 `certificate_file`/`key_file`；禁止明文 fallback/跳过校验 |
 | `server` | `read_header_timeout`、`read_timeout`、`write_timeout`、`idle_timeout`、`shutdown_timeout`、`max_header_bytes`；header/read/write/shutdown 为正且至多 1m，idle 至多 10m，read ≥ header，write ≥ HTTP 期限，header 1 KiB—1 MiB |
-| 可选 `private_drafts` | `material_root`、`bundle_directory`、外置`source_lock_file`、1—10唯一`source_ids`、正且至多1m的`timeout`、1—10的`max_in_flight`；write ≥ 草稿调用期限。省略关闭，导入/本人预览共享材料段预算，路径/权限见[README](../../README.md#显式启用私有草稿-http) |
+| 可选 `private_drafts` | `material_root`、`bundle_directory`、外置`source_lock_file`、1—10唯一`source_ids`、正且至多1m的`timeout`、1—10的`max_in_flight`；write ≥ 草稿调用期限。省略关闭，导入/本人预览共享材料段预算；可选 `reference_requests: true` 单独启用本人申请，不读取材料或自动配置额度。路径/权限见[README](../../README.md#显式启用私有草稿-http) |
 
 数据库/Redis 的 `security` 只能为 `"private"`/`"tls"`，`auth` 只能为 `"none"`/`"env"`。后者分别从固定的两个密码环境读取非空值；前者拒绝对应非空残留。解析结果不包含环境获取副作用，配置/解析错误只给固定类别。解析夹具使用合成参数，不能直接作为生产 KDF、限流或资源推荐。
 

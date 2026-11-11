@@ -1,5 +1,13 @@
 # 工程交付记录
 
+## 2026-11-11：本人参考验证申请管理
+
+基于 `origin/main 63581d2`，[作者申请入口](reference-requests.md#作者申请入口)在普通会话和私有草稿能力上显式启用。当前作者可创建、按原键查回执和取消本人申请；主体不匹配在访问账本前拒绝。六字段摘要不暴露材料、计划或报告正文。额度由受信维护命令单独配置，schema 仍为 12。
+
+离线 Docker 后端、临时 PostgreSQL/双 API、四包 sqlc、OpenAPI、仓库规则及前端 lint/类型/109 项测试/构建通过。真实 Redis、PG 和直连 TLS/代理 mTLS API 验证跨进程原键恢复、账号错配、越权、撤权、退出、额度拒绝和幂等取消。数据库回读确认维护命令只配置独立参考队列。真实 Chromium 在服务端接纳后丢弃浏览器响应，刷新无 POST，原键回执和取消通过，桌面及 390px 布局无横向溢出。Astra 静态复核无阻断；补充主体不匹配零账本调用及严格正文、未知结果边界回归。证据：`/private/tmp/oj-author-reference-{backend-final,session-final,web-final,browser}.log`、`/private/tmp/oj-author-reference-browser-qa`。
+
+本机记录按账号和草稿保留当前原键，不提供跨设备发现；HTTP 不准备材料、不调度 Worker，未运行参考题源、迁移持久库或部署。草稿仍为 `not-run`，发布保持阻断。
+
 ## 2026-11-11：接纳停止已确认的参考验证报告
 
 基于 `origin/main 35775cd`，[参考报告接纳](reference-requests.md#参考报告接纳)只允许显式启用的专用 mTLS Worker 提交。Worker 在原槽停止、工作排空、材料关闭和隔离标记清理后冻结确定证据；控制端按原授权、固定 Profile、冻结计划和有效预留复核，并在 schema 12 同一事务保存报告、终结申请、释放排队名额和原预留。丢确认时可原样重放，不改写原报告或新预留。

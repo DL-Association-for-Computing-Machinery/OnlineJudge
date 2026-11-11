@@ -26,6 +26,8 @@ import (
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
 	identitypg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/postgres"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
+	referencepg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference/postgres"
 	protocol "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/redisstore"
 	sessionruntime "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/runtime"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/testpki"
@@ -175,7 +177,8 @@ func browserDrafts(t *testing.T, f *fixture, c *sessionruntime.Config, subjectID
 	lock := filepath.Join(t.TempDir(), "trusted-lock.json")
 	must(t, os.WriteFile(lock, bundle.Lock, 0600))
 	c.PrivateDrafts = &sessionruntime.PrivateDraftsConfig{MaterialRoot: root, BundleDirectory: bundle.Directory, SourceLockFile: lock,
-		SourceIDs: []string{"library-checker:aplusb"}, Timeout: 3 * time.Second, MaxInFlight: 1}
+		SourceIDs: []string{"library-checker:aplusb"}, Timeout: 3 * time.Second, MaxInFlight: 1, ReferenceRequests: true}
+	must(t, referencepg.Configure(f.ctx, f.pools[0], problemreference.Limits{Global: 4, Owner: 1}))
 	access, err := identitypg.NewProblemAccess(f.pools[0])
 	must(t, err)
 	_, err = access.SetAuthorRole(f.ctx, identity.ProblemRoleChange{SubjectID: subjectID, Enabled: true, ExpectedRevision: 0, Operator: "browser-fixture", Reason: "synthetic preview author"})

@@ -7,11 +7,16 @@ export async function runDraftChecks(browser, info, email, password, output) {
   const page = await context.newPage()
   page.setDefaultTimeout(8000)
   const requests = [], errors = [], diagnostics = [], screenshots = []
+  const refPath = '/api/v1/problem-draft-management/reference-requests'
+  let referencePosts = 0
   let phase = 'login and real import'
   page.on('request', request => requests.push(request.url()))
+  page.on('request', request => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname.startsWith(refPath)) referencePosts++
+  })
   page.on('pageerror', error => errors.push(error.name))
   page.on('console', message => {
-    if (['warning', 'error'].includes(message.type())) diagnostics.push({ expected: message.type() === 'error' && /Failed to load resource: the server responded with a status of 401\b/.test(message.text()) })
+    if (['warning', 'error'].includes(message.type())) diagnostics.push({ expected: message.type() === 'error' && /Failed to load resource: (the server responded with a status of 401\b|net::ERR_FAILED)/.test(message.text()) })
   })
   await context.route('**/*', route => new URL(route.request().url()).origin === info.origin ? route.continue() : route.abort())
   const open = () => page.getByRole('button', { name: '检查会话并打开草稿', exact: true }).click()
@@ -48,11 +53,38 @@ export async function runDraftChecks(browser, info, email, password, output) {
     await page.getByRole('button', { name: '复制样例输入', exact: true }).click()
     assert.equal(await page.evaluate(() => navigator.clipboard.readText()), '1 2\n')
     assert.equal(await page.locator('article .sample pre').first().textContent(), '1 2\n')
+    phase = 'reference request with lost browser response'
+    const reference = page.getByRole('region', { name: '参考验证申请', exact: true })
+    const routeURL = '**' + refPath
+    let committed = false
+    await page.route(routeURL, async route => {
+      try {
+        const response = await route.fetch()
+        committed = response.status() === 200
+        await response.dispose()
+      } finally { await route.abort('failed') }
+    }, { times: 1 })
+    await reference.getByRole('button', { name: '提交或重试同一申请', exact: true }).click()
+    await reference.getByText('结果未确认，请保留原申请并查看回执。', { exact: true }).waitFor()
+    assert(committed, 'The genuine API committed the request before the browser lost the response')
+    assert.equal(referencePosts, 1)
+    await page.reload({ waitUntil: 'networkidle' })
+    await open(); await displayed()
+    assert.equal(referencePosts, 1, 'Reload must not issue a reference mutation')
+    await reference.getByRole('button', { name: '查看申请回执', exact: true }).click()
+    await reference.getByText('已取得本人申请回执。 状态：待完成。', { exact: true }).waitFor()
+    await reference.getByRole('button', { name: '取消本次申请', exact: true }).click()
+    await reference.getByText('已取得本人申请回执。 状态：已取消。', { exact: true }).waitFor()
+    assert.equal(referencePosts, 2, 'Only the two deliberate writes were sent')
+    assert.equal(page.url(), url)
+    assert.equal(await page.locator('vite-error-overlay').count(), 0)
     for (const [name, width, height] of [['desktop', 1280, 960], ['mobile', 390, 844]]) {
       await page.setViewportSize({ width, height })
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'No page horizontal overflow')
       const image = path.join(output, 'private-draft-' + name + '.png')
       await page.screenshot({ path: image, fullPage: true }); screenshots.push(image)
+      const referenceImage = path.join(output, 'reference-request-' + name + '.png')
+      await reference.screenshot({ path: referenceImage }); screenshots.push(referenceImage)
     }
     const endpoint = '**/api/v1/problem-drafts/' + draft.id + '/preview'
     // The real image path above is complete; this substitution separately
