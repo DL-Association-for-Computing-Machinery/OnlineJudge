@@ -25,6 +25,10 @@ func IsReviewReturnPath(path string) bool {
 }
 
 func reviewReturnRoute(path string) (id, key, method string) {
+	return reviewActionRoute(path, "return")
+}
+
+func reviewActionRoute(path, action string) (id, key, method string) {
 	tail, ok := strings.CutPrefix(path, reviewEvidencePrefix)
 	if !ok {
 		return "", "", ""
@@ -33,10 +37,10 @@ func reviewReturnRoute(path string) (id, key, method string) {
 	if !ok || !identity.ValidID(id) {
 		return "", "", ""
 	}
-	if rest == "return" {
+	if rest == action {
 		return id, "", http.MethodPost
 	}
-	if key, ok := strings.CutPrefix(rest, "return/"); ok && draftproblem.ValidKey(key) {
+	if key, ok := strings.CutPrefix(rest, action+"/"); ok && draftproblem.ValidKey(key) {
 		return id, key, http.MethodGet
 	}
 	return "", "", ""

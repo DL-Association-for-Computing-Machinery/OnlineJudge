@@ -151,7 +151,7 @@ func readReviewFields(w http.ResponseWriter, r *http.Request, limitBytes int64, 
 		problem(w, 413, "BODY_TOO_LARGE", "请求过大")
 		return false
 	}
-	if err != nil || !jsoninput.ValidUnicode(raw) {
+	if err != nil || !json.Valid(raw) || !jsoninput.ValidUnicode(raw) {
 		invalid(w)
 		return false
 	}

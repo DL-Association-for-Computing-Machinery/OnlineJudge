@@ -11,7 +11,7 @@ func TestPrivateDraftConfigurationExplicitAndBounded(t *testing.T) {
 	if err != nil || absent.Runtime.PrivateDrafts != nil {
 		t.Fatal("default enabled private drafts")
 	}
-	for _, kind := range []string{"valid", "reference-enabled", "review-enabled", "review-without-reference", "returns-enabled", "returns-without-access", "invalid-reference", "missing-root", "relative", "overlap", "internal-lock", "duplicate", "empty", "unbounded", "timeout", "write-timeout", "null", "unknown"} {
+	for _, kind := range []string{"valid", "reference-enabled", "review-enabled", "review-without-reference", "returns-enabled", "returns-without-access", "statement-enabled", "statement-without-access", "invalid-reference", "missing-root", "relative", "overlap", "internal-lock", "duplicate", "empty", "unbounded", "timeout", "write-timeout", "null", "unknown"} {
 		t.Run(kind, func(t *testing.T) {
 			var wire map[string]any
 			if json.Unmarshal([]byte(validDocument), &wire) != nil {
@@ -31,6 +31,10 @@ func TestPrivateDraftConfigurationExplicitAndBounded(t *testing.T) {
 				value["review_access"], value["review_returns"] = true, true
 			case "returns-without-access":
 				value["review_returns"] = true
+			case "statement-enabled":
+				value["review_access"], value["statement_confirmations"] = true, true
+			case "statement-without-access":
+				value["statement_confirmations"] = true
 			case "invalid-reference":
 				value["reference_requests"] = "true"
 			case "missing-root":
@@ -61,11 +65,12 @@ func TestPrivateDraftConfigurationExplicitAndBounded(t *testing.T) {
 				t.Fatal(err)
 			}
 			c, err := Parse(body)
-			if kind == "valid" || kind == "reference-enabled" || kind == "review-enabled" || kind == "returns-enabled" {
+			if kind == "valid" || kind == "reference-enabled" || kind == "review-enabled" || kind == "returns-enabled" || kind == "statement-enabled" {
 				if err != nil || c.Runtime.PrivateDrafts == nil || c.Runtime.PrivateDrafts.Timeout != time.Second ||
 					c.Runtime.PrivateDrafts.ReferenceRequests != (kind == "reference-enabled" || kind == "review-enabled") ||
 					c.Runtime.PrivateDrafts.ReviewIntake != (kind == "review-enabled") ||
-					c.Runtime.PrivateDrafts.ReviewReturns != (kind == "returns-enabled") {
+					c.Runtime.PrivateDrafts.ReviewReturns != (kind == "returns-enabled") ||
+					c.Runtime.PrivateDrafts.StatementConfirmations != (kind == "statement-enabled") {
 					t.Fatal("explicit capability rejected")
 				}
 			} else if err == nil {

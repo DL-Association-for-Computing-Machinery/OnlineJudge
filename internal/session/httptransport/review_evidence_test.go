@@ -36,7 +36,7 @@ func TestReviewEvidenceSessionFailurePriority(t *testing.T) {
 		{errors.Join(identity.ErrConflict, identity.ErrStore), 503},
 		{errors.Join(identity.ErrConflict, context.Canceled), 503},
 	} {
-		h, err := transport.WithReviewEvidence(draftHandler(t, &draftUseCase{}), unavailableEvidence{tc.err}, nil, nil)
+		h, err := transport.WithReviewEvidence(draftHandler(t, &draftUseCase{}), unavailableEvidence{tc.err}, nil, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -95,3 +95,17 @@ type ProblemSolutionConfirmation struct {
 	RecoveryID       string
 	ConfirmedAt      pgtype.Timestamptz
 }
+
+type ProblemStatementConfirmation struct {
+	ReviewID           string
+	AssignmentRevision int64
+	ReviewerSubjectID  string
+	ReviewerRevision   int64
+	RequestKey         string
+	ImportRevision     string
+	EvidenceSha256     string
+	ChecklistVersion   string
+	AuthGeneration     int64
+	RecoveryID         string
+	ConfirmedAt        pgtype.Timestamptz
+}

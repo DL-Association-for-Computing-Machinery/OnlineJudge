@@ -9,27 +9,29 @@ import (
 )
 
 // ReviewPolicyVersion identifies the current requirements for ordinary approval.
-const ReviewPolicyVersion = "oj.review-approval.v4"
+const ReviewPolicyVersion = "oj.review-approval.v5"
 
 // ReviewEligibilitySnapshot is the trusted read of an assigned item's verified
 // historical evidence and whether the same material has already been returned.
 type ReviewEligibilitySnapshot struct {
-	Evidence          ReviewEvidence
-	Returned          bool
-	SolutionConfirmed bool
+	Evidence           ReviewEvidence
+	Returned           bool
+	SolutionConfirmed  bool
+	StatementConfirmed bool
 }
 
 // ReviewEligibility explains what blocks approval at the time of the read.
 // It is not a receipt or proof that a later decision is permitted.
 type ReviewEligibility struct {
-	Evidence               ReviewEvidence                                    `json:"evidence"`
-	PolicyVersion          string                                            `json:"policy_version"`
-	Eligible               bool                                              `json:"eligible"`
-	Blockers               []string                                          `json:"blockers"`
-	InputValidator         *problemvalidation.InputValidatorEvidence         `json:"input_validator_evidence,omitempty"`
-	IndependentCorrectness *problemvalidation.IndependentCorrectnessEvidence `json:"independent_correctness_evidence,omitempty"`
-	WrongSolution          *problemvalidation.WrongSolutionEvidence          `json:"wrong_solution_evidence,omitempty"`
-	StatementRendering     *problemvalidation.StatementRenderingEvidence     `json:"statement_rendering_evidence,omitempty"`
+	Evidence                    ReviewEvidence                                    `json:"evidence"`
+	PolicyVersion               string                                            `json:"policy_version"`
+	Eligible                    bool                                              `json:"eligible"`
+	Blockers                    []string                                          `json:"blockers"`
+	InputValidator              *problemvalidation.InputValidatorEvidence         `json:"input_validator_evidence,omitempty"`
+	IndependentCorrectness      *problemvalidation.IndependentCorrectnessEvidence `json:"independent_correctness_evidence,omitempty"`
+	WrongSolution               *problemvalidation.WrongSolutionEvidence          `json:"wrong_solution_evidence,omitempty"`
+	StatementRendering          *problemvalidation.StatementRenderingEvidence     `json:"statement_rendering_evidence,omitempty"`
+	StatementSemanticsConfirmed bool                                              `json:"statement_semantics_confirmed,omitempty"`
 }
 
 func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
@@ -66,9 +68,6 @@ func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
 			blockers = append(blockers, "independent_correctness_missing")
 		}
 	}
-	// The historical rendering and wrong-solution checks do not establish
-	// semantic correctness or complete coverage.
-	blockers = append(blockers, "statement_quality_missing", "test_coverage_missing")
 	var validator *problemvalidation.InputValidatorEvidence
 	var wrongSolution *problemvalidation.WrongSolutionEvidence
 	var statementRendering *problemvalidation.StatementRenderingEvidence
@@ -83,6 +82,11 @@ func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
 			statementRendering = &admitted
 		}
 	}
+	semanticsConfirmed := s.StatementConfirmed && !s.Returned
+	if !semanticsConfirmed || statementRendering == nil {
+		blockers = append(blockers, "statement_quality_missing")
+	}
+	blockers = append(blockers, "test_coverage_missing")
 	if validator == nil {
 		blockers = append(blockers, "input_validator_missing")
 	}
@@ -92,7 +96,7 @@ func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
 	}
 	return ReviewEligibility{Evidence: e, PolicyVersion: ReviewPolicyVersion, Eligible: len(blockers) == 0,
 		Blockers: blockers, InputValidator: validator, IndependentCorrectness: independent,
-		WrongSolution: wrongSolution, StatementRendering: statementRendering}
+		WrongSolution: wrongSolution, StatementRendering: statementRendering, StatementSemanticsConfirmed: semanticsConfirmed}
 }
 
 // EligibilityForSubject returns the current policy's blockers for one assignment.

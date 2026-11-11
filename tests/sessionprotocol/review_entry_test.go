@@ -108,7 +108,7 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 		var view problemreference.ReviewEligibility
 		must(t, json.Unmarshal(result.body, &view))
 		if len(fields) != 4 || string(fields["evidence"]) != string(assigned.body) || string(fields["eligible"]) != "false" ||
-			view.PolicyVersion != "oj.review-approval.v4" || view.IndependentCorrectness != nil || view.WrongSolution != nil ||
+			view.PolicyVersion != "oj.review-approval.v5" || view.IndependentCorrectness != nil || view.WrongSolution != nil ||
 			view.StatementRendering != nil ||
 			!slices.Contains(view.Blockers, "independent_correctness_missing") ||
 			view.InputValidator != nil || !slices.Contains(view.Blockers, "input_validator_missing") ||
@@ -160,6 +160,13 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 	loginStatus(t, reviewMaterialsGET(x, receipt.ID, authorCookies, owner), 404)
 	loginStatus(t, reviewReadGET(y, receipt.ID+"/materials?hash="+got.EvidenceSHA256, cookies, reviewer.ID), 400)
 	loginStatus(t, reviewReadGET(y, receipt.ID+"/materials/"+got.EvidenceSHA256, cookies, reviewer.ID), 404)
+	var statementHash string
+	must(t, f.pools[0].QueryRow(f.ctx, `SELECT sha256 FROM problem_draft_materials WHERE draft_id=$1 AND logical_name='statement'`, draftID).Scan(&statementHash))
+	secondPending := beginLogin(t, x, reviewer)
+	secondCredential := completedCredential(t, loginCall(y, "/api/v1/session/login/complete", "", []*http.Cookie{secondPending}, nil))
+	testStatementLogoutAfterObjects(t, f, store, got, root, namespace, reviewer.ID, secondCredential)
+	testEntryStatementConfirmation(t, x, y, got, cookies, authorCookies, reviewer.ID, owner,
+		func() func() { return corruptReviewSource(t, root, statementHash) })
 	testEntryReviewReturn(t, x, y, receipt, got, cookies, authorCookies, reviewer.ID, owner)
 	assertEligibility(eligibility(y, receipt.ID, cookies, reviewer.ID), true, true)
 	grant(reviewer.ID, 1, false)

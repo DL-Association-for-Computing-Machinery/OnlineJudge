@@ -24,17 +24,17 @@ import (
 
 type reviewReadHook struct {
 	*materialstore.Local
-	opened int
-	after  func(materialstore.Object)
+	opened  int
+	trigger int
+	after   func(materialstore.Object)
 }
 
 func (h *reviewReadHook) Open(ctx context.Context, obj materialstore.Object) (*materialstore.Snapshot, error) {
 	snapshot, err := h.Local.Open(ctx, obj)
 	if err == nil {
 		h.opened++
-		// The A+B fixture includes statement, input/output samples and source.
-		// At this point the final object's exact bytes are already snapshotted.
-		if h.opened == 4 && h.after != nil {
+		// The hook runs only after the selected object's bytes are snapshotted.
+		if h.opened == h.trigger && h.after != nil {
 			h.after(obj)
 		}
 	}
@@ -70,7 +70,7 @@ func testReviewMaterialRaces(t *testing.T, f *fixture, access *identitypg.Proble
 	run := func(t *testing.T, effect func(materialstore.Object), want error) {
 		t.Helper()
 		held := false
-		h := &reviewReadHook{Local: objects, after: effect}
+		h := &reviewReadHook{Local: objects, trigger: 4, after: effect}
 		s, err := problemreference.NewReviewMaterialReader(sessions, repo, h, func() (func(), error) {
 			if held {
 				return nil, problem.ErrBusy
@@ -114,6 +114,38 @@ func testReviewMaterialRaces(t *testing.T, f *fixture, access *identitypg.Proble
 	t.Run("logout_after_final_object", func(t *testing.T) {
 		run(t, func(_ materialstore.Object) { must(t, sessions.Revoke(f.ctx, credential)) }, protocol.ErrStale)
 	})
+}
+
+func testStatementLogoutAfterObjects(t *testing.T, f *fixture, store *referencepg.ReviewStore, e problemreference.ReviewEvidence,
+	root, namespace, reviewer string, credential protocol.Credential) {
+	t.Helper()
+	objects, err := materialstore.OpenLocal(materialstore.Config{Root: root, MaxObjectBytes: 128 << 20, MaxInFlight: 1})
+	must(t, err)
+	defer func() { must(t, objects.Close()) }()
+	sessions := f.store(t, namespace, 0, protocol.OrdinaryPolicy())
+	repo, err := referencepg.NewReviewMaterialStore(store, problempg.ReadBoundReviewDraft)
+	must(t, err)
+	// The confirmation reads statement and both sample objects, not the solver.
+	h := &reviewReadHook{Local: objects, trigger: 3, after: func(_ materialstore.Object) {
+		must(t, sessions.Revoke(f.ctx, credential))
+	}}
+	released := false
+	s, err := problemreference.NewStatementConfirmations(sessions, repo, h, func() (func(), error) {
+		return func() { released = true }, nil
+	})
+	must(t, err)
+	i := problemreference.StatementConfirmationIntent{RequestKey: "statement-logout-after-objects",
+		AssignmentRevision: e.AssignmentRevision, ImportRevision: e.ImportRevision,
+		EvidenceSHA256: e.EvidenceSHA256, ChecklistVersion: problemreference.StatementChecklistVersion}
+	result, err := s.ConfirmForSubject(f.ctx, credential, reviewer, e.ReviewID, i)
+	if !errors.Is(err, protocol.ErrStale) || result != (problemreference.StatementConfirmationReceipt{}) || h.opened != 3 || !released {
+		t.Fatalf("logout after objects did not fence the confirmation (opened=%d, released=%v, err=%v)", h.opened, released, err)
+	}
+	var count int
+	must(t, f.pools[0].QueryRow(f.ctx, `SELECT count(*) FROM problem_statement_confirmations WHERE review_id=$1`, e.ReviewID).Scan(&count))
+	if count != 0 {
+		t.Fatal("logged-out confirmation wrote to the ledger")
+	}
 }
 
 // Corrupting one private fixture object must fail before a DTO is assembled,
