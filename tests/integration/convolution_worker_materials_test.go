@@ -323,12 +323,22 @@ func assertConvolutionReview(t *testing.T, f referenceRequestFixture, request pr
 		!reflect.DeepEqual(got.Comparison, want) {
 		t.Fatal("assigned comparison did not preserve the fixed revision, report identity and generated counterexample")
 	}
+	snapshot, err := reviews.ReviewEligibilitySnapshot(f.ctx, reader, item.ID)
+	must(t, err)
+	if snapshot.Returned || snapshot.Evidence != summary || snapshot.Evidence.ComparisonOutcome != "mismatch" {
+		t.Fatal("eligibility did not receive the verified mismatch from the frozen report")
+	}
 	denied(f.actor, item.ID, problemreference.ErrNotFound)
 	denied(reader, request.ID, problemreference.ErrNotFound)
 	// Even a separately valid summary cannot authorize a different report digest.
 	_, err = f.a.Exec(f.ctx, `UPDATE problem_review_submissions SET evidence_sha256=$1 WHERE id=$2`, strings.Repeat("f", 64), item.ID)
 	must(t, err)
 	denied(reader, item.ID, problemreference.ErrStore)
+	snapshot, err = reviews.ReviewEligibilitySnapshot(f.ctx, reader, item.ID)
+	requireReviewError(t, err, problemreference.ErrStore)
+	if snapshot != (problemreference.ReviewEligibilitySnapshot{}) {
+		t.Fatal("corrupt comparison binding produced a partial eligibility snapshot")
+	}
 	grant(reader.SubjectID, 1, false)
 	denied(reader, item.ID, identity.ErrReviewerRequired)
 }

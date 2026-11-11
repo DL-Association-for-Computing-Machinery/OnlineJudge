@@ -50,6 +50,15 @@ func TestReviewReturnAppliesToDuplicateMaterialAndPreservesOriginalKeys(t *testi
 	must(t, err)
 	f.grant(t, other.reader, 0, true)
 	d := assignReview(t, other, duplicateReceipt.ID)
+	for _, evidence := range []problemreference.ReviewEvidence{e, d} {
+		actor := f.reader
+		actor.SubjectID = evidence.Reviewer
+		snapshot, err := f.reviews.ReviewEligibilitySnapshot(f.ctx, actor, evidence.ReviewID)
+		must(t, err)
+		if snapshot.Returned || snapshot.Evidence != evidence {
+			t.Fatal("newly assigned item did not preserve its evidence")
+		}
+	}
 	initial := returnIntent(e, "return-original-material-key")
 	_, err = f.reviews.ReturnReview(f.ctx, f.actor, f.item.ID, initial)
 	requireReviewError(t, err, problemreference.ErrNotFound)
@@ -86,6 +95,15 @@ func TestReviewReturnAppliesToDuplicateMaterialAndPreservesOriginalKeys(t *testi
 	}
 	if !winner.Valid() || returned != 1 {
 		t.Fatal("expected exactly one return for the same immutable material")
+	}
+	for _, evidence := range []problemreference.ReviewEvidence{e, d} {
+		actor := f.reader
+		actor.SubjectID = evidence.Reviewer
+		snapshot, err := f.reviews.ReviewEligibilitySnapshot(f.ctx, actor, evidence.ReviewID)
+		must(t, err)
+		if !snapshot.Returned || snapshot.Evidence != evidence {
+			t.Fatal("return did not block both original and duplicate material")
+		}
 	}
 	winnerActor := f.reader
 	winnerActor.SubjectID = winner.Reviewer

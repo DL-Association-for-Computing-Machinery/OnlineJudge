@@ -160,6 +160,7 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	loginStatus(t, reviewEvidenceGET(thirdEndpoint, reviewID, cookies, subject.ID), 404)
 	loginStatus(t, reviewMaterialsGET(thirdEndpoint, reviewID, cookies, subject.ID), 404)
 	loginStatus(t, reviewReadGET(thirdEndpoint, reviewID+"/comparison", cookies, subject.ID), 404)
+	loginStatus(t, reviewReadGET(thirdEndpoint, reviewID+"/eligibility", cookies, subject.ID), 404)
 	checkEntryOwnList(t, thirdEndpoint, cookies, subject.ID, 2)
 	loginStatus(t, loginCall(thirdEndpoint, collection, body, cookies, nil), 409)
 	oldVersion := get(thirdEndpoint, draft.ID+"/preview", cookies)

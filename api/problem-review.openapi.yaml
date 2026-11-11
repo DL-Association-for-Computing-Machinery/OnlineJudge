@@ -4,7 +4,7 @@ info:
   version: 0.1.0
   description: >-
     默认关闭的独立审核读取能力。使用普通 HTTPS 会话及当前审核资格；
-    每次只按明确分配读取一项的固定验证结论、对拍详情或审核材料。退回另需显式开启；不提供批准或发布。
+    每次只按明确分配读取一项的固定验证结论、对拍详情、批准阻断或审核材料。退回另需显式开启；不提供批准或发布。
 security:
   - ordinarySession: []
 paths:
@@ -57,6 +57,29 @@ paths:
                 properties:
                   evidence: { $ref: '#/components/schemas/ReviewEvidence' }
                   comparison: { $ref: './problem-reference-requests.openapi.yaml#/components/schemas/GeneratedComparison' }
+        '400': { $ref: '#/components/responses/Failure' }
+        '401': { $ref: '#/components/responses/Failure' }
+        '403': { $ref: '#/components/responses/Failure' }
+        '404': { $ref: '#/components/responses/Failure' }
+        '405': { $ref: '#/components/responses/Failure' }
+        '409': { $ref: '#/components/responses/Failure' }
+        '503': { $ref: '#/components/responses/Failure' }
+  /api/v1/problem-review/{review_id}/eligibility:
+    parameters:
+      - $ref: './problem-draft-management.openapi.yaml#/components/parameters/ExpectedSubject'
+      - $ref: '#/components/parameters/ReviewID'
+    get:
+      operationId: getAssignedReviewEligibility
+      description: >-
+        核对当前非作者分配、完整导入修订与已接纳报告，以现行策略返回阻止批准的原因。
+        未接入的必需验证和人工确认保持阻断。此结果仅为本次读取的快照，不可用于授权写入。
+        拒绝 query、请求体及转义路径别名，响应至多 4096 字节，no-store/nosniff。
+      responses:
+        '200':
+          description: 固定证据摘要、准入规则版本和稳定的阻断码
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReviewEligibility' }
         '400': { $ref: '#/components/responses/Failure' }
         '401': { $ref: '#/components/responses/Failure' }
         '403': { $ref: '#/components/responses/Failure' }
@@ -179,6 +202,23 @@ components:
         import_revision: { $ref: '#/components/schemas/SHA256' }
         evidence_sha256: { $ref: '#/components/schemas/SHA256' }
         reason: { $ref: '#/components/schemas/ReturnReason' }
+    ReviewEligibility:
+      type: object
+      additionalProperties: false
+      required: [evidence, policy_version, eligible, blockers]
+      properties:
+        evidence: { $ref: '#/components/schemas/ReviewEvidence' }
+        policy_version: { const: 'oj.review-approval.v1' }
+        eligible: { const: false }
+        blockers:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum: [materials_returned, formal_failed, policy_unavailable, comparison_mismatch, comparison_missing,
+              independent_correctness_missing, statement_quality_missing, test_coverage_missing, input_validator_missing,
+              checker_admission_missing, target_runtime_missing, solution_confirmation_missing]
     ReviewMaterials:
       type: object
       additionalProperties: false
