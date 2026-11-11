@@ -86,10 +86,8 @@ func (e ReviewEvidence) Valid() bool {
 type ReviewEvidenceRepository interface {
 	ReviewEvidence(context.Context, identity.ProblemActor, string) (ReviewEvidence, error)
 	ReviewComparison(context.Context, identity.ProblemActor, string) (ReviewComparison, error)
+	ReviewEligibilitySnapshot(context.Context, identity.ProblemActor, string) (ReviewEligibilitySnapshot, error)
 }
-
-// MaxReviewComparisonBytes bounds the evidence summary and generated difference.
-const MaxReviewComparisonBytes = 4096
 
 // ReviewComparison contains the fixed evidence identity and its generated comparison.
 // A nil comparison means that no outcome was recorded in the accepted report.

@@ -5,6 +5,7 @@ package sessionprotocol_test
 import (
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -60,9 +61,15 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 	comparison := func(endpoint *loginEndpoint, id string, c []*http.Cookie, subject string) loginResponse {
 		return reviewReadGET(endpoint, id+"/comparison", c, subject)
 	}
+	eligibility := func(endpoint *loginEndpoint, id string, c []*http.Cookie, subject string) loginResponse {
+		return reviewReadGET(endpoint, id+"/eligibility", c, subject)
+	}
 	loginStatus(t, comparison(x, receipt.ID, nil, reviewer.ID), 401)
 	loginStatus(t, comparison(x, receipt.ID, cookies, owner), 409)
 	loginStatus(t, comparison(x, receipt.ID, cookies, reviewer.ID), 403)
+	loginStatus(t, eligibility(x, receipt.ID, nil, reviewer.ID), 401)
+	loginStatus(t, eligibility(x, receipt.ID, cookies, owner), 409)
+	loginStatus(t, eligibility(x, receipt.ID, cookies, reviewer.ID), 403)
 	grant := func(subject string, revision int64, enabled bool) {
 		t.Helper()
 		_, err := access.SetReviewerRole(f.ctx, identity.ProblemRoleChange{SubjectID: subject, ExpectedRevision: revision,
@@ -75,6 +82,7 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 	loginStatus(t, reviewEvidenceGET(y, receipt.ID, cookies, reviewer.ID), 404)
 	loginStatus(t, reviewMaterialsGET(y, receipt.ID, cookies, reviewer.ID), 404)
 	loginStatus(t, comparison(y, receipt.ID, cookies, reviewer.ID), 404)
+	loginStatus(t, eligibility(y, receipt.ID, cookies, reviewer.ID), 404)
 	store, err := referencepg.NewReviewStore(f.pools[0], access)
 	must(t, err)
 	_, err = store.SetAssignment(f.ctx, problemreference.ReviewAssignmentChange{ReviewID: receipt.ID,
@@ -92,6 +100,24 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 	}
 	loginStatus(t, reviewEvidenceGET(x, draftID, cookies, reviewer.ID), 404)
 	loginStatus(t, reviewEvidenceGET(x, receipt.ID, authorCookies, owner), 404)
+	assertEligibility := func(result loginResponse, returned bool) {
+		t.Helper()
+		loginStatus(t, result, 200)
+		var fields map[string]json.RawMessage
+		must(t, json.Unmarshal(result.body, &fields))
+		var view problemreference.ReviewEligibility
+		must(t, json.Unmarshal(result.body, &view))
+		if len(fields) != 4 || string(fields["evidence"]) != string(assigned.body) || string(fields["eligible"]) != "false" ||
+			view.PolicyVersion != "oj.review-approval.v1" || !slices.Contains(view.Blockers, "independent_correctness_missing") ||
+			!slices.Contains(view.Blockers, "solution_confirmation_missing") || slices.Contains(view.Blockers, "formal_failed") ||
+			slices.Contains(view.Blockers, "materials_returned") != returned {
+			t.Fatal("eligibility lost the accepted evidence or incorrectly treated formal AC/return status")
+		}
+	}
+	assertEligibility(eligibility(x, receipt.ID, cookies, reviewer.ID), false)
+	loginStatus(t, eligibility(y, receipt.ID, authorCookies, owner), 404)
+	loginStatus(t, eligibility(y, referenceID, cookies, reviewer.ID), 404)
+	loginStatus(t, reviewReadGET(y, receipt.ID+"/eligibility?policy=older", cookies, reviewer.ID), 400)
 	for _, endpoint := range []*loginEndpoint{x, y} {
 		result := comparison(endpoint, receipt.ID, cookies, reviewer.ID)
 		loginStatus(t, result, 200)
@@ -129,14 +155,17 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 	loginStatus(t, reviewReadGET(y, receipt.ID+"/materials?hash="+got.EvidenceSHA256, cookies, reviewer.ID), 400)
 	loginStatus(t, reviewReadGET(y, receipt.ID+"/materials/"+got.EvidenceSHA256, cookies, reviewer.ID), 404)
 	testEntryReviewReturn(t, x, y, receipt, got, cookies, authorCookies, reviewer.ID, owner)
+	assertEligibility(eligibility(y, receipt.ID, cookies, reviewer.ID), true)
 	grant(reviewer.ID, 1, false)
 	loginStatus(t, reviewEvidenceGET(x, receipt.ID, cookies, reviewer.ID), 403)
 	loginStatus(t, reviewMaterialsGET(x, receipt.ID, cookies, reviewer.ID), 403)
 	loginStatus(t, comparison(x, receipt.ID, cookies, reviewer.ID), 403)
+	loginStatus(t, eligibility(x, receipt.ID, cookies, reviewer.ID), 403)
 	grant(reviewer.ID, 2, true)
 	loginStatus(t, reviewEvidenceGET(y, receipt.ID, cookies, reviewer.ID), 404)
 	loginStatus(t, reviewMaterialsGET(y, receipt.ID, cookies, reviewer.ID), 404)
 	loginStatus(t, comparison(y, receipt.ID, cookies, reviewer.ID), 404)
+	loginStatus(t, eligibility(y, receipt.ID, cookies, reviewer.ID), 404)
 	testReviewMaterialRaces(t, f, access, store, root, namespace, reviewer.ID, credential, receipt)
 	return receipt.ID
 }

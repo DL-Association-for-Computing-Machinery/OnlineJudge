@@ -111,6 +111,23 @@ schema 16 新增两张只追加的历史表。主体／项和修订的复合主�
 
 入口只接受送审 ID，拒绝查询参数、请求体和转义别名；结果不一致或超限时不返回部分内容。响应至多 4096 字节。读取不执行程序，不写决定，也不改变草稿或发布状态。
 
+### 批准准入状态
+
+`GET /api/v1/problem-review/{review_id}/eligibility` 沿用审核开关、普通会话和预期主体头。仅当前被分配的非作者可读；同一短事务核验完整导入修订、冻结计划及已接纳报告，并查询同一材料是否已被退回。响应包含固定证据摘要、策略版本 `oj.review-approval.v1`、`eligible: false` 及阻断码。读取不写决定，不能作为批准凭证。
+
+| 阻断码 | 需要处理的事项 |
+| --- | --- |
+| `materials_returned` | 同一材料已被退回；此前的重复送审项也不能继续批准 |
+| `policy_unavailable` | 来源、来源锁或参考 Profile 不在当前支持范围；旧证据仍可回读 |
+| `formal_failed` | 正式验证结论不是 AC |
+| `comparison_missing`、`comparison_mismatch` | 卷积缺已接纳的本站对拍通过证据，或记录了差异 |
+| `independent_correctness_missing` | 其他来源暂无经接纳的独立正确性证据或明确适用规则 |
+| `statement_quality_missing`、`test_coverage_missing`、`input_validator_missing` | 尚无绑定完整修订的题面质量、正式数据覆盖或输入校验器证据 |
+| `checker_admission_missing`、`target_runtime_missing` | 尚无该修订的生产检查器或目标节点资源准入证据 |
+| `solution_confirmation_missing` | 尚无人工确认固定标程的记录 |
+
+末三行目前没有可信证据入口，始终阻止批准。即使正式点和卷积对拍都通过，也不会开放批准。不接收客户端指定的规则版本或证据；报告绑定不一致则返回 503，不返回部分结果。
+
 ### 审核材料读取
 
 `GET /api/v1/problem-review/{review_id}/materials` 沿用审核开关、普通会话和预期主体头。以本项已接纳报告、正式计划和完整导入修订确定材料，不读取当前候选目录。返回固定验证摘要、原题面、指定样例与静态图片，以及正式标程文本。素性测试同时返回正式计划明确固定的四个依赖，名称只是编译相对名。接口不接受文件路径或对象哈希，不返回正式输入与答案、非选定源码、原始报告、存储路径或下载能力，也不执行程序。

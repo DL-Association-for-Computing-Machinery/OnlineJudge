@@ -13,11 +13,13 @@ import (
 )
 
 const reviewEvidencePrefix = "/api/v1/problem-review/"
+const maxReviewSummaryResponse = 4096
 
 // ReviewEvidenceReader exposes only the scoped validation results to HTTP.
 type ReviewEvidenceReader interface {
 	EvidenceForSubject(context.Context, redisstore.Credential, string, string) (problemreference.ReviewEvidence, error)
 	ComparisonForSubject(context.Context, redisstore.Credential, string, string) (problemreference.ReviewComparison, error)
+	EligibilityForSubject(context.Context, redisstore.Credential, string, string) (problemreference.ReviewEligibility, error)
 }
 
 // ReviewMaterialsReader exposes the bounded, reauthorized material projection.
@@ -54,7 +56,7 @@ func reviewReadRoute(path string) (id string, leaf string) {
 		return "", ""
 	}
 	switch leaf {
-	case "evidence", "comparison", "materials":
+	case "evidence", "comparison", "materials", "eligibility":
 		return id, leaf
 	default:
 		return "", ""
@@ -77,7 +79,7 @@ func (h *handler) serveReviewRead(w http.ResponseWriter, r *http.Request, id, le
 	var result any
 	var e problemreference.ReviewEvidence
 	var valid bool
-	limit := problemreference.MaxReviewComparisonBytes
+	limit := maxReviewSummaryResponse
 	switch leaf {
 	case "materials":
 		limit = problemreference.MaxReviewMaterialResponse
@@ -88,6 +90,12 @@ func (h *handler) serveReviewRead(w http.ResponseWriter, r *http.Request, id, le
 		var c problemreference.ReviewComparison
 		c, err = h.reviewEvidence.ComparisonForSubject(ctx, credential, expected, id)
 		result, e, valid = c, c.Evidence, c.Valid()
+	case "eligibility":
+		var status problemreference.ReviewEligibility
+		status, err = h.reviewEvidence.EligibilityForSubject(ctx, credential, expected, id)
+		result, e = status, status.Evidence
+		valid = e.Valid() && status.PolicyVersion == problemreference.ReviewPolicyVersion &&
+			!status.Eligible && len(status.Blockers) > 0
 	case "evidence":
 		e, err = h.reviewEvidence.EvidenceForSubject(ctx, credential, expected, id)
 		result, valid = e, e.Valid()

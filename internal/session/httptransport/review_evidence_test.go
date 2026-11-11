@@ -23,6 +23,10 @@ func (e unavailableEvidence) ComparisonForSubject(context.Context, redisstore.Cr
 	return problemreference.ReviewComparison{}, e.err
 }
 
+func (e unavailableEvidence) EligibilityForSubject(context.Context, redisstore.Credential, string, string) (problemreference.ReviewEligibility, error) {
+	return problemreference.ReviewEligibility{}, e.err
+}
+
 func TestReviewEvidenceSessionFailurePriority(t *testing.T) {
 	for _, tc := range []struct {
 		err  error
