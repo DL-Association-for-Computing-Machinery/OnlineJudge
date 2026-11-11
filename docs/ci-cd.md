@@ -12,7 +12,7 @@
 
 convolution_mod的完整材料/16MiB输入答案、共享快照、封闭tier8及双端2GiB账本、独立槽与错Cmd/跨档位拒绝归普通backend。`TestConvolutionReferenceSandbox`仅在sandbox标签、Darwin arm64、`OJ_CONVOLUTION_REFERENCE=1`与实验opt-in下运行同次16MiB输入/输出边界、窄OLE证据及完整53点；失败或Stop未确认即停止。一次十来源254点/26子测试、独立四槽顺序后置、预备新Plan/Profile与旧九完整Plan/Profile核对均通过；普通CI仍不创建槽或执行题源，不替代这次固定环境证据。最终CI/合并状态与证据限制见[交付记录](delivery-log.md#2026-11-04convolution_mod-十来源固定环境接纳)。
 
-`tests/governance/test_problem_sources.py` 验证离线题源工具的来源哈希、完整集合、安全提取、输入对照、正式 WA 证据与输出/清理失败边界，随 governance 执行；不下载或执行外部题源程序。十题完整数据生成、真实 validator/checker、输入对照及三个固定错误解只由 README 的显式本地 Docker 命令运行，不进入普通 CI，也不构成生产 Worker/SPJ 或 P4 发布验收。
+`tests/governance/test_problem_sources.py` 验证离线题源工具的来源哈希、完整集合、安全提取、输入对照、正式 WA 证据与输出/清理失败边界，随 governance 执行；不下载或执行外部题源程序。十题完整数据生成、真实 validator/checker、输入对照及三个固定错误解只由 README 的显式本地 Docker 命令运行，不进入普通 CI，也不构成生产 Worker/SPJ 或 P4 发布验收。十题真实授权预览另用 [浏览器账号专项](../README.md#浏览器账号专项) 的 `--authorized-draft-bundle`，真实 API 响应不替换；普通 CI 不启动 Chromium 或导入该私有题包。
 
 [卷积小规模独立对拍](reference-validation.md#卷积小规模独立对拍)的固定语料、严格输出、首个差异、制品清理和停止不明回归归普通 backend，使用替身、不运行外部源码。正例 CLI 和 `TestConvolutionDifferentialNegativeSandbox` 仅在 README 所述专用断网卷积槽运行，负对照需 sandbox 标签、Darwin arm64 和双重显式启用，不进入普通 CI。
 

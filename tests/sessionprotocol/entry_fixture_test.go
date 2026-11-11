@@ -190,6 +190,11 @@ func entryPath(t *testing.T, path string) string {
 
 func entryConfig(t *testing.T, c sessionruntime.Config, ca *testpki.Authority, shutdown time.Duration, blocklist ...string) string {
 	t.Helper()
+	return entryConfigWithWriteTimeout(t, c, ca, shutdown, 5*time.Second, blocklist...)
+}
+
+func entryConfigWithWriteTimeout(t *testing.T, c sessionruntime.Config, ca *testpki.Authority, shutdown, write time.Duration, blocklist ...string) string {
+	t.Helper()
 	_, cert, key := ca.Issue(t, "", x509.ExtKeyUsageServerAuth, time.Now().Add(time.Hour))
 	parameter := func(p password.Parameters) map[string]any {
 		return map[string]any{"memory_kib": p.MemoryKiB, "iterations": p.Iterations, "parallelism": p.Parallelism,
@@ -218,7 +223,7 @@ func entryConfig(t *testing.T, c sessionruntime.Config, ca *testpki.Authority, s
 		"login_limits": map[string]any{"begin_global": bucket(limits.BeginGlobal), "begin_source": bucket(limits.BeginSource), "begin_email": bucket(limits.BeginEmail),
 			"recovery_global": bucket(limits.RecoveryGlobal), "recovery_source": bucket(limits.RecoverySource)},
 		"proxy_fingerprints": []string{}, "tls": map[string]any{"certificate_file": entryPath(t, cert), "key_file": entryPath(t, key)},
-		"server": map[string]any{"read_header_timeout": "2s", "read_timeout": "5s", "write_timeout": "5s", "idle_timeout": "1m",
+		"server": map[string]any{"read_header_timeout": "2s", "read_timeout": "5s", "write_timeout": write.String(), "idle_timeout": "1m",
 			"shutdown_timeout": shutdown.String(), "max_header_bytes": 8192},
 	}
 	if c.Mode == sessionruntime.ProxyMTLS {
