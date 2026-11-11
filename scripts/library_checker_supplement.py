@@ -25,6 +25,10 @@ class Supplement(NamedTuple):
 
 
 SUPPLEMENTS = {
+    "associative_array": Supplement("oj-local:associative-array-boundaries-v1",
+                                    "cb50459ffb3537de06ff6b931ea9047842d92a9420c39e37f9fb3efaa73e1271",
+                                    "4d6dd8e3fe97a0e1ec6585ff538219d811f660bdfff7cc2172bf6092cf858928",
+                                    "d5a23dd68deccc0ff55f928344287b96e3aa9f3cc023c727d0ad822dae140a1d"),
     "zalgorithm": Supplement("oj-local:zalgorithm-scale-v1",
                              "151da5a28d0bd733fe4837547ec909137a36b0e532409c93dfd7bf3c2a7e6b41",
                              "965239246cbdbd63f1641cfcf551d9c8f3a65cd558e194668ad845cac1e39711",
@@ -33,15 +37,43 @@ SUPPLEMENTS = {
                                          "151da5a28d0bd733fe4837547ec909137a36b0e532409c93dfd7bf3c2a7e6b41",
                                          "924bfcbc027160298dbe976d44f4d6308268510577c4031e24871150cb044cb1",
                                          "6d06b64ce0ea87eb1d903b7c9b69e47bcef2a263e9ce24ed9335f594f67e0fca"),
+    "primality_test": Supplement("oj-local:primality-test-single-query-v1",
+                                 "5447e801527926aa5e4b7da82101b30acaa366fdce105123c83384888fcd17af",
+                                 "d40e4fd4d8881a0bf693e4095a32693b75ca6e51203a480c57873b5fba5e2659",
+                                 "8c391e35837ac504d52ceeff004ad3b8aa5939ad0401c7acd35ae000c6a2f58c"),
     "aplusb": Supplement("oj-local:aplusb-boundaries-v1",
                          "87ebb9680aa3abe190b61d4a5ccac1dc83e48b29656364e445e36fabe7467cc9",
                          "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd",
                          "d8426964248ef07e1aae00ab12c8de690a9fdae147117b0251fa853cb4769c7b"),
+    "convolution_mod": Supplement("oj-local:convolution-mod-coefficients-v1",
+                                   "7a1079bd0d8be8d2cb57619780d4f519de096fd3bb9655eaa37a9bfe49e19e80",
+                                   "d464bf359f1e46cd3314144af2f71b21b39f1913e9e6d3d517386d12ce2b1041",
+                                   "9b6ca5320d54f7743341ddaf2fbb611dc40c84ff5819e57ef1cced12ab5f5158"),
+    "staticrmq": Supplement("oj-local:staticrmq-single-query-max-v1",
+                            "c5eef70e8f853a4525257371c895f01bd2ac40222d12cc72b83f3782a712186c",
+                            "194da8b53c88aa634cb5c030c684a355a59b224a00c7d74422bc35b333d3a5f0",
+                            "e9efcad95444d941be0bef86d9a9e834b340b69d0f921e6e7b81eedb300257b8"),
+    "point_add_range_sum": Supplement("oj-local:point-add-range-sum-boundaries-v1",
+                                      "e1fb107ff818b642bb5976ff35e7aaff5e8bb2ceb333972cb3acaf1256476bb1",
+                                      "188f392cd74cc6bb2156a0a444d0f232d0ea71ee746cb0523fba2c914d79dc25",
+                                      "9600bfbbfe15014fe911122c764e452b91f1399b428b4bdb4e66ed24e7a3dbd9"),
+    "unionfind": Supplement("oj-local:unionfind-singleton-v1",
+                            "fd871a02594fcd663790cd0530153df2ad18bf95110559ce552a121c34705bed",
+                            "42e62825925bf727c394f3435c2b50f850758576c392d082fb628f7219e4f07d",
+                            "c5857fa3048311c6bcdb40dfde511c85c843c5feacedc56a552534436aa503d5"),
+    "static_range_sum": Supplement("oj-local:static-range-sum-singleton-v1",
+                                   "4d3adee969250c1834a61d59b456649f0c2cd0445902ad386b4a6f3e351a2f93",
+                                   "a93676964a96fb5dd0320441307eb0bb11ed41b0a1e1d4441c47d124a644e375",
+                                   "d518d555c9f33d57c574b06ac41fcd4b713fa31bd3f04d18e3daf329a4744841"),
 }
 
 
 def boundary_cases(problem):
-    if problem in ("zalgorithm", "zalgorithm-alternating"):
+    if problem == "associative_array":
+        maximum = 10**18
+        yield f"1\n1 {maximum}\n".encode("ascii"), b"0\n"
+        yield f"2\n0 {maximum} {maximum}\n1 {maximum}\n".encode("ascii"), f"{maximum}\n".encode("ascii")
+    elif problem in ("zalgorithm", "zalgorithm-alternating"):
         for n in (1, 500000):
             yield b"a" * n + b"\n", (" ".join(map(str, range(n, 0, -1))) + "\n").encode("ascii")
         if problem == "zalgorithm-alternating":
@@ -51,9 +83,30 @@ def boundary_cases(problem):
             yield b"ab" * (n // 2) + b"\n", (
                 " ".join(str(n - i) if i % 2 == 0 else "0" for i in range(n)) + "\n"
             ).encode("ascii")
+    elif problem == "primality_test":
+        yield b"1\n2147483659\n", b"Yes\n"
+        yield b"1\n1000000000000000000\n", b"No\n"
     elif problem == "aplusb":
         for a, b in ((0, 0), (0, 1), (1, 0), (10**9, 10**9 - 1), (10**9 - 1, 10**9)):
             yield f"{a} {b}\n".encode("ascii"), f"{a+b}\n".encode("ascii")
+    elif problem == "convolution_mod":
+        maximum = 998244352
+        yield f"2 3\n{maximum} 2\n3 4 5\n".encode("ascii"), b"998244350 2 3 10\n"
+        yield f"3 2\n7 11 0\n{maximum} 6\n".encode("ascii"), b"998244346 31 66 0\n"
+    elif problem == "point_add_range_sum":
+        maximum = 10**9
+        yield b"1 1\n0\n1 0 1\n", b"0\n"
+        yield (f"1 5\n{maximum}\n0 0 0\n1 0 1\n0 0 {maximum}\n0 0 {maximum}\n1 0 1\n".encode("ascii"),
+               f"{maximum}\n{3*maximum}\n".encode("ascii"))
+    elif problem == "unionfind":
+        yield b"1 1\n1 0 0\n", b"1\n"
+        yield b"1 1\n0 0 0\n", b""
+    elif problem == "staticrmq":
+        maximum = 10**9
+        yield f"4 1\n0 {maximum} {maximum} 1\n1 3\n".encode("ascii"), f"{maximum}\n".encode("ascii")
+    elif problem == "static_range_sum":
+        for value in (0, 10**9):
+            yield f"1 1\n{value}\n0 1\n".encode("ascii"), f"{value}\n".encode("ascii")
     else:
         raise ValueError("unrecognized supplement")
 

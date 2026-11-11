@@ -100,7 +100,7 @@ func runConvolutionTrialLocked(ctx context.Context, sources problemvalidation.Co
 	}
 	if err == nil {
 		report, err = run(ctx, sources, func() (execution.Sandbox, error) {
-			return execution.NewReferenceGoJudgeForTier(host, host.Verify, host, experiment.ReferenceConvolution)
+			return execution.NewConvolutionComparisonGoJudge(host, host.Verify, host)
 		})
 	}
 	report.ContainerID, report.StartedAt = host.Identity()

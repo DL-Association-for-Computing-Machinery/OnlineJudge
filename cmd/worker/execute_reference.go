@@ -221,7 +221,7 @@ func runClaimedReference(ctx context.Context, lock *slotLock, claim problemrefer
 			return err
 		}
 		result, err := problemvalidation.RunSmallConvolution(ctx, *materials.comparison, func() (execution.Sandbox, error) {
-			return execution.NewReferenceGoJudgeForTier(host, host.Verify, host, tier)
+			return execution.NewConvolutionComparisonGoJudge(host, host.Verify, host)
 		})
 		// A joined mismatch/cleanup error is not determinate.
 		switch err {

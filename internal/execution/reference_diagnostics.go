@@ -38,3 +38,21 @@ func referenceCollectorOverflow(r goJudgeResult, p experiment.ExecutionProfile) 
 		r.Files["stderr"] != nil && len(*r.Files["stderr"]) <= 3*experiment.ReferenceDiagnosticBytes &&
 		len(r.FileErrors) == 1 && r.FileErrors[0].Name == "stdout" && r.FileErrors[0].Type == "CollectSizeExceeded"
 }
+
+// Cached roles were already checked and adopted before this check. A raw
+// cap+1 prefix is only meaningful alongside the complete collector receipt.
+func checkerTrialOutputEvidence(r goJudgeResult, p experiment.ExecutionProfile) bool {
+	if len(r.Files) != 2 || r.Files["stdout"] == nil || r.Files["stderr"] == nil || len(r.IDs) != 0 {
+		return false
+	}
+	if r.Status != "Output Limit Exceeded" {
+		return len(*r.Files["stdout"]) <= p.OutputBytes
+	}
+	if referenceCollectorOverflow(r, p) {
+		return true
+	}
+	return r.Error == "" && len(r.FileErrors) == 0 && r.Exit != nil && *r.Exit == 25 &&
+		r.CPU != nil && *r.CPU >= 0 && *r.CPU <= p.Run.CPU &&
+		r.Memory != nil && *r.Memory >= 0 && *r.Memory <= p.Run.Memory &&
+		len(*r.Files["stdout"]) == p.OutputBytes
+}
