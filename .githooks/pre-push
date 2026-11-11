@@ -1,4 +1,5 @@
 #!/bin/sh
 set -eu
+# Guard the destination ref only; PR scope is reviewed from the full diff.
 root=$(git rev-parse --show-toplevel)
 exec python3 "$root/scripts/repo_policy.py" pre-push
