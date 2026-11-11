@@ -9,18 +9,17 @@ import sys
 sys.dont_write_bytecode = True
 
 from library_checker_coverage import BOUNDARIES, STRUCTURES, observe
+from library_checker_supplement import BASE_INDEX, SUPPLEMENTS
 from problem_draft_files import canonical, verify_bundle
 from problem_source_common import MAX_DATA_FILE, digest, read_regular
 
 
-V6_INDEX = "8d99112ec81a50a29e3d0eb8b5f0e97a68f1ccad75c3c9ed34ec3555b265b1ef"
-Z_LOCAL_INDEX = "4a02a1c07dbddf2a4bb532f8a6d850c2a979c07ced6cd4533219788317fa8191"
 SOURCE_LOCK = "fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617"
 
 
 def audit(bundle):
     index_hash = digest(read_regular(bundle, "index.json"))
-    if index_hash not in (V6_INDEX, Z_LOCAL_INDEX):
+    if index_hash != BASE_INDEX and not any(index_hash == item.index for item in SUPPLEMENTS.values()):
         raise ValueError("coverage rules apply only to the reviewed bundle indexes")
     index = verify_bundle(bundle)
     if digest(canonical(index)) != index_hash:

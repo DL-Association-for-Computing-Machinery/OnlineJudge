@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -82,9 +83,20 @@ func TestLiveReferenceReports(t *testing.T) {
 		{"aplusb", 12}, {"unionfind", 18}, {"zalgorithm", 29}, {"suffixarray", 50}, {"primality_test", 13},
 		{"static_range_sum", 11}, {"associative_array", 20}, {"point_add_range_sum", 21}, {"staticrmq", 27}, {"convolution_mod", 53},
 	}
-	localZAlgorithm := os.Getenv("OJ_LIVE_ZALGORITHM_LOCAL_DATA") == "1"
-	if localZAlgorithm {
+	var versionPin string
+	var suffixSizes []int64
+	switch os.Getenv("OJ_LIVE_REFERENCE_SUPPLEMENT") {
+	case "":
+	case "zalgorithm":
 		sources = []fixtureSource{{"zalgorithm", 31}}
+		versionPin = "965239246cbdbd63f1641cfcf551d9c8f3a65cd558e194668ad845cac1e39711"
+		suffixSizes = []int64{2, 500001}
+	case "aplusb":
+		sources = []fixtureSource{{"aplusb", 17}}
+		versionPin = "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd"
+		suffixSizes = []int64{4, 4, 4, 21, 21}
+	default:
+		t.Fatal("unknown supplement fixture")
 	}
 	for _, source := range sources {
 		if !t.Run(source.id, func(t *testing.T) {
@@ -112,10 +124,14 @@ func TestLiveReferenceReports(t *testing.T) {
 				len(formal.Cases) != source.cases || (plan.Differential != nil) != (source.id == "convolution_mod") {
 				t.Fatal("persisted request does not match the frozen draft and fixed source")
 			}
-			if localZAlgorithm && (formal.Version != "965239246cbdbd63f1641cfcf551d9c8f3a65cd558e194668ad845cac1e39711" ||
-				formal.Cases[29].ID != "case-0030" || formal.Cases[29].Input.Size != 2 ||
-				formal.Cases[30].ID != "case-0031" || formal.Cases[30].Input.Size != 500001) {
-				t.Fatal("persisted plan lacks the pinned local boundary points")
+			if versionPin != "" && formal.Version != versionPin {
+				t.Fatal("persisted plan lacks the pinned local version")
+			}
+			for i, size := range suffixSizes {
+				pos := len(formal.Cases) - len(suffixSizes) + i
+				if c := formal.Cases[pos]; c.ID != fmt.Sprintf("case-%04d", pos+1) || c.Input.Size != size {
+					t.Fatal("persisted plan lacks the pinned local boundary points")
+				}
 			}
 			writeLiveReferenceJSON(t, out, "ready-"+source.id, problemreference.ClaimInput{RequestID: request.ID, SourceID: sourceID, PlanSHA256: plan.SHA256})
 			report := readLiveReferenceReport(t, ctx, serverDone, f, request.ID)

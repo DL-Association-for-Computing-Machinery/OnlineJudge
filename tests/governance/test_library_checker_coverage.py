@@ -74,7 +74,7 @@ class Observations(unittest.TestCase):
             write_new(root, "index.json", index)
             with self.assertRaisesRegex(ValueError, "reviewed bundle indexes"):
                 audit.audit(root)
-            with patch.object(audit, "V6_INDEX", digest(index)):
+            with patch.object(audit, "BASE_INDEX", digest(index)):
                 report = audit.audit(root)["problems"][0]["rules"]
                 self.assertEqual(report["sum=2000000000"]["sample"]["first"]["input_sha256"], sample["sha256"])
                 self.assertEqual(report["sum=2000000000"]["non_sample"], {"count": 0, "first": None})
