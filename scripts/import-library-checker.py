@@ -93,7 +93,8 @@ def run(corpus, output):
                 samples[case["id"]] = tuple(
                     read_regular(partial, objects[f"problems/{pid}/{folder}/{case['id']}{suffix}"]["path"], 64 << 10).decode()
                     for folder, suffix in (("in", ".in"), ("out", ".out")))
-        markdown, examples = convert(source_bytes("task.md").decode(), config["params"], samples)
+        markdown, examples = convert(source_bytes("task.md").decode(), config["params"], samples,
+                                     source_id=problem["source_id"])
         statement = {"path": "statements/" + pid + ".md", "language": "en",
                      "sha256": digest(markdown.encode()), "size": len(markdown.encode())}
         record(statement["path"], markdown.encode())
