@@ -45,19 +45,21 @@ func NewPlanService(sessions SessionReader, requests PlanRepository, drafts Plan
 // observes the same session again before the repository rechecks live authority
 // and queue state. An unknown write outcome is recoverable by original key.
 func (s *PlanService) Prepare(ctx context.Context, credential redisstore.Credential, key string) (ExpectedPlan, error) {
-	actor, err := s.actor(ctx, credential, key)
+	return s.prepare(ctx, credential, "", key)
+}
+
+// PrepareForSubject checks the expected account before any ledger or material I/O.
+func (s *PlanService) PrepareForSubject(ctx context.Context, credential redisstore.Credential, expected, key string) (ExpectedPlan, error) {
+	if !identity.ValidID(expected) {
+		return ExpectedPlan{}, ErrInvalid
+	}
+	return s.prepare(ctx, credential, expected, key)
+}
+
+func (s *PlanService) prepare(ctx context.Context, credential redisstore.Credential, expected, key string) (ExpectedPlan, error) {
+	actor, r, err := s.queuedIntent(ctx, credential, expected, key)
 	if err != nil {
 		return ExpectedPlan{}, err
-	}
-	r, err := s.requests.Receipt(ctx, actor, key)
-	if err != nil {
-		return ExpectedPlan{}, err
-	}
-	if r.State != Queued || r.CancelledAt != nil {
-		return ExpectedPlan{}, ErrNotQueued
-	}
-	if r.Owner != actor.SubjectID || r.RequestKey != key || r.Authorization.Actor != actor {
-		return ExpectedPlan{}, ErrAuthorityChanged
 	}
 	draft, err := s.drafts.GetOwn(ctx, actor, r.DraftID)
 	if err != nil {
@@ -82,6 +84,54 @@ func (s *PlanService) Prepare(ctx context.Context, credential redisstore.Credent
 		return ExpectedPlan{}, errors.Join(ErrCommitUnknown, err)
 	}
 	return result, nil
+}
+
+func (s *PlanService) queuedIntent(ctx context.Context, credential redisstore.Credential, expected, key string) (identity.ProblemActor, Request, error) {
+	var zero identity.ProblemActor
+	actor, err := s.actor(ctx, credential, key)
+	if err != nil {
+		return zero, Request{}, err
+	}
+	if expected != "" && actor.SubjectID != expected {
+		return zero, Request{}, ErrSubjectChanged
+	}
+	r, err := s.requests.Receipt(ctx, actor, key)
+	if err != nil {
+		return zero, Request{}, err
+	}
+	if r.State != Queued || r.CancelledAt != nil {
+		return zero, Request{}, ErrNotQueued
+	}
+	if r.Owner != actor.SubjectID || r.RequestKey != key || r.Authorization.Actor != actor {
+		return zero, Request{}, ErrAuthorityChanged
+	}
+	return actor, r, nil
+}
+
+// PlanReadyForSubject observes only whether a plan is recorded for an owned key.
+func (s *PlanService) PlanReadyForSubject(ctx context.Context, credential redisstore.Credential, expected, key string) (bool, error) {
+	if !identity.ValidID(expected) {
+		return false, ErrInvalid
+	}
+	actor, err := s.actor(ctx, credential, key)
+	if err != nil {
+		return false, err
+	}
+	if actor.SubjectID != expected {
+		return false, ErrSubjectChanged
+	}
+	if _, err := s.requests.Receipt(ctx, actor, key); err != nil {
+		return false, err
+	}
+	return s.planReady(ctx, actor, key)
+}
+
+func (s *PlanService) planReady(ctx context.Context, actor identity.ProblemActor, key string) (bool, error) {
+	_, err := s.requests.ExpectedPlan(ctx, actor, key)
+	if errors.Is(err, ErrNotFound) {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 func (s *PlanService) freezePlan(ctx context.Context, r Request, draft problem.Draft) (ExpectedPlan, error) {

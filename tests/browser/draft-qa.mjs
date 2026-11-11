@@ -73,9 +73,23 @@ export async function runDraftChecks(browser, info, email, password, output) {
     assert.equal(referencePosts, 1, 'Reload must not issue a reference mutation')
     await reference.getByRole('button', { name: '查看申请回执', exact: true }).click()
     await reference.getByText('已取得本人申请回执。 状态：待完成。', { exact: true }).waitFor()
+    phase = 'prepare persisted reference materials from ordinary session'
+    await reference.getByRole('button', { name: '准备参考材料', exact: true }).click()
+    await reference.getByText('已受理准备请求，请稍后查看材料状态。 状态：待完成。', { exact: true }).waitFor()
+    const checkPlan = reference.getByRole('button', { name: '查看材料状态', exact: true })
+    const ready = reference.getByText('材料计划已准备。 状态：待完成。', { exact: true })
+    for (let attempt = 0; attempt < 12 && !await ready.isVisible(); attempt++) {
+      const response = page.waitForResponse(r => r.request().method() === 'GET' && r.url().endsWith('/plan'))
+      await checkPlan.click()
+      assert.equal((await response).status(), 200)
+      await page.waitForTimeout(150)
+    }
+    await ready.waitFor()
+    const preparedImage = path.join(output, 'reference-preparation-ready.png')
+    await reference.screenshot({ path: preparedImage }); screenshots.push(preparedImage)
     await reference.getByRole('button', { name: '取消本次申请', exact: true }).click()
     await reference.getByText('已取得本人申请回执。 状态：已取消。', { exact: true }).waitFor()
-    assert.equal(referencePosts, 2, 'Only the two deliberate writes were sent')
+    assert.equal(referencePosts, 3, 'Only deliberate submit, prepare and cancel writes were sent')
     assert.equal(page.url(), url)
     assert.equal(await page.locator('vite-error-overlay').count(), 0)
     for (const [name, width, height] of [['desktop', 1280, 960], ['mobile', 390, 844]]) {

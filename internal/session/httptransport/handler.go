@@ -43,6 +43,7 @@ type handler struct {
 	drafts         Drafts
 	draftTimeout   time.Duration
 	references     ReferenceRequests
+	preparation    ReferencePreparation
 }
 
 // New builds three explicit endpoints without registering any application route:

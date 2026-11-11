@@ -30,7 +30,7 @@ func testEntryPrivateDrafts(t *testing.T, f *fixture, binary string) {
 }
 
 func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
-	bundle := problemfixture.New(t)
+	bundle := referenceEntryBundle(t)
 	root := filepath.Join(t.TempDir(), "materials")
 	must(t, os.Mkdir(root, 0700))
 	lock := filepath.Join(t.TempDir(), "trusted-lock.json")
@@ -108,7 +108,7 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 		References      []any          `json:"references"`
 	}
 	must(t, json.Unmarshal(created.body, &draft))
-	if !identity.ValidID(draft.ID) || draft.State != "private-draft" || draft.ValidationState != "not-run" || draft.Document["title"] != "Synthetic A + B" || len(draft.References) != 10 {
+	if !identity.ValidID(draft.ID) || draft.State != "private-draft" || draft.ValidationState != "not-run" || draft.Document["title"] != "Synthetic A + B" || len(draft.References) != 13 {
 		t.Fatal("HTTP did not return complete private metadata")
 	}
 	// Discard the first response: the other API recovers exactly the same receipt.
@@ -139,7 +139,7 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 		len(content.Examples) != 1 || content.Examples[0].ID != "case-0001" || content.Examples[0].Input != "1 2\n" || content.Examples[0].Output != "3\n" {
 		t.Fatal("actual HTTP preview changed private statement or sample bytes")
 	}
-	changed := problemfixture.New(t)
+	changed := referenceEntryBundle(t)
 	changed.Document["provenance"].(map[string]any)["original_title"] = "changed private metadata"
 	changed.Write(t)
 	cChanged := c
@@ -210,7 +210,7 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	loginStatus(t, importGET(y, entryImportsPath+"/"+pinnedReceipt.RequestKey, cookies), 401)
 	var count, refs int
 	must(t, f.pools[0].QueryRow(f.ctx, `SELECT count(*),(SELECT count(*) FROM problem_draft_materials WHERE draft_id=$2) FROM problem_drafts WHERE owner_subject_id=$1`, subject.ID, draft.ID).Scan(&count, &refs))
-	if count != 2 || refs != 10 {
+	if count != 2 || refs != 13 {
 		t.Fatal("HTTP replay duplicated/partially wrote metadata")
 	}
 	a.signal(t)
@@ -220,4 +220,13 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	noRuntimeConnections(t, f, c.Database.ApplicationName)
 	noRuntimeConnections(t, f, other.Database.ApplicationName)
 	t.Log("two real TLS API processes, Redis login and PG/private materials: import, original-key recovery, owner isolation, role revocation, logout and graceful shutdown passed")
+}
+
+func referenceEntryBundle(t *testing.T) *problemfixture.Bundle {
+	t.Helper()
+	bundle := problemfixture.New(t)
+	bundle.AddOriginal(t, "sample/aplusb/sol/correct.cpp", []byte("synthetic A+B material; not executed by this test\n"))
+	bundle.BindReferenceCases(t)
+	bundle.Write(t)
+	return bundle
 }

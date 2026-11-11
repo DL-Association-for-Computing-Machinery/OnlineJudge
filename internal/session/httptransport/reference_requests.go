@@ -27,14 +27,20 @@ type ReferenceRequests interface {
 	CancelForSubject(context.Context, redisstore.Credential, string, string) (problemreference.Request, error)
 }
 
+// ReferencePreparation starts bounded work and exposes only durable readiness.
+type ReferencePreparation interface {
+	Start(context.Context, redisstore.Credential, string, string) (bool, error)
+	Ready(context.Context, redisstore.Credential, string, string) (bool, error)
+}
+
 // WithReferenceRequests enables the capability on a private draft handler copy.
-func WithReferenceRequests(base http.Handler, requests ReferenceRequests) (http.Handler, error) {
+func WithReferenceRequests(base http.Handler, requests ReferenceRequests, preparation ReferencePreparation) (http.Handler, error) {
 	h, ok := base.(*handler)
-	if !ok || h == nil || h.drafts == nil || h.references != nil || requests == nil {
+	if !ok || h == nil || h.drafts == nil || h.references != nil || requests == nil || preparation == nil {
 		return nil, redisstore.ErrInvalid
 	}
 	return &handler{store: h.store, config: h.config, host: h.host, login: h.login, proxy: h.proxy,
-		passwordChange: h.passwordChange, drafts: h.drafts, draftTimeout: h.draftTimeout, references: requests}, nil
+		passwordChange: h.passwordChange, drafts: h.drafts, draftTimeout: h.draftTimeout, references: requests, preparation: preparation}, nil
 }
 
 // IsReferenceRequestPath recognizes route shapes without granting the capability.
@@ -51,11 +57,17 @@ func referenceRequestRoute(path string) (method, key string) {
 	if !ok {
 		return "", ""
 	}
-	key, cancel := strings.CutSuffix(tail, "/cancel")
+	if key, ok := strings.CutSuffix(tail, "/plan"); ok && draftproblem.ValidKey(key) {
+		return http.MethodGet, key
+	}
+	key, mutation := strings.CutSuffix(tail, "/prepare")
+	if !mutation {
+		key, mutation = strings.CutSuffix(tail, "/cancel")
+	}
 	if !draftproblem.ValidKey(key) {
 		return "", ""
 	}
-	if cancel {
+	if mutation {
 		return http.MethodPost, key
 	}
 	return http.MethodGet, key
@@ -84,6 +96,10 @@ func (h *handler) serveReferenceRequest(w http.ResponseWriter, r *http.Request, 
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), h.draftTimeout)
 	defer cancel()
+	if strings.HasSuffix(r.URL.Path, "/prepare") || strings.HasSuffix(r.URL.Path, "/plan") {
+		h.serveReferencePreparation(ctx, w, r.Method, credential, expected, key)
+		return
+	}
 	var result problemreference.Request
 	switch {
 	case draftID != "":
@@ -119,6 +135,32 @@ func (h *handler) serveReferenceRequest(w http.ResponseWriter, r *http.Request, 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(body)
+}
+
+func (h *handler) serveReferencePreparation(ctx context.Context, w http.ResponseWriter, method string, credential redisstore.Credential, expected, key string) {
+	var ready bool
+	var err error
+	if method == http.MethodPost {
+		ready, err = h.preparation.Start(ctx, credential, expected, key)
+	} else {
+		ready, err = h.preparation.Ready(ctx, credential, expected, key)
+	}
+	if err = errors.Join(err, ctx.Err()); err != nil {
+		referenceRequestError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if ready {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ready":true}`))
+		return
+	}
+	if method == http.MethodPost {
+		w.WriteHeader(http.StatusAccepted)
+	} else {
+		w.WriteHeader(http.StatusOK)
+	}
+	_, _ = w.Write([]byte(`{"ready":false}`))
 }
 
 func referenceRequestBody(w http.ResponseWriter, r *http.Request) (string, string, bool) {
@@ -184,6 +226,10 @@ func referenceRequestError(w http.ResponseWriter, err error) {
 		problem(w, 409, "REFERENCE_SOURCE_CHANGED", "当前草稿版本不可申请参考验证")
 	case errors.Is(err, problemreference.ErrFull):
 		problem(w, 429, "REFERENCE_QUEUE_FULL", "参考验证申请队列已满")
+	case errors.Is(err, problemreference.ErrPreparationBusy):
+		problem(w, 429, "REFERENCE_PREPARATION_BUSY", "材料准备繁忙，请稍后重试")
+	case errors.Is(err, problemreference.ErrAuthorityChanged), errors.Is(err, problemreference.ErrNotQueued):
+		problem(w, 409, "REFERENCE_PREPARATION_DENIED", "当前申请不可准备材料")
 	default:
 		problem(w, 503, "REFERENCE_UNAVAILABLE", "参考验证申请暂不可用")
 	}
