@@ -87,6 +87,14 @@ func TestLiveReferenceReports(t *testing.T) {
 	var suffixSizes []int64
 	switch os.Getenv("OJ_LIVE_REFERENCE_SUPPLEMENT") {
 	case "":
+	case "associative_array":
+		sources = []fixtureSource{{"associative_array", 22}}
+		versionPin = "4d6dd8e3fe97a0e1ec6585ff538219d811f660bdfff7cc2172bf6092cf858928"
+		suffixSizes = []int64{24, 66}
+	case "primality_test":
+		sources = []fixtureSource{{"primality_test", 15}}
+		versionPin = "d40e4fd4d8881a0bf693e4095a32693b75ca6e51203a480c57873b5fba5e2659"
+		suffixSizes = []int64{13, 22}
 	case "zalgorithm":
 		sources = []fixtureSource{{"zalgorithm", 31}}
 		versionPin = "965239246cbdbd63f1641cfcf551d9c8f3a65cd558e194668ad845cac1e39711"
@@ -95,6 +103,26 @@ func TestLiveReferenceReports(t *testing.T) {
 		sources = []fixtureSource{{"aplusb", 17}}
 		versionPin = "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd"
 		suffixSizes = []int64{4, 4, 4, 21, 21}
+	case "staticrmq":
+		sources = []fixtureSource{{"staticrmq", 28}}
+		versionPin = "194da8b53c88aa634cb5c030c684a355a59b224a00c7d74422bc35b333d3a5f0"
+		suffixSizes = []int64{34}
+	case "point_add_range_sum":
+		sources = []fixtureSource{{"point_add_range_sum", 23}}
+		versionPin = "188f392cd74cc6bb2156a0a444d0f232d0ea71ee746cb0523fba2c914d79dc25"
+		suffixSizes = []int64{12, 63}
+	case "unionfind":
+		sources = []fixtureSource{{"unionfind", 20}}
+		versionPin = "42e62825925bf727c394f3435c2b50f850758576c392d082fb628f7219e4f07d"
+		suffixSizes = []int64{10, 10}
+	case "static_range_sum":
+		sources = []fixtureSource{{"static_range_sum", 13}}
+		versionPin = "a93676964a96fb5dd0320441307eb0bb11ed41b0a1e1d4441c47d124a644e375"
+		suffixSizes = []int64{10, 19}
+	case "convolution_mod":
+		sources = []fixtureSource{{"convolution_mod", 55}}
+		versionPin = "d464bf359f1e46cd3314144af2f71b21b39f1913e9e6d3d517386d12ce2b1041"
+		suffixSizes = []int64{22, 23}
 	default:
 		t.Fatal("unknown supplement fixture")
 	}
@@ -127,11 +155,52 @@ func TestLiveReferenceReports(t *testing.T) {
 			if versionPin != "" && formal.Version != versionPin {
 				t.Fatal("persisted plan lacks the pinned local version")
 			}
+			if source.id == "primality_test" && versionPin != "" {
+				if formal.Cases[13].Answer.SHA256 != liveReferenceDigest([]byte("Yes\n")) ||
+					formal.Cases[14].Answer.SHA256 != liveReferenceDigest([]byte("No\n")) {
+					t.Fatal("persisted primality test plan lost its single-query answers")
+				}
+			}
+			if source.id == "staticrmq" && versionPin != "" && formal.Cases[27].Answer.SHA256 != liveReferenceDigest([]byte("1000000000\n")) {
+				t.Fatal("persisted static RMQ plan lost its boundary answer")
+			}
+			if source.id == "static_range_sum" && versionPin != "" {
+				if formal.Cases[11].Answer.SHA256 != liveReferenceDigest([]byte("0\n")) ||
+					formal.Cases[12].Answer.SHA256 != liveReferenceDigest([]byte("1000000000\n")) {
+					t.Fatal("persisted static range sum plan lost its boundary answers")
+				}
+			}
 			for i, size := range suffixSizes {
 				pos := len(formal.Cases) - len(suffixSizes) + i
 				if c := formal.Cases[pos]; c.ID != fmt.Sprintf("case-%04d", pos+1) || c.Input.Size != size {
 					t.Fatal("persisted plan lacks the pinned local boundary points")
 				}
+			}
+			if source.id == "unionfind" && versionPin != "" {
+				if formal.Cases[18].Answer.Size != 2 || formal.Cases[19].Answer.Size != 0 ||
+					formal.Cases[19].Answer.SHA256 != liveReferenceDigest(nil) {
+					t.Fatal("persisted unionfind plan lost its singleton answers")
+				}
+			}
+			if source.id == "point_add_range_sum" && versionPin != "" {
+				if formal.Cases[21].Answer.SHA256 != liveReferenceDigest([]byte("0\n")) ||
+					formal.Cases[22].Answer.SHA256 != liveReferenceDigest([]byte("1000000000\n3000000000\n")) {
+					t.Fatal("persisted point-add range sum plan lost its boundary answers")
+				}
+			}
+			if source.id == "associative_array" && versionPin != "" {
+				if formal.Cases[20].Answer.SHA256 != liveReferenceDigest([]byte("0\n")) ||
+					formal.Cases[21].Answer.SHA256 != liveReferenceDigest([]byte("1000000000000000000\n")) {
+					t.Fatal("persisted associative array plan lost its boundary answers")
+				}
+			}
+			if source.id == "convolution_mod" && versionPin != "" {
+				if formal.Cases[53].Answer.SHA256 != liveReferenceDigest([]byte("998244350 2 3 10\n")) ||
+					formal.Cases[54].Answer.SHA256 != liveReferenceDigest([]byte("998244346 31 66 0\n")) {
+					t.Fatal("persisted convolution plan lost its coefficient boundary answers")
+				}
+				writeLiveReferenceJSON(t, out, "formal-"+source.id, formal)
+				writeLiveReferenceJSON(t, out, "differential-"+source.id, json.RawMessage(plan.Differential.Encoding))
 			}
 			writeLiveReferenceJSON(t, out, "ready-"+source.id, problemreference.ClaimInput{RequestID: request.ID, SourceID: sourceID, PlanSHA256: plan.SHA256})
 			report := readLiveReferenceReport(t, ctx, serverDone, f, request.ID)

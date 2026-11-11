@@ -49,6 +49,9 @@ func TestConvolutionCoefficientsRequireCompleteFiniteFieldOutput(t *testing.T) {
 	if err != nil || !slices.Equal(actual, []uint32{3, 10, 8}) {
 		t.Fatalf("valid integer output was not parsed: %v, %v", actual, err)
 	}
+	if got, err := convolutionCoefficients([]byte("3 10 8"+strings.Repeat(" ", 506)), 3); err != nil || !slices.Equal(got, actual) {
+		t.Fatalf("valid output at the 512-byte boundary was rejected: %v, %v", got, err)
+	}
 	for name, output := range map[string]string{
 		"empty":       "",
 		"missing":     "3 10",

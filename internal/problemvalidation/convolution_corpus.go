@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"strconv"
+
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 )
 
 const (
@@ -91,7 +93,7 @@ var errConvolutionOutput = errors.New("invalid small convolution output")
 // Parse both solvers' evidence identically. Extra coefficients, non-decimal
 // tokens, and invalid field elements must fail before comparing the values.
 func convolutionCoefficients(raw []byte, want int) ([]uint32, error) {
-	if len(raw) == 0 || len(raw) > convolutionCaseBytes || want < 1 || want > 2*convolutionDimensions-1 {
+	if len(raw) == 0 || len(raw) > experiment.ConvolutionComparisonOutputBytes || want < 1 || want > 2*convolutionDimensions-1 {
 		return nil, errConvolutionOutput
 	}
 	values := make([]uint32, 0, want)
