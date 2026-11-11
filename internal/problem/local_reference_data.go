@@ -5,6 +5,7 @@ import "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/m
 const (
 	localReferenceSourceLock = "fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617"
 	primalityLocalVersion    = "d40e4fd4d8881a0bf693e4095a32693b75ca6e51203a480c57873b5fba5e2659"
+	convolutionLocalVersion  = "d464bf359f1e46cd3314144af2f71b21b39f1913e9e6d3d517386d12ce2b1041"
 	zAlgorithmLocalVersion   = "965239246cbdbd63f1641cfcf551d9c8f3a65cd558e194668ad845cac1e39711"
 	aPlusBLocalVersion       = "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd"
 	unionFindLocalVersion    = "42e62825925bf727c394f3435c2b50f850758576c392d082fb628f7219e4f07d"
@@ -25,6 +26,24 @@ type localReferenceRevision struct {
 // Only reviewed content versions can append local cases. Both preparation and
 // Worker transport still check the ordered upstream catalogue independently.
 var localReferenceRevisions = map[string]localReferenceRevision{
+	convolutionLocalVersion: {
+		label: "oj-local:convolution-mod-coefficients-v1", sourceID: "library-checker:convolution_mod", upstream: 53,
+		source:     materialstore.Object{SHA256: "874160d0617fd4c7da455c452ee7ac6bdc34ddf0614a818fcc4b8ef411990f62", Size: 3284},
+		definition: materialstore.Object{SHA256: "8b37c156e0d0b31890350c487136f2601996dc212eb16122c7d2ca691886c178", Size: 988},
+		hashes:     materialstore.Object{SHA256: "0a58a569700305a0d7ed202807fb1e8abeeb0c6adb9b20f636b7740fdcc837d5", Size: 9527},
+		suffix: []ReferenceCase{
+			{
+				ID:     "case-0054",
+				Input:  materialstore.Object{SHA256: "ff57fd9a64fd76e010b2dc14457c09541d5e86df460ff623230b92d8442cdbcb", Size: 22},
+				Answer: materialstore.Object{SHA256: "70eb1d5d4cd546ef1634fde8bee140426b60db0c0969895aa3b76bf08ac3705f", Size: 17},
+			},
+			{
+				ID:     "case-0055",
+				Input:  materialstore.Object{SHA256: "13197d709998c28376904b177679287aa8750110a45f6b7448bbef203b34af77", Size: 23},
+				Answer: materialstore.Object{SHA256: "f24faa5662c95d7d05e3dc9b1cae7cc5bc3a40838b49f898d2bca080b8fccd74", Size: 18},
+			},
+		},
+	},
 	zAlgorithmLocalVersion: {
 		label: "oj-local:zalgorithm-scale-v1", sourceID: "library-checker:zalgorithm", upstream: 29,
 		source:     materialstore.Object{SHA256: "9f7168d28138fb61d7706b5b899bb0ae21503a848428fc7d7551c5a8507ff8d7", Size: 969},
