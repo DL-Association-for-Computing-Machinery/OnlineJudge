@@ -24,6 +24,63 @@ func convolutionAdapter(t *testing.T) (*CachedGoJudge, *cacheFixture, experiment
 	return g, f, g.runtime
 }
 
+func TestConvolutionComparisonReservesSmallCompleteOutput(t *testing.T) {
+	for _, tc := range []struct {
+		name, failure, verdict string
+		truncated              bool
+	}{
+		{"exact cap", "", "AC", false},
+		{"collector overflow", "collector-OLE", "OLE", true},
+		{"file limit signal", "sigxfsz", "OLE", false},
+		{"unproven overflow", "over", "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := t.Context()
+			f := &cacheFixture{t: t, data: map[string][]byte{}, reference: true, referenceOutput: 512}
+			c, err := experiment.ResolveReferenceTier(experiment.ReferenceConvolution)
+			if err != nil || c.Runtime.OutputBytes != 16<<20 {
+				t.Fatal("formal convolution profile changed", err)
+			}
+			g, err := NewConvolutionComparisonGoJudge(f, func(context.Context, experiment.ExecutionProfile) error { return nil }, f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := g.Verify(ctx, c.Runtime); err != nil {
+				t.Fatal(err)
+			}
+			artifact, err := g.Compile(ctx, c.Runtime, "source")
+			if err != nil {
+				t.Fatal(err)
+			}
+			f.stdout, f.fail = bytes.Repeat([]byte{'1'}, 512), tc.failure
+			// Only 515 bytes remain: one byte of input uploaded and read
+			// back, then 512 bytes of output plus the overflow sentinel.
+			g.totalBytes = c.Files.PayloadBytes - 515
+			out, err := g.Run(ctx, c.Runtime, artifact.Artifact, []byte{'x'})
+			if tc.verdict == "" {
+				if err == nil {
+					t.Fatal("accepted cap-plus-one without overflow evidence")
+				}
+			} else {
+				got, evidenceErr := Classify(out, false)
+				if err != nil || evidenceErr != nil || got != tc.verdict || out.OutputTruncated != tc.truncated {
+					t.Fatal("unexpected bounded run evidence", got, err, evidenceErr)
+				}
+				if got == "AC" && !bytes.Equal(out.Stdout, f.stdout) {
+					t.Fatal("exact-cap output was modified")
+				}
+			}
+			if g.totalBytes != c.Files.PayloadBytes || f.runs != 1 || len(f.data) != 1 ||
+				f.runCopyOutMaximum != 513 || f.lastReadMaximum != 513 {
+				t.Fatal("incorrect comparison payload charge or owned cleanup")
+			}
+			if err := g.Remove(ctx, artifact.Artifact); err != nil || len(f.data) != 0 {
+				t.Fatal("executable cleanup failed", err)
+			}
+		})
+	}
+}
+
 func TestConvolutionCompleteFiftyThreePointTransferAndCleanup(t *testing.T) {
 	ctx := context.Background()
 	g, f, p := convolutionAdapter(t)
