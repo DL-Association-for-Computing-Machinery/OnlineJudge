@@ -29,6 +29,10 @@ SUPPLEMENTS = {
                              "151da5a28d0bd733fe4837547ec909137a36b0e532409c93dfd7bf3c2a7e6b41",
                              "965239246cbdbd63f1641cfcf551d9c8f3a65cd558e194668ad845cac1e39711",
                              "4a02a1c07dbddf2a4bb532f8a6d850c2a979c07ced6cd4533219788317fa8191"),
+    "zalgorithm-alternating": Supplement("oj-local:zalgorithm-scale-alternating-v2",
+                                         "151da5a28d0bd733fe4837547ec909137a36b0e532409c93dfd7bf3c2a7e6b41",
+                                         "924bfcbc027160298dbe976d44f4d6308268510577c4031e24871150cb044cb1",
+                                         "6d06b64ce0ea87eb1d903b7c9b69e47bcef2a263e9ce24ed9335f594f67e0fca"),
     "aplusb": Supplement("oj-local:aplusb-boundaries-v1",
                          "87ebb9680aa3abe190b61d4a5ccac1dc83e48b29656364e445e36fabe7467cc9",
                          "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd",
@@ -37,9 +41,16 @@ SUPPLEMENTS = {
 
 
 def boundary_cases(problem):
-    if problem == "zalgorithm":
+    if problem in ("zalgorithm", "zalgorithm-alternating"):
         for n in (1, 500000):
             yield b"a" * n + b"\n", (" ".join(map(str, range(n, 0, -1))) + "\n").encode("ascii")
+        if problem == "zalgorithm-alternating":
+            # The first character matches only at even offsets; every
+            # matching suffix then continues to the end of the input.
+            n = 500000
+            yield b"ab" * (n // 2) + b"\n", (
+                " ".join(str(n - i) if i % 2 == 0 else "0" for i in range(n)) + "\n"
+            ).encode("ascii")
     elif problem == "aplusb":
         for a, b in ((0, 0), (0, 1), (1, 0), (10**9, 10**9 - 1), (10**9 - 1, 10**9)):
             yield f"{a} {b}\n".encode("ascii"), f"{a+b}\n".encode("ascii")
@@ -67,7 +78,8 @@ def prepare(problem, base, output):
             raise ValueError("input changed during copy: " + name)
         return raw
 
-    entry, = (row for row in index["problems"] if row["source_id"] == f"library-checker:{problem}")
+    source = "zalgorithm" if problem == "zalgorithm-alternating" else problem
+    entry, = (row for row in index["problems"] if row["source_id"] == f"library-checker:{source}")
     raw = original(entry["draft"])
     draft = json.loads(raw)
     original_version = draft.pop("version")

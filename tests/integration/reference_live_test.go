@@ -83,7 +83,7 @@ func TestLiveReferenceReports(t *testing.T) {
 		{"aplusb", 12}, {"unionfind", 18}, {"zalgorithm", 29}, {"suffixarray", 50}, {"primality_test", 13},
 		{"static_range_sum", 11}, {"associative_array", 20}, {"point_add_range_sum", 21}, {"staticrmq", 27}, {"convolution_mod", 53},
 	}
-	var versionPin string
+	var versionPin, planPin string
 	var suffixSizes []int64
 	switch os.Getenv("OJ_LIVE_REFERENCE_SUPPLEMENT") {
 	case "":
@@ -91,6 +91,11 @@ func TestLiveReferenceReports(t *testing.T) {
 		sources = []fixtureSource{{"zalgorithm", 31}}
 		versionPin = "965239246cbdbd63f1641cfcf551d9c8f3a65cd558e194668ad845cac1e39711"
 		suffixSizes = []int64{2, 500001}
+	case "zalgorithm-alternating":
+		sources = []fixtureSource{{"zalgorithm", 32}}
+		versionPin = "924bfcbc027160298dbe976d44f4d6308268510577c4031e24871150cb044cb1"
+		planPin = "3128a2b2ce05ef99d9d66904460ba8e578d66e85edf83f4f40e264832331628c"
+		suffixSizes = []int64{2, 500001, 500001}
 	case "aplusb":
 		sources = []fixtureSource{{"aplusb", 17}}
 		versionPin = "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd"
@@ -126,6 +131,9 @@ func TestLiveReferenceReports(t *testing.T) {
 			}
 			if versionPin != "" && formal.Version != versionPin {
 				t.Fatal("persisted plan lacks the pinned local version")
+			}
+			if planPin != "" && plan.SHA256 != planPin {
+				t.Fatal("persisted plan differs from the independently verified plan")
 			}
 			for i, size := range suffixSizes {
 				pos := len(formal.Cases) - len(suffixSizes) + i

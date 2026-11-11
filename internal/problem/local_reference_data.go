@@ -3,9 +3,10 @@ package problem
 import "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materialstore"
 
 const (
-	localReferenceSourceLock = "fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617"
-	zAlgorithmLocalVersion   = "965239246cbdbd63f1641cfcf551d9c8f3a65cd558e194668ad845cac1e39711"
-	aPlusBLocalVersion       = "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd"
+	localReferenceSourceLock     = "fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617"
+	zAlgorithmLocalVersion       = "965239246cbdbd63f1641cfcf551d9c8f3a65cd558e194668ad845cac1e39711"
+	zAlgorithmAlternatingVersion = "924bfcbc027160298dbe976d44f4d6308268510577c4031e24871150cb044cb1"
+	aPlusBLocalVersion           = "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd"
 )
 
 type localReferenceRevision struct {
@@ -18,24 +19,8 @@ type localReferenceRevision struct {
 // Only reviewed content versions can append local cases. Both preparation and
 // Worker transport still check the ordered upstream catalogue independently.
 var localReferenceRevisions = map[string]localReferenceRevision{
-	zAlgorithmLocalVersion: {
-		label: "oj-local:zalgorithm-scale-v1", sourceID: "library-checker:zalgorithm", upstream: 29,
-		source:     materialstore.Object{SHA256: "9f7168d28138fb61d7706b5b899bb0ae21503a848428fc7d7551c5a8507ff8d7", Size: 969},
-		definition: materialstore.Object{SHA256: "75d80d297a4f12c13c828b289a4e5795d8573d1a668ad07e4f19c81dcc54fc4c", Size: 499},
-		hashes:     materialstore.Object{SHA256: "45ec72478cb3d175a65be662df6dc2e2ada46f6fd146f796dd07ea3174a8cf84", Size: 5099},
-		suffix: []ReferenceCase{
-			{
-				ID:     "case-0030",
-				Input:  materialstore.Object{SHA256: "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7", Size: 2},
-				Answer: materialstore.Object{SHA256: "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865", Size: 2},
-			},
-			{
-				ID:     "case-0031",
-				Input:  materialstore.Object{SHA256: "069af87ff42316e1bbe6cc65d3ed71a71cdcf9cc972257c93a7d934b435c8ad2", Size: 500001},
-				Answer: materialstore.Object{SHA256: "9a3768bb91a7c39e5777767f091605ebb81cac9a047140ba7832bc5f067ab434", Size: 3388895},
-			},
-		},
-	},
+	zAlgorithmLocalVersion:       zAlgorithmScaleRevision(),
+	zAlgorithmAlternatingVersion: zAlgorithmAlternatingRevision(),
 	aPlusBLocalVersion: {
 		label: "oj-local:aplusb-boundaries-v1", sourceID: "library-checker:aplusb", upstream: 12,
 		source:     materialstore.Object{SHA256: "5cd36270bccae9a25f48f29df5187569a3919f26dc2440485916c43cec07a70f", Size: 387},
@@ -69,6 +54,38 @@ var localReferenceRevisions = map[string]localReferenceRevision{
 			},
 		},
 	},
+}
+
+func zAlgorithmScaleRevision() localReferenceRevision {
+	return localReferenceRevision{
+		label: "oj-local:zalgorithm-scale-v1", sourceID: "library-checker:zalgorithm", upstream: 29,
+		source:     materialstore.Object{SHA256: "9f7168d28138fb61d7706b5b899bb0ae21503a848428fc7d7551c5a8507ff8d7", Size: 969},
+		definition: materialstore.Object{SHA256: "75d80d297a4f12c13c828b289a4e5795d8573d1a668ad07e4f19c81dcc54fc4c", Size: 499},
+		hashes:     materialstore.Object{SHA256: "45ec72478cb3d175a65be662df6dc2e2ada46f6fd146f796dd07ea3174a8cf84", Size: 5099},
+		suffix: []ReferenceCase{
+			{
+				ID:     "case-0030",
+				Input:  materialstore.Object{SHA256: "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7", Size: 2},
+				Answer: materialstore.Object{SHA256: "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865", Size: 2},
+			},
+			{
+				ID:     "case-0031",
+				Input:  materialstore.Object{SHA256: "069af87ff42316e1bbe6cc65d3ed71a71cdcf9cc972257c93a7d934b435c8ad2", Size: 500001},
+				Answer: materialstore.Object{SHA256: "9a3768bb91a7c39e5777767f091605ebb81cac9a047140ba7832bc5f067ab434", Size: 3388895},
+			},
+		},
+	}
+}
+
+func zAlgorithmAlternatingRevision() localReferenceRevision {
+	r := zAlgorithmScaleRevision()
+	r.label = "oj-local:zalgorithm-scale-alternating-v2"
+	r.suffix = append(r.suffix, ReferenceCase{
+		ID:     "case-0032",
+		Input:  materialstore.Object{SHA256: "969c1430b31d90507c8883d7584a27f56fc6688310ff559dd1adec7dc40fb482", Size: 500001},
+		Answer: materialstore.Object{SHA256: "00f7f624dc46f6d9434a7d7cc283ccb5044ab302425e4f41e61d209ba7202736", Size: 2194450},
+	})
+	return r
 }
 
 func (r localReferenceRevision) matches(sourceID, lock string, points int) bool {

@@ -2,10 +2,12 @@ package problem
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materialstore"
@@ -13,9 +15,48 @@ import (
 
 func TestLocalReferenceRejectsChangedPlanBeforeMaterialReads(t *testing.T) {
 	for version, revision := range localReferenceRevisions {
-		t.Run(revision.sourceID, func(t *testing.T) {
+		t.Run(revision.label, func(t *testing.T) {
 			testChangedLocalPlan(t, version, revision)
 		})
+	}
+}
+
+func TestAlternatingDraftKeepsNewPointPrivateAndVersionBound(t *testing.T) {
+	r := localReferenceRevisions[zAlgorithmAlternatingVersion]
+	var d document
+	raw := fmt.Sprintf(`{"test_cases":[%s{}],"provenance":{"source_case_mapping":[%s{}]}}`,
+		strings.Repeat("{},", 31), strings.Repeat("{},", 28))
+	if err := json.Unmarshal([]byte(raw), &d); err != nil {
+		t.Fatal(err)
+	}
+	d.Version, d.LocalData = zAlgorithmAlternatingVersion, r.label
+	d.Provenance.SourceID, d.Provenance.SourceLockSHA256 = r.sourceID, localReferenceSourceLock
+	for i, pinned := range r.suffix {
+		c := &d.TestCases[r.upstream+i]
+		c.ID = pinned.ID
+		c.Input.SHA256, c.Input.Size = pinned.Input.SHA256, pinned.Input.Size
+		c.Answer.SHA256, c.Answer.Size = pinned.Answer.SHA256, pinned.Answer.Size
+	}
+	if !validDocumentCaseMapping(d) {
+		t.Fatal("reviewed 32-point mapping rejected")
+	}
+	last := &d.TestCases[len(d.TestCases)-1]
+	last.Sample = true
+	if validDocumentCaseMapping(d) {
+		t.Fatal("accepted the added point as a sample")
+	}
+	last.Sample = false
+	d.LocalData = localReferenceRevisions[zAlgorithmLocalVersion].label
+	if validDocumentCaseMapping(d) {
+		t.Fatal("accepted the old label on the new version")
+	}
+	d.Version = zAlgorithmLocalVersion
+	if validDocumentCaseMapping(d) {
+		t.Fatal("accepted 32 points under the old version")
+	}
+	d.Version, d.LocalData = strings.Repeat("a", 64), r.label
+	if validDocumentCaseMapping(d) {
+		t.Fatal("accepted the local revision label on an unknown version")
 	}
 }
 
@@ -51,9 +92,17 @@ func testChangedLocalPlan(t *testing.T, version string, revision localReferenceR
 		change func(*ReferencePlan)
 	}{
 		{"omitted point", func(p *ReferencePlan) { p.Cases = p.Cases[:len(p.Cases)-1] }},
+		{"added point", func(p *ReferencePlan) { p.Cases = append(p.Cases, p.Cases[len(p.Cases)-1]) }},
 		{"swapped points", func(p *ReferencePlan) { p.Cases[first], p.Cases[first+1] = p.Cases[first+1], p.Cases[first] }},
 		{"different input", func(p *ReferencePlan) { p.Cases[first+1].Input = p.Cases[first].Input }},
 		{"different answer", func(p *ReferencePlan) { p.Cases[first+1].Answer = p.Cases[first].Answer }},
+		{"changed last answer", func(p *ReferencePlan) { p.Cases[len(p.Cases)-1].Answer = revision.hashes }},
+		{"changed last input", func(p *ReferencePlan) { p.Cases[len(p.Cases)-1].Input = revision.hashes }},
+		{"changed last input size", func(p *ReferencePlan) { p.Cases[len(p.Cases)-1].Input.Size-- }},
+		{"moved last point", func(p *ReferencePlan) {
+			last := len(p.Cases) - 1
+			p.Cases[first], p.Cases[last] = p.Cases[last], p.Cases[first]
+		}},
 		{"different problem", func(p *ReferencePlan) { p.SourceID = "library-checker:unionfind" }},
 		{"different source", func(p *ReferencePlan) { p.Source = p.Definition }},
 		{"different upstream catalog", func(p *ReferencePlan) { p.Hashes = p.Definition }},
