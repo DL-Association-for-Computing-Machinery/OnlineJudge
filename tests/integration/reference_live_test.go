@@ -178,6 +178,11 @@ func TestLiveReferenceReports(t *testing.T) {
 				validation != "not-run" || active {
 				t.Fatal("report changed draft state or left the reservation active")
 			}
+			if source.id == "aplusb" {
+				verifyLiveCoverageReview(t, ctx, f, store, credential, other, out, versionPin != "", problemreference.ReviewIntent{
+					RequestKey: "live-coverage-review", DraftID: draft.ID, ImportRevision: revision, ReferenceRequestID: request.ID,
+				})
+			}
 			writeLiveReferenceJSON(t, out, "accepted-"+source.id, map[string]any{
 				"source_id": sourceID, "content_version": version, "import_revision": revision,
 				"formal_plan_sha256": plan.SHA256, "profile_sha256": evidence.ProfileSHA256, "evidence_sha256": report.evidenceSHA,

@@ -9,7 +9,7 @@ import (
 )
 
 // ReviewPolicyVersion identifies the current requirements for ordinary approval.
-const ReviewPolicyVersion = "oj.review-approval.v5"
+const ReviewPolicyVersion = "oj.review-approval.v6"
 
 // ReviewEligibilitySnapshot is the trusted read of an assigned item's verified
 // historical evidence and whether the same material has already been returned.
@@ -30,6 +30,7 @@ type ReviewEligibility struct {
 	InputValidator              *problemvalidation.InputValidatorEvidence         `json:"input_validator_evidence,omitempty"`
 	IndependentCorrectness      *problemvalidation.IndependentCorrectnessEvidence `json:"independent_correctness_evidence,omitempty"`
 	WrongSolution               *problemvalidation.WrongSolutionEvidence          `json:"wrong_solution_evidence,omitempty"`
+	TestCoverage                *problemvalidation.TestCoverageEvidence           `json:"test_coverage_evidence,omitempty"`
 	StatementRendering          *problemvalidation.StatementRenderingEvidence     `json:"statement_rendering_evidence,omitempty"`
 	StatementSemanticsConfirmed bool                                              `json:"statement_semantics_confirmed,omitempty"`
 }
@@ -86,7 +87,15 @@ func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
 	if !semanticsConfirmed || statementRendering == nil {
 		blockers = append(blockers, "statement_quality_missing")
 	}
-	blockers = append(blockers, "test_coverage_missing")
+	var coverage *problemvalidation.TestCoverageEvidence
+	if policyCurrent && !s.Returned && e.FormalVerdict == "AC" && e.ComparisonPlan == "" && e.ComparisonOutcome == "" {
+		if admitted, ok := problemvalidation.AdmittedTestCoverage(id, e.FormalPlanSHA256, e.ProfileSHA256); ok {
+			coverage = &admitted
+		}
+	}
+	if coverage == nil {
+		blockers = append(blockers, "test_coverage_missing")
+	}
 	if validator == nil {
 		blockers = append(blockers, "input_validator_missing")
 	}
@@ -96,7 +105,7 @@ func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
 	}
 	return ReviewEligibility{Evidence: e, PolicyVersion: ReviewPolicyVersion, Eligible: len(blockers) == 0,
 		Blockers: blockers, InputValidator: validator, IndependentCorrectness: independent,
-		WrongSolution: wrongSolution, StatementRendering: statementRendering, StatementSemanticsConfirmed: semanticsConfirmed}
+		WrongSolution: wrongSolution, TestCoverage: coverage, StatementRendering: statementRendering, StatementSemanticsConfirmed: semanticsConfirmed}
 }
 
 // EligibilityForSubject returns the current policy's blockers for one assignment.
