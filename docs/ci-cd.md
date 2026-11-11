@@ -18,6 +18,8 @@ convolution_mod的完整材料/16MiB输入答案、共享快照、封闭tier8及
 
 已入库卷积草稿的普通 backend 回归使用小型合成材料和真实对象存储，核对完整修订、锁定角色、单槽顺序读取和损坏拒绝。手动 `TestPrivateDraftConfiguredConvolutionEvidence` 在临时 PostgreSQL 中导入实际卷积草稿，再通过独立连接和重新打开的对象根确认私有证据绑定和读取范围；需提供已复验的 `OJ_PRIVATE_DRAFT_BUNDLE_DIR`，两种测试均不执行题源。
 
+同一实物专项另验证新卷积申请的双计划原子提交、候选读取失败零计划、丢失真实 COMMIT 后原键恢复、历史回放及 Down14；未配置题包时普通集成会显式跳过该专项。普通 backend 验证历史对拍计划的规范编码及草稿、Profile、正式计划绑定；普通 PostgreSQL 集成对正式与卷积查询都运行 `EXPLAIN ANALYZE`，验证申请主键查找。
+
 `internal/judging`的独立Library Checker文本组件及M0回归随backend执行；`tests/checkercompat`仅在显式`checkercompat`标签和README专用断网/只读/非root Docker中运行锁定上游wcmp，不进入普通CI。组件差分不改草稿not-run或代替本站受限程序验证；支持域及预算见[准入约定](checker-admission.md)。
 
 `internal/problemvalidation`及Worker维护命令的材料/顺序/失败/取消、启动所有权与清理回归归普通backend；`cmd/worker/validation_sandbox_test.go`仅在显式sandbox标签、独立宿主测试驱动及双重实验opt-in下执行。该真实专项验证A+B全点和故障，不进入普通CI，不创建数据库、不改默认M0 suite，也不更新草稿not-run。结果及限制见[受限参考验证](reference-validation.md)。
@@ -62,7 +64,7 @@ MediumBulk的共享槽/原tier保留、两端256/512MiB累计额度及失败清�
 
 同一手动浏览器驱动现为15组，保留管理页真实绑定导入、服务端已提交后屏蔽成功回包/刷新只读恢复、同修订只读核验、实际Cookie从A切换到已有作者权B时原三条管理路由及本人列表均409且B无草稿、B不见A本机记录。真实Chromium IndexedDB覆盖两连接首次插入仲裁、32条事务上限、旧确认/删除不碰新pending、owner主键内容损坏、配额失败、未知schema拒绝且不自动重建；UI清库后不能用内存重试。独立journal入口只由测试驱动构建到临时assets，生产App不引用，不是产品调试入口。backend覆盖mandatory header/缺cap404/主体比较零业务I/O；前端覆盖迟到响应、延迟到期timer和确认回执拒绝不换新请求。证据是小型合成bundle和两IDB连接，不扩写为十题页面、两个完整管理标签并发或生产浏览器矩阵验收。
 
-本人服务器列表新增固定20条seek分页、同事务当前权限/owner只读摘要，真实PG验证0/20/21/45条、全相同时间戳跨多页、微秒边界、其他owner隔离、三种撤销锁、死事务零结果、infinity/不可JSON时间拒绝；12,000行权威first/deep SQL计划验证目标索引/owner与seek Index Cond、无Sort并记录索引大小。历史schema8索引的Up/Down/重Up保留非空草稿与权限，原7数据保护断言仍执行；当前启动精确要求 schema 13，其他版本拒绝，最新回退条件见[参考申请迁移](reference-requests.md#迁移与回退)。实际在途插入证明created_at早但迟提交可被旧边界漏过，重查首页可见，不宣称跨页快照。真实direct/proxy API验证默认拒绝、目录换版后仍读旧列表、owner与主体错配/撤权/退出；手动浏览器额外在新档案禁用IndexedDB后分页发现并预览真实草稿、丢弃迟到下一页、列表不改pending，全程发现操作无POST。原始材料/题源不在本专项执行。
+本人服务器列表新增固定20条seek分页、同事务当前权限/owner只读摘要，真实PG验证0/20/21/45条、全相同时间戳跨多页、微秒边界、其他owner隔离、三种撤销锁、死事务零结果、infinity/不可JSON时间拒绝；12,000行权威first/deep SQL计划验证目标索引/owner与seek Index Cond、无Sort并记录索引大小。历史schema8索引的Up/Down/重Up保留非空草稿与权限，原7数据保护断言仍执行；当前启动精确要求 schema 14，其他版本拒绝，最新回退条件见[参考申请迁移](reference-requests.md#迁移与回退)。实际在途插入证明created_at早但迟提交可被旧边界漏过，重查首页可见，不宣称跨页快照。真实direct/proxy API验证默认拒绝、目录换版后仍读旧列表、owner与主体错配/撤权/退出；手动浏览器额外在新档案禁用IndexedDB后分页发现并预览真实草稿、丢弃迟到下一页、列表不改pending，全程发现操作无POST。原始材料/题源不在本专项执行。
 
 | 控制 | 状态 |
 | --- | --- |

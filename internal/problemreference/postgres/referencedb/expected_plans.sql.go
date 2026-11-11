@@ -7,6 +7,8 @@ package referencedb
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const insertReferenceExpectedPlan = `-- name: InsertReferenceExpectedPlan :exec
@@ -23,6 +25,55 @@ type InsertReferenceExpectedPlanParams struct {
 func (q *Queries) InsertReferenceExpectedPlan(ctx context.Context, arg InsertReferenceExpectedPlanParams) error {
 	_, err := q.db.Exec(ctx, insertReferenceExpectedPlan, arg.RequestID, arg.PlanEncoding, arg.PlanSha256)
 	return err
+}
+
+const insertReferencePlanWithDifferential = `-- name: InsertReferencePlanWithDifferential :exec
+INSERT INTO problem_reference_expected_plans(request_id, plan_encoding, plan_sha256, differential_encoding, differential_sha256)
+VALUES ($1, $2, $3, $4, $5)
+`
+
+type InsertReferencePlanWithDifferentialParams struct {
+	RequestID            string
+	PlanEncoding         []byte
+	PlanSha256           string
+	DifferentialEncoding []byte
+	DifferentialSha256   pgtype.Text
+}
+
+func (q *Queries) InsertReferencePlanWithDifferential(ctx context.Context, arg InsertReferencePlanWithDifferentialParams) error {
+	_, err := q.db.Exec(ctx, insertReferencePlanWithDifferential,
+		arg.RequestID,
+		arg.PlanEncoding,
+		arg.PlanSha256,
+		arg.DifferentialEncoding,
+		arg.DifferentialSha256,
+	)
+	return err
+}
+
+const referenceConvolutionExpectedPlan = `-- name: ReferenceConvolutionExpectedPlan :one
+SELECT plan_encoding, plan_sha256, differential_encoding, differential_sha256
+FROM problem_reference_expected_plans
+WHERE request_id = $1
+`
+
+type ReferenceConvolutionExpectedPlanRow struct {
+	PlanEncoding         []byte
+	PlanSha256           string
+	DifferentialEncoding []byte
+	DifferentialSha256   pgtype.Text
+}
+
+func (q *Queries) ReferenceConvolutionExpectedPlan(ctx context.Context, requestID string) (ReferenceConvolutionExpectedPlanRow, error) {
+	row := q.db.QueryRow(ctx, referenceConvolutionExpectedPlan, requestID)
+	var i ReferenceConvolutionExpectedPlanRow
+	err := row.Scan(
+		&i.PlanEncoding,
+		&i.PlanSha256,
+		&i.DifferentialEncoding,
+		&i.DifferentialSha256,
+	)
+	return i, err
 }
 
 const referenceExpectedPlan = `-- name: ReferenceExpectedPlan :one

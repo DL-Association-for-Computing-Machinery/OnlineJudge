@@ -82,7 +82,7 @@ func newExpectedPlanFixture(t *testing.T) expectedPlanFixture {
 
 func (f expectedPlanFixture) service(t *testing.T, sessions problemreference.SessionReader, repo problemreference.PlanRepository) *problemreference.PlanService {
 	t.Helper()
-	s, err := problemreference.NewPlanService(sessions, repo, f.repository, f.materials)
+	s, err := problemreference.NewPlanService(sessions, repo, f.repository, f.materials, nil)
 	must(t, err)
 	return s
 }
@@ -98,7 +98,7 @@ func (f expectedPlanFixture) planCount(t *testing.T, want int) {
 
 func noExpectedPlan(t *testing.T, p problemreference.ExpectedPlan, err, want error) {
 	t.Helper()
-	if p.Encoding != nil || p.SHA256 != "" || !errors.Is(err, want) {
+	if p.Encoding != nil || p.SHA256 != "" || p.Differential != nil || !errors.Is(err, want) {
 		t.Fatalf("expected no plan and %v, got %v", want, err)
 	}
 }
@@ -350,14 +350,15 @@ func TestExpectedPlanQueryUsesRequestPrimaryKey(t *testing.T) {
 	must(t, err)
 	sql, err := os.ReadFile("../../db/queries/problemreference/expected_plans.sql")
 	must(t, err)
-	query := strings.SplitN(string(sql), "\n\n", 2)[0]
-	query = strings.SplitN(query, "\n", 2)[1]
 	var evidence string
-	must(t, tx.QueryRow(f.ctx, "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) "+strings.ReplaceAll(query, "@request_id", "$1"), f.request.ID).Scan(&evidence))
-	if !strings.Contains(evidence, "problem_reference_expected_plans_pkey") || !strings.Contains(evidence, "Index Cond") {
-		t.Fatal("expected bounded primary key lookup", evidence)
+	for _, name := range []string{"ReferenceExpectedPlan", "ReferenceConvolutionExpectedPlan"} {
+		query := strings.SplitN(strings.SplitN(string(sql), "-- name: "+name+" :one\n", 2)[1], "\n\n", 2)[0]
+		must(t, tx.QueryRow(f.ctx, "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) "+strings.ReplaceAll(query, "@request_id", "$1"), f.request.ID).Scan(&evidence))
+		if !strings.Contains(evidence, "problem_reference_expected_plans_pkey") || !strings.Contains(evidence, "Index Cond") {
+			t.Fatal("expected bounded primary key lookup", name, evidence)
+		}
+		t.Log(name, evidence)
 	}
-	t.Log(evidence)
 
 	claimSQL, err := os.ReadFile("../../db/queries/problemreference/worker_claim.sql")
 	must(t, err)

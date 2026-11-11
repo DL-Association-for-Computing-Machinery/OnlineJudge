@@ -2,8 +2,6 @@ package problemvalidation
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"slices"
 	"time"
@@ -92,11 +90,7 @@ func RunSmallConvolution(ctx context.Context, sources ConvolutionSources, factor
 	ctx, cancel := context.WithTimeout(ctx, profile.Wall)
 	defer cancel()
 	cases := smallConvolutionCorpus()
-	sum := sha256.New()
-	for _, c := range cases {
-		_, _ = sum.Write(c.input)
-	}
-	report.CorpusSHA256 = hex.EncodeToString(sum.Sum(nil))
+	report.CorpusSHA256 = convolutionCorpusDigest(cases)
 	expected := make([][]uint32, len(cases))
 	err = runConvolutionProgram(ctx, &report, profile.Runtime, "oracle", sources.oracle.source, cases, factory, func(i int, output []uint32) error {
 		if !convolutionAnchor(i, output) {

@@ -1,6 +1,7 @@
 package problemreference
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/redisstore"
 )
 
@@ -27,18 +29,20 @@ type PlanDraftReader interface {
 // PlanService prepares immutable plan metadata for an ordinary session. It has
 // no execution or reporting capability.
 type PlanService struct {
-	sessions  SessionReader
-	requests  PlanRepository
-	drafts    PlanDraftReader
-	materials problem.ReferenceObjectReader
+	sessions   SessionReader
+	requests   PlanRepository
+	drafts     PlanDraftReader
+	materials  problem.ReferenceObjectReader
+	sourceLock []byte
 }
 
 // NewPlanService binds authorized repositories and private material storage.
-func NewPlanService(sessions SessionReader, requests PlanRepository, drafts PlanDraftReader, materials problem.ReferenceObjectReader) (*PlanService, error) {
-	if sessions == nil || requests == nil || drafts == nil || materials == nil {
+// The source lock is needed when preparing a reviewed convolution request.
+func NewPlanService(sessions SessionReader, requests PlanRepository, drafts PlanDraftReader, materials problem.ReferenceObjectReader, sourceLock []byte) (*PlanService, error) {
+	if sessions == nil || requests == nil || drafts == nil || materials == nil || len(sourceLock) > 1<<20 {
 		return nil, ErrInvalid
 	}
-	return &PlanService{sessions, requests, drafts, materials}, nil
+	return &PlanService{sessions: sessions, requests: requests, drafts: drafts, materials: materials, sourceLock: bytes.Clone(sourceLock)}, nil
 }
 
 // Prepare reads the intent and draft, freezes materials outside SQL locks, and
@@ -149,7 +153,27 @@ func (s *PlanService) freezePlan(ctx context.Context, r Request, draft problem.D
 	if err != nil {
 		return ExpectedPlan{}, ErrInvalid
 	}
-	return ExpectedPlan{Encoding: raw, SHA256: plan.Digest()}, nil
+	expected := ExpectedPlan{Encoding: raw, SHA256: plan.Digest()}
+	if !r.ExpectsDifferential() {
+		return expected, nil
+	}
+	sources, err := problemvalidation.FreezeDraftConvolution(ctx, draft, r.DraftID, r.Owner, r.Specification.Identity, s.materials, s.sourceLock)
+	if err != nil {
+		return ExpectedPlan{}, err
+	}
+	comparison, err := sources.DraftPlan(expected.SHA256)
+	if err != nil {
+		return ExpectedPlan{}, err
+	}
+	comparisonRaw, err := json.Marshal(comparison)
+	if err != nil {
+		return ExpectedPlan{}, ErrInvalid
+	}
+	expected.Differential = &DifferentialExpectedPlan{Encoding: comparisonRaw, SHA256: profileDigest(comparisonRaw)}
+	if err := ctx.Err(); err != nil {
+		return ExpectedPlan{}, err
+	}
+	return expected, nil
 }
 
 // Receipt is a fresh, read-only observation of an already recorded plan, even

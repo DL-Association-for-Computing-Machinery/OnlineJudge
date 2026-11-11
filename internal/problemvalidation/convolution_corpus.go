@@ -3,6 +3,7 @@ package problemvalidation
 import (
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"strconv"
 )
@@ -19,6 +20,14 @@ const (
 type convolutionCase struct {
 	input        []byte
 	coefficients int
+}
+
+func convolutionCorpusDigest(cases []convolutionCase) string {
+	sum := sha256.New()
+	for _, c := range cases {
+		_, _ = sum.Write(c.input)
+	}
+	return hex.EncodeToString(sum.Sum(nil))
 }
 
 // The corpus is independent of the imported official tests and their answers.
