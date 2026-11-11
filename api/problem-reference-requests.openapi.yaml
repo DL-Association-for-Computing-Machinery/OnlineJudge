@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OnlineJudge Author Reference Requests
-  version: 0.1.0
+  version: 0.2.0
   description: >-
     默认关闭。使用普通 HTTPS 会话、固定 Host 和同源 POST。
     所有操作须匹配实际会话与预期主体，再检查当前出题权限与本人范围。
@@ -72,6 +72,42 @@ paths:
         '405': {$ref: '#/components/responses/Failure'}
         '409': {$ref: '#/components/responses/Failure'}
         '503': {$ref: '#/components/responses/Failure'}
+  /api/v1/problem-draft-management/reference-requests/{request_key}/prepare:
+    parameters:
+      - $ref: '#/components/parameters/ExpectedSubject'
+      - $ref: '#/components/parameters/RequestKey'
+    post:
+      operationId: prepareOwnReferencePlan
+      description: >-
+        显式接纳本人排队申请的限时准备，无请求体。202 仅代表本进程受理，
+        不保证计划持久化；使用原键只读查计划。已记录的计划返回 200。
+      responses:
+        '200': {$ref: '#/components/responses/Ready'}
+        '202': {$ref: '#/components/responses/Ready'}
+        '400': {$ref: '#/components/responses/Failure'}
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '405': {$ref: '#/components/responses/Failure'}
+        '409': {$ref: '#/components/responses/Failure'}
+        '429': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+  /api/v1/problem-draft-management/reference-requests/{request_key}/plan:
+    parameters:
+      - $ref: '#/components/parameters/ExpectedSubject'
+      - $ref: '#/components/parameters/RequestKey'
+    get:
+      operationId: readOwnReferencePlanReadiness
+      description: 仅观察已持久计划是否存在。false 不证明没有在途准备；不返回计划、摘要或材料。
+      responses:
+        '200': {$ref: '#/components/responses/Ready'}
+        '400': {$ref: '#/components/responses/Failure'}
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '405': {$ref: '#/components/responses/Failure'}
+        '409': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
 components:
   securitySchemes:
     ordinarySession: {type: apiKey, in: cookie, name: __Host-oj_session}
@@ -90,6 +126,16 @@ components:
     ID: {type: string, pattern: '^[a-f0-9]{32}$'}
     Key: {type: string, pattern: '^[A-Za-z0-9_-]{16,128}$'}
   responses:
+    Ready:
+      description: 是否已有可按原键核验的持久计划；202 固定为 false。
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [ready]
+            properties:
+              ready: {type: boolean}
     Receipt:
       description: 已提交的当前申请摘要；reported 只表示收到可信报告。
       content:

@@ -33,6 +33,41 @@ func (i ClaimInput) Valid() bool {
 		problem.ValidImportRevision(i.PlanSHA256)
 }
 
+// DispatchInput requests one bounded source page; the cursor is only a scan hint.
+type DispatchInput struct {
+	SourceID string `json:"source_id"`
+	After    string `json:"after"`
+}
+
+// Valid checks source and cursor syntax; it grants no access.
+func (i DispatchInput) Valid() bool {
+	return len(i.SourceID) <= 128 && sourceIdentityPattern.MatchString(i.SourceID) &&
+		(i.After == "" || identity.ValidID(i.After))
+}
+
+// DispatchResult is either one reservation or a cursor to continue an empty scan.
+type DispatchResult struct {
+	Claim *WorkerClaim `json:"claim"`
+	After string       `json:"next_after"`
+}
+
+// ValidFor rejects unbound reservations and nonadvancing scan cursors.
+func (r DispatchResult) ValidFor(i DispatchInput) bool {
+	if !i.Valid() {
+		return false
+	}
+	if r.Claim == nil {
+		return r.After == "" || identity.ValidID(r.After) && r.After > i.After
+	}
+	binding := ClaimInput{RequestID: r.Claim.RequestID, SourceID: i.SourceID, PlanSHA256: r.Claim.PlanSHA256}
+	return r.After == "" && binding.RequestID > i.After && binding.Valid() && r.Claim.ValidFor(binding)
+}
+
+// WorkerDispatcher reserves at most one previously unclaimed request.
+type WorkerDispatcher interface {
+	DispatchReference(context.Context, submission.NodeIdentity, DispatchInput) (DispatchResult, error)
+}
+
 // WorkerClaim is a short reservation, not a material or execution grant.
 type WorkerClaim struct {
 	RequestID  string    `json:"request_id"`

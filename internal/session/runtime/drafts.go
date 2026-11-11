@@ -57,14 +57,19 @@ func (c PrivateDraftsConfig) Validate() error {
 }
 
 type draftCapabilities struct {
-	importer   *problem.Importer
-	references *problemreference.Service
+	importer    *problem.Importer
+	references  *problemreference.Service
+	preparation *problemreference.Preparation
 }
 
 func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore.Store, pool *pgxpool.Pool) (*draftCapabilities, func() error, error) {
 	var prepared []*problem.Prepared
 	var materials *materialstore.Local
+	var preparation *problemreference.Preparation
 	cleanup := func() error {
+		if preparation != nil {
+			preparation.Close()
+		}
 		var errs []error
 		for _, p := range prepared {
 			errs = append(errs, p.Close())
@@ -140,6 +145,15 @@ func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore
 		if err != nil {
 			return nil, nil, ErrStartup
 		}
+		plans, err := problemreference.NewPlanService(sessions, repo, repository, materials)
+		if err != nil {
+			return nil, nil, ErrStartup
+		}
+		preparation, err = problemreference.NewPreparation(plans)
+		if err != nil {
+			return nil, nil, ErrStartup
+		}
+		result.preparation = preparation
 	}
 	ok = true
 	return result, cleanup, nil

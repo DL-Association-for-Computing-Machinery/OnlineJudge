@@ -9,7 +9,7 @@ const labels = { queued: '待完成', cancelled: '已取消', reported: '已收�
 export function ReferenceRequests({ draft }: { draft: string }) {
   const { controller: account, state: accountState } = useCurrentAccount()
   const [controller] = useState(() => new ReferenceController(account, draft))
-  const { receipt, busy, notice } = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
+  const { receipt, ready, busy, notice } = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
   useEffect(() => {
     controller.connect()
     const unsubscribe = subscribePrivateInvalidation(controller.clear)
@@ -25,6 +25,10 @@ export function ReferenceRequests({ draft }: { draft: string }) {
       </button>
       <button className="button button-outline" type="button" disabled={disabled} onClick={() => void controller.run('read')}>查看申请回执</button>
       <button className="button button-outline" type="button" disabled={disabled || receipt?.state !== 'queued'} onClick={() => void controller.run('cancel')}>取消本次申请</button>
+      {receipt?.state === 'queued' && <>
+        <button className="button button-outline" type="button" disabled={disabled || ready === true} onClick={() => void controller.run('prepare')}>准备参考材料</button>
+        <button className="button button-outline" type="button" disabled={disabled} onClick={() => void controller.run('plan')}>查看材料状态</button>
+      </>}
     </div>
     <p role="status">{notice}{receipt ? ` 状态：${labels[receipt.state]}。` : ''}</p>
   </section>

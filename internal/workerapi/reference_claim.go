@@ -13,6 +13,7 @@ import (
 const referenceClaimPath = "/api/v1/worker/reference/claim"
 const referenceRenewPath = "/api/v1/worker/reference/renew"
 const referenceReportPath = "/api/v1/worker/reference/report"
+const referenceDispatchPath = "/api/v1/worker/reference/dispatch"
 
 var referenceIdentityURI = regexp.MustCompile(`^spiffe://onlinejudge/reference-worker/([A-Za-z0-9_-]{1,128})/([1-9][0-9]{0,18})$`)
 
@@ -23,7 +24,7 @@ func WithReferenceClaims(next http.Handler, claims problemreference.WorkerClaime
 	if len(materials) != 0 {
 		service = materials[0]
 	}
-	return withReference(next, claims, nil, nil, roots, service)
+	return withReference(next, claims, nil, nil, nil, roots, service)
 }
 
 // WithReferenceExecution additionally enables renewal for the dedicated node.
@@ -33,10 +34,18 @@ func WithReferenceExecution(next http.Handler, claims problemreference.WorkerCla
 	if len(reports) != 0 {
 		reporter = reports[0]
 	}
-	return withReference(next, claims, renew, reporter, roots, materials)
+	return withReference(next, claims, renew, reporter, nil, roots, materials)
 }
 
-func withReference(next http.Handler, claims problemreference.WorkerClaimer, renew problemreference.WorkerRenewer, reports problemreference.WorkerReporter, roots *x509.CertPool, materials *problemreference.ReferenceMaterials) http.Handler {
+// WithReferenceDispatch adds one bounded selection attempt to the full
+// dedicated execution capability.
+func WithReferenceDispatch(next http.Handler, claims problemreference.WorkerClaimer, renew problemreference.WorkerRenewer,
+	reports problemreference.WorkerReporter, dispatch problemreference.WorkerDispatcher, roots *x509.CertPool, materials *problemreference.ReferenceMaterials) http.Handler {
+	return withReference(next, claims, renew, reports, dispatch, roots, materials)
+}
+
+func withReference(next http.Handler, claims problemreference.WorkerClaimer, renew problemreference.WorkerRenewer, reports problemreference.WorkerReporter,
+	dispatch problemreference.WorkerDispatcher, roots *x509.CertPool, materials *problemreference.ReferenceMaterials) http.Handler {
 	if claims == nil {
 		return next
 	}
@@ -44,7 +53,8 @@ func withReference(next http.Handler, claims problemreference.WorkerClaimer, ren
 		materialPath := r.URL.Path == referenceDescribePath || r.URL.Path == referenceMaterialPath
 		renewPath := r.URL.Path == referenceRenewPath
 		reportPath := r.URL.Path == referenceReportPath
-		if r.URL.Path != referenceClaimPath && !materialPath && !renewPath && !reportPath {
+		dispatchPath := r.URL.Path == referenceDispatchPath
+		if r.URL.Path != referenceClaimPath && !materialPath && !renewPath && !reportPath && !dispatchPath {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -69,6 +79,30 @@ func withReference(next http.Handler, claims problemreference.WorkerClaimer, ren
 				return
 			}
 			serveReferenceMaterials(w, r, materials, node, roots)
+			return
+		}
+		if dispatchPath {
+			if dispatch == nil || renew == nil || reports == nil || materials == nil {
+				problem(w, 404, "NOT_FOUND", "接口不存在")
+				return
+			}
+			var input problemreference.DispatchInput
+			if !decode(w, r, &input) {
+				return
+			}
+			if !input.Valid() || r.URL.RawQuery != "" || r.URL.ForceQuery || r.URL.RawPath != "" {
+				problem(w, 400, "INVALID_REQUEST", "参考选择格式无效")
+				return
+			}
+			result, err := dispatch.DispatchReference(r.Context(), node, input)
+			switch {
+			case err != nil:
+				referenceMaterialError(w, err)
+			case !result.ValidFor(input) || r.Context().Err() != nil:
+				problem(w, 503, "WORKER_UNAVAILABLE", "领取状态未知；不得执行或自动重试")
+			default:
+				writeJSON(w, result)
+			}
 			return
 		}
 		if reportPath {

@@ -47,7 +47,11 @@ func referenceClaimSlot(input problemreference.ClaimInput) (string, error) {
 	if !input.Valid() {
 		return "", problemreference.ErrInvalid
 	}
-	_, tier, err := problemvalidation.ResolveSource(input.SourceID)
+	return referenceSlotForSource(input.SourceID)
+}
+
+func referenceSlotForSource(sourceID string) (string, error) {
+	_, tier, err := problemvalidation.ResolveSource(sourceID)
 	if err != nil {
 		return "", problemreference.ErrClaimUnavailable
 	}

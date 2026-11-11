@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
@@ -63,6 +64,29 @@ func testEntryAuthorReferences(t *testing.T, f *fixture, x, y *loginEndpoint, co
 	}
 	loginStatus(t, authorReferenceCall(y, "POST", "", body(key, otherDraft), cookies, owner), 409)
 	loginStatus(t, authorReferenceCall(y, "POST", "", body(next, otherDraft), cookies, owner), 429)
+	loginStatus(t, authorReferenceCall(x, "POST", path+"/prepare", "", cookies, otherDraft), 409)
+	before := authorReferenceCall(y, "GET", path+"/plan", "", cookies, owner)
+	loginStatus(t, before, 200)
+	if string(before.body) != `{"ready":false}` {
+		t.Fatal("unprepared request returned ready")
+	}
+	loginStatus(t, authorReferenceCall(x, "POST", path+"/prepare", "", cookies, owner), 202)
+	for deadline := time.Now().Add(4 * time.Second); ; {
+		got := authorReferenceCall(y, "GET", path+"/plan", "", cookies, owner)
+		loginStatus(t, got, 200)
+		if string(got.body) == `{"ready":true}` {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("real ordinary-session preparation never became durable")
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	repeated := authorReferenceCall(x, "POST", path+"/prepare", "", cookies, owner)
+	loginStatus(t, repeated, 200)
+	if string(repeated.body) != `{"ready":true}` {
+		t.Fatal("already durable plan did not recover by original key")
+	}
 	loginStatus(t, authorReferenceCall(y, "POST", path+"/cancel", "{}", cookies, owner), 400)
 	loginStatus(t, authorReferenceCall(y, "GET", path+"/cancel", "", cookies, owner), 405)
 	loginStatus(t, authorReferenceCall(y, "GET", path+"?unexpected=1", "", cookies, owner), 400)
@@ -72,6 +96,7 @@ func testEntryAuthorReferences(t *testing.T, f *fixture, x, y *loginEndpoint, co
 	if summary["id"] != id || summary["state"] != "cancelled" || summary["cancelled_at"] == nil {
 		t.Fatal("cancel did not preserve the intent and original key")
 	}
+	loginStatus(t, authorReferenceCall(x, "POST", path+"/prepare", "", cookies, owner), 409)
 	replay := authorReferenceCall(x, "POST", path+"/cancel", "", cookies, owner)
 	loginStatus(t, replay, 200)
 	if !bytes.Equal(replay.body, cancelled.body) {

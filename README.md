@@ -303,7 +303,7 @@ python3 -B -m unittest discover -s tests/governance -p test_problem_drafts.py -v
 
 ### 出题角色维护与草稿入库服务
 
-出题角色始于schema 7，当前 schema 12仍默认不给任何账号授予角色。受信维护者先独立迁移，再用 Docker 工具链构建的命令明确授予/撤销；`OJ_DATABASE_URL` 通过既有私有环境注入，不把真实连接信息写入命令或日志：
+出题角色始于schema 7，当前 schema 13仍默认不给任何账号授予角色。受信维护者先独立迁移，再用 Docker 工具链构建的命令明确授予/撤销；`OJ_DATABASE_URL` 通过既有私有环境注入，不把真实连接信息写入命令或日志：
 
 ```sh
 .local/bin/migrate up
@@ -328,6 +328,8 @@ env -u OJ_WORKER_M0_SLOT -u OJ_WORKER_M0_DUAL_EXPERIMENT OJ_SANDBOX_EXPERIMENT=1
 命令获取同机槽后只发送一次领取，再在同一锁内下载并校验冻结计划的全部材料，关闭匿名快照后退出；数据库预留仍按原时钟在 30 秒后失效。控制端还须配置 `OJ_WORKER_REFERENCE_MATERIAL_ROOT`，使用草稿入库的已存在私有对象根（Linux、当前 UID、0700；上限 128 MiB/对象，同时一个快照），与 M0 的 `OJ_MATERIAL_ROOT` 含义不同。无题源执行、续租或回报；未知响应和下载失败不自动重试，低带宽下载大题可能超时。见[参考材料合同](docs/reference-requests.md#有效预留内的材料下发)。
 
 同机受信执行另需控制端 `OJ_WORKER_REFERENCE_EXECUTION=1`，以及已预配且停止的固定隔离槽。使用同一参数运行 `.local/bin/worker run-reference REQUEST_ID SOURCE_ID EXPECTED_PLAN_SHA256`（同样要求 `OJ_SANDBOX_EXPERIMENT=1` 且清空双槽/M0 槽覆盖）。命令在原锁内续期、下载、执行并确认停止；不创建、恢复或替换容器。停止确认及清理后提交确定结果，控制端接纳不推进发布。停止无法确认时保留隔离，见[持槽执行合同](docs/reference-requests.md#同机持槽参考执行)。
+
+另外显式设置控制端 `OJ_WORKER_REFERENCE_DISPATCH=1` 后，可使用 `.local/bin/worker run-next-reference SOURCE_ID [AFTER_ID]` 按来源选择并执行一个此前未领取的已准备申请。槽忙不发请求；空页可用输出的 `next_after` 显式继续。未知领取不自动重试，旧计划不会自动进入选择，见[选择合同](docs/reference-requests.md#按来源选择已准备申请)。
 
 上述 Darwin 专项产物 `worker-validation.test` 可在专用固定离线槽运行 `-test.run '^TestClaimedReferenceOwnedSandbox$' -test.v`，显式设置 `OJ_REFERENCE_LEASED_SANDBOX_TEST=1 OJ_SANDBOX_EXPERIMENT=1` 并清空槽覆盖；须与其他宿主专项串行。只使用固定合成 A+B 和续期替身，分别验证真实执行与续期拒绝后的停止。
 
@@ -367,7 +369,7 @@ env -u OJ_WORKER_M0_SLOT -u OJ_WORKER_M0_DUAL_EXPERIMENT OJ_SANDBOX_EXPERIMENT=1
 .local/bin/migrate reference-backlog 4 2
 ```
 
-命令使用既有私有 `OJ_DATABASE_URL`，只写参考队列额度，要求当前 schema，不自动迁移。随后可在本人草稿预览提交、查原键回执和取消；见[作者申请合同](docs/reference-requests.md#作者申请入口)。启用不执行材料、不更新草稿验证状态。
+命令使用既有私有 `OJ_DATABASE_URL`，只写参考队列额度，要求当前 schema，不自动迁移。随后可在本人草稿预览提交、查原键回执、显式准备材料计划和取消；见[作者申请合同](docs/reference-requests.md#作者申请入口)。API 不执行题源，不更新草稿验证状态。
 
 `GET /api/v1/problem-drafts/草稿ID/preview`返回本人已入库版本的`markdown`、有序`examples`（id/input/output）和可选`images`，不依赖当前候选版本；仍须有效普通会话和当前出题权。先核对全部引用与总预算，再逐份验证快照，读取后复核同一凭据和PG授权，失败不返回部分结果。原始markdown/input/output/显式原图合计至多1MiB，重复对象按返回次数计数；图片完整解码后限长重编码为静态PNG，输出PNG与原文/样例另限1MiB。图片角色/格式/像素/路径及回退限制见[图片合同](docs/problem-drafts.md#显式题面图片)。JSON文本转义至多六倍，图片base64另加元数据。文本严格UTF-8，保留空格、CRLF及末尾换行，不替换或截断。它是管理页数据，不提供一般材料下载或发布；正式测试与程序源码不进入预览。最终会话读取之后的退出及最终PG授权之后的撤权沿已接受在途合同，不能原子撤回已经开始发送的响应。关闭整个`private_drafts`能力即可停止入口，已入库资料保留。
 
@@ -439,7 +441,7 @@ API 镜像的 `/usr/local/bin/oj-api` 在非空 `OJ_SESSION_CONFIG_FILE` 下切�
 
 数据库及 Redis 的密码来源各自显式选择 `auth: "none"` 或 `"env"`。后者只读取固定的 `OJ_SESSION_DATABASE_PASSWORD` / `OJ_SESSION_REDIS_PASSWORD`，必须非空；前者拒绝对应非空残留环境。密码、登录 key、TLS 私钥均不写入配置 JSON、镜像或命令行。数据库不消费 `OJ_DATABASE_URL`，连接类 PG 环境变量须按运行时合同清理；服务不修改进程环境。
 
-启动前须由受信维护流程完成当前 schema 12（邮箱模型始于5、积压准入始于6、私有草稿始于7、列表索引始于8、参考申请始于9、预期计划始于10、参考领取始于11、参考报告始于12）、恢复状态开门、共享密钥分发及匹配的限流 marker 初始化；命令只检查，不自动迁移、初始化或修复。schema切换须在维护窗口排空/停止旧API、Worker及维护写入后执行，再启动匹配新版；运行中旧进程不会因版本变化自动停止，不混跑。精确回退条件见[参考申请迁移](docs/reference-requests.md#迁移与回退)及[草稿历史迁移](docs/problem-drafts.md#入库版本与迁移)。本次没有迁移现有持久化localdev或部署服务器。配置与公开证书可只读挂载，登录密钥及 TLS 私钥必须满足 0400/0600、root/进程 euid 所有等约束。非 root 容器须能遍历并读取这些文件。不要把完整配置或秘密对象输出到日志。
+启动前须由受信维护流程完成当前 schema 13（邮箱模型始于5、积压准入始于6、私有草稿始于7、列表索引始于8、参考申请始于9、预期计划始于10、参考领取始于11、参考报告始于12、参考调度始于13）、恢复状态开门、共享密钥分发及匹配的限流 marker 初始化；命令只检查，不自动迁移、初始化或修复。schema切换须在维护窗口排空/停止旧API、Worker及维护写入后执行，再启动匹配新版；运行中旧进程不会因版本变化自动停止，不混跑。精确回退条件见[参考申请迁移](docs/reference-requests.md#迁移与回退)及[草稿历史迁移](docs/problem-drafts.md#入库版本与迁移)。本次没有迁移现有持久化localdev或部署服务器。配置与公开证书可只读挂载，登录密钥及 TLS 私钥必须满足 0400/0600、root/进程 euid 所有等约束。非 root 容器须能遍历并读取这些文件。不要把完整配置或秘密对象输出到日志。
 
 direct 模式要求客户端直接 TLS；proxy 模式要求同一监听器的已验证客户端证书和允许的叶证书指纹，健康检查也须经 mTLS。现有 Compose/Nginx 的明文 backend 和浏览器页面尚未配置该入口；部署、生产阈值、真实证书/存储 TLS 和完整账号权限另行验收。回退先停服务并移除显式配置环境，不把旧明文路径接到会话 Handler。
 
@@ -543,7 +545,7 @@ python3 scripts/test-worker.py browser-loop \
   --output-dir /absolute/new/path/m0-browser
 ```
 
-Chromium参数可省略以使用该Playwright已安装的浏览器。产物必须为仓库外新目录，含检查JSON、私有日志及桌面/390px截图；测试以真实POST提交成功后丢弃响应验证未知/原键恢复，在浏览器确认queued且数据库无attempt后才启动真实Worker。查询503及提交BACKLOG_LIMIT/ADMISSION_UNAVAILABLE展示另由浏览器路由注入，不冒充真实数据库故障；共享准入后端另有真实PostgreSQL/双API验证。回退页面可关闭开关；数据库当前 schema 12按[参考申请合同](docs/reference-requests.md#迁移与回退)、历史schema8/7/6按草稿/积压合同升级与回退，不能直接混跑旧版进程；已接受提交仍按原Worker协议处理。
+Chromium参数可省略以使用该Playwright已安装的浏览器。产物必须为仓库外新目录，含检查JSON、私有日志及桌面/390px截图；测试以真实POST提交成功后丢弃响应验证未知/原键恢复，在浏览器确认queued且数据库无attempt后才启动真实Worker。查询503及提交BACKLOG_LIMIT/ADMISSION_UNAVAILABLE展示另由浏览器路由注入，不冒充真实数据库故障；共享准入后端另有真实PostgreSQL/双API验证。回退页面可关闭开关；数据库当前 schema 13按[参考申请合同](docs/reference-requests.md#迁移与回退)、历史schema8/7/6按草稿/积压合同升级与回退，不能直接混跑旧版进程；已接受提交仍按原Worker协议处理。
 
 ### 沙箱资源预算专项
 

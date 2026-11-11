@@ -119,7 +119,7 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 			return nil, ErrConfig
 		}
 		if drafts.references != nil {
-			handler, err = httptransport.WithReferenceRequests(handler, drafts.references)
+			handler, err = httptransport.WithReferenceRequests(handler, drafts.references, drafts.preparation)
 			if err != nil {
 				return nil, ErrConfig
 			}

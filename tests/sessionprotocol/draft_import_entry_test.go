@@ -95,7 +95,7 @@ func testEntryPinnedImport(t *testing.T, first, second *loginEndpoint, cookies [
 		References []any `json:"references"`
 	}
 	must(t, json.Unmarshal(metadata.body, &draft))
-	if len(draft.References) != 10 {
+	if len(draft.References) != 13 {
 		t.Fatal("new pinned import did not commit full material references")
 	}
 	return receipt

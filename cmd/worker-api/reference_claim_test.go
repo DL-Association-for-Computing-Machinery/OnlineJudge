@@ -11,7 +11,7 @@ import (
 
 func TestReferenceClaimControllerOptIn(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNotFound) })
-	h, err := configureReferenceClaims(next, nil, nil, "", nil, false)
+	h, err := configureReferenceClaims(next, nil, nil, "", nil, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -20,7 +20,7 @@ func TestReferenceClaimControllerOptIn(t *testing.T) {
 	if w.Code != http.StatusNotFound {
 		t.Fatal("reference endpoint enabled without configuration")
 	}
-	if h, err := configureReferenceClaims(next, nil, nil, "invalid node", nil, false); h != nil || !errors.Is(err, problemreference.ErrInvalid) {
+	if h, err := configureReferenceClaims(next, nil, nil, "invalid node", nil, false, false); h != nil || !errors.Is(err, problemreference.ErrInvalid) {
 		t.Fatal("invalid reference node did not fail startup", err)
 	}
 }

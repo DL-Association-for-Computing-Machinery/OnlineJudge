@@ -46,7 +46,7 @@ func TestReferenceClaimReadsCancellationAfterWaiting(t *testing.T) {
 }
 
 func TestReferenceClaimDown11WaitsForInFlightWrite(t *testing.T) {
-	f, claims, node, input := claimFixture(t)
+	f, _, node, input := claimFixture(t)
 	_, err := f.provider.DownTo(f.ctx, 11)
 	must(t, err)
 	prepareClaim(t, f, expectedPlanKey)
@@ -57,7 +57,7 @@ func TestReferenceClaimDown11WaitsForInFlightWrite(t *testing.T) {
 	must(t, err)
 	claimed := make(chan error, 1)
 	go func() {
-		_, err := claims.ClaimReference(f.ctx, node, input)
+		_, err := legacyReservation(f, node, input)
 		claimed <- err
 	}()
 	claimPID := waitBacklogBlocked(t, f.backlogFixture, tx.Conn().PgConn().PID(), f.appA)

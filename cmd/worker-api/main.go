@@ -38,6 +38,10 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	dispatchSetting := os.Getenv("OJ_WORKER_REFERENCE_DISPATCH")
+	if dispatchSetting != "" && (dispatchSetting != "1" || !referenceExecution) {
+		return errors.New("reference dispatch requires explicit opt-in and enabled reference execution")
+	}
 	addr := os.Getenv("OJ_WORKER_API_ADDR")
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil || net.ParseIP(host) == nil || !net.ParseIP(host).IsLoopback() {
@@ -92,7 +96,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		referenceObjects = objects
 	}
 	handler, err := configureReferenceClaims(workerapi.NewHandler(store, tlsConfig.ClientCAs, materialService),
-		pool, tlsConfig.ClientCAs, referenceNodeID, referenceObjects, referenceExecution)
+		pool, tlsConfig.ClientCAs, referenceNodeID, referenceObjects, referenceExecution, dispatchSetting == "1")
 	if err != nil {
 		return err
 	}

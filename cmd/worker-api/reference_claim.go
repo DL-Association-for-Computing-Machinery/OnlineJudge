@@ -26,8 +26,8 @@ func referenceExecutionEnabled(value, nodeID, root string) (bool, error) {
 	return true, nil
 }
 
-func configureReferenceClaims(next http.Handler, pool *pgxpool.Pool, roots *x509.CertPool, nodeID string, objects problem.ReferenceObjectReader, execution bool) (http.Handler, error) {
-	if execution && (!problemreference.ValidReferenceNodeID(nodeID) || objects == nil) {
+func configureReferenceClaims(next http.Handler, pool *pgxpool.Pool, roots *x509.CertPool, nodeID string, objects problem.ReferenceObjectReader, execution, dispatch bool) (http.Handler, error) {
+	if dispatch && !execution || execution && (!problemreference.ValidReferenceNodeID(nodeID) || objects == nil) {
 		return nil, problemreference.ErrInvalid
 	}
 	if nodeID == "" {
@@ -46,6 +46,9 @@ func configureReferenceClaims(next http.Handler, pool *pgxpool.Pool, roots *x509
 		if err != nil {
 			return nil, err
 		}
+	}
+	if dispatch {
+		return workerapi.WithReferenceDispatch(next, claims, claims, claims, claims, roots, materials), nil
 	}
 	if execution {
 		return workerapi.WithReferenceExecution(next, claims, claims, roots, materials, claims), nil

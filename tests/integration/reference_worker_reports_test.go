@@ -30,11 +30,30 @@ import (
 )
 
 func acceptedReportFixture(t *testing.T, verdict string) (expectedPlanFixture, *referencepg.ReferenceClaimer, submission.NodeIdentity, problemreference.WorkerReportInput) {
+	return reportFixture(t, verdict, false)
+}
+
+func reportFixture(t *testing.T, verdict string, legacy bool) (expectedPlanFixture, *referencepg.ReferenceClaimer, submission.NodeIdentity, problemreference.WorkerReportInput) {
 	t.Helper()
 	f, claims, node, selection := claimFixture(t)
+	if legacy {
+		_, err := f.provider.DownTo(f.ctx, 12)
+		must(t, err)
+	}
 	prepareClaim(t, f, expectedPlanKey)
-	claim, err := claims.ClaimReference(f.ctx, node, selection)
+	var claim problemreference.WorkerClaim
+	var err error
+	if legacy {
+		claim, err = legacyReservation(f, node, selection)
+	} else {
+		claim, err = claims.ClaimReference(f.ctx, node, selection)
+	}
 	must(t, err)
+	return f, claims, node, workerReportForClaim(t, f, claim, verdict)
+}
+
+func workerReportForClaim(t *testing.T, f expectedPlanFixture, claim problemreference.WorkerClaim, verdict string) problemreference.WorkerReportInput {
+	t.Helper()
 	var plan problem.ReferencePlan
 	must(t, json.Unmarshal(f.want.Encoding, &plan))
 	profile := problemvalidation.PinnedProfile()
@@ -51,7 +70,7 @@ func acceptedReportFixture(t *testing.T, verdict string) (expectedPlanFixture, *
 	must(t, r.Finalize(nil, nil, nil))
 	input, err := problemreference.FreezeWorkerReport(claim, r)
 	must(t, err)
-	return f, claims, node, input
+	return input
 }
 
 func TestReferenceReportCannotCrossExpiryWhileWaitingForClaim(t *testing.T) {
@@ -77,7 +96,7 @@ func TestReferenceReportCannotCrossExpiryWhileWaitingForClaim(t *testing.T) {
 }
 
 func TestReferenceReportDown12WaitsAndPreservesConcurrentReport(t *testing.T) {
-	f, claims, node, input := acceptedReportFixture(t, "AC")
+	f, claims, node, input := reportFixture(t, "AC", true)
 	tx, err := f.b.Begin(f.ctx)
 	must(t, err)
 	defer func() { _ = tx.Rollback(f.ctx) }()
@@ -162,8 +181,8 @@ func TestReferenceReportCommitsTerminalStateAndExactReplay(t *testing.T) {
 	if err := claims.ReportReference(f.ctx, node, conflict); !errors.Is(err, problemreference.ErrClaimUnavailable) {
 		t.Fatal("changed report acknowledged", err)
 	}
-	if _, err := f.provider.DownTo(f.ctx, 11); err == nil || !strings.Contains(err.Error(), "cannot discard accepted reference report state") {
-		t.Fatal("rollback discarded accepted evidence", err)
+	if _, err := f.provider.DownTo(f.ctx, 12); err == nil || !strings.Contains(err.Error(), "cannot discard reference dispatch history") {
+		t.Fatal("rollback discarded dispatch history", err)
 	}
 	var state string
 	must(t, f.a.QueryRow(f.ctx, `SELECT validation_state FROM problem_drafts WHERE id=$1`, f.draft.ID).Scan(&state))

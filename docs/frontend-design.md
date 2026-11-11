@@ -49,7 +49,7 @@ React Router 声明式路由负责导航，账号 controller 提升到应用生�
 
 `/author/drafts/open` 选择已入库 ID，`/author/drafts/:id` 显式检查会话后 GET 本人固定版本预览。入口可见性不授予出题角色，服务端仍检查真实会话、owner 和当前角色；没有编辑、审核或发布。示例做题页与本人草稿使用同一 `StatementMarkdown` 和原文样例组件，样例复制直接写原字符串，不从 DOM 提取或规范化。
 
-打开本人草稿后可显式提交、查回执和取消[参考验证申请](reference-requests.md#作者申请入口)。页面仅保存当前原键，失效时清除屏幕上的申请状态。已收到报告不表示验证通过；入口未启用时不尝试其他写入路径。
+打开本人草稿后可显式提交、查回执和取消[参考验证申请](reference-requests.md#作者申请入口)。对待完成的申请，可用同一原键显式准备并手动查计划状态；受理不等于就绪。页面仅保存当前原键，失效时清除屏幕上的申请状态。已收到报告不表示验证通过；入口未启用时不尝试其他写入路径。
 
 采用 react-markdown 10.1.0、remark-gfm 4.0.1、remark-math 6.0.0、rehype-katex 7.0.1、KaTeX 0.19.1；原始 HTML 跳过，图片只精确匹配本人预览的[显式图片清单](problem-drafts.md#显式题面图片)，以服务端受限重编码的静态PNG显示，其他源地址保持占位且不请求资源。链接仅接受无控制字符/反斜杠/凭据的 HTTPS、本站绝对路径或锚点，设置 no-referrer/noopener/noreferrer。KaTeX trust=false、maxExpand=128、maxSize=20，逐公式独立调用，错误局部显示固定提示和转义源码。两个数学插件仍依赖旧 KaTeX，按精确父版本覆盖为 0.19.1，避开[官方公告中的旧版本漏洞](https://github.com/KaTeX/KaTeX/security/advisories/GHSA-238p-pmpm-9mq7)；上游支持安全版本后再移除覆盖。CSS/字体随本地静态资源分发，不走 CDN。
 
