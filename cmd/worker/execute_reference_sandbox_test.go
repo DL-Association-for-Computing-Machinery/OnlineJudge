@@ -49,6 +49,7 @@ func TestClaimedReferenceOwnedSandbox(t *testing.T) {
 			defer lock.Close()
 			ready := make(chan struct{})
 			renewals := 0
+			reported := false
 			err = runClaimedReference(t.Context(), lock, claim, fetch, func(context.Context, problemreference.WorkerClaim) error {
 				renewals++
 				if fault && renewals > 1 {
@@ -65,6 +66,13 @@ func TestClaimedReferenceOwnedSandbox(t *testing.T) {
 					return pauseBeforeReferenceCompile{validationHost: h, ready: ready}, nil
 				}
 				return h, err
+			}, func(_ context.Context, input problemreference.WorkerReportInput) error {
+				evidence, err := input.DecodeEvidence()
+				if reported || err != nil || evidence.Verdict != "AC" || !evidence.StopConfirmed || input.Token != claim.Token {
+					t.Fatal("unexpected evidence from the confirmed sandbox", err)
+				}
+				reported = true
+				return nil
 			})
 			if fault {
 				if !errors.Is(err, execution.ErrLeaseLost) || errors.Is(err, execution.ErrStopUnconfirmed) {
@@ -72,6 +80,9 @@ func TestClaimedReferenceOwnedSandbox(t *testing.T) {
 				}
 			} else if err != nil {
 				t.Fatal(err)
+			}
+			if reported == fault {
+				t.Fatal("wrong report outcome after sandbox supervision")
 			}
 			lock.Close()
 			probe, err := lockSlotMode(slot, false)
