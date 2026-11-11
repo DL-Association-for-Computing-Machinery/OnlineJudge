@@ -174,6 +174,15 @@ func (r *Runner) validateMaterials(ctx context.Context, profile Profile, sourceI
 			return report, err
 		}
 	}
+	return r.runPrepared(ctx, report, profile, plan, frozen, compilation, nil)
+}
+
+func (r *Runner) runPrepared(ctx context.Context, report Report, profile Profile, plan problem.ReferencePlan,
+	frozen referenceReader, compilation execution.CompilationSandbox, trial *execution.CachedGoJudge) (result Report, err error) {
+	run := r.sandbox.Run
+	if trial != nil {
+		run = trial.RunCheckerTrial
+	}
 	source, err := frozen.ReadSource(ctx)
 	if err != nil {
 		return report, err
@@ -213,8 +222,8 @@ func (r *Runner) validateMaterials(ctx context.Context, profile Profile, sourceI
 			cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			if e := r.sandbox.Remove(cleanup, compiled.Artifact); e != nil {
-				report.Verdict = "SE"
-				report.recordExecution("cleanup", 0, e)
+				result.Verdict = "SE"
+				result.recordExecution("cleanup", 0, e)
 				err = errors.Join(err, e)
 			}
 		}()
@@ -247,7 +256,7 @@ func (r *Runner) validateMaterials(ctx context.Context, profile Profile, sourceI
 			return report, err
 		}
 		runCtx, done := context.WithTimeout(ctx, time.Duration(profile.Runtime.Run.Wall)+5*time.Second)
-		o, runErr := r.sandbox.Run(runCtx, profile.Runtime, compiled.Artifact, input)
+		o, runErr := run(runCtx, profile.Runtime, compiled.Artifact, input)
 		report.recordExecution("run", i+1, runErr)
 		done()
 		report.Points[i].Verdict = "SE"
@@ -270,10 +279,13 @@ func (r *Runner) validateMaterials(ctx context.Context, profile Profile, sourceI
 			ok, e := judging.CompareLibraryCheckerTextAt(ctx,
 				judging.FrozenText{Reader: answer, Size: size},
 				judging.FrozenText{Reader: bytes.NewReader(o.Stdout), Size: int64(len(o.Stdout))}, profile.Text)
-			if e != nil {
+			if trial != nil && errors.Is(e, judging.ErrOutput) && len(o.Stdout) <= profile.Text.Bytes {
+				// Strict cached run already verified a complete in-budget
+				// output. Only the token cap can account for this error.
+				verdict = "OLE"
+			} else if e != nil {
 				return report, e
-			}
-			if !ok {
+			} else if !ok {
 				verdict = "WA"
 			}
 		}
