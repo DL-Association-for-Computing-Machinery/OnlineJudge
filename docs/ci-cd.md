@@ -16,6 +16,8 @@ convolution_mod的完整材料/16MiB输入答案、共享快照、封闭tier8及
 
 [卷积小规模独立对拍](reference-validation.md#卷积小规模独立对拍)的固定语料、严格输出、首个差异、制品清理和停止不明回归归普通 backend，使用替身、不运行外部源码。正例 CLI 和 `TestConvolutionDifferentialNegativeSandbox` 仅在 README 所述专用断网卷积槽运行，负对照需 sandbox 标签、Darwin arm64 和双重显式启用，不进入普通 CI。
 
+已入库卷积草稿的普通 backend 回归使用小型合成材料和真实对象存储，核对完整修订、锁定角色、单槽顺序读取和损坏拒绝。手动 `TestPrivateDraftConfiguredConvolutionEvidence` 在临时 PostgreSQL 中导入实际卷积草稿，再通过独立连接和重新打开的对象根确认私有证据绑定和读取范围；需提供已复验的 `OJ_PRIVATE_DRAFT_BUNDLE_DIR`，两种测试均不执行题源。
+
 `internal/judging`的独立Library Checker文本组件及M0回归随backend执行；`tests/checkercompat`仅在显式`checkercompat`标签和README专用断网/只读/非root Docker中运行锁定上游wcmp，不进入普通CI。组件差分不改草稿not-run或代替本站受限程序验证；支持域及预算见[准入约定](checker-admission.md)。
 
 `internal/problemvalidation`及Worker维护命令的材料/顺序/失败/取消、启动所有权与清理回归归普通backend；`cmd/worker/validation_sandbox_test.go`仅在显式sandbox标签、独立宿主测试驱动及双重实验opt-in下执行。该真实专项验证A+B全点和故障，不进入普通CI，不创建数据库、不改默认M0 suite，也不更新草稿not-run。结果及限制见[受限参考验证](reference-validation.md)。

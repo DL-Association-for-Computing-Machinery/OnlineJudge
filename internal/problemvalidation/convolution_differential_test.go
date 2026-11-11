@@ -3,6 +3,7 @@ package problemvalidation
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -97,6 +98,9 @@ func TestSmallConvolutionDifferentialFailsClosedAndKeepsFirstMismatch(t *testing
 				oracle:    convolutionProgram{source: "oracle", identity: ConvolutionProgram{SHA256: "oracle-id"}},
 				candidate: convolutionProgram{source: "candidate", identity: ConvolutionProgram{SHA256: "candidate-id"}},
 			}
+			if tc.wrong != 0 {
+				src.draft = ConvolutionDraftBinding{ID: "draft-id", Version: "version", ImportRevision: "import-revision"}
+			}
 			r, err := RunSmallConvolution(t.Context(), src, func() (execution.Sandbox, error) {
 				factories++
 				if factories == 1 {
@@ -110,6 +114,9 @@ func TestSmallConvolutionDifferentialFailsClosedAndKeepsFirstMismatch(t *testing
 				t.Fatalf("unexpected report or run counts: %+v, %v, candidate=%d", r, err, candidate.runs)
 			}
 			if tc.wrong != 0 {
+				if r.Draft == nil || *r.Draft != src.draft {
+					t.Fatal("counterexample lost the bound draft revision")
+				}
 				c := r.Counterexample
 				if err != ErrConvolutionMismatch || c == nil || c.Case != 10 || c.Input != "2 2\n1 2\n3 4\n" ||
 					c.InputSHA256 != convolutionSHA256([]byte(c.Input)) || !slices.Equal(c.Expected, []uint32{3, 10, 8}) ||
@@ -118,6 +125,12 @@ func TestSmallConvolutionDifferentialFailsClosedAndKeepsFirstMismatch(t *testing
 				}
 			} else if r.Counterexample != nil || errors.Is(err, ErrConvolutionMismatch) {
 				t.Fatal("non-mismatch produced a counterexample")
+			}
+			if tc.name == "matches" {
+				raw, err := json.Marshal(r)
+				if err != nil || bytes.Contains(raw, []byte(`"draft"`)) {
+					t.Fatal("source-root report gained a draft field", err)
+				}
 			}
 			want := []string{"verify oracle", "compile oracle", "remove oracle"}
 			if !tc.oracleCleanup {
