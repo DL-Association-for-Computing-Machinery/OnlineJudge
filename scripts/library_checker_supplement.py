@@ -33,6 +33,10 @@ SUPPLEMENTS = {
                          "87ebb9680aa3abe190b61d4a5ccac1dc83e48b29656364e445e36fabe7467cc9",
                          "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd",
                          "d8426964248ef07e1aae00ab12c8de690a9fdae147117b0251fa853cb4769c7b"),
+    "unionfind": Supplement("oj-local:unionfind-singleton-v1",
+                            "fd871a02594fcd663790cd0530153df2ad18bf95110559ce552a121c34705bed",
+                            "42e62825925bf727c394f3435c2b50f850758576c392d082fb628f7219e4f07d",
+                            "c5857fa3048311c6bcdb40dfde511c85c843c5feacedc56a552534436aa503d5"),
 }
 
 
@@ -43,6 +47,9 @@ def boundary_cases(problem):
     elif problem == "aplusb":
         for a, b in ((0, 0), (0, 1), (1, 0), (10**9, 10**9 - 1), (10**9 - 1, 10**9)):
             yield f"{a} {b}\n".encode("ascii"), f"{a+b}\n".encode("ascii")
+    elif problem == "unionfind":
+        yield b"1 1\n1 0 0\n", b"1\n"
+        yield b"1 1\n0 0 0\n", b""
     else:
         raise ValueError("unrecognized supplement")
 
