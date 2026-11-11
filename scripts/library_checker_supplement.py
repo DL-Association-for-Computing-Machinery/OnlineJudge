@@ -37,6 +37,10 @@ SUPPLEMENTS = {
                          "87ebb9680aa3abe190b61d4a5ccac1dc83e48b29656364e445e36fabe7467cc9",
                          "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd",
                          "d8426964248ef07e1aae00ab12c8de690a9fdae147117b0251fa853cb4769c7b"),
+    "point_add_range_sum": Supplement("oj-local:point-add-range-sum-boundaries-v1",
+                                      "e1fb107ff818b642bb5976ff35e7aaff5e8bb2ceb333972cb3acaf1256476bb1",
+                                      "188f392cd74cc6bb2156a0a444d0f232d0ea71ee746cb0523fba2c914d79dc25",
+                                      "9600bfbbfe15014fe911122c764e452b91f1399b428b4bdb4e66ed24e7a3dbd9"),
     "unionfind": Supplement("oj-local:unionfind-singleton-v1",
                             "fd871a02594fcd663790cd0530153df2ad18bf95110559ce552a121c34705bed",
                             "42e62825925bf727c394f3435c2b50f850758576c392d082fb628f7219e4f07d",
@@ -59,6 +63,11 @@ def boundary_cases(problem):
     elif problem == "aplusb":
         for a, b in ((0, 0), (0, 1), (1, 0), (10**9, 10**9 - 1), (10**9 - 1, 10**9)):
             yield f"{a} {b}\n".encode("ascii"), f"{a+b}\n".encode("ascii")
+    elif problem == "point_add_range_sum":
+        maximum = 10**9
+        yield b"1 1\n0\n1 0 1\n", b"0\n"
+        yield (f"1 5\n{maximum}\n0 0 0\n1 0 1\n0 0 {maximum}\n0 0 {maximum}\n1 0 1\n".encode("ascii"),
+               f"{maximum}\n{3*maximum}\n".encode("ascii"))
     elif problem == "unionfind":
         yield b"1 1\n1 0 0\n", b"1\n"
         yield b"1 1\n0 0 0\n", b""
