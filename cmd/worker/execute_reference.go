@@ -95,7 +95,7 @@ func executeReferenceSelection(ctx context.Context, slot string, logger *slog.Lo
 	return runSelectionUnderSlot(ctx, func() (*slotLock, error) { return lockSlotMode(slot, false) },
 		func(ctx context.Context) (*problemreference.WorkerClaim, error) { return selectClaim(ctx, client) },
 		func(ctx context.Context, lock *slotLock, claim problemreference.WorkerClaim) error {
-			err := runClaimedReference(ctx, lock, claim, fetch, renewal.RenewReference, startClaimedReference, client.ReportReference)
+			err := runClaimedReference(ctx, lock, claim, logger, fetch, renewal.RenewReference, startClaimedReference, client.ReportReference)
 			if err == nil {
 				logger.Info("参考执行通过，停止已确认，报告已接纳")
 			}
@@ -148,7 +148,7 @@ type referenceExecutionMaterials struct {
 	comparison *problemvalidation.ConvolutionSources
 }
 
-func runClaimedReference(ctx context.Context, lock *slotLock, claim problemreference.WorkerClaim,
+func runClaimedReference(ctx context.Context, lock *slotLock, claim problemreference.WorkerClaim, logger *slog.Logger,
 	fetch func(context.Context, problemreference.WorkerClaim) (referenceExecutionMaterials, error),
 	renew func(context.Context, problemreference.WorkerClaim) error,
 	start func(context.Context, string) (validationHost, error),
@@ -255,6 +255,8 @@ func runClaimedReference(ctx context.Context, lock *slotLock, claim problemrefer
 		cleanErr = lock.clean()
 	}
 	if err := errors.Join(out.WorkErr, out.StopErr, cleanErr, ctx.Err()); err != nil {
+		// The lease joins Work before returning, so these diagnostics are final.
+		logClaimedReferenceFailure(logger, claim.SourceID, report.ExecutionDiagnostic, marked, out.StopErr, cleanErr)
 		return err
 	}
 	report.Slot = (workerhost.M0Slot{}).ContainerName()
@@ -290,6 +292,27 @@ func runClaimedReference(ctx context.Context, lock *slotLock, claim problemrefer
 		return problemvalidation.ErrConvolutionMismatch
 	}
 	return nil
+}
+
+func logClaimedReferenceFailure(logger *slog.Logger, sourceID string, diagnostic *problemvalidation.ExecutionDiagnostic, marked bool, stopErr, cleanErr error) {
+	if logger == nil {
+		return
+	}
+	stopState := "not_attempted"
+	switch {
+	case stopErr != nil:
+		stopState = "unconfirmed"
+	case marked:
+		stopState = "confirmed"
+	}
+	attrs := []slog.Attr{slog.String("source_id", sourceID), slog.String("stop_state", stopState), slog.Bool("slot_cleanup_failed", cleanErr != nil)}
+	if diagnostic != nil {
+		attrs = append(attrs, slog.Any("execution_diagnostic", diagnostic))
+	}
+	if stop := workerhost.StopDetails(stopErr); stop != nil {
+		attrs = append(attrs, slog.Any("stop_diagnostic", stop))
+	}
+	logger.LogAttrs(context.Background(), slog.LevelError, "参考执行未完成", attrs...)
 }
 
 func sendFrozenReferenceReport(ctx context.Context, input problemreference.WorkerReportInput, send func(context.Context, problemreference.WorkerReportInput) error) error {

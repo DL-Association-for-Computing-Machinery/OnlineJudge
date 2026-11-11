@@ -50,7 +50,7 @@ func TestClaimedReferenceOwnedSandbox(t *testing.T) {
 			ready := make(chan struct{})
 			renewals := 0
 			reported := false
-			err = runClaimedReference(t.Context(), lock, claim, fetch, func(context.Context, problemreference.WorkerClaim) error {
+			err = runClaimedReference(t.Context(), lock, claim, nil, fetch, func(context.Context, problemreference.WorkerClaim) error {
 				renewals++
 				if fault && renewals > 1 {
 					select {
