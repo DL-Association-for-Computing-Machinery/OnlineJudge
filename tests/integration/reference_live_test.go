@@ -119,6 +119,10 @@ func TestLiveReferenceReports(t *testing.T) {
 		sources = []fixtureSource{{"static_range_sum", 13}}
 		versionPin = "a93676964a96fb5dd0320441307eb0bb11ed41b0a1e1d4441c47d124a644e375"
 		suffixSizes = []int64{10, 19}
+	case "convolution_mod":
+		sources = []fixtureSource{{"convolution_mod", 55}}
+		versionPin = "d464bf359f1e46cd3314144af2f71b21b39f1913e9e6d3d517386d12ce2b1041"
+		suffixSizes = []int64{22, 23}
 	default:
 		t.Fatal("unknown supplement fixture")
 	}
@@ -189,6 +193,14 @@ func TestLiveReferenceReports(t *testing.T) {
 					formal.Cases[21].Answer.SHA256 != liveReferenceDigest([]byte("1000000000000000000\n")) {
 					t.Fatal("persisted associative array plan lost its boundary answers")
 				}
+			}
+			if source.id == "convolution_mod" && versionPin != "" {
+				if formal.Cases[53].Answer.SHA256 != liveReferenceDigest([]byte("998244350 2 3 10\n")) ||
+					formal.Cases[54].Answer.SHA256 != liveReferenceDigest([]byte("998244346 31 66 0\n")) {
+					t.Fatal("persisted convolution plan lost its coefficient boundary answers")
+				}
+				writeLiveReferenceJSON(t, out, "formal-"+source.id, formal)
+				writeLiveReferenceJSON(t, out, "differential-"+source.id, json.RawMessage(plan.Differential.Encoding))
 			}
 			writeLiveReferenceJSON(t, out, "ready-"+source.id, problemreference.ClaimInput{RequestID: request.ID, SourceID: sourceID, PlanSHA256: plan.SHA256})
 			report := readLiveReferenceReport(t, ctx, serverDone, f, request.ID)
