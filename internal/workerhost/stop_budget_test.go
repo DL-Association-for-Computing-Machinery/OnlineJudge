@@ -42,6 +42,37 @@ func TestStopEnumerationTimeoutStillDispatchesKill(t *testing.T) {
 	}
 }
 
+func TestStopPhaseRejectsElapsedDeadlineBeforeParentCancellation(t *testing.T) {
+	// Model the interval after a deadline passes but before cancellation has
+	// propagated to this parent. No timer or scheduler ordering is required.
+	parent, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	deadline := time.Now().Add(-time.Second)
+	phase, done := stopPhaseContext(stopContextWithDeadline{Context: parent, deadline: deadline})
+	defer done()
+	if parent.Err() != nil {
+		t.Fatal("test parent must still be active")
+	}
+	if !errors.Is(phase.Err(), context.DeadlineExceeded) {
+		t.Fatalf("elapsed deadline left the phase active: %v", phase.Err())
+	}
+	if got, ok := phase.Deadline(); !ok || !got.Equal(deadline) {
+		t.Fatal("expired phase must retain the original absolute deadline")
+	}
+	select {
+	case <-phase.Done():
+	default:
+		t.Fatal("expired phase must already be done")
+	}
+}
+
+type stopContextWithDeadline struct {
+	context.Context
+	deadline time.Time
+}
+
+func (c stopContextWithDeadline) Deadline() (time.Time, bool) { return c.deadline, true }
+
 func TestStopPhaseBudgetPreservesParent(t *testing.T) {
 	for _, remaining := range []time.Duration{10 * time.Second, time.Second, -time.Second} {
 		parent, cancel := context.WithTimeout(context.Background(), remaining)
