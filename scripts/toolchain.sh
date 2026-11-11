@@ -3,7 +3,7 @@
 set -eu
 build() {
     mkdir -p .local/bin
-    for app in api worker worker-api migrate localdev materialstore problem-author problem-review; do
+    for app in api worker worker-api migrate localdev materialstore problem-author problem-review checker-candidate; do
         go build -trimpath -o ".local/bin/$app" "./cmd/$app"
     done
 }

@@ -16,7 +16,7 @@ type referenceReader interface {
 	Close() error
 }
 
-func freezeReferences(ctx context.Context, prepared *problem.Prepared, profile Profile, disk bool) (problem.ReferencePlan, referenceReader, error) {
+func freezeReferences(ctx context.Context, prepared *problem.Prepared, limits problem.ReferenceLimits, disk bool) (problem.ReferencePlan, referenceReader, error) {
 	if disk {
 		s, err := prepared.PrepareDiskReference(ctx)
 		if err != nil {
@@ -24,7 +24,7 @@ func freezeReferences(ctx context.Context, prepared *problem.Prepared, profile P
 		}
 		return s.Plan(), s, nil
 	}
-	p, err := prepared.PrepareReference(ctx, profile.Materials)
+	p, err := prepared.PrepareReference(ctx, limits)
 	return p, memoryReference{p}, err
 }
 

@@ -74,6 +74,19 @@ docker --context desktop-linux run --rm --network none --read-only \
 
 镜像须无声明式 VOLUME，运行用户必须非 root 且可读取私有候选；在 root 环境须另配明确非 root UID/GID，不直接复制执行上述用户参数。所有写入仅在临时内存盘，编译/检查子进程各限120秒/5秒。模式 `lc-wcmp-tokens-v1` 保留 M0 规则，区别 VT/FF 并显式约束字节/token；[支持域与限制](docs/checker-admission.md)不等于完整题目验证或生产预算准入，草稿继续 `not-run`。
 
+### 生产检查器候选预检
+
+在已有 Go 工具链容器内，将已准备的私有题包和固定来源锁挂为只读；运行用户须满足题包的私有文件所有权要求。以下变量分别来自当前题包路径、已接纳的正式参考记录和本次待验证的显式限额，未设置默认值：
+
+```sh
+go run ./cmd/checker-candidate --bundle "$PRIVATE_BUNDLE" \
+  --source-id library-checker:aplusb --source-lock config/problem-sources/library-checker.json \
+  --expected-plan "$TRUSTED_FORMAL_PLAN_SHA256" --checker lc-wcmp-tokens-v1 \
+  --bytes "$CANDIDATE_BYTES" --token-bytes "$CANDIDATE_TOKEN_BYTES"
+```
+
+成功时输出候选配置和摘要。命令只检查冻结答案，既不运行题源程序，也不采纳生产限额；见[预检契约](docs/checker-admission.md#生产检查器候选预检)。
+
 ### 私有草稿参考验证
 
 [#151 新题包](docs/delivery-log.md#2026-11-11新版题包十题参考复验与卷积报告接纳)的十题254点均通过固定环境维护参考验证并确认停止。最初批次因素性测试宿主超时中止，受控恢复后以新报告完成余下六题；[原失败](docs/delivery-log.md#2026-11-11新版题包维护参考复验中止)仍保留，根因未知。维护入口不写数据库验证状态或发布。需要已配置且停止的专用槽、已有固定镜像与 Docker Desktop、macOS arm64；命令不会自动创建、替换或恢复槽。使用已有 Go 1.26.11 工具链镜像构建独立宿主产物（不与 Linux 检查共用输出）：

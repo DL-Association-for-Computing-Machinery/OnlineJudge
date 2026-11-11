@@ -28,13 +28,14 @@ type TextLimits struct {
 // then valid UTF-8 output token overflow returns ErrOutput.
 // No Testlib execution, draft validation, or publication takes place here.
 func CompareLibraryCheckerText(reference, output []byte, limits TextLimits) (bool, error) {
-	if !validTextLimits(limits) {
+	if !limits.Valid() {
 		return false, ErrTextLimits
 	}
 	return compareText(reference, output, true, limits.Bytes, limits.TokenBytes, libraryCheckerSpace)
 }
 
-func validTextLimits(limits TextLimits) bool {
+// Valid reports whether the explicit limits fit the component's supported domain.
+func (limits TextLimits) Valid() bool {
 	return limits.Bytes >= 1 && limits.Bytes <= MaxTextBytes && limits.TokenBytes >= 1 &&
 		limits.TokenBytes <= tokenBudget && limits.TokenBytes <= limits.Bytes
 }
