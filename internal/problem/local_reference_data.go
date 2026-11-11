@@ -6,6 +6,7 @@ const (
 	localReferenceSourceLock = "fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617"
 	zAlgorithmLocalVersion   = "965239246cbdbd63f1641cfcf551d9c8f3a65cd558e194668ad845cac1e39711"
 	aPlusBLocalVersion       = "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd"
+	unionFindLocalVersion    = "42e62825925bf727c394f3435c2b50f850758576c392d082fb628f7219e4f07d"
 )
 
 type localReferenceRevision struct {
@@ -66,6 +67,24 @@ var localReferenceRevisions = map[string]localReferenceRevision{
 				ID:     "case-0017",
 				Input:  materialstore.Object{SHA256: "4d0b3116b1f3552d37cd16d57c533acc42ae47e198d201c0173bd7979528b1e2", Size: 21},
 				Answer: materialstore.Object{SHA256: "873cf3b1e4f23454700801f646b785edf54fe87150bbda8c8c0a7f657fc01979", Size: 11},
+			},
+		},
+	},
+	unionFindLocalVersion: {
+		label: "oj-local:unionfind-singleton-v1", sourceID: "library-checker:unionfind", upstream: 18,
+		source:     materialstore.Object{SHA256: "c17d0ae17487b004935e4f9bb4d43738d627bf68f63470239f170e2e9ca42024", Size: 1140},
+		definition: materialstore.Object{SHA256: "848ea059fdd5dd16444ea3323882ca7bbae64a0f88090506dc1522eb6e15a796", Size: 359},
+		hashes:     materialstore.Object{SHA256: "a5c718fe24e2a83f31aa0902c065d31229cf90e503128354d30bc4c568233a41", Size: 3126},
+		suffix: []ReferenceCase{
+			{
+				ID:     "case-0019",
+				Input:  materialstore.Object{SHA256: "6e1e9445fd0bd0736d00d1cafb78d3c101ae577a258c5178efd9e8909f20ddb8", Size: 10},
+				Answer: materialstore.Object{SHA256: "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865", Size: 2},
+			},
+			{
+				ID:     "case-0020",
+				Input:  materialstore.Object{SHA256: "5b12ce47a7cd1d0c27176fd80881c7d8676b680b86626b9df12d4e78095744e3", Size: 10},
+				Answer: materialstore.Object{SHA256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", Size: 0},
 			},
 		},
 	},
