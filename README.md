@@ -359,6 +359,9 @@ python3 -B scripts/supplement-suffixarray.py \
 python3 -B scripts/supplement-primality-test.py \
   --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
   --output /private/tmp/oj-primality-single-query
+python3 -B scripts/supplement-convolution-mod.py \
+  --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
+  --output /private/tmp/oj-convolution-coefficients
 python3 -B scripts/supplement-aplusb.py \
   --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
   --output /private/tmp/oj-aplusb-boundaries
@@ -446,6 +449,8 @@ OJ_SANDBOX_EXPERIMENT=1 python3 -B tests/integration/live_reference.py \
 单点加与区间求和使用 `--point-add-range-sum-local-data`（23 点），额外核对加零及累加到 3×10⁹ 时的固定答案。
 
 素性测试使用 `--primality-test-local-data`（15 点），额外核对两个单次查询的 `Yes` 与 `No` 答案。
+
+卷积使用 `--convolution-local-data`（55 点），额外核对两条系数边界答案及绑定同一正式计划的 24 个独立对拍。
 
 上述 Darwin 专项产物 `worker-validation.test` 可在专用固定离线槽运行 `-test.run '^TestClaimedReferenceOwnedSandbox$' -test.v`，显式设置 `OJ_REFERENCE_LEASED_SANDBOX_TEST=1 OJ_SANDBOX_EXPERIMENT=1` 并清空槽覆盖；须与其他宿主专项串行。只使用固定合成 A+B 和续期替身，分别验证真实执行与续期拒绝后的停止。
 
