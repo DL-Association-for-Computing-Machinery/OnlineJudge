@@ -60,4 +60,9 @@ func TestV6IndependentCorrectnessThroughReview(t *testing.T) {
 		wrong.AcceptedCasePositions == nil || len(wrong.AcceptedCasePositions) != 0 || wrong.ReportSHA256 != ev.ReportSHA256 {
 		t.Fatalf("assigned review did not return the v6 wrong solution witness: %+v", wrong)
 	}
+	rendering := got.StatementRendering
+	if rendering == nil || rendering.Examples != 2 || rendering.Formulas != 6 || rendering.FormatBlocks != 2 ||
+		!slices.Contains(got.Blockers, "statement_quality_missing") {
+		t.Fatalf("browser evidence must remain separate from semantic review: %+v", got)
+	}
 }

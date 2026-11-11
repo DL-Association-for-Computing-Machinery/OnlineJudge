@@ -1,0 +1,66 @@
+package problemvalidation
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"os"
+	"slices"
+	"testing"
+
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
+)
+
+func TestStatementRenderingMatchesHistoricalBrowserReport(t *testing.T) {
+	path := os.Getenv("OJ_V6_STATEMENT_BROWSER_REPORT")
+	if path == "" {
+		t.Skip("requires the verified #151 browser report")
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(raw)
+	if hex.EncodeToString(digest[:]) != statementRenderingReport {
+		t.Fatal("not the reviewed historical browser report")
+	}
+	var report struct {
+		Success   bool     `json:"success"`
+		Viewports []string `json:"viewports"`
+		Problems  []struct {
+			SourceID     string `json:"source_id"`
+			Version      string `json:"version"`
+			Examples     int    `json:"examples"`
+			Formulas     int    `json:"formulas"`
+			FormatBlocks int    `json:"format_blocks"`
+		} `json:"problems"`
+	}
+	if err := json.Unmarshal(raw, &report); err != nil {
+		t.Fatal(err)
+	}
+	if !report.Success || !slices.Equal(report.Viewports, []string{"1280x960", "390x844"}) ||
+		len(report.Problems) != len(reviewedV6Bindings) || len(report.Problems) != len(reviewedStatementRendering) {
+		t.Fatal("incomplete browser evidence")
+	}
+	seen := map[string]bool{}
+	var examples, formulas, formatBlocks int
+	for _, row := range report.Problems {
+		if seen[row.SourceID] {
+			t.Fatal("duplicate report entry", row.SourceID)
+		}
+		seen[row.SourceID] = true
+		binding := reviewedV6Bindings[row.SourceID]
+		identity := problem.ImportIdentity{SourceID: row.SourceID, Version: row.Version,
+			ImportRevision: binding.revision, SourceLockSHA256: SourceLockSHA256}
+		got, ok := AdmittedStatementRendering(identity, binding.plan)
+		if !ok || got.Examples != row.Examples || got.Formulas != row.Formulas || got.FormatBlocks != row.FormatBlocks {
+			t.Fatalf("%s: stored evidence does not match the historical observation: %+v", row.SourceID, got)
+		}
+		examples += row.Examples
+		formulas += row.Formulas
+		formatBlocks += row.FormatBlocks
+	}
+	if examples != 18 || formulas != 82 || formatBlocks != 9 {
+		t.Fatalf("unexpected browser totals: examples=%d formulas=%d format blocks=%d", examples, formulas, formatBlocks)
+	}
+}

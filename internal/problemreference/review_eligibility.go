@@ -29,6 +29,7 @@ type ReviewEligibility struct {
 	InputValidator         *problemvalidation.InputValidatorEvidence         `json:"input_validator_evidence,omitempty"`
 	IndependentCorrectness *problemvalidation.IndependentCorrectnessEvidence `json:"independent_correctness_evidence,omitempty"`
 	WrongSolution          *problemvalidation.WrongSolutionEvidence          `json:"wrong_solution_evidence,omitempty"`
+	StatementRendering     *problemvalidation.StatementRenderingEvidence     `json:"statement_rendering_evidence,omitempty"`
 }
 
 func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
@@ -65,17 +66,21 @@ func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
 			blockers = append(blockers, "independent_correctness_missing")
 		}
 	}
-	// The input check is independent of the reference verdict and confirms
-	// neither statement quality nor coverage or production readiness.
+	// The historical rendering and wrong-solution checks do not establish
+	// semantic correctness or complete coverage.
 	blockers = append(blockers, "statement_quality_missing", "test_coverage_missing")
 	var validator *problemvalidation.InputValidatorEvidence
 	var wrongSolution *problemvalidation.WrongSolutionEvidence
+	var statementRendering *problemvalidation.StatementRenderingEvidence
 	if policyCurrent {
 		if admitted, ok := problemvalidation.AdmittedInputValidator(id, e.FormalPlanSHA256); ok {
 			validator = &admitted
 		}
 		if admitted, ok := problemvalidation.AdmittedWrongSolution(id, e.FormalPlanSHA256); ok {
 			wrongSolution = &admitted
+		}
+		if admitted, ok := problemvalidation.AdmittedStatementRendering(id, e.FormalPlanSHA256); ok {
+			statementRendering = &admitted
 		}
 	}
 	if validator == nil {
@@ -86,7 +91,8 @@ func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
 		blockers = append(blockers, "solution_confirmation_missing")
 	}
 	return ReviewEligibility{Evidence: e, PolicyVersion: ReviewPolicyVersion, Eligible: len(blockers) == 0,
-		Blockers: blockers, InputValidator: validator, IndependentCorrectness: independent, WrongSolution: wrongSolution}
+		Blockers: blockers, InputValidator: validator, IndependentCorrectness: independent,
+		WrongSolution: wrongSolution, StatementRendering: statementRendering}
 }
 
 // EligibilityForSubject returns the current policy's blockers for one assignment.

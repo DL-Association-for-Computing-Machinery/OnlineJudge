@@ -243,6 +243,16 @@ components:
               description: 拒绝前已记录为接受的点，按探测顺序排列。空数组表示报告没有此类记录。
               uniqueItems: true
               items: { type: integer, minimum: 1 }
+        statement_rendering_evidence:
+          type: object
+          additionalProperties: false
+          description: 仅精确命中已审查 v6 绑定时返回。桌面和移动端曾验证相同内容版本；不是题意人工确认。
+          required: [report_sha256, examples, formulas, format_blocks]
+          properties:
+            report_sha256: { $ref: '#/components/schemas/SHA256' }
+            examples: { type: integer, minimum: 1 }
+            formulas: { type: integer, minimum: 1 }
+            format_blocks: { type: integer, minimum: 0 }
         blockers:
           type: array
           minItems: 1
