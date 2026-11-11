@@ -65,13 +65,44 @@ func TestReviewApprovalWithTrustedValidatorKeepsOtherBlockers(t *testing.T) {
 	got := assessReviewEligibility(s)
 	want := []string{"materials_returned", "formal_failed", "comparison_mismatch", "statement_quality_missing",
 		"test_coverage_missing", "checker_admission_missing", "target_runtime_missing", "solution_confirmation_missing"}
-	if got.Eligible || got.InputValidator == nil || got.InputValidator.Inputs != 53 || !slices.Equal(got.Blockers, want) {
+	if got.Eligible || got.InputValidator == nil || got.IndependentCorrectness != nil || got.InputValidator.Inputs != 53 || !slices.Equal(got.Blockers, want) {
 		t.Fatalf("expected only the validator prerequisite to clear: %+v", got)
+	}
+	s.Evidence.ComparisonOutcome = ""
+	missing := assessReviewEligibility(s)
+	if missing.IndependentCorrectness != nil || !slices.Contains(missing.Blockers, "comparison_missing") {
+		t.Fatalf("convolution missed mandatory station comparison: %+v", missing)
 	}
 	s.Evidence.ProfileSHA256 = strings.Repeat("f", 64)
 	stale := assessReviewEligibility(s)
 	if stale.InputValidator != nil || !slices.Contains(stale.Blockers, "policy_unavailable") ||
 		!slices.Contains(stale.Blockers, "input_validator_missing") {
+		t.Fatalf("old profile borrowed current policy evidence: %+v", stale)
+	}
+}
+
+func TestReviewApprovalWithTrustedIndependentCorrectnessKeepsOtherBlockers(t *testing.T) {
+	const source = "library-checker:aplusb"
+	profile, _, err := problemvalidation.ResolveSource(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := ReviewEvidence{SourceID: source, SourceLockSHA256: problemvalidation.SourceLockSHA256,
+		ContentVersion:   "87ebb9680aa3abe190b61d4a5ccac1dc83e48b29656364e445e36fabe7467cc9",
+		ImportRevision:   "d19c436bc1631cb2e42b38f0036de45c100ea2f76c953df502b960287c248dd5",
+		FormalPlanSHA256: "4632b8970118f8a75ac39857d31d2afb8244683892b9edc49357f9f5aefeba2a",
+		ProfileSHA256:    profile.Digest(), FormalVerdict: "WA"}
+	s := ReviewEligibilitySnapshot{Evidence: e, Returned: true}
+	got := assessReviewEligibility(s)
+	want := []string{"materials_returned", "formal_failed", "statement_quality_missing", "test_coverage_missing",
+		"checker_admission_missing", "target_runtime_missing", "solution_confirmation_missing"}
+	if got.Eligible || got.IndependentCorrectness == nil || got.IndependentCorrectness.Cases != 25 || !slices.Equal(got.Blockers, want) {
+		t.Fatalf("trusted source probes weakened another prerequisite: %+v", got)
+	}
+	s.Evidence.ProfileSHA256 = strings.Repeat("f", 64)
+	stale := assessReviewEligibility(s)
+	if stale.IndependentCorrectness != nil || !slices.Contains(stale.Blockers, "policy_unavailable") ||
+		!slices.Contains(stale.Blockers, "independent_correctness_missing") {
 		t.Fatalf("old profile borrowed current policy evidence: %+v", stale)
 	}
 }

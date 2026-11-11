@@ -40,7 +40,6 @@ type expectedPlanFixture struct {
 func newExpectedPlanFixture(t *testing.T) expectedPlanFixture {
 	t.Helper()
 	f := expectedPlanFixture{referenceRequestFixture: referenceRequestFixture{draftFixture: newDraftFixture(t)}}
-	f.role(t, f.actor.SubjectID, 0, true)
 	b := f.bundle
 	b.AddOriginal(t, "sample/aplusb/sol/correct.cpp", []byte("synthetic expected plan source\n"))
 	b.BindReferenceCases(t)
@@ -48,6 +47,16 @@ func newExpectedPlanFixture(t *testing.T) expectedPlanFixture {
 	p, err := problem.LoadBundle(b.Directory, "library-checker:aplusb", b.Lock)
 	must(t, err)
 	t.Cleanup(func() { must(t, p.Close()) })
+	f = expectedPlanFixtureFor(t, f, p)
+	must(t, p.Close())
+	must(t, f.prepared.Close())
+	must(t, os.RemoveAll(b.Directory))
+	return f
+}
+
+func expectedPlanFixtureFor(t *testing.T, f expectedPlanFixture, p *problem.Prepared) expectedPlanFixture {
+	t.Helper()
+	f.role(t, f.actor.SubjectID, 0, true)
 	plan, err := p.PrepareReference(f.ctx, problem.SmallReferenceLimits())
 	must(t, err)
 	raw, err := json.Marshal(plan)
@@ -74,9 +83,6 @@ func newExpectedPlanFixture(t *testing.T) expectedPlanFixture {
 	must(t, err)
 	f.request, err = f.store.Enqueue(f.ctx, f.actor, expectedPlanKey, f.draft.ID, f.catalog)
 	must(t, err)
-	must(t, p.Close())
-	must(t, f.prepared.Close())
-	must(t, os.RemoveAll(b.Directory))
 	return f
 }
 

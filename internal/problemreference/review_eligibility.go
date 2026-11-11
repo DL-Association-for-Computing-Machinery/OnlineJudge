@@ -9,7 +9,7 @@ import (
 )
 
 // ReviewPolicyVersion identifies the current requirements for ordinary approval.
-const ReviewPolicyVersion = "oj.review-approval.v3"
+const ReviewPolicyVersion = "oj.review-approval.v4"
 
 // ReviewEligibilitySnapshot is the trusted read of an assigned item's verified
 // historical evidence and whether the same material has already been returned.
@@ -22,11 +22,12 @@ type ReviewEligibilitySnapshot struct {
 // ReviewEligibility explains what blocks approval at the time of the read.
 // It is not a receipt or proof that a later decision is permitted.
 type ReviewEligibility struct {
-	Evidence       ReviewEvidence                            `json:"evidence"`
-	PolicyVersion  string                                    `json:"policy_version"`
-	Eligible       bool                                      `json:"eligible"`
-	Blockers       []string                                  `json:"blockers"`
-	InputValidator *problemvalidation.InputValidatorEvidence `json:"input_validator_evidence,omitempty"`
+	Evidence               ReviewEvidence                                    `json:"evidence"`
+	PolicyVersion          string                                            `json:"policy_version"`
+	Eligible               bool                                              `json:"eligible"`
+	Blockers               []string                                          `json:"blockers"`
+	InputValidator         *problemvalidation.InputValidatorEvidence         `json:"input_validator_evidence,omitempty"`
+	IndependentCorrectness *problemvalidation.IndependentCorrectnessEvidence `json:"independent_correctness_evidence,omitempty"`
 }
 
 func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
@@ -44,6 +45,8 @@ func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
 		// An unknown or older source profile cannot waive a required check.
 		blockers = append(blockers, "policy_unavailable")
 	}
+	id := problem.ImportIdentity{SourceID: e.SourceID, Version: e.ContentVersion, ImportRevision: e.ImportRevision, SourceLockSHA256: e.SourceLockSHA256}
+	var independent *problemvalidation.IndependentCorrectnessEvidence
 	switch {
 	case e.ComparisonOutcome == "mismatch":
 		blockers = append(blockers, "comparison_mismatch")
@@ -52,16 +55,20 @@ func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
 			blockers = append(blockers, "comparison_missing")
 		}
 	default:
-		// No trusted independent-correctness producer or exemption is
-		// registered for the other sources.
-		blockers = append(blockers, "independent_correctness_missing")
+		if policyCurrent {
+			if admitted, ok := problemvalidation.AdmittedIndependentCorrectness(id, e.FormalPlanSHA256); ok {
+				independent = &admitted
+			}
+		}
+		if independent == nil {
+			blockers = append(blockers, "independent_correctness_missing")
+		}
 	}
 	// The input check is independent of the reference verdict and confirms
 	// neither statement quality nor coverage or production readiness.
 	blockers = append(blockers, "statement_quality_missing", "test_coverage_missing")
 	var validator *problemvalidation.InputValidatorEvidence
 	if policyCurrent {
-		id := problem.ImportIdentity{SourceID: e.SourceID, Version: e.ContentVersion, ImportRevision: e.ImportRevision, SourceLockSHA256: e.SourceLockSHA256}
 		if admitted, ok := problemvalidation.AdmittedInputValidator(id, e.FormalPlanSHA256); ok {
 			validator = &admitted
 		}
@@ -73,7 +80,8 @@ func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
 	if !s.SolutionConfirmed {
 		blockers = append(blockers, "solution_confirmation_missing")
 	}
-	return ReviewEligibility{Evidence: e, PolicyVersion: ReviewPolicyVersion, Eligible: len(blockers) == 0, Blockers: blockers, InputValidator: validator}
+	return ReviewEligibility{Evidence: e, PolicyVersion: ReviewPolicyVersion, Eligible: len(blockers) == 0,
+		Blockers: blockers, InputValidator: validator, IndependentCorrectness: independent}
 }
 
 // EligibilityForSubject returns the current policy's blockers for one assignment.
