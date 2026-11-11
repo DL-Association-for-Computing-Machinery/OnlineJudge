@@ -99,6 +99,10 @@ func TestLiveReferenceReports(t *testing.T) {
 		sources = []fixtureSource{{"aplusb", 17}}
 		versionPin = "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd"
 		suffixSizes = []int64{4, 4, 4, 21, 21}
+	case "staticrmq":
+		sources = []fixtureSource{{"staticrmq", 28}}
+		versionPin = "194da8b53c88aa634cb5c030c684a355a59b224a00c7d74422bc35b333d3a5f0"
+		suffixSizes = []int64{34}
 	case "unionfind":
 		sources = []fixtureSource{{"unionfind", 20}}
 		versionPin = "42e62825925bf727c394f3435c2b50f850758576c392d082fb628f7219e4f07d"
@@ -134,6 +138,9 @@ func TestLiveReferenceReports(t *testing.T) {
 			}
 			if versionPin != "" && formal.Version != versionPin {
 				t.Fatal("persisted plan lacks the pinned local version")
+			}
+			if source.id == "staticrmq" && versionPin != "" && formal.Cases[27].Answer.SHA256 != liveReferenceDigest([]byte("1000000000\n")) {
+				t.Fatal("persisted static RMQ plan lost its boundary answer")
 			}
 			for i, size := range suffixSizes {
 				pos := len(formal.Cases) - len(suffixSizes) + i

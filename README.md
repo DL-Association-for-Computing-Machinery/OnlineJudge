@@ -359,6 +359,9 @@ python3 -B scripts/supplement-aplusb.py \
 python3 -B scripts/supplement-unionfind.py \
   --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
   --output /private/tmp/oj-unionfind-singleton
+python3 -B scripts/supplement-static-rmq.py \
+  --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
+  --output /private/tmp/oj-static-rmq-boundary
 ```
 
 离线盘点输入覆盖时，对各题包分别生成报告。只读取已核验题包，不执行题源程序；用私有输出路径保留报告：
@@ -423,6 +426,8 @@ OJ_SANDBOX_EXPERIMENT=1 python3 -B tests/integration/live_reference.py \
 验证单题修订时，在同一命令追加 `--zalgorithm-local-data`（31 点）、`--aplusb-local-data`（17 点）或 `--unionfind-local-data`（20 点），将 `--bundle` 指向对应的单题包，并为 `--output` 另选新目录。专项要求冻结和接纳同一份计划；并查集还核对仅合并用例的零字节答案。A+B 还核对指定非作者读取覆盖、输入校验和独立小用例摘要，作者和未分配者被拒，退回后覆盖缺项恢复。原 v6 的 A+B 保留原质量摘要且无覆盖摘要。
 
 关联数组的同一专项使用 `--associative-array-local-data`（22 点），额外核对两个边界点的固定答案。
+
+静态区间最小值使用 `--static-rmq-local-data`（28 点），额外核对只查询一次时的上界答案。
 
 上述 Darwin 专项产物 `worker-validation.test` 可在专用固定离线槽运行 `-test.run '^TestClaimedReferenceOwnedSandbox$' -test.v`，显式设置 `OJ_REFERENCE_LEASED_SANDBOX_TEST=1 OJ_SANDBOX_EXPERIMENT=1` 并清空槽覆盖；须与其他宿主专项串行。只使用固定合成 A+B 和续期替身，分别验证真实执行与续期拒绝后的停止。
 
