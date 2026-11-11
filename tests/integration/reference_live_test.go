@@ -95,6 +95,10 @@ func TestLiveReferenceReports(t *testing.T) {
 		sources = []fixtureSource{{"aplusb", 17}}
 		versionPin = "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd"
 		suffixSizes = []int64{4, 4, 4, 21, 21}
+	case "point_add_range_sum":
+		sources = []fixtureSource{{"point_add_range_sum", 23}}
+		versionPin = "188f392cd74cc6bb2156a0a444d0f232d0ea71ee746cb0523fba2c914d79dc25"
+		suffixSizes = []int64{12, 63}
 	case "unionfind":
 		sources = []fixtureSource{{"unionfind", 20}}
 		versionPin = "42e62825925bf727c394f3435c2b50f850758576c392d082fb628f7219e4f07d"
@@ -141,6 +145,12 @@ func TestLiveReferenceReports(t *testing.T) {
 				if formal.Cases[18].Answer.Size != 2 || formal.Cases[19].Answer.Size != 0 ||
 					formal.Cases[19].Answer.SHA256 != liveReferenceDigest(nil) {
 					t.Fatal("persisted unionfind plan lost its singleton answers")
+				}
+			}
+			if source.id == "point_add_range_sum" && versionPin != "" {
+				if formal.Cases[21].Answer.SHA256 != liveReferenceDigest([]byte("0\n")) ||
+					formal.Cases[22].Answer.SHA256 != liveReferenceDigest([]byte("1000000000\n3000000000\n")) {
+					t.Fatal("persisted point-add range sum plan lost its boundary answers")
 				}
 			}
 			writeLiveReferenceJSON(t, out, "ready-"+source.id, problemreference.ClaimInput{RequestID: request.ID, SourceID: sourceID, PlanSHA256: plan.SHA256})

@@ -7,6 +7,7 @@ const (
 	zAlgorithmLocalVersion   = "965239246cbdbd63f1641cfcf551d9c8f3a65cd558e194668ad845cac1e39711"
 	aPlusBLocalVersion       = "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd"
 	unionFindLocalVersion    = "42e62825925bf727c394f3435c2b50f850758576c392d082fb628f7219e4f07d"
+	pointAddLocalVersion     = "188f392cd74cc6bb2156a0a444d0f232d0ea71ee746cb0523fba2c914d79dc25"
 )
 
 type localReferenceRevision struct {
@@ -67,6 +68,24 @@ var localReferenceRevisions = map[string]localReferenceRevision{
 				ID:     "case-0017",
 				Input:  materialstore.Object{SHA256: "4d0b3116b1f3552d37cd16d57c533acc42ae47e198d201c0173bd7979528b1e2", Size: 21},
 				Answer: materialstore.Object{SHA256: "873cf3b1e4f23454700801f646b785edf54fe87150bbda8c8c0a7f657fc01979", Size: 11},
+			},
+		},
+	},
+	pointAddLocalVersion: {
+		label: "oj-local:point-add-range-sum-boundaries-v1", sourceID: "library-checker:point_add_range_sum", upstream: 21,
+		source:     materialstore.Object{SHA256: "3d57829f581030f3f97c7f282ffbb51a6a30247e4d28d540d663da139b9aacfe", Size: 1382},
+		definition: materialstore.Object{SHA256: "e4bc11b1c68357961379ed2d14344e723bb91aaa85406094c6b75063e054aaf2", Size: 392},
+		hashes:     materialstore.Object{SHA256: "04f182429d0d58a6f30ef60b2c60d4645ed3bbc9ac15a034d9a2ec4565a7091a", Size: 3657},
+		suffix: []ReferenceCase{
+			{
+				ID:     "case-0022",
+				Input:  materialstore.Object{SHA256: "b51a4a556eba251c8884e032eeafbbeb0de410b3da47062c2aab1b55ddf8024a", Size: 12},
+				Answer: materialstore.Object{SHA256: "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa", Size: 2},
+			},
+			{
+				ID:     "case-0023",
+				Input:  materialstore.Object{SHA256: "c97fdf50a506fb3aa94025726ed7b742a343cd68cabff5391a537fee852f6be5", Size: 63},
+				Answer: materialstore.Object{SHA256: "1c8e7642152280a3e5bee17531c30bbbd84003d3cba9fdb220b617a990c8a432", Size: 22},
 			},
 		},
 	},
