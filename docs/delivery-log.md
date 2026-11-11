@@ -1,5 +1,13 @@
 # 工程交付记录
 
+## 2026-11-11：已入库卷积草稿的对拍材料
+
+基于 `origin/main f5d9fa0`，[草稿材料冻结](reference-validation.md#已入库草稿的卷积对拍材料)用完整导入修订和固定来源锁绑定朴素解与候选解。材料绑定报告保留草稿 ID、内容版本和导入修订，维护命令旧格式保持；任何一份对象损坏都不返回部分材料。
+
+离线 Docker 的定向竞态测试通过。已复验的实际卷积候选经正式导入服务写入临时 PostgreSQL 和私有对象根；关闭准备对象后，用独立数据库连接和重新打开的存储读回，核对实际只打开两个已审核的解法对象，错误归属及来源锁均在对象 I/O 前拒绝。实物专项 `TestPrivateDraftConfiguredConvolutionEvidence` 通过，日志见 `/private/tmp/oj-draft-convolution-evidence-postgres-final.log`。测试使用合成会话观察，未执行沙箱中的题源，不代表作者请求或 Worker 受信报告联通。
+
+无 schema 或运行配置变化，草稿保持 `not-run`，未部署。最终 CI 及合并状态以 PR 回读为准。
+
 ## 2026-11-11：固定卷积小规模独立对拍
 
 基于 `origin/main 4a30fa1`，[卷积小规模独立对拍](reference-validation.md#卷积小规模独立对拍)在现有断网卷积槽内先运行固定朴素解，清理后再运行固定候选。24 点语料包含模域、手算锚点和固定种子；首个合法差异保留有界输入、哈希和两端系数，启动不明时保留可用容器身份、停止证据及 `INCOMPLETE`。

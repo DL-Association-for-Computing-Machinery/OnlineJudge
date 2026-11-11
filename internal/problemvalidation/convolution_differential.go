@@ -25,6 +25,14 @@ type ConvolutionCounterexample struct {
 	Actual      []uint32 `json:"actual"`
 }
 
+// ConvolutionDraftBinding identifies the exact private draft import used to
+// prepare both solver inputs. It is provenance, not an authorization grant.
+type ConvolutionDraftBinding struct {
+	ID             string `json:"id"`
+	Version        string `json:"version"`
+	ImportRevision string `json:"import_revision"`
+}
+
 // ConvolutionReport describes a small differential trial, never publication
 // approval. The Worker independently owns the slot and confirms its stop.
 type ConvolutionReport struct {
@@ -34,6 +42,7 @@ type ConvolutionReport struct {
 	SourceID       string                     `json:"source_id"`
 	SourceRevision string                     `json:"source_revision"`
 	SourceLock     string                     `json:"source_lock_sha256"`
+	Draft          *ConvolutionDraftBinding   `json:"draft,omitempty"`
 	Oracle         ConvolutionProgram         `json:"oracle"`
 	Candidate      ConvolutionProgram         `json:"candidate"`
 	Corpus         string                     `json:"corpus"`
@@ -56,12 +65,16 @@ type ConvolutionReport struct {
 // NewConvolutionReport records the admitted identities even if startup never
 // reached compilation. Only the slot owner may confirm a terminal outcome.
 func NewConvolutionReport(sources ConvolutionSources) ConvolutionReport {
-	return ConvolutionReport{
+	report := ConvolutionReport{
 		Schema: "oj.convolution-differential.v1", Status: "incomplete", Publication: "blocked",
 		SourceID: ConvolutionSourceID, SourceRevision: sources.revision, SourceLock: SourceLockSHA256,
 		Oracle: sources.oracle.identity, Candidate: sources.candidate.identity,
 		Corpus: convolutionCorpusID, Seed: convolutionCorpusSeed, Cases: convolutionCases,
 	}
+	if binding := sources.draft; binding.ID != "" {
+		report.Draft = &binding
+	}
+	return report
 }
 
 // RunSmallConvolution executes the frozen, pinned programs serially. The
