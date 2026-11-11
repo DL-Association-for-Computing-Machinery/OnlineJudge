@@ -51,7 +51,7 @@ python3 -B -m unittest discover -s tests/governance -p test_problem_sources.py -
 
 ### 首批文本检查器差分
 
-已有完整私有候选及同时含 Go 1.26.10、GNU++17 的本地镜像时，显式执行下列专用隔离实验。替换镜像为已审阅的本地不可变 ID；`CHECKER_CORPUS` 指向已有 `materials/` 目录。不下载/安装工具，不在宿主或普通 CI 执行题源 checker：
+已有完整私有候选及同时含 Go 1.26.11、GNU++17 的本地镜像时，显式执行下列专用隔离实验。替换镜像为已审阅的本地不可变 ID；`CHECKER_CORPUS` 指向已有 `materials/` 目录。不下载/安装工具，不在宿主或普通 CI 执行题源 checker：
 
 ```sh
 CHECKER_CORPUS=/private/tmp/oj-library-checker-corpus/materials
@@ -74,7 +74,7 @@ docker --context desktop-linux run --rm --network none --read-only \
 
 ### 私有草稿参考验证
 
-维护入口已验证固定Library Checker A+B完整12点、unionfind完整18点、zalgorithm完整29点、suffixarray完整50点、primality_test固定依赖/完整13点、static_range_sum完整11点、associative_array完整20点、point_add_range_sum完整21点、staticrmq完整27点及convolution_mod完整53点。历史启动/运行故障仍保留，根因未知，不据新通过宣称故障修复或长期稳定，证据归[交付记录](docs/delivery-log.md)。入口不写数据库验证状态或发布。需要已配置且停止的专用槽、已有固定镜像与Docker Desktop、macOS arm64；命令不会自动创建、替换或恢复槽。使用已有Go1.26.10工具链镜像构建独立宿主产物（不与Linux检查共用输出）：
+维护入口已验证固定Library Checker A+B完整12点、unionfind完整18点、zalgorithm完整29点、suffixarray完整50点、primality_test固定依赖/完整13点、static_range_sum完整11点、associative_array完整20点、point_add_range_sum完整21点、staticrmq完整27点及convolution_mod完整53点。历史启动/运行故障仍保留，根因未知，不据新通过宣称故障修复或长期稳定，证据归[交付记录](docs/delivery-log.md)。入口不写数据库验证状态或发布。需要已配置且停止的专用槽、已有固定镜像与Docker Desktop、macOS arm64；命令不会自动创建、替换或恢复槽。使用已有Go1.26.11工具链镜像构建独立宿主产物（不与Linux检查共用输出）：
 
 `associative_array`使用512MiB完整材料总预算、input48MiB、stdout/checker8MiB、payload1GiB，独立CPU5秒/wall10秒，保留更严的整体3分钟和原medium物理槽/锁。同次48MiB输入→8MiB输出、完整20AC/Stop及随后独立原六来源回归已通过；[参考合同](docs/reference-validation.md#associative_array参考验证)与旧失败限制分开记录。
 
@@ -398,7 +398,7 @@ docker --context desktop-linux run --rm --network none --read-only --cap-drop AL
 
 ## 运行环境
 
-Docker 工具链使用 Go 1.26.10、pnpm 11.25.0、Node 24.19.0，与 `go.mod`、[Node 版本](web/.node-version)及 [package.json](web/package.json)对应；依赖锁文件为 `go.sum` 和 `web/pnpm-lock.yaml`。宿主无需另外安装这些构建工具。
+Docker 工具链使用 Go 1.26.11、pnpm 11.25.0、Node 24.19.0，与 `go.mod`、[Node 版本](web/.node-version)及 [package.json](web/package.json)对应；依赖锁文件为 `go.sum` 和 `web/pnpm-lock.yaml`。宿主无需另外安装这些构建工具。
 
 构建工具链由 Dockerfile 固定，应用依赖以 go.sum 和 pnpm-lock.yaml 为准。Docker Desktop 迁移的验证结果见交付日志；历史 Colima 证据不能替代本次验证。
 

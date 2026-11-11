@@ -22,6 +22,6 @@ golangci-lint 固定 v2.15.0，配置位于 `.golangci.yml`，仅启用 staticch
 
 ## Go 工具准入
 
-2026-10-29 核对 [v2.15.0](https://github.com/golangci/golangci-lint/releases/tag/v2.15.0)：要求 Go 1.26.0，使用项目 Go 1.26.10 构建；主项目许可证 GPL-3.0，作为独立开发 CLI 使用，不链接到应用，也不进入运行镜像。若对外分发开发镜像，应履行适用许可义务。公开 GitHub advisory 查询为空，不代表工具或传递依赖无漏洞。
+2026-10-29 核对 [v2.15.0](https://github.com/golangci/golangci-lint/releases/tag/v2.15.0)：要求 Go 1.26.0，当时以项目 Go 1.26.10 构建；当前版本见 README；主项目许可证 GPL-3.0，作为独立开发 CLI 使用，不链接到应用，也不进入运行镜像。若对外分发开发镜像，应履行适用许可义务。公开 GitHub advisory 查询为空，不代表工具或传递依赖无漏洞。
 
 工具通过固定 Go 模块版本和校验和下载，额外成本是首次构建下载、开发镜像空间及每次分析时间；不上传源码到第三方质量服务。后续升级须验证配置、有效/无效样例、源码基线和 CI，并重新核对许可、安全与兼容性。官方规则见 [linters](https://golangci-lint.run/docs/linters/)。
