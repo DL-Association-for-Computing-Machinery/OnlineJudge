@@ -66,7 +66,7 @@ func TestStatementRenderingMatchesHistoricalBrowserReport(t *testing.T) {
 }
 
 func TestApPlusBRenderingEvidenceMatchesReviewedEquivalence(t *testing.T) {
-	raw, err := os.ReadFile("../../docs/evidence/aplusb-render-equivalence-20261112.json")
+	raw, err := os.ReadFile("testdata/aplusb-render-equivalence-20261112.json")
 	if err != nil {
 		t.Fatal(err)
 	}

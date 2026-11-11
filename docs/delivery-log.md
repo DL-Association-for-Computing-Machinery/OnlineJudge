@@ -2,11 +2,13 @@
 
 ## 2026-11-12：审核采信 A+B 等价题面的历史渲染
 
-基于 `cafbded`，[审核准入](problem-drafts.md#批准准入状态)为 A+B 17 点修订的精确绑定返回历史浏览器摘要和 `historical_match`。已核验 [#151 浏览器报告](#2026-11-11六题输入输出格式逐行排版)、旧包与新包的原始摘要，标题、Markdown、有序样例及其字节一致；整个前端文件树相同。临时 PostgreSQL 将两包经当前服务独立导入，核对真实预览投影相同。[等价性清单](evidence/aplusb-render-equivalence-20261112.json)的 SHA-256 为 `3c8ec439df6cd551a87ea40e405cd06990d0f9476ad2e3413c4ecbc894329644`。没有重新跑浏览器。
+基于 `cafbded`，[审核准入](problem-drafts.md#批准准入状态)为 A+B 17 点修订的精确绑定返回历史浏览器摘要和 `historical_match`。已核验 [#151 浏览器报告](#2026-11-11六题输入输出格式逐行排版)、旧包与新包的原始摘要，标题、Markdown、有序样例及其字节一致；整个前端文件树相同。临时 PostgreSQL 将两包经当前服务独立导入，核对真实预览投影相同。[等价性清单](../internal/problemvalidation/testdata/aplusb-render-equivalence-20261112.json)的 SHA-256 为 `3c8ec439df6cd551a87ea40e405cd06990d0f9476ad2e3413c4ecbc894329644`。没有重新跑浏览器。
 
 新修订真实 Worker／回环 mTLS／临时 PostgreSQL 接纳 17 点；当前授权审核题面的归一化摘要与历史输入一致。测试夹具提交当前语义确认只解除题面缺项，撤回分配、重新分配及退回分别复验权限和缺项。审核读回 SHA-256 为 `56806baf78269da84e73b4bbf024559afd48d6d757db92c01a05bb00e7c2cd79`。这不是生产人工题意确认；生产检查器、目标环境、作者标程确认、批准与发布仍分开判断。
 
 离线 Go 后端、历史报告、OpenAPI 和真实 Redis／HTTPS 会话套件通过。原 v6 十题复验接纳 254 个正式点与卷积 24 个对拍，逐题计划、导入修订和档位摘要不变，旧 A+B 渲染响应不含 `historical_match`。旧版汇总 SHA-256 为 `c46a3da98aef4c7c33f9dfad01b6a383915f8f7afaa7c68fd48698c30c8d2e90`。
+
+首轮远端后端镜像不包含 `docs/`，等价性测试因此找不到清单。已将同一字节的清单放到测试包的 `testdata/`，文档链接指向该清单；按 CI 镜像的文件范围复验，不改变测试断言。
 
 ## 2026-11-12：审核采信 A+B 输入校验和独立小用例
 
