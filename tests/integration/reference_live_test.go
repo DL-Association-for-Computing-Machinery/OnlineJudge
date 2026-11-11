@@ -103,6 +103,10 @@ func TestLiveReferenceReports(t *testing.T) {
 		sources = []fixtureSource{{"unionfind", 20}}
 		versionPin = "42e62825925bf727c394f3435c2b50f850758576c392d082fb628f7219e4f07d"
 		suffixSizes = []int64{10, 10}
+	case "static_range_sum":
+		sources = []fixtureSource{{"static_range_sum", 13}}
+		versionPin = "a93676964a96fb5dd0320441307eb0bb11ed41b0a1e1d4441c47d124a644e375"
+		suffixSizes = []int64{10, 19}
 	default:
 		t.Fatal("unknown supplement fixture")
 	}
@@ -134,6 +138,12 @@ func TestLiveReferenceReports(t *testing.T) {
 			}
 			if versionPin != "" && formal.Version != versionPin {
 				t.Fatal("persisted plan lacks the pinned local version")
+			}
+			if source.id == "static_range_sum" && versionPin != "" {
+				if formal.Cases[11].Answer.SHA256 != liveReferenceDigest([]byte("0\n")) ||
+					formal.Cases[12].Answer.SHA256 != liveReferenceDigest([]byte("1000000000\n")) {
+					t.Fatal("persisted static range sum plan lost its boundary answers")
+				}
 			}
 			for i, size := range suffixSizes {
 				pos := len(formal.Cases) - len(suffixSizes) + i

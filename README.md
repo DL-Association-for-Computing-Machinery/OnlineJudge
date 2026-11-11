@@ -359,6 +359,9 @@ python3 -B scripts/supplement-aplusb.py \
 python3 -B scripts/supplement-unionfind.py \
   --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
   --output /private/tmp/oj-unionfind-singleton
+python3 -B scripts/supplement-static-range-sum.py \
+  --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
+  --output /private/tmp/oj-static-range-sum-singleton
 ```
 
 离线盘点输入覆盖时，对各题包分别生成报告。只读取已核验题包，不执行题源程序；用私有输出路径保留报告：
@@ -420,7 +423,7 @@ OJ_SANDBOX_EXPERIMENT=1 python3 -B tests/integration/live_reference.py \
 
 题包父目录须归当前用户所有、权限为 0700，且只含题包；挂载整个父目录可保留 Linux 读到的题包所有者。工具链须已缓存依赖并提供 PostgreSQL 工具，以非 root 用户运行。输出须是已有父目录下的新目录，位于仓库与题包父目录之外。五个预配槽须已停止且无隔离标记；命令不创建、替换或恢复槽。临时控制端只向宿主回环发布，数据库使用容器内 Unix socket。执行仍在原断网槽，首个失败即停止批次，原始日志保留；成功才写 `summary.json`。见[报告接纳专项](docs/reference-requests.md#十题实物报告接纳专项)。
 
-验证单题修订时，在同一命令追加 `--zalgorithm-local-data`（31 点）、`--aplusb-local-data`（17 点）或 `--unionfind-local-data`（20 点），将 `--bundle` 指向对应的单题包，并为 `--output` 另选新目录。专项要求冻结和接纳同一份计划；并查集还核对仅合并用例的零字节答案。A+B 还核对指定非作者读取覆盖、输入校验和独立小用例摘要，作者和未分配者被拒，退回后覆盖缺项恢复。原 v6 的 A+B 保留原质量摘要且无覆盖摘要。
+验证单题修订时，在同一命令追加 `--zalgorithm-local-data`（31 点）、`--aplusb-local-data`（17 点）、`--unionfind-local-data`（20 点）或 `--static-range-sum-local-data`（13 点），将 `--bundle` 指向对应的单题包，并为 `--output` 另选新目录。专项要求冻结和接纳同一份计划；并查集还核对仅合并用例的零字节答案，静态区间和核对两个整段查询的固定答案。A+B 还核对指定非作者读取覆盖、输入校验和独立小用例摘要，作者和未分配者被拒，退回后覆盖缺项恢复。原 v6 的 A+B 保留原质量摘要且无覆盖摘要。
 
 关联数组的同一专项使用 `--associative-array-local-data`（22 点），额外核对两个边界点的固定答案。
 

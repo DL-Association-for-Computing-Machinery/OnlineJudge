@@ -41,6 +41,10 @@ SUPPLEMENTS = {
                             "fd871a02594fcd663790cd0530153df2ad18bf95110559ce552a121c34705bed",
                             "42e62825925bf727c394f3435c2b50f850758576c392d082fb628f7219e4f07d",
                             "c5857fa3048311c6bcdb40dfde511c85c843c5feacedc56a552534436aa503d5"),
+    "static_range_sum": Supplement("oj-local:static-range-sum-singleton-v1",
+                                   "4d3adee969250c1834a61d59b456649f0c2cd0445902ad386b4a6f3e351a2f93",
+                                   "a93676964a96fb5dd0320441307eb0bb11ed41b0a1e1d4441c47d124a644e375",
+                                   "d518d555c9f33d57c574b06ac41fcd4b713fa31bd3f04d18e3daf329a4744841"),
 }
 
 
@@ -58,6 +62,9 @@ def boundary_cases(problem):
     elif problem == "unionfind":
         yield b"1 1\n1 0 0\n", b"1\n"
         yield b"1 1\n0 0 0\n", b""
+    elif problem == "static_range_sum":
+        for value in (0, 10**9):
+            yield f"1 1\n{value}\n0 1\n".encode("ascii"), f"{value}\n".encode("ascii")
     else:
         raise ValueError("unrecognized supplement")
 
