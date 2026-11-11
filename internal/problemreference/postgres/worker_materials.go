@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
@@ -15,69 +16,112 @@ import (
 
 // AuthorizeReferenceMaterials is read-only and never extends the reservation.
 func (c *ReferenceClaimer) AuthorizeReferenceMaterials(ctx context.Context, node submission.NodeIdentity, input problemreference.MaterialInput) (problemreference.MaterialAuthorization, error) {
-	var zero problemreference.MaterialAuthorization
+	plan, deadline, _, err := c.liveReferenceClaim(ctx, node, input, false)
+	if err != nil {
+		return problemreference.MaterialAuthorization{}, err
+	}
+	return problemreference.MaterialAuthorization{Plan: plan, Deadline: deadline}, nil
+}
+
+// RenewReference rechecks live authority and only extends the exact live token.
+// It never marks execution stopped or rebinds an expired reservation.
+func (c *ReferenceClaimer) RenewReference(ctx context.Context, node submission.NodeIdentity, input problemreference.MaterialInput) (problemreference.WorkerClaim, error) {
+	_, _, until, err := c.liveReferenceClaim(ctx, node, input, true)
+	if err != nil {
+		return problemreference.WorkerClaim{}, err
+	}
+	return problemreference.WorkerClaim{RequestID: input.RequestID, SourceID: input.SourceID,
+		PlanSHA256: input.PlanSHA256, Token: input.Token, Until: until}, nil
+}
+
+func (c *ReferenceClaimer) liveReferenceClaim(ctx context.Context, node submission.NodeIdentity, input problemreference.MaterialInput, renew bool) (problemreference.ExpectedPlan, time.Time, time.Time, error) {
+	var zero problemreference.ExpectedPlan
+	var noTime time.Time
 	if c == nil || ctx == nil || !input.Valid() {
-		return zero, problemreference.ErrInvalid
+		return zero, noTime, noTime, problemreference.ErrInvalid
 	}
 	if node.ID != c.nodeID || node.CredentialVersion < 1 {
-		return zero, submission.ErrNode
+		return zero, noTime, noTime, submission.ErrNode
 	}
 	profile, _, err := problemvalidation.ResolveSource(input.SourceID)
 	if err != nil {
-		return zero, problemreference.ErrClaimUnavailable
+		return zero, noTime, noTime, problemreference.ErrClaimUnavailable
 	}
 	raw, err := json.Marshal(profile)
 	if err != nil {
-		return zero, storageError{err}
+		return zero, noTime, noTime, storageError{err}
 	}
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	tx, err := c.store.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
-		return zero, storageError{err}
+		return zero, noTime, noTime, storageError{err}
 	}
 	defer rollback(tx)
 	if err := c.lockNode(ctx, tx, node); err != nil {
-		return zero, err
+		return zero, noTime, noTime, err
 	}
 	q := referencedb.New(tx)
 	r, err := c.lockClaimRequest(ctx, tx, q, input.ClaimInput, raw)
 	if err != nil {
-		return zero, err
+		return zero, noTime, noTime, err
 	}
 	p, err := q.ReferenceExpectedPlanForShare(ctx, r.ID)
 	if err != nil {
-		return zero, referenceClaimError(err)
+		return zero, noTime, noTime, referenceClaimError(err)
 	}
 	plan := problemreference.ExpectedPlan{Encoding: p.PlanEncoding, SHA256: p.PlanSha256}
 	var parsed problem.ReferencePlan
 	if plan.SHA256 != input.PlanSHA256 || !plan.ValidFor(r.Specification) || json.Unmarshal(plan.Encoding, &parsed) != nil || parsed.ValidateMaterials() != nil {
-		return zero, problemreference.ErrClaimUnavailable
+		return zero, noTime, noTime, problemreference.ErrClaimUnavailable
 	}
-	claim, err := q.ReferenceWorkerClaimForShare(ctx)
+	var claim referencedb.ProblemReferenceWorkerClaim
+	if renew {
+		claim, err = q.ReferenceWorkerClaimForUpdate(ctx)
+	} else {
+		claim, err = q.ReferenceWorkerClaimForShare(ctx)
+	}
 	if err != nil {
-		return zero, referenceClaimError(err)
+		return zero, noTime, noTime, referenceClaimError(err)
 	}
 	if claim.RequestID != r.ID || claim.NodeID != node.ID || claim.CredentialVersion != node.CredentialVersion || claim.LeaseToken != input.Token || claim.PlanSha256 != input.PlanSHA256 {
-		return zero, problemreference.ErrClaimUnavailable
+		return zero, noTime, noTime, problemreference.ErrClaimUnavailable
+	}
+	if renew {
+		until, err := q.RenewReferenceWorkerClaim(ctx, referencedb.RenewReferenceWorkerClaimParams{
+			RequestID: r.ID, NodeID: node.ID, CredentialVersion: node.CredentialVersion, LeaseToken: input.Token, PlanSha256: input.PlanSHA256,
+		})
+		if err != nil {
+			return zero, noTime, noTime, referenceClaimError(err)
+		}
+		if !until.Valid || until.InfinityModifier != 0 {
+			return zero, noTime, noTime, storageError{problemreference.ErrInvalid}
+		}
+		if err := commitTx(ctx, tx, true); err != nil {
+			return zero, noTime, noTime, err
+		}
+		if err := ctx.Err(); err != nil {
+			return zero, noTime, noTime, errors.Join(problemreference.ErrCommitUnknown, err)
+		}
+		return plan, noTime, until.Time, nil
 	}
 	ms, err := q.ReferenceWorkerClaimRemaining(ctx)
 	if err != nil {
-		return zero, referenceClaimError(err)
+		return zero, noTime, noTime, referenceClaimError(err)
 	}
 	if ms <= 0 || ms > 30000 {
-		return zero, problemreference.ErrClaimUnavailable
+		return zero, noTime, noTime, problemreference.ErrClaimUnavailable
 	}
 	deadline := start.Add(time.Duration(ms) * time.Millisecond)
 	if !time.Now().Before(deadline) {
-		return zero, problemreference.ErrClaimUnavailable
+		return zero, noTime, noTime, problemreference.ErrClaimUnavailable
 	}
 	if err := commitTx(ctx, tx, false); err != nil {
-		return zero, err
+		return zero, noTime, noTime, err
 	}
 	if ctx.Err() != nil || !time.Now().Before(deadline) {
-		return zero, problemreference.ErrClaimUnavailable
+		return zero, noTime, noTime, problemreference.ErrClaimUnavailable
 	}
-	return problemreference.MaterialAuthorization{Plan: plan, Deadline: deadline}, nil
+	return plan, deadline, noTime, nil
 }

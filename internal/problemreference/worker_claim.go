@@ -52,3 +52,9 @@ func (c WorkerClaim) ValidFor(i ClaimInput) bool {
 type WorkerClaimer interface {
 	ClaimReference(context.Context, submission.NodeIdentity, ClaimInput) (WorkerClaim, error)
 }
+
+// WorkerRenewer extends only a current, fully bound reservation after rechecking
+// live authority. Expiry is not proof that the prior sandbox has stopped.
+type WorkerRenewer interface {
+	RenewReference(context.Context, submission.NodeIdentity, MaterialInput) (WorkerClaim, error)
+}

@@ -7,6 +7,8 @@ package referencedb
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const referenceWorkerClaimForShare = `-- name: ReferenceWorkerClaimForShare :one
@@ -15,6 +17,25 @@ SELECT singleton, request_id, node_id, credential_version, lease_token, plan_sha
 
 func (q *Queries) ReferenceWorkerClaimForShare(ctx context.Context) (ProblemReferenceWorkerClaim, error) {
 	row := q.db.QueryRow(ctx, referenceWorkerClaimForShare)
+	var i ProblemReferenceWorkerClaim
+	err := row.Scan(
+		&i.Singleton,
+		&i.RequestID,
+		&i.NodeID,
+		&i.CredentialVersion,
+		&i.LeaseToken,
+		&i.PlanSha256,
+		&i.LeaseUntil,
+	)
+	return i, err
+}
+
+const referenceWorkerClaimForUpdate = `-- name: ReferenceWorkerClaimForUpdate :one
+SELECT singleton, request_id, node_id, credential_version, lease_token, plan_sha256, lease_until FROM problem_reference_worker_claim WHERE singleton FOR UPDATE
+`
+
+func (q *Queries) ReferenceWorkerClaimForUpdate(ctx context.Context) (ProblemReferenceWorkerClaim, error) {
+	row := q.db.QueryRow(ctx, referenceWorkerClaimForUpdate)
 	var i ProblemReferenceWorkerClaim
 	err := row.Scan(
 		&i.Singleton,
@@ -39,4 +60,36 @@ func (q *Queries) ReferenceWorkerClaimRemaining(ctx context.Context) (int64, err
 	var remaining_ms int64
 	err := row.Scan(&remaining_ms)
 	return remaining_ms, err
+}
+
+const renewReferenceWorkerClaim = `-- name: RenewReferenceWorkerClaim :one
+UPDATE problem_reference_worker_claim
+SET lease_until = clock_timestamp() + interval '30 seconds'
+WHERE singleton AND request_id = $1 AND node_id = $2
+    AND credential_version = $3 AND lease_token = $4
+    AND plan_sha256 = $5 AND lease_until > clock_timestamp()
+RETURNING lease_until
+`
+
+type RenewReferenceWorkerClaimParams struct {
+	RequestID         string
+	NodeID            string
+	CredentialVersion int64
+	LeaseToken        string
+	PlanSha256        string
+}
+
+// Acquire the singleton row lock first. The database clock is read after any
+// wait, and neither a replaced token nor an expired token can be renewed.
+func (q *Queries) RenewReferenceWorkerClaim(ctx context.Context, arg RenewReferenceWorkerClaimParams) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, renewReferenceWorkerClaim,
+		arg.RequestID,
+		arg.NodeID,
+		arg.CredentialVersion,
+		arg.LeaseToken,
+		arg.PlanSha256,
+	)
+	var lease_until pgtype.Timestamptz
+	err := row.Scan(&lease_until)
+	return lease_until, err
 }
