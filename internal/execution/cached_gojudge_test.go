@@ -27,6 +27,8 @@ type cacheFixture struct {
 	referenceOutput               int
 	stdout                        []byte
 	compilationEntry              string
+	lastReadMaximum               int64
+	runCopyOutMaximum             float64
 }
 
 func (f *cacheFixture) add(data []byte) string {
@@ -47,6 +49,7 @@ func (f *cacheFixture) UploadFile(ctx context.Context, data []byte) (string, err
 	return id, nil
 }
 func (f *cacheFixture) ReadFile(ctx context.Context, id string, maximum int64) ([]byte, error) {
+	f.lastReadMaximum = maximum
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -118,6 +121,7 @@ func (f *cacheFixture) RoundTrip(r *http.Request) (*http.Response, error) {
 		result["fileIds"] = map[string]string{"main": f.add([]byte("executable"))}
 	} else {
 		f.runs++
+		f.runCopyOutMaximum, _ = c["copyOutMax"].(float64)
 		if f.block != nil {
 			close(f.entered)
 			select {
