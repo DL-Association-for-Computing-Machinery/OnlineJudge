@@ -14,6 +14,8 @@ convolution_mod的完整材料/16MiB输入答案、共享快照、封闭tier8及
 
 `tests/governance/test_problem_sources.py` 验证离线题源工具的来源哈希、完整集合、安全提取及输出/清理失败边界，随 governance 执行；不下载或执行外部题源程序。十题完整数据生成/validator/checker只由 README 的显式本地 Docker 命令运行，不进入普通 CI，也不构成生产 Worker/SPJ 或 P4 发布验收。
 
+[卷积小规模独立对拍](reference-validation.md#卷积小规模独立对拍)的固定语料、严格输出、首个差异、制品清理和停止不明回归归普通 backend，使用替身、不运行外部源码。正例 CLI 和 `TestConvolutionDifferentialNegativeSandbox` 仅在 README 所述专用断网卷积槽运行，负对照需 sandbox 标签、Darwin arm64 和双重显式启用，不进入普通 CI。
+
 `internal/judging`的独立Library Checker文本组件及M0回归随backend执行；`tests/checkercompat`仅在显式`checkercompat`标签和README专用断网/只读/非root Docker中运行锁定上游wcmp，不进入普通CI。组件差分不改草稿not-run或代替本站受限程序验证；支持域及预算见[准入约定](checker-admission.md)。
 
 `internal/problemvalidation`及Worker维护命令的材料/顺序/失败/取消、启动所有权与清理回归归普通backend；`cmd/worker/validation_sandbox_test.go`仅在显式sandbox标签、独立宿主测试驱动及双重实验opt-in下执行。该真实专项验证A+B全点和故障，不进入普通CI，不创建数据库、不改默认M0 suite，也不更新草稿not-run。结果及限制见[受限参考验证](reference-validation.md)。

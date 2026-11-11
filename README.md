@@ -258,6 +258,18 @@ env -u OJ_WORKER_M0_SLOT OJ_SANDBOX_EXPERIMENT=1 OJ_CONVOLUTION_REFERENCE=1 \
 
 维护命令显式指定`--source-id library-checker:convolution_mod`；异常恢复指定同一来源及原full ID，遵循原在途控制排空、Stop/PID证据和dirty门禁。专项首组或Stop失败时不进入完整53点CLI，不重试到通过。
 
+小规模独立对拍复用同一停止槽。令 `OJ_CONVOLUTION_SOURCE_ROOT` 指向本地已核验的固定上游源码根（含 `convolution/convolution_mod/sol/{naive,correct}.cpp`），报告目录必须是源码根外尚不存在的路径：
+
+```sh
+env -u OJ_WORKER_M0_SLOT -u OJ_WORKER_M0_DUAL_EXPERIMENT OJ_SANDBOX_EXPERIMENT=1 \
+  .local/validation-host/worker validate-convolution-differential \
+  --source-root "$OJ_CONVOLUTION_SOURCE_ROOT" \
+  --source-lock "$PWD/config/problem-sources/library-checker.json" \
+  --output /private/tmp/oj-convolution-differential-report --start-stopped-slot
+```
+
+使用上方的 Darwin arm64 宿主产物。固定错误解负对照只在专用 `worker-validation.test` 中运行：显式设置 `OJ_CONVOLUTION_DIFFERENTIAL_TEST=1`、`OJ_SANDBOX_EXPERIMENT=1`、`OJ_CONVOLUTION_DIFFERENTIAL_SOURCE_ROOT`、`OJ_CONVOLUTION_DIFFERENTIAL_SOURCE_LOCK` 和新目录 `OJ_CONVOLUTION_DIFFERENTIAL_TEST_OUTPUT`，清空上述两个槽覆盖，选择 `-test.run='^TestConvolutionDifferentialNegativeSandbox$' -test.timeout=5m`。负对照应在报告中留下合法系数差异并确认停机。私有报告和限制见[卷积小规模独立对拍](docs/reference-validation.md#卷积小规模独立对拍)。
+
 static_range_sum的维护命令选择`--source-id library-checker:static_range_sum`和新报告目录。以下显式专项先验证完整16MiB输入与8MiB stdout/4KiB stderr、stdout超限的窄SIGXFSZ证据及stderr4097拒绝，再运行完整11点CLI。预期负例只接受一条明确验证错误；任何额外清理/取消/截断错误或Stop失败均中止后组。首次启动失败与后续环境改变后的新通过分开记录，不沿用已消耗的协议重试；固定文件限制/collector区分见[参考合同](docs/reference-validation.md#static_range_sum参考验证)：
 
 ```sh
