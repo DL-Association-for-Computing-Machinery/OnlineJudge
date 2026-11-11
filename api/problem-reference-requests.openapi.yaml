@@ -1,11 +1,11 @@
 openapi: 3.1.0
 info:
   title: OnlineJudge Author Reference Requests
-  version: 0.2.0
+  version: 0.3.0
   description: >-
     默认关闭。使用普通 HTTPS 会话、固定 Host 和同源 POST。
     所有操作须匹配实际会话与预期主体，再检查当前出题权限与本人范围。
-    不允许 query 或路径编码别名。响应均不缓存，不包含材料、配置、预留或报告正文。
+    不允许 query 或路径编码别名。响应均不缓存。结果只返回受限摘要，不包含正式材料、配置、预留或原始 Worker 报告。
 security:
   - ordinarySession: []
 paths:
