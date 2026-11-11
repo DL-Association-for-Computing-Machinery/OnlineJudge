@@ -6,6 +6,7 @@ import json
 import logging
 from pathlib import Path
 import resource
+import signal
 import subprocess
 import sys
 import tempfile
@@ -14,7 +15,8 @@ import tomllib
 import types
 
 from library_checker_quality import (
-    WRONG_SOLUTIONS, WRONG_SOLUTION_SCHEMA, control_result, input_controls, wrong_solution_result,
+    SLOW_CPU_SECONDS, SLOW_HARD_CPU_SECONDS, SLOW_SOLUTION, SLOW_SOLUTION_SCHEMA, SLOW_SOURCE, SLOW_WALL_SECONDS,
+    WRONG_SOLUTIONS, control_result, input_controls, slow_solution_result, wrong_solution_result,
 )
 from problem_source_common import digest, expected_materials, load_lock, read_regular, snapshot
 
@@ -56,6 +58,50 @@ def run_wrong_solution(base, item, inventory, output):
         if result.returncode != 0:
             raise ValueError(f"{item['source_id']}: checker exited {result.returncode} at point {position}")
     raise ValueError(f"{item['source_id']}: no formal point rejected the wrong solution")
+
+
+def cpu_limit():
+    resource.setrlimit(resource.RLIMIT_CPU, (SLOW_CPU_SECONDS, SLOW_HARD_CPU_SECONDS))
+
+
+def run_cpu_bounded(program, infile, output):
+    # This driver is single threaded and waits for each child before starting
+    # the next. The delta measures this invocation, not compiler/checker work.
+    before = resource.getrusage(resource.RUSAGE_CHILDREN)
+    with infile.open("rb") as stream, output.open("wb") as actual:
+        result = checked([str(program)], stdin=stream, stdout=actual, timeout=SLOW_WALL_SECONDS,
+                         check=False, preexec_fn=cpu_limit)
+    after = resource.getrusage(resource.RUSAGE_CHILDREN)
+    cpu_ms = round(1000 * (after.ru_utime - before.ru_utime + after.ru_stime - before.ru_stime))
+    return result.returncode, cpu_ms
+
+
+def run_slow_solution(base, item, inventory, output):
+    limit = tomllib.loads((base / "info.toml").read_text())["timelimit"]
+    if limit != SLOW_CPU_SECONDS:
+        raise ValueError("slow-solution budget differs from pinned source")
+    for position, case in enumerate(item["cases"], 1):
+        if case["sample"]:
+            continue
+        infile = base / "in" / (case["id"] + ".in")
+        answer = base / "out" / (case["id"] + ".out")
+        status, candidate_cpu_ms = run_cpu_bounded(base / "sol" / Path(SLOW_SOLUTION).stem, infile, output)
+        if status == -signal.SIGXCPU:
+            status, reference_cpu_ms = run_cpu_bounded(base / "sol" / "correct", infile, output)
+            if status != 0:
+                raise ValueError(f"reference failed under the same CPU limit at point {position}")
+            witness = slow_solution_result(item, position, inventory, candidate_cpu_ms, reference_cpu_ms)
+        elif status == 0:
+            witness = None
+        else:
+            raise ValueError(f"slow solution exited {status} at point {position}")
+        result = checked([str(base / "checker"), str(infile), str(output), str(answer)],
+                         timeout=SLOW_WALL_SECONDS, check=False)
+        if result.returncode != 0:
+            raise ValueError(f"slow-solution control checker exited {result.returncode} at point {position}")
+        if witness is not None:
+            return witness
+    raise ValueError("no formal point exhausted the slow solution's CPU budget")
 
 
 def main():
@@ -106,10 +152,17 @@ def main():
                 wrong_solution = run_wrong_solution(base, item, expected, Path(directory) / "actual.out")
             print(item["source_id"], "wrong solution rejected at formal position",
                   wrong_solution["case_position"], flush=True)
+        slow_solution = None
+        if item["path"] == SLOW_SOURCE:
+            module.compile(base / "sol" / SLOW_SOLUTION, source)
+            with tempfile.TemporaryDirectory(dir="/work") as directory:
+                slow_solution = run_slow_solution(base, item, expected, Path(directory) / "actual.out")
+            print(item["source_id"], "slow solution exceeded CPU budget at formal position",
+                  slow_solution["case_position"], flush=True)
         report.append({"source_id": item["source_id"], "cases": len(item["cases"]),
                        "input_validator": "passed-all", "reference_checker": "passed-all",
                        "invalid_output_checker_exit": result.returncode, "input_controls": controls,
-                       "wrong_solution": wrong_solution})
+                       "wrong_solution": wrong_solution, "slow_solution": slow_solution})
         print(item["source_id"], len(item["cases"]), "cases and", len(controls), "input controls validated", flush=True)
     export = Path("/work/export")
     export.mkdir()
@@ -128,7 +181,7 @@ def main():
         target.parent.mkdir(parents=True, exist_ok=True)
         # Hard links avoid a second copy of the generated data in bounded tmpfs.
         target.hardlink_to(original)
-    validation = {"schema": WRONG_SOLUTION_SCHEMA, "commit": lock["commit"],
+    validation = {"schema": SLOW_SOLUTION_SCHEMA, "commit": lock["commit"],
                   "elapsed_seconds": round(time.monotonic() - start, 3),
                   "compiler": subprocess.check_output(["g++", "--version"], text=True).splitlines()[0],
                   "python": sys.version.split()[0], "problems": report}

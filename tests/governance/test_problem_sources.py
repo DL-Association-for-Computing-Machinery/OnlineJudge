@@ -6,6 +6,7 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import signal
 import subprocess
 import sys
 import tarfile
@@ -295,6 +296,84 @@ class WrongSolutionTests(TemporaryCase):
                     export.validate_report(damaged, lock, catalog, inventory=self.inventory)
         with self.assertRaisesRegex(ValueError, "missing wrong-solution"):
             export.validate_report({**new, "problems": [row]}, lock, catalog, inventory=self.inventory)
+
+
+class SlowSolutionTests(TemporaryCase):
+    def setUp(self):
+        super().setUp()
+        path = "data_structure/associative_array"
+        self.item = {"source_id": "library-checker:associative_array", "path": path, "cases": [
+            {"id": "example_00", "sample": True}, {"id": "formal_00", "sample": False},
+            {"id": "formal_01", "sample": False}, {"id": "formal_02", "sample": False},
+        ]}
+        (self.root / "info.toml").write_text("timelimit = 5.0\n")
+        self.inventory = {
+            f"source/{path}/sol/tle_unordered_map.cpp": {"sha256": "a" * 64},
+            f"source/{path}/sol/correct.cpp": {"sha256": "b" * 64},
+            f"source/{path}/checker.cpp": {"sha256": "c" * 64},
+            "problems/associative_array/in/formal_01.in": {"sha256": "d" * 64},
+            "problems/associative_array/out/formal_01.out": {"sha256": "e" * 64},
+        }
+
+    def run_probe(self):
+        return runner.run_slow_solution(self.root, self.item, self.inventory, self.root / "actual")
+
+    def test_requires_first_formal_cpu_exhaustion_with_same_case_checked_reference(self):
+        with patch.object(runner, "run_cpu_bounded", side_effect=[(0, 101), (-signal.SIGXCPU, 5004), (0, 207)]) as cpu, \
+                patch.object(runner, "checked", return_value=subprocess.CompletedProcess([], 0)) as checker:
+            observed = self.run_probe()
+        self.assertEqual(observed["case_id"], "formal_01")
+        self.assertEqual(observed["case_position"], 3)
+        self.assertEqual((observed["candidate_cpu_ms"], observed["reference_cpu_ms"]), (5004, 207))
+        self.assertEqual([(args[0].name, args[1].name) for args, _ in cpu.call_args_list],
+                         [("tle_unordered_map", "formal_00.in"), ("tle_unordered_map", "formal_01.in"),
+                          ("correct", "formal_01.in")])
+        self.assertEqual([Path(args[0][1]).name for args, _ in checker.call_args_list], ["formal_00.in", "formal_01.in"])
+
+    def test_wall_timeout_crash_and_failed_reference_are_not_cpu_witnesses(self):
+        for seq, checker_exit, error in (
+            ([(0, 101), subprocess.TimeoutExpired("candidate", 15)], 0, subprocess.TimeoutExpired),
+            ([(0, 101), (-signal.SIGKILL, 5004)], 0, ValueError),
+            ([(0, 101), (-signal.SIGXCPU, 7), (0, 207)], 0, ValueError),
+            ([(0, 101), (-signal.SIGXCPU, 5004), (1, 207)], 0, ValueError),
+            ([(0, 101), (-signal.SIGXCPU, 5004), (0, 207)], 1, ValueError),
+            ([(0, 101), (0, 207), (0, 500)], 0, ValueError),
+        ):
+            with self.subTest(seq=seq), patch.object(runner, "run_cpu_bounded", side_effect=seq), \
+                    patch.object(runner, "checked", side_effect=[
+                        subprocess.CompletedProcess([], 0), subprocess.CompletedProcess([], checker_exit),
+                        subprocess.CompletedProcess([], 0),
+                    ]), self.assertRaises(error):
+                self.run_probe()
+
+    def test_v4_host_rejects_unbound_or_non_cpu_evidence(self):
+        from library_checker_quality import control_result, input_controls
+
+        row = {"source_id": self.item["source_id"], "cases": 4, "input_validator": "passed-all",
+               "reference_checker": "passed-all", "invalid_output_checker_exit": 1, "wrong_solution": None,
+               "input_controls": [control_result(*c) for c in input_controls(self.item["source_id"])]}
+        witness = {"solution": "tle_unordered_map.cpp", "solution_sha256": "a" * 64, "reference_sha256": "b" * 64,
+                   "checker_sha256": "c" * 64, "case_id": "formal_01", "case_position": 3,
+                   "input_sha256": "d" * 64, "answer_sha256": "e" * 64, "cpu_limit_seconds": 5,
+                   "hard_cpu_limit_seconds": 6, "wall_limit_seconds": 15, "candidate_signal": "SIGXCPU",
+                   "candidate_cpu_ms": 5004, "reference_cpu_ms": 207, "reference_exit": 0, "checker_exit": 0}
+        lock = {"commit": "pinned"}
+        old = {"schema": "oj.source-validation.v3", "commit": "pinned", "problems": [row]}
+        new = {"schema": "oj.source-validation.v4", "commit": "pinned", "problems": [{**row, "slow_solution": witness}]}
+        export.validate_report(old, lock, [self.item], inventory=self.inventory)
+        export.validate_report(new, lock, [self.item], inventory=self.inventory, required_schema=new["schema"])
+        with self.assertRaisesRegex(ValueError, "identity"):
+            export.validate_report(old, lock, [self.item], inventory=self.inventory, required_schema=new["schema"])
+        for key, value in (("case_position", 1), ("case_position", True), ("case_id", "formal_00"),
+                           ("input_sha256", "0" * 64), ("reference_sha256", "0" * 64), ("cpu_limit_seconds", 4),
+                           ("wall_limit_seconds", 10), ("candidate_signal", "SIGKILL"), ("candidate_cpu_ms", 100),
+                           ("candidate_cpu_ms", 6100), ("reference_cpu_ms", True), ("reference_cpu_ms", 5000),
+                           ("reference_exit", 1), ("checker_exit", 1)):
+            with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                forged = {**new, "problems": [{**row, "slow_solution": {**witness, key: value}}]}
+                export.validate_report(forged, lock, [self.item], inventory=self.inventory)
+        with self.assertRaisesRegex(ValueError, "missing slow-solution"):
+            export.validate_report({**new, "problems": [row]}, lock, [self.item], inventory=self.inventory)
 
 
 class DriverTests(TemporaryCase):

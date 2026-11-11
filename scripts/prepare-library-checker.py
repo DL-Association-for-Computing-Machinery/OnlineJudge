@@ -19,7 +19,7 @@ import uuid
 
 sys.dont_write_bytecode = True
 
-from library_checker_quality import WRONG_SOLUTION_SCHEMA
+from library_checker_quality import SLOW_SOLUTION_SCHEMA
 from problem_source_common import MAX_EXPORT, digest, expected_materials, parse_lock, read_regular, snapshot
 from problem_source_export import extract, validate_report
 
@@ -150,7 +150,7 @@ def run(args):
             candidate = output / "materials.partial"
             candidate.mkdir(mode=0o700)
             report, size = extract(archive, candidate, expected)
-            validate_report(report, lock, catalog, inventory=expected, required_schema=WRONG_SOLUTION_SCHEMA)
+            validate_report(report, lock, catalog, inventory=expected, required_schema=SLOW_SOLUTION_SCHEMA)
             document = {"schema": "oj.private-source-corpus.v1", "status": "private-unpublished",
                         "repository": lock["repository"], "commit": lock["commit"],
                         "source_lock_sha256": digest(lock_bytes),
@@ -168,7 +168,8 @@ def run(args):
                         "execution_report_trust": "pinned-reviewed-source; not an adversarial-code attestation",
                         "notices": ["source/LICENSE", "source/common/testlib.h", "source/*/checker.cpp"],
                         "validation_scope": ("pinned hashes, all input validators, input boundary controls, "
-                                             "reference and negative checker controls, three fixed wrong solutions"),
+                                             "reference and negative checker controls, three fixed wrong solutions, "
+                                             "one fixed slow-solution CPU control"),
                         "publication_blockers": ["P4 import/authorization/review/publish not implemented",
                                                  "statement templates not converted or rendered",
                                                  "checker and resource limits not admitted to production"],

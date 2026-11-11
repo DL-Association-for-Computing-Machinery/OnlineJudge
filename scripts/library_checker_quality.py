@@ -5,6 +5,15 @@ from problem_source_common import digest
 
 INPUT_CONTROL_SCHEMA = "oj.source-validation.v2"
 WRONG_SOLUTION_SCHEMA = "oj.source-validation.v3"
+SLOW_SOLUTION_SCHEMA = "oj.source-validation.v4"
+SLOW_SOURCE = "data_structure/associative_array"
+SLOW_SOLUTION = "tle_unordered_map.cpp"
+SLOW_CPU_SECONDS = 5
+SLOW_HARD_CPU_SECONDS = SLOW_CPU_SECONDS + 1
+SLOW_WALL_SECONDS = 15
+# Kernel accounting can report slightly below the signal threshold. A signal
+# alone is not evidence that a child used its allotted CPU.
+MIN_EXHAUSTED_CPU_MS = SLOW_CPU_SECONDS * 1000 - 100
 
 # Only the locked, stand-alone programs that upstream declares expect=WA.
 WRONG_SOLUTIONS = {
@@ -69,4 +78,37 @@ def wrong_solution_result(problem, position, inventory):
         "answer_sha256": inventory[f"{data}/out/{name}.out"]["sha256"],
         "candidate_exit": 0,
         "checker_exit": 1,
+    }
+
+
+def slow_solution_result(problem, position, inventory, candidate_cpu_ms, reference_cpu_ms):
+    """Bind CPU exhaustion and a successful reference to the same formal point."""
+    if problem["path"] != SLOW_SOURCE or type(position) is not int or not 1 <= position <= len(problem["cases"]):
+        raise ValueError("invalid slow-solution case position")
+    case = problem["cases"][position - 1]
+    if case["sample"]:
+        raise ValueError("slow-solution witness must be a formal point")
+    if (type(candidate_cpu_ms) is not int or not MIN_EXHAUSTED_CPU_MS <= candidate_cpu_ms <= SLOW_HARD_CPU_SECONDS * 1000
+            or type(reference_cpu_ms) is not int or not 0 <= reference_cpu_ms < SLOW_CPU_SECONDS * 1000):
+        raise ValueError("invalid slow-solution CPU accounting")
+    name = case["id"]
+    data = "problems/associative_array"
+    source = f"source/{SLOW_SOURCE}"
+    return {
+        "solution": SLOW_SOLUTION,
+        "solution_sha256": inventory[f"{source}/sol/{SLOW_SOLUTION}"]["sha256"],
+        "reference_sha256": inventory[f"{source}/sol/correct.cpp"]["sha256"],
+        "checker_sha256": inventory[f"{source}/checker.cpp"]["sha256"],
+        "case_id": name,
+        "case_position": position,
+        "input_sha256": inventory[f"{data}/in/{name}.in"]["sha256"],
+        "answer_sha256": inventory[f"{data}/out/{name}.out"]["sha256"],
+        "cpu_limit_seconds": SLOW_CPU_SECONDS,
+        "hard_cpu_limit_seconds": SLOW_HARD_CPU_SECONDS,
+        "wall_limit_seconds": SLOW_WALL_SECONDS,
+        "candidate_signal": "SIGXCPU",
+        "candidate_cpu_ms": candidate_cpu_ms,
+        "reference_cpu_ms": reference_cpu_ms,
+        "reference_exit": 0,
+        "checker_exit": 0,
     }
