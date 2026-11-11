@@ -41,6 +41,10 @@ SUPPLEMENTS = {
                          "87ebb9680aa3abe190b61d4a5ccac1dc83e48b29656364e445e36fabe7467cc9",
                          "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd",
                          "d8426964248ef07e1aae00ab12c8de690a9fdae147117b0251fa853cb4769c7b"),
+    "convolution_mod": Supplement("oj-local:convolution-mod-coefficients-v1",
+                                   "7a1079bd0d8be8d2cb57619780d4f519de096fd3bb9655eaa37a9bfe49e19e80",
+                                   "d464bf359f1e46cd3314144af2f71b21b39f1913e9e6d3d517386d12ce2b1041",
+                                   "9b6ca5320d54f7743341ddaf2fbb611dc40c84ff5819e57ef1cced12ab5f5158"),
     "staticrmq": Supplement("oj-local:staticrmq-single-query-max-v1",
                             "c5eef70e8f853a4525257371c895f01bd2ac40222d12cc72b83f3782a712186c",
                             "194da8b53c88aa634cb5c030c684a355a59b224a00c7d74422bc35b333d3a5f0",
@@ -74,6 +78,10 @@ def boundary_cases(problem):
     elif problem == "aplusb":
         for a, b in ((0, 0), (0, 1), (1, 0), (10**9, 10**9 - 1), (10**9 - 1, 10**9)):
             yield f"{a} {b}\n".encode("ascii"), f"{a+b}\n".encode("ascii")
+    elif problem == "convolution_mod":
+        maximum = 998244352
+        yield f"2 3\n{maximum} 2\n3 4 5\n".encode("ascii"), b"998244350 2 3 10\n"
+        yield f"3 2\n7 11 0\n{maximum} 6\n".encode("ascii"), b"998244346 31 66 0\n"
     elif problem == "point_add_range_sum":
         maximum = 10**9
         yield b"1 1\n0\n1 0 1\n", b"0\n"
