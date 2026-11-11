@@ -22,6 +22,8 @@ convolution_mod的完整材料/16MiB输入答案、共享快照、封闭tier8及
 
 卷积材料下发的固定来源、语料、角色和同长度坏字节拒绝归普通 backend；实物专项使用真实专用 mTLS、临时 PostgreSQL 和私有对象根验证对拍材料下发、原路由隔离及对象 I/O 期间撤权。两者均不执行题源。
 
+十题[实物报告接纳专项](reference-requests.md#十题实物报告接纳专项)只在显式 `live_reference` 集成标签及已配置的 macOS arm64 专用槽运行，普通 CI 不执行题源。命令归 README；合成作者会话与实际 mTLS/Worker/数据库证据分别描述。
+
 组合报告的临时 PostgreSQL/mTLS 专项用受控证据验证正式 AC 缺少对拍或反例非法均拒绝、合法差异原子保存及逐字重放。另用固定断网槽上的 `TestClaimedConvolutionOwnedSandbox` 验证真实 53 正式点和 24 对拍点，以及在进入对拍时注入续期失效。宿主专项不进入普通 CI；两类结果不能互相代替。
 
 `internal/judging`的独立Library Checker文本组件及M0回归随backend执行；`tests/checkercompat`仅在显式`checkercompat`标签和README专用断网/只读/非root Docker中运行锁定上游wcmp，不进入普通CI。组件差分不改草稿not-run或代替本站受限程序验证；支持域及预算见[准入约定](checker-admission.md)。
