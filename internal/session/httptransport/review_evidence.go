@@ -26,7 +26,7 @@ type ReviewMaterialsReader interface {
 
 // WithReviewEvidence adds reviewer access to the configured draft runtime.
 // A nil materials reader leaves only the summary route available.
-func WithReviewEvidence(base http.Handler, reader ReviewEvidenceReader, materials ReviewMaterialsReader) (http.Handler, error) {
+func WithReviewEvidence(base http.Handler, reader ReviewEvidenceReader, materials ReviewMaterialsReader, returns ReviewReturns) (http.Handler, error) {
 	h, ok := base.(*handler)
 	if !ok || h == nil || h.drafts == nil || h.reviewEvidence != nil || reader == nil {
 		return nil, redisstore.ErrInvalid
@@ -34,7 +34,7 @@ func WithReviewEvidence(base http.Handler, reader ReviewEvidenceReader, material
 	return &handler{store: h.store, config: h.config, host: h.host, login: h.login, proxy: h.proxy,
 		passwordChange: h.passwordChange, drafts: h.drafts, draftTimeout: h.draftTimeout,
 		references: h.references, preparation: h.preparation, reviewIntake: h.reviewIntake,
-		reviewEvidence: reader, reviewMaterials: materials}, nil
+		reviewEvidence: reader, reviewMaterials: materials, reviewReturns: returns}, nil
 }
 
 // IsReviewReadPath recognizes scoped reviewer GET routes.

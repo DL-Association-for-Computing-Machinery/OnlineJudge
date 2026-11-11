@@ -84,7 +84,7 @@ func (s *Store) SubmitReview(ctx context.Context, actor identity.ProblemActor, i
 	if _, err := rand.Read(id[:]); err != nil {
 		return zero, storageError{err}
 	}
-	stored, err := q.InsertReviewSubmission(ctx, referencedb.InsertReviewSubmissionParams{
+	stored, wrote, err := persistReviewSubmission(ctx, q, referencedb.InsertReviewSubmissionParams{
 		ID: hex.EncodeToString(id[:]), Owner: actor.SubjectID, RequestKey: i.RequestKey,
 		DraftID: i.DraftID, SourceID: bound.SourceID, ContentVersion: bound.Version,
 		ImportRevision: bound.ImportRevision, SourceLockSha256: bound.SourceLockSHA256,
@@ -93,15 +93,8 @@ func (s *Store) SubmitReview(ctx context.Context, actor identity.ProblemActor, i
 		DifferentialPlanSha256: differentialPlan, DifferentialOutcome: differentialOutcome,
 		AuthGeneration: auth.Actor.AuthGeneration, RecoveryID: auth.Actor.RecoveryID, AuthorRevision: auth.RoleRevision,
 	})
-	wrote := err == nil
-	if errors.Is(err, pgx.ErrNoRows) {
-		// Use a fresh statement after the uniqueness wait; an earlier snapshot
-		// may not see the concurrent winner.
-		stored, err = q.ReviewSubmissionByOwnerKey(ctx, referencedb.ReviewSubmissionByOwnerKeyParams{
-			Owner: actor.SubjectID, RequestKey: i.RequestKey})
-	}
 	if err != nil {
-		return zero, storageError{err}
+		return zero, err
 	}
 	result, err := readReviewReceipt(stored, actor.SubjectID, i.RequestKey)
 	if err != nil {
@@ -124,6 +117,37 @@ func (s *Store) SubmitReview(ctx context.Context, actor identity.ProblemActor, i
 		return zero, errors.Join(problemreference.ErrCommitUnknown, err)
 	}
 	return result, nil
+}
+
+func persistReviewSubmission(ctx context.Context, q *referencedb.Queries, p referencedb.InsertReviewSubmissionParams) (referencedb.ProblemReviewSubmission, bool, error) {
+	var zero referencedb.ProblemReviewSubmission
+	digest := reviewMaterialDigest(p.Owner, p.ImportRevision, p.FormalPlanSha256, p.ProfileSha256, p.EvidenceSha256, p.DifferentialPlanSha256)
+	if err := lockReviewMaterial(ctx, q, digest); err != nil {
+		return zero, false, storageError{err}
+	}
+	key := referencedb.ReviewSubmissionByOwnerKeyParams{Owner: p.Owner, RequestKey: p.RequestKey}
+	stored, err := q.ReviewSubmissionByOwnerKey(ctx, key)
+	if err == nil {
+		return stored, false, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return zero, false, storageError{err}
+	}
+	if _, err := q.ReviewReturnByMaterial(ctx, hex.EncodeToString(digest[:])); err == nil {
+		return zero, false, problemreference.ErrReviewReturned
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return zero, false, storageError{err}
+	}
+	stored, err = q.InsertReviewSubmission(ctx, p)
+	wrote := err == nil
+	if errors.Is(err, pgx.ErrNoRows) {
+		// A different material may race on owner/key; use a fresh snapshot.
+		stored, err = q.ReviewSubmissionByOwnerKey(ctx, key)
+	}
+	if err != nil {
+		return zero, false, storageError{err}
+	}
+	return stored, wrote, nil
 }
 
 // ReviewReceipt reads an immutable intake row under current author authority.

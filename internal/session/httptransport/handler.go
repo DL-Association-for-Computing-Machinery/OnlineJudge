@@ -47,6 +47,7 @@ type handler struct {
 	reviewIntake    ReviewIntake
 	reviewEvidence  ReviewEvidenceReader
 	reviewMaterials ReviewMaterialsReader
+	reviewReturns   ReviewReturns
 }
 
 // New builds three explicit endpoints without registering any application route:
@@ -82,8 +83,9 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	method := ""
 	isDraft := IsPrivateDraftPath(r.URL.Path)
 	refMethod, refKey := referenceRequestRoute(r.URL.Path)
-	reviewMethod, reviewKey := reviewIntakeRoute(r.URL.Path)
+	reviewMethod, reviewKey, authorReturn := reviewIntakeRoute(r.URL.Path)
 	reviewID, readMaterials := reviewReadRoute(r.URL.Path)
+	returnID, returnKey, returnMethod := reviewReturnRoute(r.URL.Path)
 	switch r.URL.Path {
 	case "/api/v1/session":
 		method = http.MethodGet
@@ -102,6 +104,14 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		method = http.MethodPost
 	default:
+		if returnMethod != "" {
+			if h.reviewReturns == nil {
+				problem(w, http.StatusNotFound, "NOT_FOUND", "接口不存在")
+				return
+			}
+			method = returnMethod
+			break
+		}
 		if reviewID != "" {
 			if h.reviewEvidence == nil || (readMaterials && h.reviewMaterials == nil) {
 				problem(w, http.StatusNotFound, "NOT_FOUND", "接口不存在")
@@ -161,7 +171,11 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if reviewMethod != "" {
-		h.serveReviewIntake(w, r, reviewKey)
+		h.serveReviewIntake(w, r, reviewKey, authorReturn)
+		return
+	}
+	if returnMethod != "" {
+		h.serveReviewReturn(w, r, returnID, returnKey)
 		return
 	}
 	if reviewID != "" {

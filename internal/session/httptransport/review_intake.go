@@ -23,6 +23,7 @@ const reviewIntakeCollection = "/api/v1/problem-draft-management/review-submissi
 type ReviewIntake interface {
 	SubmitForSubject(context.Context, redisstore.Credential, string, problemreference.ReviewIntent) (problemreference.ReviewReceipt, error)
 	ReceiptForSubject(context.Context, redisstore.Credential, string, string) (problemreference.ReviewReceipt, error)
+	AuthorReturnForSubject(context.Context, redisstore.Credential, string, string) (problemreference.ReviewReturnStatus, error)
 }
 
 // WithReviewIntake enables intake on the configured private author transport.
@@ -38,21 +39,24 @@ func WithReviewIntake(base http.Handler, intake ReviewIntake) (http.Handler, err
 
 // IsReviewIntakePath only recognizes paths; it does not enable them.
 func IsReviewIntakePath(path string) bool {
-	method, _ := reviewIntakeRoute(path)
+	method, _, _ := reviewIntakeRoute(path)
 	return method != ""
 }
 
-func reviewIntakeRoute(path string) (string, string) {
+func reviewIntakeRoute(path string) (method, key string, returned bool) {
 	if path == reviewIntakeCollection {
-		return http.MethodPost, ""
+		return http.MethodPost, "", false
 	}
-	if key, ok := strings.CutPrefix(path, reviewIntakeCollection+"/"); ok && draftproblem.ValidKey(key) {
-		return http.MethodGet, key
+	if tail, ok := strings.CutPrefix(path, reviewIntakeCollection+"/"); ok {
+		key, returned := strings.CutSuffix(tail, "/return")
+		if draftproblem.ValidKey(key) {
+			return http.MethodGet, key, returned
+		}
 	}
-	return "", ""
+	return "", "", false
 }
 
-func (h *handler) serveReviewIntake(w http.ResponseWriter, r *http.Request, key string) {
+func (h *handler) serveReviewIntake(w http.ResponseWriter, r *http.Request, key string, returned bool) {
 	expected, ok := expectedSubject(r)
 	if !ok || r.URL.RawQuery != "" || r.URL.ForceQuery || r.URL.RawPath != "" {
 		invalidReviewIntake(w)
@@ -65,6 +69,23 @@ func (h *handler) serveReviewIntake(w http.ResponseWriter, r *http.Request, key 
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), h.draftTimeout)
 	defer cancel()
+	if returned {
+		if r.ContentLength != 0 || len(r.TransferEncoding) != 0 {
+			invalidReviewIntake(w)
+			return
+		}
+		result, err := h.reviewIntake.AuthorReturnForSubject(ctx, credential, expected, key)
+		if err != nil {
+			reviewIntakeError(w, err)
+			return
+		}
+		if !result.Valid() || result.Owner != expected || result.IntakeKey != key || ctx.Err() != nil {
+			reviewIntakeError(w, problemreference.ErrStore)
+			return
+		}
+		writeReviewJSON(w, result)
+		return
+	}
 	var receipt problemreference.ReviewReceipt
 	if key == "" {
 		input, ok := reviewIntakeBody(w, r)
@@ -98,56 +119,70 @@ func (h *handler) serveReviewIntake(w http.ResponseWriter, r *http.Request, key 
 		reviewIntakeError(w, problemreference.ErrStore)
 		return
 	}
-	body, err := json.Marshal(receipt)
+	writeReviewJSON(w, receipt)
+}
+
+func reviewIntakeBody(w http.ResponseWriter, r *http.Request) (problemreference.ReviewIntent, bool) {
+	var input problemreference.ReviewIntent
+	fields := map[string]any{"request_key": &input.RequestKey, "draft_id": &input.DraftID,
+		"import_revision": &input.ImportRevision, "reference_request_id": &input.ReferenceRequestID}
+	if !readReviewFields(w, r, 1024, fields, invalidReviewIntake) {
+		return problemreference.ReviewIntent{}, false
+	}
+	if !input.Valid() {
+		invalidReviewIntake(w)
+		return problemreference.ReviewIntent{}, false
+	}
+	return input, true
+}
+
+func readReviewFields(w http.ResponseWriter, r *http.Request, limitBytes int64, fields map[string]any, invalid func(http.ResponseWriter)) bool {
+	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || media != "application/json" {
+		problem(w, 415, "UNSUPPORTED_MEDIA_TYPE", "请使用 JSON 提交")
+		return false
+	}
+	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, limitBytes))
+	var limit *http.MaxBytesError
+	if errors.As(err, &limit) {
+		problem(w, 413, "BODY_TOO_LARGE", "请求过大")
+		return false
+	}
+	if err != nil || !jsoninput.ValidUnicode(raw) {
+		invalid(w)
+		return false
+	}
+	d := json.NewDecoder(bytes.NewReader(raw))
+	start, _ := d.Token()
+	if start != json.Delim('{') {
+		invalid(w)
+		return false
+	}
+	for d.More() {
+		token, _ := d.Token()
+		name, _ := token.(string)
+		p := fields[name]
+		if p == nil || d.Decode(p) != nil {
+			invalid(w)
+			return false
+		}
+		delete(fields, name)
+	}
+	if len(fields) != 0 {
+		invalid(w)
+		return false
+	}
+	return true
+}
+
+func writeReviewJSON(w http.ResponseWriter, value any) {
+	body, err := json.Marshal(value)
 	if err != nil {
 		reviewIntakeError(w, problemreference.ErrStore)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write(body)
-}
-
-func reviewIntakeBody(w http.ResponseWriter, r *http.Request) (problemreference.ReviewIntent, bool) {
-	var zero problemreference.ReviewIntent
-	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	if err != nil || media != "application/json" {
-		problem(w, 415, "UNSUPPORTED_MEDIA_TYPE", "请使用 JSON 提交")
-		return zero, false
-	}
-	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1024))
-	var limit *http.MaxBytesError
-	if errors.As(err, &limit) {
-		problem(w, 413, "BODY_TOO_LARGE", "请求过大")
-		return zero, false
-	}
-	if err != nil || !jsoninput.ValidUnicode(raw) {
-		invalidReviewIntake(w)
-		return zero, false
-	}
-	d := json.NewDecoder(bytes.NewReader(raw))
-	start, _ := d.Token()
-	if start != json.Delim('{') {
-		invalidReviewIntake(w)
-		return zero, false
-	}
-	var input problemreference.ReviewIntent
-	fields := map[string]*string{"request_key": &input.RequestKey, "draft_id": &input.DraftID,
-		"import_revision": &input.ImportRevision, "reference_request_id": &input.ReferenceRequestID}
-	for d.More() {
-		token, _ := d.Token()
-		name, _ := token.(string)
-		p := fields[name]
-		if p == nil || d.Decode(p) != nil {
-			invalidReviewIntake(w)
-			return zero, false
-		}
-		delete(fields, name)
-	}
-	if len(fields) != 0 || !input.Valid() {
-		invalidReviewIntake(w)
-		return zero, false
-	}
-	return input, true
 }
 
 func invalidReviewIntake(w http.ResponseWriter) {
@@ -174,6 +209,8 @@ func reviewIntakeError(w http.ResponseWriter, err error) {
 		problem(w, 409, "REVIEW_KEY_CONFLICT", "请求键已用于其他送审材料")
 	case errors.Is(err, problemreference.ErrSourceChanged):
 		problem(w, 409, "REVIEW_SOURCE_CHANGED", "草稿修订与送审材料不一致")
+	case errors.Is(err, problemreference.ErrReviewReturned):
+		problem(w, 409, "REVIEW_MATERIALS_RETURNED", "相同材料已退回，请更新草稿修订或验证证据后重送")
 	default:
 		problem(w, 503, "REVIEW_UNAVAILABLE", "送审暂不可用")
 	}

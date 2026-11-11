@@ -30,6 +30,7 @@ type privateDraftsWire struct {
 	ReferenceRequests bool     `json:"reference_requests"`
 	ReviewIntake      bool     `json:"review_intake"`
 	ReviewAccess      bool     `json:"review_access"`
+	ReviewReturns     bool     `json:"review_returns"`
 }
 
 type passwordChangeWire struct {

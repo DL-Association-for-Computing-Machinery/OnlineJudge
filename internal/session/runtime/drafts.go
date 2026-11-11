@@ -31,11 +31,15 @@ type PrivateDraftsConfig struct {
 	ReferenceRequests                             bool
 	ReviewIntake                                  bool
 	ReviewAccess                                  bool
+	ReviewReturns                                 bool
 }
 
 // Validate checks bounded lexical configuration without accessing files.
 func (c PrivateDraftsConfig) Validate() error {
 	if c.ReviewIntake && !c.ReferenceRequests {
+		return ErrConfig
+	}
+	if c.ReviewReturns && !c.ReviewAccess {
 		return ErrConfig
 	}
 	for _, path := range []string{c.MaterialRoot, c.BundleDirectory, c.SourceLockFile} {
@@ -68,6 +72,7 @@ type draftCapabilities struct {
 	review      *problemreference.ReviewIntake
 	evidence    *problemreference.ReviewAccess
 	materials   *problemreference.ReviewMaterialReader
+	returns     *problemreference.ReviewerReturns
 }
 
 func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore.Store, pool *pgxpool.Pool) (*draftCapabilities, func() error, error) {
@@ -144,6 +149,12 @@ func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore
 		result.evidence, err = problemreference.NewReviewAccess(sessions, reviewer)
 		if err != nil {
 			return nil, nil, ErrStartup
+		}
+		if c.ReviewReturns {
+			result.returns, err = problemreference.NewReviewerReturns(sessions, reviewer)
+			if err != nil {
+				return nil, nil, ErrStartup
+			}
 		}
 		reviewObjects, err := referencepg.NewReviewMaterialStore(reviewer, problempg.ReadBoundReviewDraft)
 		if err != nil {

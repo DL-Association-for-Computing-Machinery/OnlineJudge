@@ -46,6 +46,7 @@ func (r ReviewReceipt) Valid() bool {
 type ReviewIntakeRepository interface {
 	SubmitReview(context.Context, identity.ProblemActor, ReviewIntent) (ReviewReceipt, error)
 	ReviewReceipt(context.Context, identity.ProblemActor, string) (ReviewReceipt, error)
+	AuthorReviewReturn(context.Context, identity.ProblemActor, string) (ReviewReturnStatus, error)
 }
 
 // ReviewIntake is the author-facing intake capability. There is no reviewer
@@ -106,6 +107,28 @@ func (s *ReviewIntake) ReceiptForSubject(ctx context.Context, credential redisst
 		return ReviewReceipt{}, ErrStore
 	}
 	return receipt, nil
+}
+
+// AuthorReturnForSubject returns feedback on the owner's original intake key.
+func (s *ReviewIntake) AuthorReturnForSubject(ctx context.Context, c redisstore.Credential, expected, key string) (ReviewReturnStatus, error) {
+	if !problem.ValidKey(key) {
+		return ReviewReturnStatus{}, ErrInvalid
+	}
+	actor, err := s.actor(ctx, c, expected)
+	if err != nil {
+		return ReviewReturnStatus{}, err
+	}
+	r, err := s.repo.AuthorReviewReturn(ctx, actor, key)
+	if err != nil {
+		return ReviewReturnStatus{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return ReviewReturnStatus{}, err
+	}
+	if !r.Valid() || r.Owner != expected || r.IntakeKey != key {
+		return ReviewReturnStatus{}, ErrStore
+	}
+	return r, nil
 }
 
 func (s *ReviewIntake) actor(ctx context.Context, credential redisstore.Credential, expected string) (identity.ProblemActor, error) {

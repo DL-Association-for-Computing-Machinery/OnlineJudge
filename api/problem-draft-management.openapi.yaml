@@ -139,6 +139,7 @@ paths:
       description: >-
         须显式启用 review_intake。保存本人草稿的精确修订和本人已接纳的参考报告；不产生批准。
         最多 1024 字节 JSON，拒绝重复字段。相同主体、键和材料返回原回执。
+        相同修订和证据已退回时，新键返回 409 REVIEW_MATERIALS_RETURNED；只换键不产生新送审。
         若结果未知，保留原参数并查回执，不自动重发。
       requestBody:
         required: true
@@ -168,6 +169,40 @@ paths:
       description: 查询本人已提交的回执，须仍有出题权限。404 不证明没有在途 POST。
       responses:
         '200': { $ref: '#/components/responses/ReviewReceipt' }
+        '400': { $ref: '#/components/responses/Failure' }
+        '401': { $ref: '#/components/responses/Failure' }
+        '403': { $ref: '#/components/responses/Failure' }
+        '404': { $ref: '#/components/responses/Failure' }
+        '405': { $ref: '#/components/responses/Failure' }
+        '409': { $ref: '#/components/responses/Failure' }
+        '503': { $ref: '#/components/responses/Failure' }
+  /api/v1/problem-draft-management/review-submissions/{request_key}/return:
+    parameters:
+      - $ref: '#/components/parameters/ExpectedSubject'
+      - name: request_key
+        in: path
+        required: true
+        schema: { $ref: './problem-draft-imports.openapi.yaml#/components/schemas/RequestKey' }
+    get:
+      operationId: getOwnReviewReturn
+      description: >-
+        以本人原送审键读取相同修订及证据的退回理由；同材料的旧重复项共享结果。
+        须有当前出题权限，不提供审核人账号或退回请求键。404 表示本次未见退回。
+      responses:
+        '200':
+          description: 已提交的退回及理由
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [review_id, import_revision, evidence_sha256, reason, returned_at]
+                properties:
+                  review_id: { $ref: '#/components/schemas/ReviewID' }
+                  import_revision: { $ref: '#/components/schemas/ReviewRevision' }
+                  evidence_sha256: { $ref: '#/components/schemas/ReviewRevision' }
+                  reason: { $ref: './problem-review.openapi.yaml#/components/schemas/ReturnReason' }
+                  returned_at: { type: string, format: date-time }
         '400': { $ref: '#/components/responses/Failure' }
         '401': { $ref: '#/components/responses/Failure' }
         '403': { $ref: '#/components/responses/Failure' }

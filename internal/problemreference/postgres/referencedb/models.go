@@ -49,6 +49,19 @@ type ProblemReferenceWorkerReport struct {
 	AcceptedAt        pgtype.Timestamptz
 }
 
+type ProblemReviewReturn struct {
+	ReviewID           string
+	MaterialSha256     string
+	ReviewerSubjectID  string
+	RequestKey         string
+	Reason             string
+	AuthGeneration     int64
+	RecoveryID         string
+	ReviewerRevision   int64
+	AssignmentRevision int64
+	ReturnedAt         pgtype.Timestamptz
+}
+
 type ProblemReviewSubmission struct {
 	ID                     string
 	OwnerSubjectID         string

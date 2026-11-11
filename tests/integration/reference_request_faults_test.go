@@ -20,6 +20,16 @@ import (
 
 func lostReferenceCommitStore(t *testing.T, f referenceRequestFixture) (*referencepg.Store, <-chan bool) {
 	t.Helper()
+	pool, observed := lostReferenceCommitPool(t, f)
+	access, err := problempg.NewReferenceAccess(f.access)
+	must(t, err)
+	store, err := referencepg.New(pool, access)
+	must(t, err)
+	return store, observed
+}
+
+func lostReferenceCommitPool(t *testing.T, f referenceRequestFixture) (*pgxpool.Pool, <-chan bool) {
+	t.Helper()
 	var drop atomic.Bool
 	drop.Store(true)
 	observed := make(chan bool, 1)
@@ -34,11 +44,7 @@ func lostReferenceCommitStore(t *testing.T, f referenceRequestFixture) (*referen
 	pool, err := pgxpool.NewWithConfig(f.ctx, cfg)
 	must(t, err)
 	t.Cleanup(pool.Close)
-	access, err := problempg.NewReferenceAccess(f.access)
-	must(t, err)
-	store, err := referencepg.New(pool, access)
-	must(t, err)
-	return store, observed
+	return pool, observed
 }
 
 func TestReferenceRequestsUnknownCommit(t *testing.T) {
