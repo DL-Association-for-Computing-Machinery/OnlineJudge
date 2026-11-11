@@ -6,7 +6,9 @@
 
 真实断网卷积槽通过 53 个正式 AC 和 24 个一致对拍，确认停止后才生成组合证据；独立对照在进入对拍时拒绝续期，确认停止且未发报告。最终原槽 `running=false`、PID 0、槽锁标记为空。原生宿主使用续期和报告替身；临时 PostgreSQL／真实 mTLS 专项另以受控结果验证首报缺字段、非法反例拒绝、合法差异落库及精确重放。完整离线后端和 PostgreSQL 集成通过。
 
-日志：`/private/tmp/oj-convolution-worker-evidence-native.log`、`/private/tmp/oj-convolution-worker-evidence-fault.log`、`/private/tmp/oj-convolution-worker-evidence-postgres.log`。两套证据分别验证运行和接纳，未验收真实宿主直接向控制端上报的整链。作者回读、终审与发布未接，草稿仍为 `not-run`；未迁移现有数据库或部署。
+另外以同一实现构建真实 Darwin Worker，通过仅发布到回环的临时 mTLS 控制端领取实际入库草稿，在原断网槽完成后直接上报。PostgreSQL 回读确认正式 53 AC、对拍 24 点一致、停止确认、证据已保存且预留已消费。日志：`/private/tmp/oj-convolution-live-worker.log`、`/private/tmp/oj-convolution-live-fixture.log`；分项日志见 `/private/tmp/oj-convolution-worker-evidence-native.log`、`/private/tmp/oj-convolution-worker-evidence-fault.log` 和 `/private/tmp/oj-convolution-worker-evidence-postgres.log`。
+
+作者回读、终审与发布未接，草稿仍为 `not-run`；未迁移现有数据库或部署。
 
 ## 2026-11-11：有效预留内下发卷积对拍解法
 
