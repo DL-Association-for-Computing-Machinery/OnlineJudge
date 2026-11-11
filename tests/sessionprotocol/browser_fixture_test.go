@@ -60,7 +60,8 @@ func TestBrowserFixture(t *testing.T) {
 	c.Mode = sessionruntime.ProxyMTLS
 	c.Proxy.CertificateSHA256 = [][32]byte{sha256.Sum256(proxyCert.Certificate[0])}
 	connections := redisConnections(t, f)
-	process := entryStart(t, entryBinary(t), entryConfig(t, c, ca, 3*time.Second, rules), "127.0.0.1:0")
+	writeTimeout := max(5*time.Second, c.PrivateDrafts.Timeout+time.Second)
+	process := entryStart(t, entryBinary(t), entryConfigWithWriteTimeout(t, c, ca, 3*time.Second, writeTimeout, rules), "127.0.0.1:0")
 	started := process.waitEvent(t, "API starting")
 	if started.Scope != "ordinary-session-http" {
 		t.Fatal("browser fixture started the wrong API scope")
@@ -164,6 +165,34 @@ func TestBrowserFixture(t *testing.T) {
 
 func browserDrafts(t *testing.T, f *fixture, c *sessionruntime.Config, subjectID string) {
 	t.Helper()
+	root := filepath.Join(t.TempDir(), "materials")
+	must(t, os.Mkdir(root, 0700))
+	if os.Getenv("OJ_BROWSER_LC_DRAFTS") == "1" {
+		const lockPath = "/workspace/config/problem-sources/library-checker.json"
+		raw, err := os.ReadFile(lockPath)
+		must(t, err)
+		var lock struct{ Problems []struct{ Path string } }
+		must(t, json.Unmarshal(raw, &lock))
+		if len(lock.Problems) != 10 {
+			t.Fatal("browser fixture requires ten pinned Library Checker sources")
+		}
+		sources := make([]string, 0, len(lock.Problems))
+		for _, p := range lock.Problems {
+			sources = append(sources, "library-checker:"+filepath.Base(p.Path))
+		}
+		c.PrivateDrafts = &sessionruntime.PrivateDraftsConfig{MaterialRoot: root, BundleDirectory: "/lc-bundle",
+			SourceLockFile: lockPath, SourceIDs: sources, Timeout: 45 * time.Second, MaxInFlight: 1}
+	} else {
+		browserSyntheticDraft(t, f, c, root)
+	}
+	access, err := identitypg.NewProblemAccess(f.pools[0])
+	must(t, err)
+	_, err = access.SetAuthorRole(f.ctx, identity.ProblemRoleChange{SubjectID: subjectID, Enabled: true, ExpectedRevision: 0, Operator: "browser-fixture", Reason: "synthetic preview author"})
+	must(t, err)
+}
+
+func browserSyntheticDraft(t *testing.T, f *fixture, c *sessionruntime.Config, root string) {
+	t.Helper()
 	bundle := referenceEntryBundle(t)
 	statement := []byte("# Browser statement\n\nInline $x^2$ and display:\n\n$$\n\\sum_{i=1}^n i\n$$\n\n| Input | Output |\n| --- | --- |\n| 1 2 | 3 |\n\n" +
 		"```math\na+b\n```\n\nInvalid $\\badcommand$ then valid $y+1$.\n\n![授权的本题示意图](figures/diagram.png)\n\n![private source image](https://invalid.example.test/blocked.png)\n\n<script>window.__unsafeStatement=true</script>\n\n[unsafe](javascript:alert%281%29) [reference](https://example.test/reference)\n")
@@ -172,17 +201,11 @@ func browserDrafts(t *testing.T, f *fixture, c *sessionruntime.Config, subjectID
 	s["size"], s["sha256"] = len(statement), problemfixture.Hash(statement)
 	bundle.AddStatementImage(t, "figures/diagram.png", problemfixture.PNG(t, 640, 160))
 	bundle.Write(t)
-	root := filepath.Join(t.TempDir(), "materials")
-	must(t, os.Mkdir(root, 0700))
 	lock := filepath.Join(t.TempDir(), "trusted-lock.json")
 	must(t, os.WriteFile(lock, bundle.Lock, 0600))
 	c.PrivateDrafts = &sessionruntime.PrivateDraftsConfig{MaterialRoot: root, BundleDirectory: bundle.Directory, SourceLockFile: lock,
 		SourceIDs: []string{"library-checker:aplusb"}, Timeout: 3 * time.Second, MaxInFlight: 1, ReferenceRequests: true}
 	must(t, referencepg.Configure(f.ctx, f.pools[0], problemreference.Limits{Global: 4, Owner: 1}))
-	access, err := identitypg.NewProblemAccess(f.pools[0])
-	must(t, err)
-	_, err = access.SetAuthorRole(f.ctx, identity.ProblemRoleChange{SubjectID: subjectID, Enabled: true, ExpectedRevision: 0, Operator: "browser-fixture", Reason: "synthetic preview author"})
-	must(t, err)
 }
 
 func browserOrigin(t *testing.T) *url.URL {

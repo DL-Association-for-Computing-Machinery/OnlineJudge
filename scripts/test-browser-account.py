@@ -18,6 +18,9 @@ ROOT = Path(__file__).resolve().parents[1]
 REDIS = "redis:7.2.17@sha256:0312984fbfeb2ff1d4382ecef45b50e7d65478a6a58cf12ce28d6de7a4142e45"
 # Loading the shared driver must not leave bytecode artifacts in the checkout.
 sys.dont_write_bytecode = True
+from problem_draft_files import verify_bundle
+from problem_source_common import load_lock, read_regular
+
 spec = importlib.util.spec_from_file_location("session_protocol", ROOT / "scripts/test-session-protocol.py")
 protocol = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(protocol)
@@ -64,7 +67,9 @@ def arguments():
     parser.add_argument("--build-cache-volume", default="onlinejudge_toolchain-cache")
     parser.add_argument("--playwright-module", type=Path, required=True)
     parser.add_argument("--chromium-executable", type=Path)
-    parser.add_argument("--statement-corpus", type=Path, help="optional prepared bundle statements directory, renderer-only checks")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--statement-corpus", type=Path, help="optional prepared bundle statements directory, renderer-only checks")
+    mode.add_argument("--authorized-draft-bundle", type=Path, help="run real authorized previews for the pinned ten-problem private bundle")
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
     output = args.output_dir.resolve()
@@ -78,6 +83,12 @@ def arguments():
         raise ValueError("existing Playwright package or entry required")
     args.playwright_module = module
     args.statements = []
+    args.authorized_drafts = []
+    if args.authorized_draft_bundle:
+        args.authorized_draft_bundle = local_path(args.authorized_draft_bundle, directory=True)
+        if output.is_relative_to(args.authorized_draft_bundle):
+            raise ValueError("output cannot be written into the input bundle")
+        args.authorized_drafts = draft_expectations(args.authorized_draft_bundle)
     if args.statement_corpus:
         corpus = local_path(args.statement_corpus, directory=True)
         files = sorted(corpus.iterdir())
@@ -101,6 +112,27 @@ def arguments():
     args.node = local_path(Path(node), executable=True)
     args.output_dir = output
     return args
+
+
+def draft_expectations(bundle):
+    index = verify_bundle(bundle)
+    lock = load_lock(ROOT / "config/problem-sources/library-checker.json")
+    sources = {"library-checker:" + p["path"].rsplit("/", 1)[-1] for p in lock["problems"]}
+    if {p["source_id"] for p in index["problems"]} != sources:
+        raise ValueError("expected the fixed ten-problem bundle")
+    drafts = []
+    for item in index["problems"]:
+        draft = json.loads(read_regular(bundle, item["draft"]))
+        statement = draft["statement"]
+        markdown = read_regular(bundle, statement["path"], 131072).decode("utf-8", errors="strict")
+        samples = {case["id"]: case for case in draft["test_cases"] if case["sample"]}
+        drafts.append({"source_id": item["source_id"], "version": item["version"], "title": draft["title"],
+                       "markdown_sha256": statement["sha256"], "headings": re.findall(r"^## (.+)$", markdown, re.M),
+                       "examples": [{"id": ident, "input_sha256": samples[ident]["input"]["sha256"],
+                                     "output_sha256": samples[ident]["answer"]["sha256"]} for ident in draft["examples"]]})
+    if len(drafts) != 10 or sum(len(draft["examples"]) for draft in drafts) != 18:
+        raise ValueError("unexpected pinned sample inventory")
+    return drafts
 
 
 def fixture_script():
@@ -189,8 +221,10 @@ def main():
         for name in ("src", "scripts", "public", "index.html", "vite.config.ts", "tsconfig.json", "eslint.config.js", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", ".npmrc"):
             if not (ROOT / "web" / name).exists():
                 raise ValueError("frontend source incomplete")
-        expected_checks = re.findall(r"^\s+passed\('([^'\n]+)'\)", (ROOT / "tests/browser/account-qa.mjs").read_text(), re.M)
-        if len(expected_checks) != 15 or len(set(expected_checks)) != 15:
+        script_name, check_count = ("authorized-draft-qa.mjs", 4) if args.authorized_drafts else ("account-qa.mjs", 15)
+        qa_script = ROOT / "tests/browser" / script_name
+        expected_checks = re.findall(r"^\s+passed\('([^'\n]+)'\)", qa_script.read_text(), re.M)
+        if len(expected_checks) != check_count or len(set(expected_checks)) != check_count:
             raise ValueError("browser driver check contract changed")
         phase = "FRONTEND"
         print("Building assets with cached dependencies", flush=True)
@@ -240,6 +274,9 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
             options += ["--mount", f"type=volume,src={args.build_cache_volume},dst=/tmp/go-build"]
         if args.module_cache:
             options += ["--mount", f"type=bind,src={args.module_cache},dst=/verified-module-cache,readonly"]
+        if args.authorized_drafts:
+            options += ["--mount", f"type=bind,src={args.authorized_draft_bundle},dst=/lc-bundle,readonly",
+                        "-e", "OJ_BROWSER_LC_DRAFTS=1"]
         containers["test"] = docker.create("--pull", "never", *options, "--entrypoint", "sh", images[0][0], "-ec", "while :; do sleep 30; done")
         docker.run("start", containers["test"])
         origin = published_origin(docker, containers["test"], 9443, "https")
@@ -249,7 +286,9 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
         process = subprocess.Popen([*docker.command, "exec", "-e", "OJ_BROWSER_ORIGIN=" + origin, "-e", "OJ_BROWSER_UI_DIR=/browser-assets", containers["test"], "sh", "/browser-fixture.sh"], stdout=handles[-1], stderr=subprocess.STDOUT)
         ready = wait_ready(process, fixture_log, origin)
         info = out / "fixture.json"
-        info.write_text(json.dumps({"origin": origin, "http_origin": http_origin, "log": str(fixture_log), "email": ready["email"], "subject_id": ready["subject_id"], "statements": args.statements}, indent=2) + "\n")
+        info.write_text(json.dumps({"origin": origin, "http_origin": http_origin, "log": str(fixture_log), "email": ready["email"],
+                                    "subject_id": ready["subject_id"], "statements": args.statements,
+                                    "authorized_drafts": args.authorized_drafts}, indent=2) + "\n")
         phase = "BROWSER_QA"
         print("Running real browser account checks", flush=True)
         env = {key: os.environ[key] for key in ("PATH", "HOME", "USER", "TMPDIR", "TMP", "TEMP", "LANG", "LC_ALL") if key in os.environ}
@@ -257,7 +296,8 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
         if args.chromium_executable:
             env["OJ_CHROMIUM_EXECUTABLE"] = str(args.chromium_executable)
         with (out / "node.log").open("w") as node_log:
-            qa = subprocess.run([str(args.node), str(ROOT / "tests/browser/account-qa.mjs")], env=env, stdout=node_log, stderr=subprocess.STDOUT, timeout=120)
+            qa = subprocess.run([str(args.node), str(qa_script)], env=env, stdout=node_log, stderr=subprocess.STDOUT,
+                                timeout=420 if args.authorized_drafts else 120)
         report = json.loads((out / "browser-qa.json").read_text())
         result["browser_ok"] = qa.returncode == 0 and isinstance(report, dict) and report.get("success") is True and report.get("checks") == expected_checks
         if not result["browser_ok"]:
