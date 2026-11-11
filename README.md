@@ -315,7 +315,7 @@ python3 -B -m unittest discover -s tests/governance -p test_problem_drafts.py -v
 
 输入须为稳定私有快照；输出为仓库外、与输入不重叠的新目录。工具重新核对源码和全部数据哈希，生成自含的10题/254点/18样例草稿、英文Markdown题面、来源映射与许可对象。所有路径相对bundle，移到其他目录后可独立复验，不依赖原候选目录。失败保留 `INCOMPLETE` 和部分文件，重试用新目录；临时目录不是持久备份。格式、权限及发布阻断见[草稿合同](docs/problem-drafts.md)。已增加私有草稿入库服务；审核和生产判题配置仍未接通；已有按ID本人题面预览。
 
-从已审查的 v6 题包派生 [Z 算法规模边界修订](docs/problem-sources.md#z-算法规模边界修订)时，另建私有单题包，保留原包供旧修订使用：
+从已审查的 v6 题包派生 [Z 算法](docs/problem-sources.md#z-算法规模边界修订)或 [A+B](docs/problem-sources.md#ab-值域边界修订)边界修订时，另建私有单题包，保留原包供旧修订使用：
 
 ```sh
 python3 -B scripts/supplement-zalgorithm.py \
@@ -323,9 +323,12 @@ python3 -B scripts/supplement-zalgorithm.py \
   --output /private/tmp/oj-zalgorithm-scale
 python3 -B scripts/import-library-checker.py \
   --verify-bundle /private/tmp/oj-zalgorithm-scale/bundle
+python3 -B scripts/supplement-aplusb.py \
+  --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
+  --output /private/tmp/oj-aplusb-boundaries
 ```
 
-离线盘点输入覆盖时，对两份题包分别生成报告。只读取已核验题包，不执行题源程序；用私有输出路径保留报告：
+离线盘点输入覆盖时，对各题包分别生成报告。只读取已核验题包，不执行题源程序；用私有输出路径保留报告：
 
 ```sh
 umask 077
@@ -333,6 +336,8 @@ python3 -B scripts/audit-library-checker-coverage.py \
   --bundle /private/tmp/oj-library-checker-drafts/bundle >/private/tmp/oj-v6-input-coverage.json
 python3 -B scripts/audit-library-checker-coverage.py \
   --bundle /private/tmp/oj-zalgorithm-scale/bundle >/private/tmp/oj-zalgorithm-input-coverage.json
+python3 -B scripts/audit-library-checker-coverage.py \
+  --bundle /private/tmp/oj-aplusb-boundaries/bundle >/private/tmp/oj-aplusb-input-coverage.json
 ```
 
 判定口径、版本及已观测缺口见[输入覆盖盘点](docs/problem-sources.md#输入覆盖盘点)。
@@ -382,7 +387,7 @@ OJ_SANDBOX_EXPERIMENT=1 python3 -B tests/integration/live_reference.py \
 
 题包父目录须归当前用户所有、权限为 0700，且只含题包；挂载整个父目录可保留 Linux 读到的题包所有者。工具链须已缓存依赖并提供 PostgreSQL 工具，以非 root 用户运行。输出须是已有父目录下的新目录，位于仓库与题包父目录之外。五个预配槽须已停止且无隔离标记；命令不创建、替换或恢复槽。临时控制端只向宿主回环发布，数据库使用容器内 Unix socket。执行仍在原断网槽，首个失败即停止批次，原始日志保留；成功才写 `summary.json`。见[报告接纳专项](docs/reference-requests.md#十题实物报告接纳专项)。
 
-验证 Z 算法单题修订时，在同一命令追加 `--zalgorithm-local-data`，将 `--bundle` 指向上述单题包，并为 `--output` 另选新目录。专项要求冻结和接纳同一份 31 点计划。
+验证单题修订时，在同一命令追加 `--zalgorithm-local-data`（31 点）或 `--aplusb-local-data`（17 点），将 `--bundle` 指向对应的单题包，并为 `--output` 另选新目录。专项要求冻结和接纳同一份计划。
 
 上述 Darwin 专项产物 `worker-validation.test` 可在专用固定离线槽运行 `-test.run '^TestClaimedReferenceOwnedSandbox$' -test.v`，显式设置 `OJ_REFERENCE_LEASED_SANDBOX_TEST=1 OJ_SANDBOX_EXPERIMENT=1` 并清空槽覆盖；须与其他宿主专项串行。只使用固定合成 A+B 和续期替身，分别验证真实执行与续期拒绝后的停止。
 

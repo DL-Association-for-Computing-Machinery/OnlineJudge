@@ -1,0 +1,114 @@
+package problem
+
+import "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materialstore"
+
+const (
+	localReferenceSourceLock = "fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617"
+	zAlgorithmLocalVersion   = "965239246cbdbd63f1641cfcf551d9c8f3a65cd558e194668ad845cac1e39711"
+	aPlusBLocalVersion       = "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd"
+)
+
+type localReferenceRevision struct {
+	label, sourceID            string
+	upstream                   int
+	source, definition, hashes materialstore.Object
+	suffix                     []ReferenceCase
+}
+
+// Only reviewed content versions can append local cases. Both preparation and
+// Worker transport still check the ordered upstream catalogue independently.
+var localReferenceRevisions = map[string]localReferenceRevision{
+	zAlgorithmLocalVersion: {
+		label: "oj-local:zalgorithm-scale-v1", sourceID: "library-checker:zalgorithm", upstream: 29,
+		source:     materialstore.Object{SHA256: "9f7168d28138fb61d7706b5b899bb0ae21503a848428fc7d7551c5a8507ff8d7", Size: 969},
+		definition: materialstore.Object{SHA256: "75d80d297a4f12c13c828b289a4e5795d8573d1a668ad07e4f19c81dcc54fc4c", Size: 499},
+		hashes:     materialstore.Object{SHA256: "45ec72478cb3d175a65be662df6dc2e2ada46f6fd146f796dd07ea3174a8cf84", Size: 5099},
+		suffix: []ReferenceCase{
+			{
+				ID:     "case-0030",
+				Input:  materialstore.Object{SHA256: "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7", Size: 2},
+				Answer: materialstore.Object{SHA256: "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865", Size: 2},
+			},
+			{
+				ID:     "case-0031",
+				Input:  materialstore.Object{SHA256: "069af87ff42316e1bbe6cc65d3ed71a71cdcf9cc972257c93a7d934b435c8ad2", Size: 500001},
+				Answer: materialstore.Object{SHA256: "9a3768bb91a7c39e5777767f091605ebb81cac9a047140ba7832bc5f067ab434", Size: 3388895},
+			},
+		},
+	},
+	aPlusBLocalVersion: {
+		label: "oj-local:aplusb-boundaries-v1", sourceID: "library-checker:aplusb", upstream: 12,
+		source:     materialstore.Object{SHA256: "5cd36270bccae9a25f48f29df5187569a3919f26dc2440485916c43cec07a70f", Size: 387},
+		definition: materialstore.Object{SHA256: "402dded4217583a68f9fdd800909f2c3f915e0698a5b392654e9e753d03cc047", Size: 359},
+		hashes:     materialstore.Object{SHA256: "c328b044bc45ce3a0eef37c9e9e8bb6791409bc8bfedf944e106f3aadd7fb20c", Size: 2082},
+		suffix: []ReferenceCase{
+			{
+				ID:     "case-0013",
+				Input:  materialstore.Object{SHA256: "0ccdb5a77ba5bf7687f2565a8ed97dfb9c1af45503c496fb646312239fab5101", Size: 4},
+				Answer: materialstore.Object{SHA256: "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa", Size: 2},
+			},
+			{
+				ID:     "case-0014",
+				Input:  materialstore.Object{SHA256: "a79122992d53d358e6bbbbb98883d64fa0c15df3bcb08ff7b65a0580870af424", Size: 4},
+				Answer: materialstore.Object{SHA256: "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865", Size: 2},
+			},
+			{
+				ID:     "case-0015",
+				Input:  materialstore.Object{SHA256: "f4a8ae8e74ddfb896a256de4e3099911dcaa6a9302591713898069b0bcd6e3d7", Size: 4},
+				Answer: materialstore.Object{SHA256: "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865", Size: 2},
+			},
+			{
+				ID:     "case-0016",
+				Input:  materialstore.Object{SHA256: "094f53851d789a7dfbebbbd19875d6dff79aeb9b1dbbadefc1f5bab77d597ff0", Size: 21},
+				Answer: materialstore.Object{SHA256: "873cf3b1e4f23454700801f646b785edf54fe87150bbda8c8c0a7f657fc01979", Size: 11},
+			},
+			{
+				ID:     "case-0017",
+				Input:  materialstore.Object{SHA256: "4d0b3116b1f3552d37cd16d57c533acc42ae47e198d201c0173bd7979528b1e2", Size: 21},
+				Answer: materialstore.Object{SHA256: "873cf3b1e4f23454700801f646b785edf54fe87150bbda8c8c0a7f657fc01979", Size: 11},
+			},
+		},
+	},
+}
+
+func (r localReferenceRevision) matches(sourceID, lock string, points int) bool {
+	return sourceID == r.sourceID && lock == localReferenceSourceLock && points == r.upstream+len(r.suffix)
+}
+
+func validDocumentCaseMapping(d document) bool {
+	revision, known := localReferenceRevisions[d.Version]
+	if !known {
+		return d.LocalData == "" && len(d.Provenance.Mapping) == len(d.TestCases)
+	}
+	if d.LocalData != revision.label || !revision.matches(d.Provenance.SourceID, d.Provenance.SourceLockSHA256, len(d.TestCases)) ||
+		len(d.Provenance.Mapping) != revision.upstream {
+		return false
+	}
+	for i, pinned := range revision.suffix {
+		c := d.TestCases[revision.upstream+i]
+		if c.Sample || c.ID != pinned.ID || c.Input.object() != pinned.Input || c.Answer.object() != pinned.Answer {
+			return false
+		}
+	}
+	return true
+}
+
+// upstreamPlanSize keeps the original encoding and full-catalogue behavior for
+// ordinary versions. A reviewed local version must have its exact suffix.
+func upstreamPlanSize(p ReferencePlan) (int, bool) {
+	revision, known := localReferenceRevisions[p.Version]
+	if !known {
+		return len(p.Cases), true
+	}
+	if !revision.matches(p.SourceID, p.SourceLockSHA256, len(p.Cases)) ||
+		p.Source != revision.source || p.Definition != revision.definition || p.Hashes != revision.hashes {
+		return 0, false
+	}
+	for i, pinned := range revision.suffix {
+		c := p.Cases[revision.upstream+i]
+		if c.ID != pinned.ID || c.Input != pinned.Input || c.Answer != pinned.Answer {
+			return 0, false
+		}
+	}
+	return revision.upstream, true
+}
