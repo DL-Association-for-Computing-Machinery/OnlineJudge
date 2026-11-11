@@ -30,6 +30,7 @@ type CachedGoJudge struct {
 	verified, compiled, failed bool
 	executable                 string
 	compilationEntry           string // empty for the unchanged single-source protocol
+	runOutputBytes             int    // zero uses the verified runtime's regular stdout limit
 	objects                    map[string]*cachedObject
 	seen                       map[string]bool
 	liveBytes, totalBytes      int64
@@ -60,6 +61,17 @@ func NewReferenceGoJudgeForTier(transport http.RoundTripper, verify func(context
 	g := NewReferenceGoJudge(transport, verify, files)
 	g.runtime, g.limits = c.Runtime, c.Files
 	g.compilationEntry = c.Entry
+	return g, nil
+}
+
+// NewConvolutionComparisonGoJudge retains the convolution host profile but
+// reserves only the output that the fixed small-corpus parser can accept.
+func NewConvolutionComparisonGoJudge(transport http.RoundTripper, verify func(context.Context, experiment.ExecutionProfile) error, files FileTransport) (*CachedGoJudge, error) {
+	g, err := NewReferenceGoJudgeForTier(transport, verify, files, experiment.ReferenceConvolution)
+	if err != nil {
+		return nil, err
+	}
+	g.runOutputBytes = experiment.ConvolutionComparisonOutputBytes
 	return g, nil
 }
 
@@ -178,6 +190,9 @@ func (g *CachedGoJudge) run(ctx context.Context, p experiment.ExecutionProfile, 
 	}
 	if !g.verified || !g.compiled || id != g.executable || g.objects[id] == nil || !reflect.DeepEqual(p, g.runtime) {
 		return o, failureError("validate", "executable", "ownership", "cached execution rejected")
+	}
+	if g.runOutputBytes > 0 {
+		p.OutputBytes = min(p.OutputBytes, g.runOutputBytes)
 	}
 	in, err := g.upload(ctx, input, "input")
 	var out *cachedObject
