@@ -9,7 +9,7 @@ import (
 )
 
 // ReviewPolicyVersion identifies the current requirements for ordinary approval.
-const ReviewPolicyVersion = "oj.review-approval.v7"
+const ReviewPolicyVersion = "oj.review-approval.v8"
 
 // ReviewEligibilitySnapshot is the trusted read of an assigned item's verified
 // historical evidence and whether the same material has already been returned.
@@ -89,6 +89,10 @@ func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
 		}
 		if admitted, ok := problemvalidation.AdmittedStatementRendering(id, e.FormalPlanSHA256); ok {
 			statementRendering = &admitted
+		} else if formalOnly {
+			if admitted, ok := problemvalidation.AdmittedApPlusBStatementRendering(id, e.FormalPlanSHA256, e.ProfileSHA256); ok {
+				statementRendering = &admitted
+			}
 		}
 	}
 	semanticsConfirmed := s.StatementConfirmed && !s.Returned
