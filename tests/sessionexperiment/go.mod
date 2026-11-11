@@ -1,6 +1,6 @@
 module github.com/DL-Association-for-Computing-Machinery/OnlineJudge/tests/sessionexperiment
 
-go 1.26.10
+go 1.26.11
 
 require (
 	github.com/alexedwards/scs/v2 v2.9.0

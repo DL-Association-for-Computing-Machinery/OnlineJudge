@@ -33,4 +33,4 @@ Docker Desktop LinuxKit7.0.14/arm64的专用ext4命名卷上，已逐对象导�
 
 这些证据不验收真实持久磁盘断电、全盘容量、跨主机共享、孤儿回收、独立备份或业务题目发布。P4私有草稿服务已在完整保存材料后同事务检查当前出题权限并提交数据库固定引用；加入题面/草稿/证据后的622对象联调归草稿合同，不改写本页原597对象证据。受限验证、审核及发布继续待交付；当前M0材料入口保持原有独立实现及门禁。
 
-实现依据：[锁定Go1.26.10的os.Root/Link源码](https://github.com/golang/go/blob/go1.26.10/src/os/root.go)、[Linux link不覆盖语义](https://man7.org/linux/man-pages/man2/link.2.html)、[文件和目录分别fsync的要求](https://man7.org/linux/man-pages/man2/fsync.2.html)。2026-11-03核对官方源码/手册；本项目实际支持范围仍由以上实测限定。
+实现依据：[实验使用的Go1.26.10 os.Root/Link源码](https://github.com/golang/go/blob/go1.26.10/src/os/root.go)、[Linux link不覆盖语义](https://man7.org/linux/man-pages/man2/link.2.html)、[文件和目录分别fsync的要求](https://man7.org/linux/man-pages/man2/fsync.2.html)。2026-11-03核对官方源码/手册；本项目实际支持范围仍由以上实测限定，当前构建版本见 README。

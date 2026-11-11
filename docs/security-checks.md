@@ -2,6 +2,8 @@
 
 本页维护扫描范围与处置流程；扫描通过不等于完整安全审计。主线必需结果门禁要求 `security` 成功，失败、取消、超时和未知状态均阻断合并，不修改远端保护名称。
 
+2026-11-11，CI 在 Go 1.26.10 上报告了可达的 [GO-2026-6859](https://github.com/golang/go/issues/82563)。主模块、会话实验模块和 Docker 构建工具链统一到 Go 1.26.11，并锁定 [Docker 官方 Go 镜像](https://github.com/docker-library/official-images/blob/master/library/golang)的多架构摘要。请求上限、扫描器、CI 门禁和 Go 模块依赖保持不变。
+
 ## 执行与边界
 
 在仓库根目录执行：
@@ -23,7 +25,7 @@ Linux CI 使用相同镜像与命令，省略 `--context desktop-linux`。PR、�
 
 ## 工具准入与维护
 
-2026-10-29 核对官方仓库：Gitleaks CLI 为 MIT，govulncheck 为 Go BSD 风格许可；两个版本的 Go 要求分别为 1.24.11 与 1.26.0，项目构建工具链为 1.26.10。固定版本通过 Go 模块校验安装到专用 Docker stage；不进入应用运行镜像，不修改应用依赖清单。代价是首次下载、工具镜像空间与分析时间。Gitleaks 官方公开 advisory 查询为空，仅表示该接口未返回公告，不是无漏洞证明。
+2026-10-29 核对官方仓库：Gitleaks CLI 为 MIT，govulncheck 为 Go BSD 风格许可；两个版本的 Go 要求分别为 1.24.11 与 1.26.0，当时项目构建工具链为 1.26.10；当前版本见 README。固定版本通过 Go 模块校验安装到专用 Docker stage；不进入应用运行镜像，不修改应用依赖清单。代价是首次下载、工具镜像空间与分析时间。Gitleaks 官方公开 advisory 查询为空，仅表示该接口未返回公告，不是无漏洞证明。
 
 使用 CLI 而非额外第三方 Action，沿用现有只读工作流权限、固定 checkout SHA 和 Docker 工具链。镜像 OS 包漏洞扫描及 SBOM 留作独立后续目标，不宣称本项覆盖。
 
