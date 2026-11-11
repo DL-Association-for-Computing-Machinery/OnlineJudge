@@ -5,6 +5,7 @@ import json
 from pathlib import PurePosixPath
 import tarfile
 
+from library_checker_quality import control_result, input_controls
 from problem_source_common import MAX_DATA_FILE, MAX_EXPORT, MAX_REPORT, safe_path
 
 
@@ -91,12 +92,19 @@ def extract(archive, destination, expected):
     return report, total
 
 
-def validate_report(report, lock, catalog):
+def validate_report(report, lock, catalog, *, require_controls=False):
     """A source-validation report is evidence, never a production verdict."""
-    if report.get("schema") != "oj.source-validation.v1" or report.get("commit") != lock["commit"]:
+    schema = report.get("schema")
+    with_controls = schema == "oj.source-validation.v2"
+    if (not with_controls and (require_controls or schema != "oj.source-validation.v1")
+            or report.get("commit") != lock["commit"]):
         raise ValueError("invalid validation report identity")
     expected = [{"source_id": p["source_id"], "cases": len(p["cases"]),
                  "input_validator": "passed-all", "reference_checker": "passed-all",
                  "invalid_output_checker_exit": 1} for p in catalog]
-    if report.get("problems") != expected:
+    if with_controls:
+        for problem in expected:
+            problem["input_controls"] = [control_result(*probe) for probe in input_controls(problem["source_id"])]
+    # JSON comparison also distinguishes numbers from booleans and fractions.
+    if json.dumps(report.get("problems"), sort_keys=True) != json.dumps(expected, sort_keys=True):
         raise ValueError("incomplete validation results")

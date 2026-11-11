@@ -1,6 +1,7 @@
 """Regression checks for offline source integrity and the host export boundary."""
 
 import argparse
+import copy
 import importlib.util
 import io
 import json
@@ -17,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 import problem_source_common as common
 import problem_source_export as export
+import validate_library_checker as runner
 
 spec = importlib.util.spec_from_file_location("prepare_lc", ROOT / "scripts/prepare-library-checker.py")
 prepare = importlib.util.module_from_spec(spec)
@@ -165,6 +167,54 @@ class ExportTests(TemporaryCase):
         report["commit"] = "other"
         with self.assertRaisesRegex(ValueError, "identity"):
             export.validate_report(report, lock, catalog)
+
+    def test_new_preparation_requires_complete_bound_controls_but_old_imports_remain_valid(self):
+        lock = {"commit": "pinned"}
+        catalog = [{"source_id": "library-checker:aplusb", "cases": [{}]}]
+        result = {"source_id": "library-checker:aplusb", "cases": 1, "input_validator": "passed-all",
+                  "reference_checker": "passed-all", "invalid_output_checker_exit": 1}
+        old = {"schema": "oj.source-validation.v1", "commit": "pinned", "problems": [result]}
+        export.validate_report(old, lock, catalog)
+        with self.assertRaisesRegex(ValueError, "identity"):
+            export.validate_report(old, lock, catalog, require_controls=True)
+
+        report = copy.deepcopy(old)
+        report["schema"] = "oj.source-validation.v2"
+        report["problems"][0]["input_controls"] = [
+            {"id": name, "input_sha256": common.digest(payload), "exit_code": code}
+            for name, payload, code in (
+                ("valid-boundary", b"0 1000000000\n", 0),
+                ("outside-domain", b"0 1000000001\n", 3),
+                ("truncated", b"0 1000000000", 3),
+                ("trailing-data", b"0 1000000000\n0\n", 3),
+            )
+        ]
+        export.validate_report(report, lock, catalog, require_controls=True)
+        for change in ("missing", "wrong-input", "untyped-exit", "crash"):
+            with self.subTest(change=change):
+                damaged = copy.deepcopy(report)
+                controls = damaged["problems"][0]["input_controls"]
+                if change == "missing":
+                    controls.pop()
+                elif change == "wrong-input":
+                    controls[1]["input_sha256"] = controls[0]["input_sha256"]
+                elif change == "untyped-exit":
+                    controls[0]["exit_code"] = False
+                else:
+                    controls[1]["exit_code"] = -9
+                with self.assertRaisesRegex(ValueError, "incomplete"):
+                    export.validate_report(damaged, lock, catalog, require_controls=True)
+
+
+class InputControlTests(unittest.TestCase):
+    def test_accepting_invalid_input_or_a_crash_does_not_count_as_rejection(self):
+        for exit_code in (0, -9):
+            with self.subTest(exit_code=exit_code), patch.object(
+                runner, "checked", side_effect=[subprocess.CompletedProcess([], code) for code in (0, exit_code)],
+            ) as checked, self.assertRaisesRegex(ValueError, "outside-domain"):
+                runner.run_input_controls(Path("/fixture/verifier"), "library-checker:convolution_mod")
+            self.assertEqual(checked.call_count, 2)
+            self.assertEqual(checked.call_args.kwargs["input"], b"1 1\n0\n998244353\n")
 
 
 class DriverTests(TemporaryCase):
