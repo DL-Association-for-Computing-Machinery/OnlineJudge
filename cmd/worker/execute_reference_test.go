@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
@@ -91,7 +93,7 @@ func TestClaimedReferenceHoldsHostUntilConfirmedStop(t *testing.T) {
 			reports := 0
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
-			err := runClaimedReference(ctx, lock, claim, func(ctx context.Context, _ problemreference.WorkerClaim) (referenceExecutionMaterials, error) {
+			err := runClaimedReference(ctx, lock, claim, nil, func(ctx context.Context, _ problemreference.WorkerClaim) (referenceExecutionMaterials, error) {
 				checkHeld()
 				fetched = true
 				return fetch(ctx, claim)
@@ -151,6 +153,76 @@ func TestClaimedReferenceHoldsHostUntilConfirmedStop(t *testing.T) {
 				rejectHostSlot(t, dir, other, false, false)
 			} else {
 				takeHostSlot(t, dir, other, false, false).Close()
+			}
+		})
+	}
+}
+
+type referenceUploadTimeoutHost struct {
+	referenceHost
+}
+
+func (h *referenceUploadTimeoutHost) UploadFile(ctx context.Context, data []byte) (string, error) {
+	if h.requests == 1 {
+		return "", errors.Join(context.DeadlineExceeded, errors.New("PRIVATE-upload-detail"))
+	}
+	return h.referenceHost.UploadFile(ctx, data)
+}
+
+func TestClaimedReferenceLogsPointUploadAndStopOutcome(t *testing.T) {
+	claim, fetch := claimedReferenceFixture(t, []byte("PRIVATE-source"))
+	for _, stopState := range []string{"confirmed", "unconfirmed"} {
+		t.Run(stopState, func(t *testing.T) {
+			dir := t.TempDir()
+			lock := takeHostSlot(t, dir, (workerhost.M0Slot{}).LockName(), false, false)
+			defer lock.Close()
+			h := &referenceUploadTimeoutHost{}
+			if stopState == "unconfirmed" {
+				h.stopErr = errors.Join(context.DeadlineExceeded, errors.New("PRIVATE-stop-detail"))
+			}
+			var log bytes.Buffer
+			logger := slog.New(slog.NewJSONHandler(&log, nil))
+			err := runClaimedReference(t.Context(), lock, claim, logger, fetch,
+				func(context.Context, problemreference.WorkerClaim) error { return nil },
+				func(context.Context, string) (validationHost, error) { return h, nil },
+				func(context.Context, problemreference.WorkerReportInput) error {
+					t.Error("failed work sent a report")
+					return nil
+				})
+			if !errors.Is(err, context.DeadlineExceeded) || h.stops != 1 || !h.independent {
+				t.Fatalf("upload failure did not preserve its cause and require an independent stop: %v", err)
+			}
+			if errors.Is(err, execution.ErrStopUnconfirmed) != (stopState == "unconfirmed") {
+				t.Fatalf("wrong returned stop classification: %v", err)
+			}
+			var event struct {
+				Level      string                                 `json:"level"`
+				Source     string                                 `json:"source_id"`
+				Stop       string                                 `json:"stop_state"`
+				Execution  *problemvalidation.ExecutionDiagnostic `json:"execution_diagnostic"`
+				StopDetail *workerhost.StopDiagnostic             `json:"stop_diagnostic"`
+			}
+			if err := json.Unmarshal(log.Bytes(), &event); err != nil {
+				t.Fatal("expected exactly one structured failure event", err)
+			}
+			if event.Level != "ERROR" || event.Source != claim.SourceID || event.Stop != stopState || event.Execution == nil || len(event.Execution.Entries) == 0 {
+				t.Fatalf("missing execution or stop evidence: %+v", event)
+			}
+			first := event.Execution.Entries[0]
+			if first.Operation != "run" || first.Point != 1 || first.Phase != "upload" || first.Role != "input" || first.Code != "deadline" {
+				t.Fatalf("wrong upload failure location: %+v", first)
+			}
+			if stopState == "unconfirmed" {
+				if event.StopDetail == nil || event.StopDetail.Code != "deadline" {
+					t.Fatal("missing stop deadline evidence")
+				}
+			} else if event.StopDetail != nil {
+				t.Fatal("confirmed stop logged a failure diagnostic")
+			}
+			for _, private := range []string{"PRIVATE", claim.RequestID, claim.PlanSHA256, claim.Token, "compiled", "upload-1"} {
+				if strings.Contains(log.String(), private) {
+					t.Fatal("structured event leaked private execution data")
+				}
 			}
 		})
 	}
