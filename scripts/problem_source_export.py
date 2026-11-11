@@ -10,6 +10,7 @@ from library_checker_quality import (
     control_result, input_controls, slow_solution_result, wrong_solution_result,
 )
 from library_checker_oracles import ORACLE_SCHEMA, oracle_result, small_cases
+from library_checker_wrong_cases import LOCAL_WRONG_CASES, LOCAL_WRONG_SCHEMA, local_wrong_result
 from problem_source_common import MAX_DATA_FILE, MAX_EXPORT, MAX_REPORT, safe_path
 
 
@@ -99,7 +100,8 @@ def extract(archive, destination, expected):
 def validate_report(report, lock, catalog, *, inventory=None, required_schema=None):
     """A source-validation report is evidence, never a production verdict."""
     schema = report.get("schema")
-    if (schema not in ("oj.source-validation.v1", INPUT_CONTROL_SCHEMA, WRONG_SOLUTION_SCHEMA, SLOW_SOLUTION_SCHEMA, ORACLE_SCHEMA)
+    if (schema not in ("oj.source-validation.v1", INPUT_CONTROL_SCHEMA, WRONG_SOLUTION_SCHEMA, SLOW_SOLUTION_SCHEMA,
+                       ORACLE_SCHEMA, LOCAL_WRONG_SCHEMA)
             or required_schema is not None and schema != required_schema
             or report.get("commit") != lock["commit"]):
         raise ValueError("invalid validation report identity")
@@ -112,7 +114,7 @@ def validate_report(report, lock, catalog, *, inventory=None, required_schema=No
     if schema != "oj.source-validation.v1":
         for problem in expected:
             problem["input_controls"] = [control_result(*probe) for probe in input_controls(problem["source_id"])]
-    if schema in (WRONG_SOLUTION_SCHEMA, SLOW_SOLUTION_SCHEMA, ORACLE_SCHEMA):
+    if schema in (WRONG_SOLUTION_SCHEMA, SLOW_SOLUTION_SCHEMA, ORACLE_SCHEMA, LOCAL_WRONG_SCHEMA):
         if inventory is None:
             raise ValueError("missing pinned inventory for wrong-solution results")
         for item, row, observed in zip(catalog, expected, actual, strict=True):
@@ -122,7 +124,7 @@ def validate_report(report, lock, catalog, *, inventory=None, required_schema=No
                 if not isinstance(result, dict):
                     raise ValueError("missing wrong-solution witness")
                 row["wrong_solution"] = wrong_solution_result(item, result.get("case_position"), inventory)
-            if schema in (SLOW_SOLUTION_SCHEMA, ORACLE_SCHEMA):
+            if schema in (SLOW_SOLUTION_SCHEMA, ORACLE_SCHEMA, LOCAL_WRONG_SCHEMA):
                 row["slow_solution"] = None
                 if item["path"] == SLOW_SOURCE:
                     result = observed.get("slow_solution") if isinstance(observed, dict) else None
@@ -130,8 +132,18 @@ def validate_report(report, lock, catalog, *, inventory=None, required_schema=No
                         raise ValueError("missing slow-solution witness")
                     row["slow_solution"] = slow_solution_result(item, result.get("case_position"), inventory,
                                                                result.get("candidate_cpu_ms"), result.get("reference_cpu_ms"))
-            if schema == ORACLE_SCHEMA:
+            if schema in (ORACLE_SCHEMA, LOCAL_WRONG_SCHEMA):
                 row["independent"] = oracle_result(item, inventory, small_cases(item["source_id"]))
+            if schema == LOCAL_WRONG_SCHEMA:
+                local = item["source_id"] in LOCAL_WRONG_CASES
+                if local == (row["wrong_solution"] is not None):
+                    raise ValueError("expected exactly one wrong-solution family per source")
+                row["local_wrong_solution"] = None
+                if local:
+                    result = observed.get("local_wrong_solution") if isinstance(observed, dict) else None
+                    if not isinstance(result, dict):
+                        raise ValueError("missing local wrong-solution witness")
+                    row["local_wrong_solution"] = local_wrong_result(item, inventory, result.get("case_position"))
     # JSON comparison also distinguishes numbers from booleans and fractions.
     if json.dumps(actual, sort_keys=True) != json.dumps(expected, sort_keys=True):
         raise ValueError("incomplete validation results")
