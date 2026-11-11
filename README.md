@@ -43,11 +43,12 @@ python3 -B scripts/prepare-library-checker.py \
   --output /private/tmp/oj-library-checker-corpus
 ```
 
-`--output` 必须为仓库外的新目录。成功生成 `materials/catalog.json`、来源/许可、全部数据及 `oj.source-validation.v5` 报告。报告包含十题输入校验对照、三个固定错误解的首个正式 WA 点、关联数组的低效解 CPU 对照和十题共 198 个独立小用例；失败保留 `INCOMPLETE`，重试使用新目录。私有候选不会自动进入数据库、Web 题库或 Worker。工具行为回归：
+`--output` 必须为仓库外的新目录。成功生成 `materials/catalog.json`、来源/许可、全部数据及 `oj.source-validation.v6` 报告。报告包含十题输入校验对照、每题一份固定错误解的正式 WA、关联数组低效解 CPU 对照和十题共 198 个独立小用例；失败保留 `INCOMPLETE`，重试使用新目录。私有候选不会自动进入数据库、Web 题库或 Worker。工具行为回归：
 
 ```sh
 python3 -B -m unittest discover -s tests/governance -p test_problem_sources.py -v
 python3 -B -m unittest discover -s tests/governance -p test_library_checker_oracles.py -v
+python3 -B -m unittest discover -s tests/governance -p test_library_checker_wrong_cases.py -v
 ```
 
 ### 首批文本检查器差分

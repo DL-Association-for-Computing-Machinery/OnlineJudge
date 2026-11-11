@@ -19,7 +19,11 @@ from library_checker_quality import (
     SLOW_CPU_SECONDS, SLOW_HARD_CPU_SECONDS, SLOW_SOLUTION, SLOW_SOURCE, SLOW_WALL_SECONDS,
     WRONG_SOLUTIONS, control_result, input_controls, slow_solution_result, wrong_solution_result,
 )
-from library_checker_oracles import MAX_OUTPUT_BYTES, ORACLE_SCHEMA, WALL_SECONDS, oracle_result, small_cases
+from library_checker_oracles import MAX_OUTPUT_BYTES, WALL_SECONDS, oracle_result, small_cases
+from library_checker_wrong_cases import (
+    LOCAL_WRONG_CASES, LOCAL_WRONG_SCHEMA, MAX_INPUT_BYTES as WRONG_MAX_INPUT_BYTES,
+    MAX_OUTPUT_BYTES as WRONG_MAX_OUTPUT_BYTES, WALL_SECONDS as WRONG_WALL_SECONDS, fixed_cases, local_wrong_result,
+)
 from problem_source_common import digest, expected_materials, load_lock, read_regular, snapshot
 
 
@@ -128,6 +132,28 @@ def run_small_oracles(base, item, inventory, directory):
     return oracle_result(item, inventory, probes)
 
 
+def run_local_wrong_case(base, item, inventory, output):
+    for position, case in fixed_cases(item):
+        infile = base / "in" / (case + ".in")
+        answer = base / "out" / (case + ".out")
+        data = read_regular(infile.parent, infile.name, WRONG_MAX_INPUT_BYTES)
+        with output.open("wb") as stream:
+            checked([sys.executable, "-B", str(Path(__file__).with_name("library_checker_wrong_cases.py")), item["source_id"]],
+                    input=data, stdout=stream, timeout=WRONG_WALL_SECONDS)
+        actual = tokens(read_regular(output.parent, output.name, WRONG_MAX_OUTPUT_BYTES))
+        expected = tokens(read_regular(answer.parent, answer.name, WRONG_MAX_OUTPUT_BYTES))
+        if len(actual) != len(expected) or not actual or any(not token.isdigit() for token in actual):
+            raise ValueError(f"{item['source_id']}: malformed wrong-candidate output at formal point {position}")
+        result = checked([str(base / "checker"), str(infile), str(output), str(answer)],
+                         timeout=WRONG_WALL_SECONDS, check=False)
+        if result.returncode == 1:
+            return local_wrong_result(item, inventory, position)
+        if result.returncode != 0:
+            raise ValueError(f"{item['source_id']}: checker exited {result.returncode} at formal point {position}")
+        print(item["source_id"], "local wrong candidate accepted at formal position", position, flush=True)
+    raise ValueError(f"{item['source_id']}: fixed formal probes did not reject the wrong candidate")
+
+
 def main():
     if Path.cwd() != Path("/work") or not Path("/input/source-lock.json").is_file():
         raise ValueError("run only through prepare-library-checker.py")
@@ -185,10 +211,17 @@ def main():
                   slow_solution["case_position"], flush=True)
         with tempfile.TemporaryDirectory(dir="/work") as directory:
             independent = run_small_oracles(base, item, expected, Path(directory))
+        local_wrong = None
+        if item["source_id"] in LOCAL_WRONG_CASES:
+            with tempfile.TemporaryDirectory(dir="/work") as directory:
+                local_wrong = run_local_wrong_case(base, item, expected, Path(directory) / "wrong.out")
+            print(item["source_id"], "local wrong candidate rejected at formal position",
+                  local_wrong["case_position"], flush=True)
         report.append({"source_id": item["source_id"], "cases": len(item["cases"]),
                        "input_validator": "passed-all", "reference_checker": "passed-all",
                        "invalid_output_checker_exit": result.returncode, "input_controls": controls,
-                       "wrong_solution": wrong_solution, "slow_solution": slow_solution, "independent": independent})
+                       "wrong_solution": wrong_solution, "slow_solution": slow_solution, "independent": independent,
+                       "local_wrong_solution": local_wrong})
         print(item["source_id"], len(item["cases"]), "formal and", len(independent["cases"]),
               "independent cases validated", flush=True)
     export = Path("/work/export")
@@ -208,7 +241,7 @@ def main():
         target.parent.mkdir(parents=True, exist_ok=True)
         # Hard links avoid a second copy of the generated data in bounded tmpfs.
         target.hardlink_to(original)
-    validation = {"schema": ORACLE_SCHEMA, "commit": lock["commit"],
+    validation = {"schema": LOCAL_WRONG_SCHEMA, "commit": lock["commit"],
                   "elapsed_seconds": round(time.monotonic() - start, 3),
                   "compiler": subprocess.check_output(["g++", "--version"], text=True).splitlines()[0],
                   "python": sys.version.split()[0], "problems": report}
