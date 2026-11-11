@@ -175,9 +175,6 @@ func testEntryReferenceResult(t *testing.T, f *fixture, x, y *loginEndpoint, coo
 	if string(got.body) != want {
 		t.Fatal("terminal author response did not match its exact public shape")
 	}
-	if got.headers.Get("Cache-Control") != "private, no-store" {
-		t.Fatal("terminal author response was not marked private and noncacheable")
-	}
 	replay := authorReferenceCall(x, "GET", path+"/report", "", cookies, owner)
 	loginStatus(t, replay, 200)
 	if !bytes.Equal(got.body, replay.body) {

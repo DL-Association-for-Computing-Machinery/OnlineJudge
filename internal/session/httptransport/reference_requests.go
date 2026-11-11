@@ -161,7 +161,6 @@ func (h *handler) serveAuthorReport(ctx context.Context, w http.ResponseWriter, 
 		referenceRequestError(w, problemreference.ErrStore)
 		return
 	}
-	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(body)
