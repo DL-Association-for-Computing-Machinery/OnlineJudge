@@ -280,7 +280,7 @@ components:
       required: [evidence, policy_version, eligible, blockers]
       properties:
         evidence: { $ref: '#/components/schemas/ReviewEvidence' }
-        policy_version: { const: 'oj.review-approval.v5' }
+        policy_version: { const: 'oj.review-approval.v6' }
         eligible: { const: false }
         statement_semantics_confirmed:
           const: true
@@ -328,6 +328,30 @@ components:
             examples: { type: integer, minimum: 1 }
             formulas: { type: integer, minimum: 1 }
             format_blocks: { type: integer, minimum: 0 }
+        test_coverage_evidence:
+          type: object
+          additionalProperties: false
+          description: 仅已接纳正式 AC、材料未退回且精确命中受信 A+B 修订、计划及档位时返回。
+          required: [report_sha256, points, sample_points, non_sample_criteria, sample_only_criteria,
+            maximum_sum_sample_position, wrong_solutions]
+          properties:
+            report_sha256: { $ref: '#/components/schemas/SHA256' }
+            points: { const: 17 }
+            sample_points: { const: 2 }
+            non_sample_criteria: { const: 7 }
+            sample_only_criteria: { const: 1 }
+            maximum_sum_sample_position: { const: 2 }
+            wrong_solutions:
+              type: array
+              minItems: 4
+              maxItems: 4
+              items:
+                type: object
+                additionalProperties: false
+                required: [candidate, rejected_points]
+                properties:
+                  candidate: { type: string, enum: [constant_zero, left_only, right_only, upstream_round_down_even] }
+                  rejected_points: { type: integer, minimum: 1, maximum: 15 }
         blockers:
           type: array
           minItems: 1

@@ -109,3 +109,55 @@ func TestReviewApprovalWithTrustedIndependentCorrectnessKeepsOtherBlockers(t *te
 		t.Fatalf("old profile borrowed current policy evidence: %+v", stale)
 	}
 }
+
+func TestReviewCoverageRequiresCurrentCompleteApPlusBPlan(t *testing.T) {
+	e := ReviewEvidence{
+		SourceID:         "library-checker:aplusb",
+		SourceLockSHA256: problemvalidation.SourceLockSHA256,
+		ContentVersion:   "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd",
+		ImportRevision:   "e96d280c89a6e5d3da76ee5347c0581d4153d7052e9afceddffb2fdbb3d2036d",
+		FormalPlanSHA256: "fe4e1968ae66dbfbe23afb96c03ed62dba8957d06e3b88602ebd653faf1c80f5",
+		ProfileSHA256:    "658fef827daa872a726e6a728ad05c84a08103bd9857c71606fe76cff92c1437",
+		FormalVerdict:    "AC",
+	}
+	s := ReviewEligibilitySnapshot{Evidence: e}
+	got := assessReviewEligibility(s)
+	coverage := got.TestCoverage
+	want := []string{"independent_correctness_missing", "statement_quality_missing", "input_validator_missing",
+		"checker_admission_missing", "target_runtime_missing", "solution_confirmation_missing"}
+	if got.Eligible || coverage == nil || !slices.Equal(got.Blockers, want) ||
+		got.InputValidator != nil || got.IndependentCorrectness != nil || got.WrongSolution != nil || got.StatementRendering != nil {
+		t.Fatalf("coverage must clear only its own blocker: %+v", got)
+	}
+	if coverage.Points != 17 || coverage.SamplePoints != 2 || coverage.NonSampleCriteria != 7 ||
+		coverage.SampleOnlyCriteria != 1 || coverage.MaximumSumSamplePosition != 2 ||
+		coverage.WrongSolutions[0].RejectedPoints != 14 || coverage.WrongSolutions[3].RejectedPoints != 10 {
+		t.Fatalf("coverage projection drifted from the reviewed report: %+v", coverage)
+	}
+	for _, tc := range []struct {
+		name   string
+		change func(*ReviewEligibilitySnapshot)
+	}{
+		{"other source", func(x *ReviewEligibilitySnapshot) { x.Evidence.SourceID = problemvalidation.ConvolutionSourceID }},
+		{"other source lock", func(x *ReviewEligibilitySnapshot) { x.Evidence.SourceLockSHA256 = strings.Repeat("1", 64) }},
+		{"other version", func(x *ReviewEligibilitySnapshot) { x.Evidence.ContentVersion = strings.Repeat("2", 64) }},
+		{"other import", func(x *ReviewEligibilitySnapshot) { x.Evidence.ImportRevision = strings.Repeat("3", 64) }},
+		{"other plan", func(x *ReviewEligibilitySnapshot) { x.Evidence.FormalPlanSHA256 = strings.Repeat("4", 64) }},
+		{"other profile", func(x *ReviewEligibilitySnapshot) { x.Evidence.ProfileSHA256 = strings.Repeat("5", 64) }},
+		{"formal failure", func(x *ReviewEligibilitySnapshot) { x.Evidence.FormalVerdict = "WA" }},
+		{"unexpected comparison", func(x *ReviewEligibilitySnapshot) {
+			x.Evidence.ComparisonPlan = strings.Repeat("6", 64)
+			x.Evidence.ComparisonOutcome = "mismatch"
+		}},
+		{"returned material", func(x *ReviewEligibilitySnapshot) { x.Returned = true }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			changed := s
+			tc.change(&changed)
+			result := assessReviewEligibility(changed)
+			if result.Eligible || result.TestCoverage != nil || !slices.Contains(result.Blockers, "test_coverage_missing") {
+				t.Fatalf("coverage evidence escaped its admitted binding: %+v", result)
+			}
+		})
+	}
+}
