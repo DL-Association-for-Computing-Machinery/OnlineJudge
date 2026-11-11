@@ -13,14 +13,15 @@ import (
 )
 
 var (
-	ErrInvalid       = errors.New("invalid reference request")
-	ErrNotFound      = errors.New("reference request not found")
-	ErrConflict      = errors.New("reference request key conflict")
-	ErrSourceChanged = errors.New("reference request source is not configured at this revision")
-	ErrPolicy        = errors.New("reference request admission is not configured")
-	ErrFull          = errors.New("reference request queue is full")
-	ErrStore         = errors.New("reference request storage unavailable")
-	ErrCommitUnknown = errors.New("reference request commit outcome unknown; retain original key")
+	ErrInvalid        = errors.New("invalid reference request")
+	ErrNotFound       = errors.New("reference request not found")
+	ErrConflict       = errors.New("reference request key conflict")
+	ErrSubjectChanged = errors.New("reference request session subject changed")
+	ErrSourceChanged  = errors.New("reference request source is not configured at this revision")
+	ErrPolicy         = errors.New("reference request admission is not configured")
+	ErrFull           = errors.New("reference request queue is full")
+	ErrStore          = errors.New("reference request storage unavailable")
+	ErrCommitUnknown  = errors.New("reference request commit outcome unknown; retain original key")
 )
 
 const (

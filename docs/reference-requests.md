@@ -1,6 +1,14 @@
 # 持久化参考验证申请
 
-本页描述内部 Go 用例、PostgreSQL 申请账本与预期计划。专用参考 Worker 可通过默认关闭的节点接口领取短预留，并在有效期内下载与计划绑定的材料。另行启用后可在单宿主隔离环境续期、执行冻结材料并提交确定结果。作者 HTTP 管理入口仍待接入，草稿 `not-run`、生产配置及发布阻断保持。
+本页描述 PostgreSQL 申请账本、作者申请入口和内部预期计划。专用参考 Worker 可通过默认关闭的节点接口领取短预留，在有效期内下载与计划绑定的材料；另行启用后可在单宿主隔离环境续期、执行并提交确定结果。作者入口管理本人申请，草稿 `not-run`、生产配置及发布阻断保持。
+
+## 作者申请入口
+
+普通 HTTPS 会话配置显式设置 `private_drafts.reference_requests: true` 后，[参考申请 API](../api/problem-reference-requests.openapi.yaml)允许本人创建、按原键查询和取消。仍须独立配置排队额度。沿用私有草稿的固定 Host、可选受信 mTLS 代理和同源 POST 门禁；`X-OJ-Expected-Subject` 与实际 Cookie 会话不一致时，在访问账本前返回 409。当前角色、恢复与账号状态在 PostgreSQL 事务中检查，读取和取消仅限本人；其他作者或不存在的申请同为 404。HTTP 不从客户端接收来源、材料、Profile、Plan 或判定。
+
+预览页在严格 IndexedDB 事务提交后才发送，按账号与草稿保留当前请求键。刷新、账号变化或恢复页面只清除显示，不自动查询或提交。丢失确认后显式查原键；404 仅代表本次未观察到，可用同键重试。确认终态后才可为同一草稿新建请求；没有跨设备申请发现，清除浏览器数据会丢失本机键。取消仅更新账本，不承诺立即停止在途 Worker。回执只有 ID、原键、草稿 ID、状态和创建/取消时间；`reported` 表示收到可信报告，不代表通过或发布。
+
+此入口只管理申请，不在 HTTP 请求中读取大材料、冻结计划或调度 Worker。关闭配置并重启保留原账本；回退到不识别该字段的版本前移除配置键。无需迁移。
 
 ## 身份与可信配置
 
@@ -24,7 +32,7 @@
 
 ## 有界排队与未完成边界
 
-schema9默认创建空policy，缺失时拒绝新申请。只有显式受信维护调用`problemreference/postgres.Configure(ctx,pool,Limits)`才能设置额度，启动不会自动写入。`1≤Owner≤Global≤1024`，具体值是维护选择，不是硬件容量结论。下调额度不删除已接受记录；旧原键仍可恢复，新的不同键在超额时拒绝。
+schema9 默认创建空 policy，缺失时拒绝新申请。受信维护者用 README 的 `migrate reference-backlog` 命令显式设置；启动不会自动写入。`1≤Owner≤Global≤1024`，具体值是维护选择，不是硬件容量结论。下调额度不删除已接受记录；旧原键仍可恢复，新的不同键在超额时拒绝。
 
 新增、取消和首报接纳都串行取得 singleton policy 行锁。计数沿用积压准入的 MATERIALIZED 窗口，最多读取 Global 条 queued：达到窗口立即拒绝，未满时全局与本人计数均精确。部分 B-tree `problem_reference_requests_queued_owner(owner_subject_id,id) WHERE state='queued'` 排除终态历史，支持有界计数；入队和离队产生索引与 WAL 写入，实际代价依分布而定。owner/key 唯一索引支持回执，主键支持固定 ID，配套真实查询计划归交付记录。
 

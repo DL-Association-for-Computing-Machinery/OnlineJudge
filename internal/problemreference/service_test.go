@@ -127,6 +127,28 @@ func TestServicePassesOnlyFreshSessionIdentityAndSupportsRetiredOriginalKeys(t *
 	}
 }
 
+func TestExpectedSubjectMismatchNeverTouchesReferenceRepository(t *testing.T) {
+	s, sessions, repo, credential := newServiceFixture(t)
+	ctx := t.Context()
+	other := strings.Repeat("a", 32)
+	for i, call := range []func(string) (Request, error){
+		func(subject string) (Request, error) {
+			return s.EnqueueForSubject(ctx, credential, subject, serviceKey, serviceDraft)
+		},
+		func(subject string) (Request, error) {
+			return s.ReceiptForSubject(ctx, credential, subject, serviceKey)
+		},
+		func(subject string) (Request, error) { return s.CancelForSubject(ctx, credential, subject, serviceKey) },
+	} {
+		if got, err := call(""); got.ID != "" || !errors.Is(err, ErrInvalid) || sessions.reads != i {
+			t.Fatal("invalid subject reached session storage", err)
+		}
+		if got, err := call(other); got.ID != "" || !errors.Is(err, ErrSubjectChanged) || sessions.reads != i+1 || len(repo.operations) != 0 {
+			t.Fatal("mismatched actual subject reached the ledger", err)
+		}
+	}
+}
+
 func TestServiceRejectsMalformedInputsBeforeSessionOrStorage(t *testing.T) {
 	s, sessions, repo, credential := newServiceFixture(t)
 	catalog, _ := NewCatalog(nil)

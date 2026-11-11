@@ -64,7 +64,8 @@ func (w document) config() (Config, error) {
 
 func (w privateDraftsWire) apply(c *Config) error {
 	d := &sessionruntime.PrivateDraftsConfig{MaterialRoot: w.MaterialRoot, BundleDirectory: w.BundleDirectory,
-		SourceLockFile: w.SourceLockFile, SourceIDs: append([]string(nil), w.SourceIDs...), MaxInFlight: w.MaxInFlight}
+		SourceLockFile: w.SourceLockFile, SourceIDs: append([]string(nil), w.SourceIDs...), MaxInFlight: w.MaxInFlight,
+		ReferenceRequests: w.ReferenceRequests}
 	if !durations([]durationField{{w.Timeout, &d.Timeout}}) || d.Validate() != nil || c.Server.WriteTimeout < d.Timeout {
 		return ErrConfig
 	}

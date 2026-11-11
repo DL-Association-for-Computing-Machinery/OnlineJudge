@@ -33,6 +33,14 @@ def main():
     for arguments in (("0", "1"), ("1", "2"), ("no-number", "1"), ("9223372036854775808", "1")):
         assert subprocess.run([str(root / ".local/bin/migrate"), "backlog", *arguments], env=env,
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0
+    reference_policy = [str(root / ".local/bin/migrate"), "reference-backlog"]
+    for arguments in (("1025", "1"), ("2", "3"), ("0", "1")):
+        assert subprocess.run([*reference_policy, *arguments], env=env, stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL).returncode != 0
+    subprocess.run([*reference_policy, "4", "2"], env=env, check=True)
+    policy = subprocess.check_output(["psql", "--no-psqlrc", "-At", dsn, "-c",
+                                      "SELECT global_limit, owner_limit FROM problem_reference_request_policy WHERE singleton"], text=True)
+    assert policy.strip() == "4|2"
 
     with tempfile.TemporaryDirectory(prefix="oj-api-processes-") as temp:
         material_root = Path(temp) / "materials"

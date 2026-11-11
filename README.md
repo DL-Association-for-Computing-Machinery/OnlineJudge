@@ -361,6 +361,14 @@ env -u OJ_WORKER_M0_SLOT -u OJ_WORKER_M0_DUAL_EXPERIMENT OJ_SANDBOX_EXPERIMENT=1
 
 服务器本人列表为`GET /api/v1/problem-draft-management/drafts`，带同一预期主体header。首次无query，之后原样传单个`cursor=next_cursor`；每页最多20条，空next_cursor表示本次末页，无总数/他人统计。只读最小回执，不读题面或材料；网页即使本机记录已清或IndexedDB不可用也能手动发现已提交草稿并打开预览，不自动确认或清理pending。逐页视图不是跨请求快照，较早时间戳迟提交可能被旧边界漏过，并发时重查首页；空/末页不是取消或无在途证明。schema8索引的维护升级/回退见[本人列表合同](docs/problem-drafts.md#本人草稿列表)。
 
+要启用本人参考申请，在 `private_drafts` 中显式设 `"reference_requests": true`，并由受信维护者设置独立队列额度（示例值，不代表容量建议）：
+
+```sh
+.local/bin/migrate reference-backlog 4 2
+```
+
+命令使用既有私有 `OJ_DATABASE_URL`，只写参考队列额度，要求当前 schema，不自动迁移。随后可在本人草稿预览提交、查原键回执和取消；见[作者申请合同](docs/reference-requests.md#作者申请入口)。启用不执行材料、不更新草稿验证状态。
+
 `GET /api/v1/problem-drafts/草稿ID/preview`返回本人已入库版本的`markdown`、有序`examples`（id/input/output）和可选`images`，不依赖当前候选版本；仍须有效普通会话和当前出题权。先核对全部引用与总预算，再逐份验证快照，读取后复核同一凭据和PG授权，失败不返回部分结果。原始markdown/input/output/显式原图合计至多1MiB，重复对象按返回次数计数；图片完整解码后限长重编码为静态PNG，输出PNG与原文/样例另限1MiB。图片角色/格式/像素/路径及回退限制见[图片合同](docs/problem-drafts.md#显式题面图片)。JSON文本转义至多六倍，图片base64另加元数据。文本严格UTF-8，保留空格、CRLF及末尾换行，不替换或截断。它是管理页数据，不提供一般材料下载或发布；正式测试与程序源码不进入预览。最终会话读取之后的退出及最终PG授权之后的撤权沿已接受在途合同，不能原子撤回已经开始发送的响应。关闭整个`private_drafts`能力即可停止入口，已入库资料保留。
 
 浏览器可从 `/author/drafts` 的本人列表选择已提交草稿，或在 `/author/drafts/open` 输入ID，再显式检查会话并打开本人预览。Markdown/GFM/数学公式使用共享组件和本地KaTeX字体，样例原文复制；清单图片精确匹配后使用静态PNG数据，其他图片占位且无源地址请求，审核和发布尚未开放。账号操作、页面恢复/隐藏或期限到达会清除题面和图片，再次显示须重新检查；无持久缓存。预算与隐私边界见[前端设计](docs/frontend-design.md#共享题面与本人预览)。默认HTTP Compose及未启用private_drafts的账号环境不提供草稿能力。

@@ -21,12 +21,13 @@ type document struct {
 }
 
 type privateDraftsWire struct {
-	MaterialRoot    string   `json:"material_root"`
-	BundleDirectory string   `json:"bundle_directory"`
-	SourceLockFile  string   `json:"source_lock_file"`
-	SourceIDs       []string `json:"source_ids"`
-	Timeout         string   `json:"timeout"`
-	MaxInFlight     int      `json:"max_in_flight"`
+	MaterialRoot      string   `json:"material_root"`
+	BundleDirectory   string   `json:"bundle_directory"`
+	SourceLockFile    string   `json:"source_lock_file"`
+	SourceIDs         []string `json:"source_ids"`
+	Timeout           string   `json:"timeout"`
+	MaxInFlight       int      `json:"max_in_flight"`
+	ReferenceRequests bool     `json:"reference_requests"`
 }
 
 type passwordChangeWire struct {

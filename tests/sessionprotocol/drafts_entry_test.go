@@ -37,7 +37,7 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	must(t, os.WriteFile(lock, bundle.Lock, 0600))
 	c := runtimeConfig(t, f, namespace(t), true)
 	c.PrivateDrafts = &sessionruntime.PrivateDraftsConfig{MaterialRoot: root, BundleDirectory: bundle.Directory, SourceLockFile: lock,
-		SourceIDs: []string{"library-checker:aplusb"}, Timeout: 3 * time.Second, MaxInFlight: 1}
+		SourceIDs: []string{"library-checker:aplusb"}, Timeout: 3 * time.Second, MaxInFlight: 1, ReferenceRequests: true}
 	ca := testpki.New(t)
 	var proxyCert tls.Certificate
 	if mode == "proxy" {
@@ -84,6 +84,8 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	access, err := identitypg.NewProblemAccess(f.pools[0])
 	must(t, err)
 	testEntryImportPreflight(t, x, cookies)
+	loginStatus(t, authorReferenceCall(x, "GET", "/author-reference-fixture", "", nil, subject.ID), 401)
+	loginStatus(t, authorReferenceCall(x, "GET", "/author-reference-fixture", "", cookies, subject.ID), 403)
 	loginStatus(t, ownListGET(x, nil, subject.ID, ""), 401)
 	loginStatus(t, ownListGET(x, cookies, subject.ID, ""), 403)
 	_, err = access.SetAuthorRole(f.ctx, identity.ProblemRoleChange{SubjectID: subject.ID, Enabled: true, ExpectedRevision: 0, Operator: "entry-fixture", Reason: "synthetic private draft author"})
@@ -120,6 +122,7 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	if pinnedReceipt.DraftID == draft.ID {
 		t.Fatal("different request keys shared a draft")
 	}
+	testEntryAuthorReferences(t, f, x, y, cookies, subject.ID, draft.ID, pinnedReceipt.DraftID)
 	get := func(endpoint *loginEndpoint, id string, c []*http.Cookie) loginResponse {
 		return loginCall(endpoint, collection+"/"+id, "", c, func(r *http.Request) { r.Method = "GET" })
 	}
@@ -143,10 +146,12 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	cChanged.Database.ApplicationName += "_changed"
 	dChanged := *c.PrivateDrafts
 	dChanged.BundleDirectory = changed.Directory
+	dChanged.ReferenceRequests = false
 	cChanged.PrivateDrafts = &dChanged
 	third := entryStart(t, binary, entryConfig(t, cChanged, ca, 3*time.Second), "127.0.0.1:0")
 	thirdEndpoint := endpoint(third)
 	testEntryChangedImportCatalog(t, thirdEndpoint, cookies, pinnedReceipt)
+	loginStatus(t, authorReferenceCall(thirdEndpoint, "GET", "/author-reference-fixture", "", cookies, subject.ID), 404)
 	checkEntryOwnList(t, thirdEndpoint, cookies, subject.ID, 2)
 	loginStatus(t, loginCall(thirdEndpoint, collection, body, cookies, nil), 409)
 	oldVersion := get(thirdEndpoint, draft.ID+"/preview", cookies)
@@ -166,6 +171,14 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	checkEntryOwnList(t, x, strangerCookies, stranger.ID, 0)
 	loginStatus(t, ownListGET(x, strangerCookies, subject.ID, ""), 409)
 	testEntryReceiptOwner(t, x, strangerCookies, pinnedReceipt.RequestKey)
+	loginStatus(t, authorReferenceCall(x, "POST", "/author-reference-fixture/cancel", "", strangerCookies, subject.ID), 409)
+	foreignRef := authorReferenceCall(x, "GET", "/author-reference-fixture", "", strangerCookies, stranger.ID)
+	missingRef := authorReferenceCall(x, "GET", "/missing-reference-fixture", "", strangerCookies, stranger.ID)
+	loginStatus(t, foreignRef, 404)
+	loginStatus(t, missingRef, 404)
+	if string(foreignRef.body) != string(missingRef.body) {
+		t.Fatal("reference receipt disclosed another author's existence")
+	}
 	foreign, missing := get(x, draft.ID, strangerCookies), get(x, strings.Repeat("f", 32), strangerCookies)
 	loginStatus(t, foreign, 404)
 	loginStatus(t, missing, 404)
@@ -181,6 +194,7 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	_, err = access.SetAuthorRole(f.ctx, identity.ProblemRoleChange{SubjectID: subject.ID, Enabled: false, ExpectedRevision: 1, Operator: "entry-fixture", Reason: "revoke author"})
 	must(t, err)
 	loginStatus(t, get(y, draft.ID, cookies), 403)
+	loginStatus(t, authorReferenceCall(y, "GET", "/author-reference-fixture", "", cookies, subject.ID), 403)
 	loginStatus(t, ownListGET(y, cookies, subject.ID, ""), 403)
 	loginStatus(t, get(y, draft.ID+"/preview", cookies), 403)
 	loginStatus(t, loginCall(y, collection, body, cookies, nil), 403)
@@ -189,6 +203,7 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	loginStatus(t, loginCall(y, entryImportsPath, pinnedBody(t, pinnedReceipt.RequestKey, pinnedReceipt.SourceID, pinnedReceipt.ImportRevision), cookies, nil), 403)
 	loginStatus(t, loginCall(x, "/api/v1/session/logout", "", cookies, nil), 204)
 	loginStatus(t, get(y, draft.ID, cookies), 401)
+	loginStatus(t, authorReferenceCall(y, "GET", "/author-reference-fixture", "", cookies, subject.ID), 401)
 	loginStatus(t, ownListGET(y, cookies, subject.ID, ""), 401)
 	loginStatus(t, get(y, draft.ID+"/preview", cookies), 401)
 	loginStatus(t, importGET(y, entrySourcesPath, cookies), 401)
