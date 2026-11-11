@@ -27,7 +27,7 @@ type FrozenText struct {
 // it into memory. Cancellation is checked at reads; ReaderAt itself must
 // return promptly or provide its own cancellation.
 func ValidateLibraryCheckerReferenceAt(ctx context.Context, reference FrozenText, limits TextLimits) error {
-	if !validTextLimits(limits) {
+	if !limits.Valid() {
 		return ErrTextLimits
 	}
 	_, err := validateFrozenReference(ctx, reference, limits)
@@ -39,7 +39,7 @@ func ValidateLibraryCheckerReferenceAt(ctx context.Context, reference FrozenText
 // mismatch cannot hide later invalid material. Scratch space is bounded by
 // two read buffers and two tokens, independent of the file sizes.
 func CompareLibraryCheckerTextAt(ctx context.Context, reference, output FrozenText, limits TextLimits) (bool, error) {
-	if !validTextLimits(limits) {
+	if !limits.Valid() {
 		return false, ErrTextLimits
 	}
 	ref, err := validateFrozenReference(ctx, reference, limits)
