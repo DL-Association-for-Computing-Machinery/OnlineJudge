@@ -1,0 +1,121 @@
+openapi: 3.1.0
+info:
+  title: OnlineJudge Author Reference Requests
+  version: 0.1.0
+  description: >-
+    默认关闭。使用普通 HTTPS 会话、固定 Host 和同源 POST。
+    所有操作须匹配实际会话与预期主体，再检查当前出题权限与本人范围。
+    不允许 query 或路径编码别名。响应均不缓存，不包含材料、配置、预留或报告正文。
+security:
+  - ordinarySession: []
+paths:
+  /api/v1/problem-draft-management/reference-requests:
+    parameters:
+      - $ref: '#/components/parameters/ExpectedSubject'
+    post:
+      operationId: createOwnReferenceRequest
+      description: >-
+        创建本人草稿的原键申请。同键同草稿返回已有回执，不重写；同键异草稿冲突。
+        JSON 请求体上限 1024 字节，拒绝额外或重复字段。未知结果保留原键。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [request_key, draft_id]
+              properties:
+                request_key: {$ref: '#/components/schemas/Key'}
+                draft_id: {$ref: '#/components/schemas/ID'}
+      responses:
+        '200': {$ref: '#/components/responses/Receipt'}
+        '400': {$ref: '#/components/responses/Failure'}
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '405': {$ref: '#/components/responses/Failure'}
+        '409': {$ref: '#/components/responses/Failure'}
+        '413': {$ref: '#/components/responses/Failure'}
+        '415': {$ref: '#/components/responses/Failure'}
+        '429': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+  /api/v1/problem-draft-management/reference-requests/{request_key}:
+    parameters:
+      - $ref: '#/components/parameters/ExpectedSubject'
+      - $ref: '#/components/parameters/RequestKey'
+    get:
+      operationId: readOwnReferenceReceipt
+      description: 本人原键的只读回执；404 不能证明没有在途提交。无请求体。
+      responses:
+        '200': {$ref: '#/components/responses/Receipt'}
+        '400': {$ref: '#/components/responses/Failure'}
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '405': {$ref: '#/components/responses/Failure'}
+        '409': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+  /api/v1/problem-draft-management/reference-requests/{request_key}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/ExpectedSubject'
+      - $ref: '#/components/parameters/RequestKey'
+    post:
+      operationId: cancelOwnReferenceRequest
+      description: 取消尚未终结的本人申请，已有终态原样返回。无请求体；不承诺立即停止 Worker。
+      responses:
+        '200': {$ref: '#/components/responses/Receipt'}
+        '400': {$ref: '#/components/responses/Failure'}
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '405': {$ref: '#/components/responses/Failure'}
+        '409': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+components:
+  securitySchemes:
+    ordinarySession: {type: apiKey, in: cookie, name: __Host-oj_session}
+  parameters:
+    ExpectedSubject:
+      name: X-OJ-Expected-Subject
+      in: header
+      required: true
+      schema: {$ref: '#/components/schemas/ID'}
+    RequestKey:
+      name: request_key
+      in: path
+      required: true
+      schema: {$ref: '#/components/schemas/Key'}
+  schemas:
+    ID: {type: string, pattern: '^[a-f0-9]{32}$'}
+    Key: {type: string, pattern: '^[A-Za-z0-9_-]{16,128}$'}
+  responses:
+    Receipt:
+      description: 已提交的当前申请摘要；reported 只表示收到可信报告。
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [id, request_key, draft_id, state, created_at, cancelled_at]
+            properties:
+              id: {$ref: '#/components/schemas/ID'}
+              request_key: {$ref: '#/components/schemas/Key'}
+              draft_id: {$ref: '#/components/schemas/ID'}
+              state: {type: string, enum: [queued, cancelled, reported]}
+              created_at: {type: string, format: date-time}
+              cancelled_at: {type: [string, 'null'], format: date-time}
+    Failure:
+      description: >-
+        稳定错误摘要。主体不匹配为 REFERENCE_SUBJECT_CHANGED；未知写入为
+        REFERENCE_WRITE_UNKNOWN。任何无法确认的写入须按同一原键恢复。
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            required: [type, title, status, code]
+            properties:
+              type: {type: string}
+              title: {type: string}
+              status: {type: integer}
+              code: {type: string}

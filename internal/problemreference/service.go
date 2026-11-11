@@ -36,10 +36,22 @@ func New(sessions SessionReader, repo Repository, catalog *Catalog) (*Service, e
 // Enqueue records an intent for an owned draft and its exact trusted catalog
 // selection. An uncertain result must be recovered with the same original key.
 func (s *Service) Enqueue(ctx context.Context, credential redisstore.Credential, key, draftID string) (Request, error) {
+	return s.enqueue(ctx, credential, "", key, draftID)
+}
+
+// EnqueueForSubject rejects a stale account-bound intent before reading the ledger.
+func (s *Service) EnqueueForSubject(ctx context.Context, credential redisstore.Credential, expected, key, draftID string) (Request, error) {
+	if !identity.ValidID(expected) {
+		return Request{}, ErrInvalid
+	}
+	return s.enqueue(ctx, credential, expected, key, draftID)
+}
+
+func (s *Service) enqueue(ctx context.Context, credential redisstore.Credential, expected, key, draftID string) (Request, error) {
 	if !problem.ValidKey(key) || !identity.ValidID(draftID) {
 		return Request{}, ErrInvalid
 	}
-	return s.call(ctx, credential, true, func(actor identity.ProblemActor) (Request, error) {
+	return s.call(ctx, credential, expected, true, func(actor identity.ProblemActor) (Request, error) {
 		return s.repository.Enqueue(ctx, actor, key, draftID, s.catalog)
 	})
 }
@@ -47,10 +59,22 @@ func (s *Service) Enqueue(ctx context.Context, credential redisstore.Credential,
 // Receipt observes a current owner's key independently of current source
 // configuration. Absence does not prove that an earlier write never committed.
 func (s *Service) Receipt(ctx context.Context, credential redisstore.Credential, key string) (Request, error) {
+	return s.receipt(ctx, credential, "", key)
+}
+
+// ReceiptForSubject restricts the original-key lookup to the expected account.
+func (s *Service) ReceiptForSubject(ctx context.Context, credential redisstore.Credential, expected, key string) (Request, error) {
+	if !identity.ValidID(expected) {
+		return Request{}, ErrInvalid
+	}
+	return s.receipt(ctx, credential, expected, key)
+}
+
+func (s *Service) receipt(ctx context.Context, credential redisstore.Credential, expected, key string) (Request, error) {
 	if !problem.ValidKey(key) {
 		return Request{}, ErrInvalid
 	}
-	return s.call(ctx, credential, false, func(actor identity.ProblemActor) (Request, error) {
+	return s.call(ctx, credential, expected, false, func(actor identity.ProblemActor) (Request, error) {
 		return s.repository.Receipt(ctx, actor, key)
 	})
 }
@@ -58,15 +82,27 @@ func (s *Service) Receipt(ctx context.Context, credential redisstore.Credential,
 // Cancel asks the repository to cancel a queued intent under current authority.
 // It does not stop a Worker or revoke an accepted in-flight session operation.
 func (s *Service) Cancel(ctx context.Context, credential redisstore.Credential, key string) (Request, error) {
+	return s.cancel(ctx, credential, "", key)
+}
+
+// CancelForSubject restricts cancellation to the expected current account.
+func (s *Service) CancelForSubject(ctx context.Context, credential redisstore.Credential, expected, key string) (Request, error) {
+	if !identity.ValidID(expected) {
+		return Request{}, ErrInvalid
+	}
+	return s.cancel(ctx, credential, expected, key)
+}
+
+func (s *Service) cancel(ctx context.Context, credential redisstore.Credential, expected, key string) (Request, error) {
 	if !problem.ValidKey(key) {
 		return Request{}, ErrInvalid
 	}
-	return s.call(ctx, credential, true, func(actor identity.ProblemActor) (Request, error) {
+	return s.call(ctx, credential, expected, true, func(actor identity.ProblemActor) (Request, error) {
 		return s.repository.Cancel(ctx, actor, key)
 	})
 }
 
-func (s *Service) call(ctx context.Context, credential redisstore.Credential, write bool, operation func(identity.ProblemActor) (Request, error)) (Request, error) {
+func (s *Service) call(ctx context.Context, credential redisstore.Credential, expected string, write bool, operation func(identity.ProblemActor) (Request, error)) (Request, error) {
 	if s == nil || ctx == nil || s.sessions == nil || s.repository == nil || s.catalog == nil {
 		return Request{}, ErrInvalid
 	}
@@ -76,6 +112,9 @@ func (s *Service) call(ctx context.Context, credential redisstore.Credential, wr
 	actor, err := observeActor(ctx, s.sessions, credential)
 	if err != nil {
 		return Request{}, err
+	}
+	if expected != "" && actor.SubjectID != expected {
+		return Request{}, ErrSubjectChanged
 	}
 	result, err := operation(actor)
 	if err != nil {

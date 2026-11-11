@@ -109,14 +109,20 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 		return nil, ErrConfig
 	}
 	if c.PrivateDrafts != nil {
-		importer, cleanup, err := openDrafts(startup, *c.PrivateDrafts, store, pool)
+		drafts, cleanup, err := openDrafts(startup, *c.PrivateDrafts, store, pool)
 		if err != nil {
 			return nil, err
 		}
 		closeDrafts = cleanup
-		handler, err = httptransport.WithPrivateDrafts(handler, importer, c.PrivateDrafts.Timeout)
+		handler, err = httptransport.WithPrivateDrafts(handler, drafts.importer, c.PrivateDrafts.Timeout)
 		if err != nil {
 			return nil, ErrConfig
+		}
+		if drafts.references != nil {
+			handler, err = httptransport.WithReferenceRequests(handler, drafts.references)
+			if err != nil {
+				return nil, ErrConfig
+			}
 		}
 	}
 	if err := startup.Err(); err != nil {

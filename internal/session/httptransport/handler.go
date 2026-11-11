@@ -42,6 +42,7 @@ type handler struct {
 	passwordChange *redisstore.PasswordChange
 	drafts         Drafts
 	draftTimeout   time.Duration
+	references     ReferenceRequests
 }
 
 // New builds three explicit endpoints without registering any application route:
@@ -76,6 +77,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	method := ""
 	isDraft := IsPrivateDraftPath(r.URL.Path)
+	refMethod, refKey := referenceRequestRoute(r.URL.Path)
 	switch r.URL.Path {
 	case "/api/v1/session":
 		method = http.MethodGet
@@ -94,6 +96,10 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		method = http.MethodPost
 	default:
+		if refMethod != "" && h.references != nil {
+			method = refMethod
+			break
+		}
 		if !isDraft || h.drafts == nil {
 			problem(w, http.StatusNotFound, "NOT_FOUND", "接口不存在")
 			return
@@ -126,6 +132,10 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if method == http.MethodPost && !h.sameOrigin(r) {
 		problem(w, http.StatusForbidden, "ORIGIN_REJECTED", "请求来源不允许")
+		return
+	}
+	if refMethod != "" {
+		h.serveReferenceRequest(w, r, refKey)
 		return
 	}
 	if isDraft {

@@ -14,6 +14,8 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materialstore"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 	problempg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem/postgres"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
+	referencepg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference/postgres"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/redisstore"
 )
 
@@ -26,6 +28,7 @@ type PrivateDraftsConfig struct {
 	SourceIDs                                     []string
 	Timeout                                       time.Duration
 	MaxInFlight                                   int
+	ReferenceRequests                             bool
 }
 
 // Validate checks bounded lexical configuration without accessing files.
@@ -53,7 +56,12 @@ func (c PrivateDraftsConfig) Validate() error {
 	return nil
 }
 
-func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore.Store, pool *pgxpool.Pool) (*problem.Importer, func() error, error) {
+type draftCapabilities struct {
+	importer   *problem.Importer
+	references *problemreference.Service
+}
+
+func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore.Store, pool *pgxpool.Pool) (*draftCapabilities, func() error, error) {
 	var prepared []*problem.Prepared
 	var materials *materialstore.Local
 	cleanup := func() error {
@@ -114,6 +122,25 @@ func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore
 	if err != nil {
 		return nil, nil, ErrStartup
 	}
+	result := &draftCapabilities{importer: importer}
+	if c.ReferenceRequests {
+		catalog, err := problemreference.NewCatalog(sources)
+		if err != nil {
+			return nil, nil, ErrStartup
+		}
+		access, err := problempg.NewReferenceAccess(access)
+		if err != nil {
+			return nil, nil, ErrStartup
+		}
+		repo, err := referencepg.New(pool, access)
+		if err != nil {
+			return nil, nil, ErrStartup
+		}
+		result.references, err = problemreference.New(sessions, repo, catalog)
+		if err != nil {
+			return nil, nil, ErrStartup
+		}
+	}
 	ok = true
-	return importer, cleanup, nil
+	return result, cleanup, nil
 }
