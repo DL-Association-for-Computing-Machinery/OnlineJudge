@@ -87,6 +87,10 @@ func TestLiveReferenceReports(t *testing.T) {
 	var suffixSizes []int64
 	switch os.Getenv("OJ_LIVE_REFERENCE_SUPPLEMENT") {
 	case "":
+	case "associative_array":
+		sources = []fixtureSource{{"associative_array", 22}}
+		versionPin = "4d6dd8e3fe97a0e1ec6585ff538219d811f660bdfff7cc2172bf6092cf858928"
+		suffixSizes = []int64{24, 66}
 	case "zalgorithm":
 		sources = []fixtureSource{{"zalgorithm", 31}}
 		versionPin = "965239246cbdbd63f1641cfcf551d9c8f3a65cd558e194668ad845cac1e39711"
@@ -151,6 +155,12 @@ func TestLiveReferenceReports(t *testing.T) {
 				if formal.Cases[18].Answer.Size != 2 || formal.Cases[19].Answer.Size != 0 ||
 					formal.Cases[19].Answer.SHA256 != liveReferenceDigest(nil) {
 					t.Fatal("persisted unionfind plan lost its singleton answers")
+				}
+			}
+			if source.id == "associative_array" && versionPin != "" {
+				if formal.Cases[20].Answer.SHA256 != liveReferenceDigest([]byte("0\n")) ||
+					formal.Cases[21].Answer.SHA256 != liveReferenceDigest([]byte("1000000000000000000\n")) {
+					t.Fatal("persisted associative array plan lost its boundary answers")
 				}
 			}
 			writeLiveReferenceJSON(t, out, "ready-"+source.id, problemreference.ClaimInput{RequestID: request.ID, SourceID: sourceID, PlanSHA256: plan.SHA256})

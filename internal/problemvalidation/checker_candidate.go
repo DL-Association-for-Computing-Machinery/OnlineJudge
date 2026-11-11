@@ -66,11 +66,15 @@ func PreflightCheckerCandidate(ctx context.Context, prepared *problem.Prepared, 
 	if err := errors.Join(err, reader.Close(), ctx.Err()); err != nil {
 		return CheckerCandidate{}, err
 	}
+	return checkerCandidateFor(plan, expectedPlan, version, limits), nil
+}
+
+func checkerCandidateFor(plan problem.ReferencePlan, expectedPlan, version string, limits judging.TextLimits) CheckerCandidate {
 	return CheckerCandidate{
 		Schema: CheckerCandidateSchema, CheckerVersion: version, Bytes: limits.Bytes, TokenBytes: limits.TokenBytes,
 		SourceID: plan.SourceID, ContentVersion: plan.Version, ImportRevision: plan.ImportRevision,
 		SourceLockSHA256: plan.SourceLockSHA256, FormalPlanSHA256: expectedPlan, AnswerCount: len(plan.Cases),
-	}, nil
+	}
 }
 
 func checkCandidateAnswers(ctx context.Context, plan problem.ReferencePlan, reader referenceReader, expected string, limits judging.TextLimits) error {

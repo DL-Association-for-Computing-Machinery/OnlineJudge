@@ -168,8 +168,8 @@ def run(bundle, toolchain, out, supplement):
             require(not docker("ps", "-a", "--filter", "label=run=" + owner, "--format", "{{.ID}}"),
                     "temporary fixture container was not removed")
             formal, comparison = {
-                "zalgorithm": (31, 0), "aplusb": (17, 0), "unionfind": (20, 0), "static_range_sum": (13, 0),
-                "": (254, 24),
+                "associative_array": (22, 0), "zalgorithm": (31, 0), "aplusb": (17, 0), "unionfind": (20, 0),
+                "static_range_sum": (13, 0), "": (254, 24),
             }[supplement]
             require(sum(row["formal_ac"] for row in result) == formal and sum(row["comparison_matched"] for row in result) == comparison,
                     "incomplete accepted coverage")
@@ -191,6 +191,8 @@ def main():
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--start-stopped-slots", required=True, action="store_true")
     local = parser.add_mutually_exclusive_group()
+    local.add_argument("--associative-array-local-data", dest="supplement", action="store_const", const="associative_array",
+                       help="run only the pinned 22-point local associative-array revision")
     local.add_argument("--zalgorithm-local-data", dest="supplement", action="store_const", const="zalgorithm",
                        help="run only the pinned 31-point local Z-algorithm revision")
     local.add_argument("--aplusb-local-data", dest="supplement", action="store_const", const="aplusb",
