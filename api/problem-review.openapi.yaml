@@ -1,0 +1,66 @@
+openapi: 3.1.0
+info:
+  title: OnlineJudge Assigned Problem Review
+  version: 0.1.0
+  description: >-
+    默认关闭的独立审核读取能力。使用普通 HTTPS 会话及当前审核资格；
+    每次只按明确分配读取一项的固定验证结论。不提供审核决定或发布。
+security:
+  - ordinarySession: []
+paths:
+  /api/v1/problem-review/{review_id}/evidence:
+    parameters:
+      - $ref: './problem-draft-management.openapi.yaml#/components/parameters/ExpectedSubject'
+      - name: review_id
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/ID' }
+    get:
+      operationId: getAssignedReviewEvidence
+      description: >-
+        拒绝 query、请求体和转义路径别名。先读取实际会话并比较预期主体，再同事务检查
+        当前账号、资格、非作者和最新分配。撤权后重授须显式重新分配。
+        未知、未分配、已撤分配、资格修订失配及作者自审均返回相同 404。
+        比较字段缺失表示没有记录，不代表通过。所有响应 no-store/nosniff。
+      responses:
+        '200':
+          description: 本次分配的送审修订与固定参考证据摘要
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReviewEvidence' }
+        '400': { $ref: '#/components/responses/Failure' }
+        '401': { $ref: '#/components/responses/Failure' }
+        '403': { $ref: '#/components/responses/Failure' }
+        '404': { $ref: '#/components/responses/Failure' }
+        '405': { $ref: '#/components/responses/Failure' }
+        '409': { $ref: '#/components/responses/Failure' }
+        '503': { $ref: '#/components/responses/Failure' }
+components:
+  securitySchemes:
+    ordinarySession: { $ref: './session.openapi.yaml#/components/securitySchemes/ordinarySession' }
+  responses:
+    Failure: { $ref: './problem-draft-imports.openapi.yaml#/components/responses/Failure' }
+  schemas:
+    ID: { type: string, pattern: '^[0-9a-f]{32}$' }
+    SHA256: { type: string, pattern: '^[0-9a-f]{64}$' }
+    ReviewEvidence:
+      type: object
+      additionalProperties: false
+      required: [review_id, draft_id, source_id, content_version, import_revision, source_lock_sha256,
+        reference_request_id, formal_plan_sha256, profile_sha256, evidence_sha256, formal_verdict]
+      dependentRequired:
+        comparison_outcome: [comparison_plan_sha256]
+      properties:
+        review_id: { $ref: '#/components/schemas/ID' }
+        draft_id: { $ref: '#/components/schemas/ID' }
+        source_id: { type: string, minLength: 1, maxLength: 128 }
+        content_version: { $ref: '#/components/schemas/SHA256' }
+        import_revision: { $ref: '#/components/schemas/SHA256' }
+        source_lock_sha256: { $ref: '#/components/schemas/SHA256' }
+        reference_request_id: { $ref: '#/components/schemas/ID' }
+        formal_plan_sha256: { $ref: '#/components/schemas/SHA256' }
+        profile_sha256: { $ref: '#/components/schemas/SHA256' }
+        evidence_sha256: { $ref: '#/components/schemas/SHA256' }
+        formal_verdict: { type: string, enum: [AC, WA, CE, RE, TLE, MLE, OLE] }
+        comparison_plan_sha256: { $ref: '#/components/schemas/SHA256' }
+        comparison_outcome: { type: string, enum: [passed, mismatch] }

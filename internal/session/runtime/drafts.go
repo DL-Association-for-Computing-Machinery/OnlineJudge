@@ -30,6 +30,7 @@ type PrivateDraftsConfig struct {
 	MaxInFlight                                   int
 	ReferenceRequests                             bool
 	ReviewIntake                                  bool
+	ReviewAccess                                  bool
 }
 
 // Validate checks bounded lexical configuration without accessing files.
@@ -65,6 +66,7 @@ type draftCapabilities struct {
 	references  *problemreference.Service
 	preparation *problemreference.Preparation
 	review      *problemreference.ReviewIntake
+	evidence    *problemreference.ReviewAccess
 }
 
 func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore.Store, pool *pgxpool.Pool) (*draftCapabilities, func() error, error) {
@@ -133,6 +135,16 @@ func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore
 		return nil, nil, ErrStartup
 	}
 	result := &draftCapabilities{importer: importer}
+	if c.ReviewAccess {
+		reviewer, err := referencepg.NewReviewStore(pool, access)
+		if err != nil {
+			return nil, nil, ErrStartup
+		}
+		result.evidence, err = problemreference.NewReviewAccess(sessions, reviewer)
+		if err != nil {
+			return nil, nil, ErrStartup
+		}
+	}
 	if c.ReferenceRequests {
 		catalog, err := problemreference.NewCatalog(sources)
 		if err != nil {

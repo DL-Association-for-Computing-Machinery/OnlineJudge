@@ -29,7 +29,7 @@ func authorReferenceCall(endpoint *loginEndpoint, method, path, body string, coo
 	})
 }
 
-func testEntryAuthorReferences(t *testing.T, f *fixture, x, y *loginEndpoint, cookies []*http.Cookie, owner, draft, otherDraft string) {
+func testEntryAuthorReferences(t *testing.T, f *fixture, x, y *loginEndpoint, cookies []*http.Cookie, owner, draft, otherDraft string) string {
 	t.Helper()
 	must(t, referencepg.Configure(f.ctx, f.pools[0], problemreference.Limits{Global: 4, Owner: 1}))
 	const key = "author-reference-fixture"
@@ -111,15 +111,16 @@ func testEntryAuthorReferences(t *testing.T, f *fixture, x, y *loginEndpoint, co
 	loginStatus(t, authorReferenceCall(y, "POST", "", body(next, otherDraft), cookies, owner), 200)
 	loginStatus(t, authorReferenceCall(x, "POST", "/"+next+"/cancel", "", cookies, owner), 200)
 	loginStatus(t, authorReferenceCall(y, "GET", path+"/report", "", cookies, owner), 404)
-	testEntryReferenceResult(t, f, x, y, cookies, owner, draft, otherDraft)
+	referenceID := testEntryReferenceResult(t, f, x, y, cookies, owner, draft, otherDraft)
 	var draftState string
 	must(t, f.pools[0].QueryRow(f.ctx, `SELECT validation_state FROM problem_drafts WHERE id=$1`, draft).Scan(&draftState))
 	if draftState != "not-run" {
 		t.Fatal("author request changed draft validation")
 	}
+	return referenceID
 }
 
-func testEntryReferenceResult(t *testing.T, f *fixture, x, y *loginEndpoint, cookies []*http.Cookie, owner, draft, otherSubject string) {
+func testEntryReferenceResult(t *testing.T, f *fixture, x, y *loginEndpoint, cookies []*http.Cookie, owner, draft, otherSubject string) string {
 	t.Helper()
 	const key = entryTerminalReferenceKey
 	const path = "/" + key
@@ -182,4 +183,5 @@ func testEntryReferenceResult(t *testing.T, f *fixture, x, y *loginEndpoint, coo
 	}
 	loginStatus(t, authorReferenceCall(y, "GET", path+"/report", "", cookies, otherSubject), 409)
 	loginStatus(t, authorReferenceCall(y, "GET", path+"/report", "", nil, owner), 401)
+	return request.ID
 }

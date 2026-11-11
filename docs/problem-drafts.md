@@ -87,13 +87,23 @@
 
 ### 作者送审回执
 
-已登录且当前有出题权限的作者，可以把自己草稿的一份已接纳参考报告提交送审。此入口默认关闭，须启用 `private_drafts.reference_requests` 和 `private_drafts.review_intake`。目前只有 [HTTP 接口](../api/problem-draft-management.openapi.yaml)，没有页面按钮、审核人分配、决定或发布入口。
+已登录且当前有出题权限的作者，可以把自己草稿的一份已接纳参考报告提交送审。此入口默认关闭，须启用 `private_drafts.reference_requests` 和 `private_drafts.review_intake`。目前只有 [HTTP 接口](../api/problem-draft-management.openapi.yaml)，没有页面按钮。维护分配另见[审核人分配与证据摘要](#审核人分配与证据摘要)。
 
 - `POST /api/v1/problem-draft-management/review-submissions` 接受 `request_key`、`draft_id`、`import_revision`、`reference_request_id` 四个字段。完整修订从本人列表或导入回执取得；报告 ID 是[本人报告](reference-requests.md#作者申请入口)的 `request_id`。请求须同源，带普通会话和 `X-OJ-Expected-Subject`；请求头只约束实际会话主体。
 - 服务端在持有当前作者权限和本人草稿锁的事务中核对修订、已接纳报告和冻结计划，自行保存来源锁、正式 Plan、Profile、报告证据的摘要和结论。有对拍时也固定对应计划和结论。失败报告和没有对拍的历史报告可以留档。草稿仍为 `private-draft / not-run`。
 - 成功返回 ID、原四字段、内容版本和服务器时间。同一作者用同键提交相同材料返回原回执；同键提交另一组有效材料返回 `REVIEW_KEY_CONFLICT`，不同键各自形成回执。遇到断连或 `REVIEW_WRITE_UNKNOWN`，保留原主体和四字段，通过 `GET /api/v1/problem-draft-management/review-submissions/{request_key}` 查看。404 只表示本次未观察到提交；客户端不自动重试 POST 或换键。撤权后不能读取旧回执。
 
 schema 15 增加送审账本，唯一的 owner/key 索引用于回执和并发去重；草稿与报告外键索引避免维护父记录时全表扫描。每条写入维护四个索引条目，增加对应磁盘和 WAL 开销。关闭开关保留记录。维护窗口排空旧进程后独立升级；Down15 仅允许空账本，存在记录须向前修复。
+
+### 审核人分配与证据摘要
+
+独立的 [审核接口](../api/problem-review.openapi.yaml) 默认关闭，在 `private_drafts` 中设置 `"review_access": true` 才开启。无需继续开放作者送审入口。维护者分别管理审核资格和每一项分配；普通作者角色、运维归属字符串和 Worker 身份都不赋权。作者不能获分配本人草稿；维护者仍须核实不同账号背后是实际非作者。
+
+- 维护操作每次追加一条带操作者、理由和服务端时间的记录；必须给出当前修订。分配也须确认目标审核资格修订。资格变化使旧分配失效，重授后须重新分配。改派及撤分配不删除旧记录；结果不明先查看已保存的修订，不盲目追加。
+- `GET /api/v1/problem-review/{review_id}/evidence` 带当前普通会话及 `X-OJ-Expected-Subject`。数据库先锁审核人当前恢复与账号，再读最新资格、锁定该送审项并读最新分配。旧会话不可用；改密后以新会话登录仍按当前资格与分配检查。已取得锁的在途读取遵循普通会话边界。
+- 仅返回本项固定的完整修订、报告标识、摘要与记录结论；没有独立对拍时省略其字段，正式 AC 不表示可以批准。不返回其他草稿、原始证据、题面、标程、材料下载或审核决定。下一步是经二次授权复核读取固定题面与标程。
+
+schema 16 新增两张只追加的历史表。主体／项和修订的复合主键支持反向查最新记录，每次追加更新对应主键；分配额外维护非空资格外键的索引，避免维护父记录时扫描全部分配。维护窗口排空旧进程后独立升级；Down16 只在两份历史均为空时允许，保留已有送审，存在历史须前滚。
 
 ### 入库、版本与迁移
 
@@ -107,9 +117,9 @@ schema 15 增加送审账本，唯一的 owner/key 索引用于回执和并发�
 
 PG事务同一次提交owner、稳定ID、不可变文档/版本、全部引用及请求回执。同owner同键同内容返回原记录，不同内容为`ErrConflict`。`ErrCommitUnknown`后保持原键/原bundle核验；不得用新键制造重复记录。Put失败/未知不提交引用，已成功的无引用对象保留，当前没有全局磁盘额度或孤儿GC。业务读取限本人元数据/题面样例、授权配置候选摘要、本人导入回执和分页列表；不提供改写、删除、转让、共享或一般材料下载，状态结构性固定`private-draft/not-run`。
 
-角色/审计及草稿/材料关联表始于schema7，不为历史账号授予权限；schema8新增`problem_drafts_owner_created_id_idx(owner_subject_id,created_at DESC,id COLLATE "C" DESC)`，使首屏和深页owner+seek查询不扫描/排序全部历史。每次新草稿多维护一个B-tree条目及相应WAL/磁盘，实际占用依数据分布而变；12000行合成查询计划及索引大小见交付记录，不将该样本当生产容量估算。原owner/key唯一索引支持幂等定位，主键支持本人ID读取，材料复合主键支持按草稿读取；不为列表附带大document或冗余覆盖字段。schema9 另增[参考申请账本与默认空policy](reference-requests.md)，schema 10 增加预期计划表，schema 11 增加参考领取预留，schema 12 增加参考报告和申请终态，schema 13 增加参考调度，schema 14 增加卷积对拍预期计划，schema 15 增加作者送审账本；均不修改既有草稿、角色或材料引用。
+角色/审计及草稿/材料关联表始于schema7，不为历史账号授予权限；schema8新增`problem_drafts_owner_created_id_idx(owner_subject_id,created_at DESC,id COLLATE "C" DESC)`，使首屏和深页owner+seek查询不扫描/排序全部历史。每次新草稿多维护一个B-tree条目及相应WAL/磁盘，实际占用依数据分布而变；12000行合成查询计划及索引大小见交付记录，不将该样本当生产容量估算。原owner/key唯一索引支持幂等定位，主键支持本人ID读取，材料复合主键支持按草稿读取；不为列表附带大document或冗余覆盖字段。schema9 另增[参考申请账本与默认空policy](reference-requests.md)，schema 10 增加预期计划表，schema 11 增加参考领取预留，schema 12 增加参考报告和申请终态，schema 13 增加参考调度，schema 14 增加卷积对拍预期计划，schema 15 增加作者送审账本，schema 16 增加审核资格和分配；均不修改既有草稿、角色或材料引用。
 
-升级在维护窗口排空并停止旧版 API/Worker 及维护写入，独立 `migrate up` 至当前 schema 15 后启动匹配二进制。API 不自动迁移，新二进制拒绝其他 schema。迁移不会停止旧进程，不混跑；本次没有迁移已有持久化 localdev 或服务器。回退先停新版，Down15 见[作者送审回执](#作者送审回执)；历史 Down14/Down13/Down12/Down11/Down10/Down9 的锁序与条件见[参考申请迁移](reference-requests.md#迁移与回退)。
+升级在维护窗口排空并停止旧版 API/Worker 及维护写入，独立 `migrate up` 至当前 schema 16 后启动匹配二进制。API 不自动迁移，新二进制拒绝其他 schema。迁移不会停止旧进程，不混跑；本次没有迁移已有持久化 localdev 或服务器。回退先停新版，[Down16](#审核人分配与证据摘要) 只允许空访问历史；Down15 见[作者送审回执](#作者送审回执)；历史 Down14/Down13/Down12/Down11/Down10/Down9 的锁序与条件见[参考申请迁移](reference-requests.md#迁移与回退)。
 
 历史schema8的普通CREATE INDEX在事务中建索引，需要协调写入，不使用CONCURRENTLY。Down8仅删列表索引并保留全部草稿/权限，重Up8保留资料；回到8后须匹配要求8的二进制，继续Down8至7后才可启动要求7的旧版。继续Down7至6仍仅允许角色、审计、草稿均空，存在数据则向前修复；Down6也保留原积压保护，不清表绕过。
 

@@ -49,10 +49,12 @@ type ProblemRoleChange struct {
 
 // Valid rejects malformed audit attribution and absent CAS preconditions.
 func (c ProblemRoleChange) Valid() bool {
-	if !ValidID(c.SubjectID) || c.ExpectedRevision < 0 || !auditText(c.Operator, 80) || !auditText(c.Reason, 512) {
-		return false
-	}
-	return true
+	return ValidID(c.SubjectID) && c.ExpectedRevision >= 0 && ValidMaintenanceAttribution(c.Operator, c.Reason)
+}
+
+// ValidMaintenanceAttribution bounds the trusted maintenance audit fields.
+func ValidMaintenanceAttribution(operator, reason string) bool {
+	return auditText(operator, 80) && auditText(reason, 512)
 }
 
 func auditText(text string, max int) bool {
