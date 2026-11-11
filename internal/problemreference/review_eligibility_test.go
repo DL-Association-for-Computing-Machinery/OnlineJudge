@@ -66,7 +66,8 @@ func TestReviewApprovalWithTrustedValidatorKeepsOtherBlockers(t *testing.T) {
 	want := []string{"materials_returned", "formal_failed", "comparison_mismatch", "statement_quality_missing",
 		"test_coverage_missing", "checker_admission_missing", "target_runtime_missing", "solution_confirmation_missing"}
 	if got.Eligible || got.InputValidator == nil || got.IndependentCorrectness != nil || got.InputValidator.Inputs != 53 ||
-		got.WrongSolution == nil || got.WrongSolution.RejectedCasePosition != 8 || !slices.Equal(got.Blockers, want) {
+		got.WrongSolution == nil || got.WrongSolution.RejectedCasePosition != 8 ||
+		got.StatementRendering == nil || got.StatementRendering.FormatBlocks != 2 || !slices.Equal(got.Blockers, want) {
 		t.Fatalf("expected only the validator prerequisite to clear: %+v", got)
 	}
 	s.Evidence.ComparisonOutcome = ""
@@ -76,7 +77,8 @@ func TestReviewApprovalWithTrustedValidatorKeepsOtherBlockers(t *testing.T) {
 	}
 	s.Evidence.ProfileSHA256 = strings.Repeat("f", 64)
 	stale := assessReviewEligibility(s)
-	if stale.InputValidator != nil || stale.WrongSolution != nil || !slices.Contains(stale.Blockers, "policy_unavailable") ||
+	if stale.InputValidator != nil || stale.WrongSolution != nil || stale.StatementRendering != nil ||
+		!slices.Contains(stale.Blockers, "policy_unavailable") ||
 		!slices.Contains(stale.Blockers, "input_validator_missing") {
 		t.Fatalf("old profile borrowed current policy evidence: %+v", stale)
 	}

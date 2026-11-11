@@ -36,6 +36,11 @@ func TestAdmittedInputValidatorRequiresExactBinding(t *testing.T) {
 		t.Fatalf("known complete v6 binding did not expose its wrong solution: %+v", wrong)
 	}
 	other := strings.Repeat("f", 64)
+	rendering, ok := AdmittedStatementRendering(want, plan)
+	if !ok || rendering.Examples != 2 || rendering.Formulas != 6 || rendering.FormatBlocks != 2 ||
+		!problem.ValidImportRevision(rendering.ReportSHA256) || rendering.ReportSHA256 == ev.ReportSHA256 {
+		t.Fatalf("known complete v6 binding did not expose its browser evidence: %+v", rendering)
+	}
 	for _, tc := range []struct {
 		name   string
 		mutate func(*problem.ImportIdentity, *string)
@@ -57,6 +62,9 @@ func TestAdmittedInputValidatorRequiresExactBinding(t *testing.T) {
 			}
 			if ev, ok := AdmittedWrongSolution(got, hash); ok || ev.ReportSHA256 != "" {
 				t.Fatalf("different binding inherited wrong solution evidence: %+v", ev)
+			}
+			if ev, ok := AdmittedStatementRendering(got, hash); ok || ev != (StatementRenderingEvidence{}) {
+				t.Fatalf("different binding inherited statement rendering evidence: %+v", ev)
 			}
 		})
 	}
