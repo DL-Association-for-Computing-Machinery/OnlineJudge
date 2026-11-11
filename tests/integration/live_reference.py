@@ -167,7 +167,10 @@ def run(bundle, toolchain, out, supplement):
             (out / "slots-after.txt").write_text(inspect_slots())
             require(not docker("ps", "-a", "--filter", "label=run=" + owner, "--format", "{{.ID}}"),
                     "temporary fixture container was not removed")
-            formal, comparison = {"zalgorithm": (31, 0), "aplusb": (17, 0), "unionfind": (20, 0), "": (254, 24)}[supplement]
+            formal, comparison = {
+                "zalgorithm": (31, 0), "aplusb": (17, 0), "unionfind": (20, 0), "static_range_sum": (13, 0),
+                "": (254, 24),
+            }[supplement]
             require(sum(row["formal_ac"] for row in result) == formal and sum(row["comparison_matched"] for row in result) == comparison,
                     "incomplete accepted coverage")
             (out / "summary.json").write_text(json.dumps({
@@ -194,6 +197,8 @@ def main():
                        help="run only the pinned 17-point local A+B revision")
     local.add_argument("--unionfind-local-data", dest="supplement", action="store_const", const="unionfind",
                        help="run only the pinned 20-point local unionfind revision")
+    local.add_argument("--static-range-sum-local-data", dest="supplement", action="store_const", const="static_range_sum",
+                       help="run only the pinned 13-point local static range sum revision")
     args = parser.parse_args()
     require(platform.system() == "Darwin" and platform.machine() == "arm64", "requires macOS arm64")
     require(os.environ.get("OJ_SANDBOX_EXPERIMENT") == "1", "requires OJ_SANDBOX_EXPERIMENT=1")

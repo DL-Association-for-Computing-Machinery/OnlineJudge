@@ -7,6 +7,7 @@ const (
 	zAlgorithmLocalVersion   = "965239246cbdbd63f1641cfcf551d9c8f3a65cd558e194668ad845cac1e39711"
 	aPlusBLocalVersion       = "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd"
 	unionFindLocalVersion    = "42e62825925bf727c394f3435c2b50f850758576c392d082fb628f7219e4f07d"
+	staticSumLocalVersion    = "a93676964a96fb5dd0320441307eb0bb11ed41b0a1e1d4441c47d124a644e375"
 )
 
 type localReferenceRevision struct {
@@ -34,6 +35,24 @@ var localReferenceRevisions = map[string]localReferenceRevision{
 				ID:     "case-0031",
 				Input:  materialstore.Object{SHA256: "069af87ff42316e1bbe6cc65d3ed71a71cdcf9cc972257c93a7d934b435c8ad2", Size: 500001},
 				Answer: materialstore.Object{SHA256: "9a3768bb91a7c39e5777767f091605ebb81cac9a047140ba7832bc5f067ab434", Size: 3388895},
+			},
+		},
+	},
+	staticSumLocalVersion: {
+		label: "oj-local:static-range-sum-singleton-v1", sourceID: "library-checker:static_range_sum", upstream: 11,
+		source:     materialstore.Object{SHA256: "ce9cc2b97c96f7d58c35f73e4a666ba2d3657a52158253fc0bd1827525ab4721", Size: 328},
+		definition: materialstore.Object{SHA256: "4bb9d46e0588f7ccb82300e122a9a28c137629f4c592f521306d1d9bf61dc9ec", Size: 398},
+		hashes:     materialstore.Object{SHA256: "31429aeefb0ff6d0692774fa374cc2f4b7d96a83554a5a0dbab745b2c40c520f", Size: 1947},
+		suffix: []ReferenceCase{
+			{
+				ID:     "case-0012",
+				Input:  materialstore.Object{SHA256: "44da26b5b66dcf1623863d95d7e7d480612c22415a3c11783b7b0d2fe1cbb2c0", Size: 10},
+				Answer: materialstore.Object{SHA256: "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa", Size: 2},
+			},
+			{
+				ID:     "case-0013",
+				Input:  materialstore.Object{SHA256: "59e68f510f84ca808f1e2c7ca2053fb5d6b9e3a5f6840ebcb5b11e20d5ec4e29", Size: 19},
+				Answer: materialstore.Object{SHA256: "8bd5a23c3aef1243c78bac155b39b9d57a43d8c49665ccf6f42acf2992a94afa", Size: 11},
 			},
 		},
 	},
