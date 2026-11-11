@@ -70,6 +70,7 @@ type draftCapabilities struct {
 	references  *problemreference.Service
 	preparation *problemreference.Preparation
 	review      *problemreference.ReviewIntake
+	solutions   *problemreference.AuthorSolutions
 	evidence    *problemreference.ReviewAccess
 	materials   *problemreference.ReviewMaterialReader
 	returns     *problemreference.ReviewerReturns
@@ -184,6 +185,14 @@ func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore
 		}
 		if c.ReviewIntake {
 			result.review, err = problemreference.NewReviewIntake(sessions, repo)
+			if err != nil {
+				return nil, nil, ErrStartup
+			}
+			solutions, err := referencepg.NewAuthorSolutionStore(repo, problempg.ReadBoundReviewDraft)
+			if err != nil {
+				return nil, nil, ErrStartup
+			}
+			result.solutions, err = problemreference.NewAuthorSolutions(sessions, solutions, materials, importer.AcquireMaterialSlot)
 			if err != nil {
 				return nil, nil, ErrStartup
 			}

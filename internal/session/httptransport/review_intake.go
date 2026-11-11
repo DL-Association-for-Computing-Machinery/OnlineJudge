@@ -27,14 +27,14 @@ type ReviewIntake interface {
 }
 
 // WithReviewIntake enables intake on the configured private author transport.
-func WithReviewIntake(base http.Handler, intake ReviewIntake) (http.Handler, error) {
+func WithReviewIntake(base http.Handler, intake ReviewIntake, solutions AuthorReviewSolution) (http.Handler, error) {
 	h, ok := base.(*handler)
 	if !ok || h == nil || h.references == nil || h.reviewIntake != nil || intake == nil {
 		return nil, redisstore.ErrInvalid
 	}
 	return &handler{store: h.store, config: h.config, host: h.host, login: h.login, proxy: h.proxy,
 		passwordChange: h.passwordChange, drafts: h.drafts, draftTimeout: h.draftTimeout,
-		references: h.references, preparation: h.preparation, reviewIntake: intake}, nil
+		references: h.references, preparation: h.preparation, reviewIntake: intake, reviewSolution: solutions}, nil
 }
 
 // IsReviewIntakePath only recognizes paths; it does not enable them.
@@ -43,17 +43,20 @@ func IsReviewIntakePath(path string) bool {
 	return method != ""
 }
 
-func reviewIntakeRoute(path string) (method, key string, returned bool) {
+func reviewIntakeRoute(path string) (method, key, action string) {
 	if path == reviewIntakeCollection {
-		return http.MethodPost, "", false
+		return http.MethodPost, "", ""
 	}
 	if tail, ok := strings.CutPrefix(path, reviewIntakeCollection+"/"); ok {
-		key, returned := strings.CutSuffix(tail, "/return")
-		if draftproblem.ValidKey(key) {
-			return http.MethodGet, key, returned
+		key, action, _ := strings.Cut(tail, "/")
+		switch action {
+		case "", "return", "solution", "solution-confirmation":
+			if draftproblem.ValidKey(key) && (action != "" || key == tail) {
+				return http.MethodGet, key, action
+			}
 		}
 	}
-	return "", "", false
+	return "", "", ""
 }
 
 func (h *handler) serveReviewIntake(w http.ResponseWriter, r *http.Request, key string, returned bool) {

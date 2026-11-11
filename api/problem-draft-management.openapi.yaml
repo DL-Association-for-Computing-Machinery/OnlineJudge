@@ -176,6 +176,78 @@ paths:
         '405': { $ref: '#/components/responses/Failure' }
         '409': { $ref: '#/components/responses/Failure' }
         '503': { $ref: '#/components/responses/Failure' }
+  /api/v1/problem-draft-management/review-submissions/{request_key}/solution:
+    parameters:
+      - $ref: '#/components/parameters/ExpectedSubject'
+      - $ref: '#/components/parameters/ReviewIntakeKey'
+    get:
+      operationId: getOwnFrozenReviewSolution
+      description: >-
+        本人按原送审键读取冻结标程及固定依赖。需要当前出题权限；读取后重验会话、作者资格及材料。
+        拒绝 query、请求体和转义路径别名；无正式数据或存储地址，响应至多 512 KiB。
+      responses:
+        '200':
+          description: 完整导入修订、正式计划摘要及标程原文
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [import_revision, formal_plan_sha256, standard_solution]
+                properties:
+                  import_revision: { $ref: '#/components/schemas/ReviewRevision' }
+                  formal_plan_sha256: { $ref: '#/components/schemas/ReviewRevision' }
+                  standard_solution: { $ref: './problem-review.openapi.yaml#/components/schemas/ReviewSolution' }
+        '400': { $ref: '#/components/responses/Failure' }
+        '401': { $ref: '#/components/responses/Failure' }
+        '403': { $ref: '#/components/responses/Failure' }
+        '404': { $ref: '#/components/responses/Failure' }
+        '405': { $ref: '#/components/responses/Failure' }
+        '409': { $ref: '#/components/responses/Failure' }
+        '503': { $ref: '#/components/responses/Failure' }
+  /api/v1/problem-draft-management/review-submissions/{request_key}/solution-confirmation:
+    parameters:
+      - $ref: '#/components/parameters/ExpectedSubject'
+      - $ref: '#/components/parameters/ReviewIntakeKey'
+    get:
+      operationId: getOwnReviewSolutionConfirmation
+      description: 同绑定读取已提交的作者确认；404 不证明没有在途写入。
+      responses:
+        '200': { $ref: '#/components/responses/SolutionConfirmation' }
+        '400': { $ref: '#/components/responses/Failure' }
+        '401': { $ref: '#/components/responses/Failure' }
+        '403': { $ref: '#/components/responses/Failure' }
+        '404': { $ref: '#/components/responses/Failure' }
+        '405': { $ref: '#/components/responses/Failure' }
+        '409': { $ref: '#/components/responses/Failure' }
+        '503': { $ref: '#/components/responses/Failure' }
+    post:
+      operationId: confirmOwnReviewSolution
+      description: >-
+        作者以同源请求显式确认刚核对的两个摘要；同草稿、完整修订和正式计划只写一次。
+        不匹配返回 409；确认结果未知时用原送审键 GET 回读。同样拒绝 query 和转义别名；
+        JSON 至多 1024 字节。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [import_revision, formal_plan_sha256]
+              properties:
+                import_revision: { $ref: '#/components/schemas/ReviewRevision' }
+                formal_plan_sha256: { $ref: '#/components/schemas/ReviewRevision' }
+      responses:
+        '200': { $ref: '#/components/responses/SolutionConfirmation' }
+        '400': { $ref: '#/components/responses/Failure' }
+        '401': { $ref: '#/components/responses/Failure' }
+        '403': { $ref: '#/components/responses/Failure' }
+        '404': { $ref: '#/components/responses/Failure' }
+        '409': { $ref: '#/components/responses/Failure' }
+        '413': { $ref: '#/components/responses/Failure' }
+        '415': { $ref: '#/components/responses/Failure' }
+        '503': { $ref: '#/components/responses/Failure' }
   /api/v1/problem-draft-management/review-submissions/{request_key}/return:
     parameters:
       - $ref: '#/components/parameters/ExpectedSubject'
@@ -214,6 +286,11 @@ components:
   securitySchemes:
     ordinarySession: { $ref: './session.openapi.yaml#/components/securitySchemes/ordinarySession' }
   parameters:
+    ReviewIntakeKey:
+      name: request_key
+      in: path
+      required: true
+      schema: { $ref: './problem-draft-imports.openapi.yaml#/components/schemas/RequestKey' }
     ExpectedSubject:
       name: X-OJ-Expected-Subject
       in: header
@@ -223,6 +300,19 @@ components:
         type: string
         pattern: '^[0-9a-f]{32}$'
   responses:
+    SolutionConfirmation:
+      description: 本人送审键下与完整修订和正式计划绑定的确认回执
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [request_key, import_revision, formal_plan_sha256, confirmed_at]
+            properties:
+              request_key: { $ref: './problem-draft-imports.openapi.yaml#/components/schemas/RequestKey' }
+              import_revision: { $ref: '#/components/schemas/ReviewRevision' }
+              formal_plan_sha256: { $ref: '#/components/schemas/ReviewRevision' }
+              confirmed_at: { type: string, format: date-time }
     Failure:
       $ref: './problem-draft-imports.openapi.yaml#/components/responses/Failure'
     ReviewReceipt:

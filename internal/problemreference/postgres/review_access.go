@@ -151,7 +151,7 @@ func (s *ReviewStore) ReviewComparison(ctx context.Context, actor identity.Probl
 	if err != nil {
 		return zero, err
 	}
-	frozen, err := loadHistoricalReviewEvidence(ctx, referencedb.New(tx), item)
+	frozen, err := loadHistoricalReviewEvidence(ctx, referencedb.New(tx), item.owner, item.evidence)
 	if err != nil {
 		return zero, storageError{err}
 	}
@@ -201,16 +201,20 @@ func (s *ReviewStore) lockAssignedReview(ctx context.Context, tx pgx.Tx, actor i
 	if roleRev < 1 || a.ReviewerSubjectID != actor.SubjectID || a.ReviewerRevision != roleRev {
 		return zero, problemreference.ErrNotFound
 	}
-	e := problemreference.ReviewEvidence{Reviewer: actor.SubjectID, AssignmentRevision: a.Revision,
-		ReviewID: row.ID, DraftID: row.DraftID, SourceID: row.SourceID, ContentVersion: row.ContentVersion,
-		ImportRevision: row.ImportRevision, SourceLockSHA256: row.SourceLockSha256,
-		ReferenceRequestID: row.ReferenceRequestID, FormalPlanSHA256: row.FormalPlanSha256,
-		ProfileSHA256: row.ProfileSha256, EvidenceSHA256: row.EvidenceSha256, FormalVerdict: row.FormalVerdict,
-		ComparisonPlan: row.DifferentialPlanSha256, ComparisonOutcome: row.DifferentialOutcome}
+	e := reviewEvidence(row)
+	e.Reviewer, e.AssignmentRevision = actor.SubjectID, a.Revision
 	if e.ReviewID != id || !e.Valid() {
 		return zero, storageError{problemreference.ErrInvalid}
 	}
 	return assignedReview{owner: row.OwnerSubjectID, roleRevision: roleRev, evidence: e}, nil
+}
+
+func reviewEvidence(row referencedb.ProblemReviewSubmission) problemreference.ReviewEvidence {
+	return problemreference.ReviewEvidence{ReviewID: row.ID, DraftID: row.DraftID, SourceID: row.SourceID, ContentVersion: row.ContentVersion,
+		ImportRevision: row.ImportRevision, SourceLockSHA256: row.SourceLockSha256,
+		ReferenceRequestID: row.ReferenceRequestID, FormalPlanSHA256: row.FormalPlanSha256,
+		ProfileSHA256: row.ProfileSha256, EvidenceSHA256: row.EvidenceSha256, FormalVerdict: row.FormalVerdict,
+		ComparisonPlan: row.DifferentialPlanSha256, ComparisonOutcome: row.DifferentialOutcome}
 }
 
 func readAssignment(ctx context.Context, q *referencedb.Queries, id string) (problemreference.ReviewAssignment, error) {

@@ -63,7 +63,7 @@ func TestReviewIntakeTransport(t *testing.T) {
 		return r
 	}
 	base := draftHandler(t, &draftUseCase{})
-	if _, err := transport.WithReviewIntake(base, stub); err == nil {
+	if _, err := transport.WithReviewIntake(base, stub, nil); err == nil {
 		t.Fatal("review intake enabled without reference requests")
 	}
 	reference := reviewReferenceStub{}
@@ -72,7 +72,7 @@ func TestReviewIntakeTransport(t *testing.T) {
 		t.Fatal(err)
 	}
 	response(t, base, post(string(raw)), 404, false)
-	h, err := transport.WithReviewIntake(base, stub)
+	h, err := transport.WithReviewIntake(base, stub, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -144,6 +144,9 @@ func TestReviewReturnAppliesToDuplicateMaterialAndPreservesOriginalKeys(t *testi
 	if _, err := f.provider.DownTo(f.ctx, 16); err == nil || !strings.Contains(err.Error(), "cannot discard review returns") {
 		t.Fatalf("rollback discarded a nonempty decision history: %v", err)
 	}
+	// Down18 succeeds on the empty confirmation ledger before Down17 is refused.
+	_, err = f.provider.Up(f.ctx)
+	must(t, err)
 	must(t, db.CheckSchema(f.ctx, f.a))
 }
 

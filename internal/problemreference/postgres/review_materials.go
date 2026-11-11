@@ -53,7 +53,7 @@ func (s *ReviewMaterialStore) ReviewMaterialSnapshot(ctx context.Context, actor 
 	if err != nil {
 		return zero, storageError{err}
 	}
-	frozen, err := loadHistoricalReviewEvidence(ctx, referencedb.New(tx), item)
+	frozen, err := loadHistoricalReviewEvidence(ctx, referencedb.New(tx), item.owner, item.evidence)
 	if err != nil {
 		return zero, storageError{err}
 	}
@@ -81,11 +81,10 @@ type historicalReviewEvidence struct {
 	comparison *problemreference.AuthorComparisonResult
 }
 
-func loadHistoricalReviewEvidence(ctx context.Context, q *referencedb.Queries, item assignedReview) (historicalReviewEvidence, error) {
+func loadHistoricalReviewEvidence(ctx context.Context, q *referencedb.Queries, owner string, e problemreference.ReviewEvidence) (historicalReviewEvidence, error) {
 	var zero historicalReviewEvidence
-	e := item.evidence
 	row, err := q.ReportedReferenceForReview(ctx, referencedb.ReportedReferenceForReviewParams{
-		ID: e.ReferenceRequestID, Owner: item.owner, Draft: e.DraftID})
+		ID: e.ReferenceRequestID, Owner: owner, Draft: e.DraftID})
 	if err != nil {
 		return zero, err
 	}

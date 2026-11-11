@@ -125,7 +125,7 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 			}
 		}
 		if drafts.review != nil {
-			handler, err = httptransport.WithReviewIntake(handler, drafts.review)
+			handler, err = httptransport.WithReviewIntake(handler, drafts.review, drafts.solutions)
 			if err != nil {
 				return nil, ErrConfig
 			}
