@@ -124,7 +124,7 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 		t.Fatal("different request keys shared a draft")
 	}
 	referenceID := testEntryAuthorReferences(t, f, x, y, cookies, subject.ID, draft.ID, pinnedReceipt.DraftID)
-	reviewID := testEntryReviewAccess(t, f, x, y, access, cookies, subject.ID, draft.ID, referenceID)
+	reviewID := testEntryReviewAccess(t, f, x, y, access, cookies, subject.ID, draft.ID, referenceID, root, c.Namespace)
 	get := func(endpoint *loginEndpoint, id string, c []*http.Cookie) loginResponse {
 		return loginCall(endpoint, collection+"/"+id, "", c, func(r *http.Request) { r.Method = "GET" })
 	}
@@ -155,6 +155,7 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	testEntryChangedImportCatalog(t, thirdEndpoint, cookies, pinnedReceipt)
 	loginStatus(t, authorReferenceCall(thirdEndpoint, "GET", "/author-reference-fixture", "", cookies, subject.ID), 404)
 	loginStatus(t, reviewEvidenceGET(thirdEndpoint, reviewID, cookies, subject.ID), 404)
+	loginStatus(t, reviewMaterialsGET(thirdEndpoint, reviewID, cookies, subject.ID), 404)
 	checkEntryOwnList(t, thirdEndpoint, cookies, subject.ID, 2)
 	loginStatus(t, loginCall(thirdEndpoint, collection, body, cookies, nil), 409)
 	oldVersion := get(thirdEndpoint, draft.ID+"/preview", cookies)

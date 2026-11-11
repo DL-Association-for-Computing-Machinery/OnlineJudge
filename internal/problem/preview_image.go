@@ -61,8 +61,8 @@ func (b *imageBuffer) Write(p []byte) (int, error) {
 	return b.Buffer.Write(p)
 }
 
-func (s *Service) previewImage(ctx context.Context, file previewFile, pixels *int64) (PreviewImage, error) {
-	raw, err := s.previewBytes(ctx, file.object)
+func readPreviewImage(ctx context.Context, objects ReferenceObjectReader, file previewFile, pixels *int64) (PreviewImage, error) {
+	raw, err := readPreviewBytes(ctx, objects, file.object)
 	if err != nil {
 		return PreviewImage{}, err
 	}

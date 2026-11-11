@@ -43,6 +43,17 @@ type previewFile struct {
 	object materialstore.Object
 }
 
+type previewPlan struct {
+	id, version, title, language, imagePrefix string
+	examples                                  []string
+	files                                     []previewFile
+}
+
+func newPreviewPlan(id string, doc document, files []previewFile) previewPlan {
+	return previewPlan{id: id, version: doc.Version, title: doc.Title, language: doc.Statement.Language,
+		imagePrefix: "original/source/" + doc.Provenance.SourcePath + "/", examples: doc.Examples, files: files}
+}
+
 func (s *Service) preview(ctx context.Context, credential redisstore.Credential, id string, acquire func() error) (Preview, error) {
 	actor, err := s.actor(ctx, credential)
 	if err != nil {
@@ -55,32 +66,13 @@ func (s *Service) preview(ctx context.Context, credential redisstore.Credential,
 	if err = acquire(); err != nil {
 		return Preview{}, err
 	}
-	doc, files, err := previewFiles(draft, actor, id)
+	doc, files, err := previewFiles(draft, actor.SubjectID, id)
 	if err != nil {
 		return Preview{}, err
 	}
-	textCount := 1 + 2*len(doc.Examples)
-	text := make([]string, textCount)
-	for n, file := range files[:textCount] {
-		text[n], err = s.previewText(ctx, file.object)
-		if err != nil {
-			return Preview{}, err
-		}
-	}
-	images := make([]PreviewImage, 0, len(doc.Statement.Images))
-	var pixels int64
-	var outputBytes int64
-	for _, value := range text {
-		outputBytes += int64(len(value))
-	}
-	for _, file := range files[textCount:] {
-		image, err := s.previewImage(ctx, file, &pixels)
-		if err != nil || int64(len(image.Data)) > MaxPreviewBytes-outputBytes {
-			return Preview{}, errors.Join(ErrStore, err)
-		}
-		outputBytes += int64(len(image.Data))
-		image.Source = strings.TrimPrefix(file.name, "original/source/"+doc.Provenance.SourcePath+"/")
-		images = append(images, image)
+	out, err := readPreview(ctx, s.materials, newPreviewPlan(id, doc, files))
+	if err != nil {
+		return Preview{}, err
 	}
 	// Material verification is outside PG locks. Observe the actual credential
 	// again and recheck owner/role after I/O before publishing any private bytes.
@@ -103,17 +95,46 @@ func (s *Service) preview(ctx context.Context, credential redisstore.Credential,
 	if err = ctx.Err(); err != nil {
 		return Preview{}, err
 	}
-	out := Preview{DraftID: id, Version: draft.Version, Title: doc.Title, Language: doc.Statement.Language,
-		Markdown: text[0], Examples: make([]Example, len(doc.Examples)), Images: images}
-	for n, exampleID := range doc.Examples {
+	return out, nil
+}
+
+func readPreview(ctx context.Context, objects ReferenceObjectReader, p previewPlan) (Preview, error) {
+	textCount := 1 + 2*len(p.examples)
+	if len(p.files) < textCount {
+		return Preview{}, ErrStore
+	}
+	text := make([]string, textCount)
+	var outputBytes int64
+	for n, file := range p.files[:textCount] {
+		value, err := readPreviewText(ctx, objects, file.object)
+		if err != nil {
+			return Preview{}, err
+		}
+		text[n] = value
+		outputBytes += int64(len(value))
+	}
+	images := make([]PreviewImage, 0, len(p.files)-textCount)
+	var pixels int64
+	for _, file := range p.files[textCount:] {
+		image, err := readPreviewImage(ctx, objects, file, &pixels)
+		if err != nil || int64(len(image.Data)) > MaxPreviewBytes-outputBytes {
+			return Preview{}, errors.Join(ErrStore, err)
+		}
+		outputBytes += int64(len(image.Data))
+		image.Source = strings.TrimPrefix(file.name, p.imagePrefix)
+		images = append(images, image)
+	}
+	out := Preview{DraftID: p.id, Version: p.version, Title: p.title, Language: p.language,
+		Markdown: text[0], Examples: make([]Example, len(p.examples)), Images: images}
+	for n, exampleID := range p.examples {
 		out.Examples[n] = Example{ID: exampleID, Input: text[1+2*n], Output: text[2+2*n]}
 	}
 	return out, nil
 }
 
-func previewFiles(draft Draft, actor identity.ProblemActor, id string) (document, []previewFile, error) {
+func previewFiles(draft Draft, owner, id string) (document, []previewFile, error) {
 	doc, err := parseDocument(draft.Document, draft.SourceID)
-	if err != nil || draft.ID != id || draft.Owner != actor.SubjectID || draft.Version != doc.Version ||
+	if err != nil || draft.ID != id || draft.Owner != owner || draft.Version != doc.Version ||
 		draft.State != "private-draft" || draft.ValidationState != "not-run" || len(draft.References) > 8192 {
 		return document{}, nil, ErrStore
 	}
@@ -151,16 +172,16 @@ func previewFiles(draft Draft, actor identity.ProblemActor, id string) (document
 	return doc, files, nil
 }
 
-func (s *Service) previewText(ctx context.Context, object materialstore.Object) (string, error) {
-	raw, err := s.previewBytes(ctx, object)
+func readPreviewText(ctx context.Context, objects ReferenceObjectReader, object materialstore.Object) (string, error) {
+	raw, err := readPreviewBytes(ctx, objects, object)
 	if err != nil || !utf8.Valid(raw) {
 		return "", errors.Join(ErrStore, err)
 	}
 	return string(raw), nil
 }
 
-func (s *Service) previewBytes(ctx context.Context, object materialstore.Object) ([]byte, error) {
-	snapshot, err := s.materials.Open(ctx, object)
+func readPreviewBytes(ctx context.Context, objects ReferenceObjectReader, object materialstore.Object) ([]byte, error) {
+	snapshot, err := objects.Open(ctx, object)
 	if err != nil {
 		return nil, errors.Join(ErrStore, err)
 	}

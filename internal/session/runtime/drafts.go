@@ -67,6 +67,7 @@ type draftCapabilities struct {
 	preparation *problemreference.Preparation
 	review      *problemreference.ReviewIntake
 	evidence    *problemreference.ReviewAccess
+	materials   *problemreference.ReviewMaterialReader
 }
 
 func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore.Store, pool *pgxpool.Pool) (*draftCapabilities, func() error, error) {
@@ -141,6 +142,14 @@ func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore
 			return nil, nil, ErrStartup
 		}
 		result.evidence, err = problemreference.NewReviewAccess(sessions, reviewer)
+		if err != nil {
+			return nil, nil, ErrStartup
+		}
+		reviewObjects, err := referencepg.NewReviewMaterialStore(reviewer, problempg.ReadBoundReviewDraft)
+		if err != nil {
+			return nil, nil, ErrStartup
+		}
+		result.materials, err = problemreference.NewReviewMaterialReader(sessions, reviewObjects, materials, importer.AcquireMaterialSlot)
 		if err != nil {
 			return nil, nil, ErrStartup
 		}

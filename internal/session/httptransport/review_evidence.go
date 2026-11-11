@@ -19,29 +19,43 @@ type ReviewEvidenceReader interface {
 	EvidenceForSubject(context.Context, redisstore.Credential, string, string) (problemreference.ReviewEvidence, error)
 }
 
+// ReviewMaterialsReader exposes the bounded, reauthorized material projection.
+type ReviewMaterialsReader interface {
+	MaterialsForSubject(context.Context, redisstore.Credential, string, string) (problemreference.ReviewMaterials, error)
+}
+
 // WithReviewEvidence adds reviewer access to the configured draft runtime.
-func WithReviewEvidence(base http.Handler, reader ReviewEvidenceReader) (http.Handler, error) {
+// A nil materials reader leaves only the summary route available.
+func WithReviewEvidence(base http.Handler, reader ReviewEvidenceReader, materials ReviewMaterialsReader) (http.Handler, error) {
 	h, ok := base.(*handler)
 	if !ok || h == nil || h.drafts == nil || h.reviewEvidence != nil || reader == nil {
 		return nil, redisstore.ErrInvalid
 	}
 	return &handler{store: h.store, config: h.config, host: h.host, login: h.login, proxy: h.proxy,
 		passwordChange: h.passwordChange, drafts: h.drafts, draftTimeout: h.draftTimeout,
-		references: h.references, preparation: h.preparation, reviewIntake: h.reviewIntake, reviewEvidence: reader}, nil
+		references: h.references, preparation: h.preparation, reviewIntake: h.reviewIntake,
+		reviewEvidence: reader, reviewMaterials: materials}, nil
 }
 
-// IsReviewEvidencePath recognizes the single scoped GET path.
-func IsReviewEvidencePath(path string) bool { return reviewEvidenceID(path) != "" }
+// IsReviewReadPath recognizes scoped reviewer GET routes.
+func IsReviewReadPath(path string) bool {
+	id, _ := reviewReadRoute(path)
+	return id != ""
+}
 
-func reviewEvidenceID(path string) string {
+func reviewReadRoute(path string) (id string, materials bool) {
 	tail, ok := strings.CutPrefix(path, reviewEvidencePrefix)
-	if id, suffix := strings.CutSuffix(tail, "/evidence"); ok && suffix && identity.ValidID(id) {
-		return id
+	if !ok {
+		return "", false
 	}
-	return ""
+	id, leaf, found := strings.Cut(tail, "/")
+	if !found || !identity.ValidID(id) || (leaf != "evidence" && leaf != "materials") {
+		return "", false
+	}
+	return id, leaf == "materials"
 }
 
-func (h *handler) serveReviewEvidence(w http.ResponseWriter, r *http.Request, id string) {
+func (h *handler) serveReviewRead(w http.ResponseWriter, r *http.Request, id string, materials bool) {
 	expected, ok := expectedSubject(r)
 	if !ok || r.URL.RawQuery != "" || r.URL.ForceQuery || r.URL.RawPath != "" || r.ContentLength != 0 || len(r.TransferEncoding) != 0 {
 		problem(w, 400, "INVALID_REVIEW_EVIDENCE_REQUEST", "审核证据请求格式无效")
@@ -54,9 +68,19 @@ func (h *handler) serveReviewEvidence(w http.ResponseWriter, r *http.Request, id
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), h.draftTimeout)
 	defer cancel()
-	e, err := h.reviewEvidence.EvidenceForSubject(ctx, credential, expected, id)
+	var result any
+	var e problemreference.ReviewEvidence
+	var valid bool
+	if materials {
+		var m problemreference.ReviewMaterials
+		m, err = h.reviewMaterials.MaterialsForSubject(ctx, credential, expected, id)
+		result, e, valid = m, m.Evidence, m.Valid()
+	} else {
+		e, err = h.reviewEvidence.EvidenceForSubject(ctx, credential, expected, id)
+		result, valid = e, e.Valid()
+	}
 	switch {
-	case ctx.Err() != nil:
+	case ctx.Err() != nil, errors.Is(err, problemreference.ErrStore):
 		problem(w, 503, "REVIEW_UNAVAILABLE", "审核证据暂不可用")
 		return
 	case sessionDenied(err):
@@ -72,12 +96,12 @@ func (h *handler) serveReviewEvidence(w http.ResponseWriter, r *http.Request, id
 		problem(w, 409, "REVIEW_SUBJECT_CHANGED", "会话用户已变化")
 		return
 	}
-	if err != nil || !e.Valid() || e.ReviewID != id || e.Reviewer != expected {
+	if err != nil || !valid || e.ReviewID != id || e.Reviewer != expected {
 		problem(w, 503, "REVIEW_UNAVAILABLE", "审核证据暂不可用")
 		return
 	}
-	body, err := json.Marshal(e)
-	if err != nil || ctx.Err() != nil {
+	body, err := json.Marshal(result)
+	if err != nil || len(body) > problemreference.MaxReviewMaterialResponse || ctx.Err() != nil {
 		problem(w, 503, "REVIEW_UNAVAILABLE", "审核证据暂不可用")
 		return
 	}

@@ -110,7 +110,7 @@ func (s *ReviewStore) SetAssignment(ctx context.Context, c problemreference.Revi
 // foreign, reassigned, and withdrawn items are indistinguishable.
 func (s *ReviewStore) ReviewEvidence(ctx context.Context, actor identity.ProblemActor, id string) (problemreference.ReviewEvidence, error) {
 	var zero problemreference.ReviewEvidence
-	if s == nil || s.pool == nil || s.auth == nil || ctx == nil || !actor.Valid() || !identity.ValidID(id) {
+	if !s.validRead(ctx, actor, id) {
 		return zero, problemreference.ErrInvalid
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -120,6 +120,31 @@ func (s *ReviewStore) ReviewEvidence(ctx context.Context, actor identity.Problem
 		return zero, storageError{err}
 	}
 	defer rollback(tx)
+	item, err := s.lockAssignedReview(ctx, tx, actor, id)
+	if err != nil {
+		return zero, err
+	}
+	if err := commitTx(ctx, tx, false); err != nil {
+		return zero, err
+	}
+	if err := ctx.Err(); err != nil {
+		return zero, err
+	}
+	return item.evidence, nil
+}
+
+func (s *ReviewStore) validRead(ctx context.Context, actor identity.ProblemActor, id string) bool {
+	return s != nil && s.pool != nil && s.auth != nil && ctx != nil && actor.Valid() && identity.ValidID(id)
+}
+
+type assignedReview struct {
+	owner        string
+	roleRevision int64
+	evidence     problemreference.ReviewEvidence
+}
+
+func (s *ReviewStore) lockAssignedReview(ctx context.Context, tx pgx.Tx, actor identity.ProblemActor, id string) (assignedReview, error) {
+	var zero assignedReview
 	roleRev, err := s.auth.LockReviewer(ctx, tx, actor)
 	if err != nil {
 		return zero, err
@@ -134,6 +159,9 @@ func (s *ReviewStore) ReviewEvidence(ctx context.Context, actor identity.Problem
 	}
 	if row.OwnerSubjectID == actor.SubjectID {
 		return zero, problemreference.ErrNotFound
+	}
+	if !identity.ValidID(row.OwnerSubjectID) {
+		return zero, storageError{problemreference.ErrInvalid}
 	}
 	a, err := readAssignment(ctx, q, id)
 	if err != nil {
@@ -151,13 +179,7 @@ func (s *ReviewStore) ReviewEvidence(ctx context.Context, actor identity.Problem
 	if e.ReviewID != id || !e.Valid() {
 		return zero, storageError{problemreference.ErrInvalid}
 	}
-	if err := commitTx(ctx, tx, false); err != nil {
-		return zero, err
-	}
-	if err := ctx.Err(); err != nil {
-		return zero, err
-	}
-	return e, nil
+	return assignedReview{owner: row.OwnerSubjectID, roleRevision: roleRev, evidence: e}, nil
 }
 
 func readAssignment(ctx context.Context, q *referencedb.Queries, id string) (problemreference.ReviewAssignment, error) {
