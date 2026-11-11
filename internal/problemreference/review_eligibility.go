@@ -9,7 +9,7 @@ import (
 )
 
 // ReviewPolicyVersion identifies the current requirements for ordinary approval.
-const ReviewPolicyVersion = "oj.review-approval.v6"
+const ReviewPolicyVersion = "oj.review-approval.v7"
 
 // ReviewEligibilitySnapshot is the trusted read of an assigned item's verified
 // historical evidence and whether the same material has already been returned.
@@ -51,7 +51,14 @@ func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
 		blockers = append(blockers, "policy_unavailable")
 	}
 	id := problem.ImportIdentity{SourceID: e.SourceID, Version: e.ContentVersion, ImportRevision: e.ImportRevision, SourceLockSHA256: e.SourceLockSHA256}
+	formalOnly := e.ComparisonPlan == "" && e.ComparisonOutcome == ""
+	var validator *problemvalidation.InputValidatorEvidence
 	var independent *problemvalidation.IndependentCorrectnessEvidence
+	if policyCurrent && formalOnly {
+		if input, small, ok := problemvalidation.AdmittedApPlusBQuality(id, e.FormalPlanSHA256, e.ProfileSHA256); ok {
+			validator, independent = &input, &small
+		}
+	}
 	switch {
 	case e.ComparisonOutcome == "mismatch":
 		blockers = append(blockers, "comparison_mismatch")
@@ -60,7 +67,7 @@ func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
 			blockers = append(blockers, "comparison_missing")
 		}
 	default:
-		if policyCurrent {
+		if policyCurrent && independent == nil {
 			if admitted, ok := problemvalidation.AdmittedIndependentCorrectness(id, e.FormalPlanSHA256); ok {
 				independent = &admitted
 			}
@@ -69,12 +76,13 @@ func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
 			blockers = append(blockers, "independent_correctness_missing")
 		}
 	}
-	var validator *problemvalidation.InputValidatorEvidence
 	var wrongSolution *problemvalidation.WrongSolutionEvidence
 	var statementRendering *problemvalidation.StatementRenderingEvidence
 	if policyCurrent {
-		if admitted, ok := problemvalidation.AdmittedInputValidator(id, e.FormalPlanSHA256); ok {
-			validator = &admitted
+		if validator == nil {
+			if admitted, ok := problemvalidation.AdmittedInputValidator(id, e.FormalPlanSHA256); ok {
+				validator = &admitted
+			}
 		}
 		if admitted, ok := problemvalidation.AdmittedWrongSolution(id, e.FormalPlanSHA256); ok {
 			wrongSolution = &admitted
@@ -88,7 +96,7 @@ func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
 		blockers = append(blockers, "statement_quality_missing")
 	}
 	var coverage *problemvalidation.TestCoverageEvidence
-	if policyCurrent && !s.Returned && e.FormalVerdict == "AC" && e.ComparisonPlan == "" && e.ComparisonOutcome == "" {
+	if policyCurrent && !s.Returned && e.FormalVerdict == "AC" && formalOnly {
 		if admitted, ok := problemvalidation.AdmittedTestCoverage(id, e.FormalPlanSHA256, e.ProfileSHA256); ok {
 			coverage = &admitted
 		}

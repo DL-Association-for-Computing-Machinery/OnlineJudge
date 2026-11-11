@@ -47,14 +47,24 @@ func verifyLiveCoverageReview(t *testing.T, ctx context.Context, f draftFixture,
 		slices.Contains(got.Blockers, "test_coverage_missing") == local {
 		t.Fatalf("unexpected coverage admission: %+v", got)
 	}
+	validator, small := got.InputValidator, got.IndependentCorrectness
+	if validator == nil || validator.Controls != 4 || small == nil || small.Cases != 25 ||
+		validator.ReportSHA256 != small.ReportSHA256 ||
+		slices.Contains(got.Blockers, "input_validator_missing") || slices.Contains(got.Blockers, "independent_correctness_missing") {
+		t.Fatalf("incorrect input or oracle evidence: %+v", got)
+	}
 	if local {
 		c := got.TestCoverage
 		if c.Points != 17 || c.SamplePoints != 2 || c.NonSampleCriteria != 7 || c.SampleOnlyCriteria != 1 ||
 			c.MaximumSumSamplePosition != 2 || c.WrongSolutions[3].RejectedPoints != 10 ||
-			got.InputValidator != nil || got.IndependentCorrectness != nil || got.StatementRendering != nil ||
+			validator.Inputs != 17 || validator.ReportSHA256 != "70c7834df6a86220da0cb8a9e6b30f7015832ff082cdeaa45eced15579107bc0" ||
+			got.StatementRendering != nil || got.WrongSolution != nil ||
 			!slices.Contains(got.Blockers, "checker_admission_missing") || !slices.Contains(got.Blockers, "target_runtime_missing") {
 			t.Fatalf("incorrect coverage summary or unrelated prerequisite changed: %+v", got)
 		}
+	} else if validator.Inputs != 12 || validator.ReportSHA256 != "cc6907675c87d93e6c0dd08fc637d13bcd34ff6b4ba9e497fbce4c6681578a9d" ||
+		got.StatementRendering == nil || got.WrongSolution == nil {
+		t.Fatalf("original v6 evidence changed: %+v", got)
 	}
 	_, err = reviews.ReturnReview(ctx, reviewer, item.ID, problemreference.ReturnIntent{
 		RequestKey: "live-coverage-return", AssignmentRevision: got.Evidence.AssignmentRevision,
@@ -64,7 +74,8 @@ func verifyLiveCoverageReview(t *testing.T, ctx context.Context, f draftFixture,
 	returned, err := read.EligibilityForSubject(ctx, credential, reviewer.SubjectID, item.ID)
 	must(t, err)
 	if returned.TestCoverage != nil || returned.Eligible || !slices.Contains(returned.Blockers, "materials_returned") ||
-		!slices.Contains(returned.Blockers, "test_coverage_missing") {
+		!slices.Contains(returned.Blockers, "test_coverage_missing") || returned.InputValidator == nil ||
+		returned.IndependentCorrectness == nil || *returned.InputValidator != *validator || *returned.IndependentCorrectness != *small {
 		t.Fatalf("returned material retained coverage admission: %+v", returned)
 	}
 	writeLiveReferenceJSON(t, out, "coverage-aplusb", map[string]any{"current": got, "returned": returned})
