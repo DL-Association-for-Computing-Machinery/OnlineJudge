@@ -1,2 +1,5 @@
 .reference-requests { margin-block: 24px; }
 .reference-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.reference-result { margin-block-start: 16px; }
+.reference-result pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.reference-result code { overflow-wrap: anywhere; }

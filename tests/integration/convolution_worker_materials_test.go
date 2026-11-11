@@ -190,12 +190,13 @@ func testConvolutionTransport(t *testing.T, f referenceRequestFixture, local *ma
 	defer reportClient.Close()
 	reportClaim, err := reportClient.ClaimReference(f.ctx, input.ClaimInput)
 	must(t, err)
-	testConvolutionReportAdmission(t, f, reportClient, reportClaim, formal, expected, frozen)
+	testConvolutionReportAdmission(t, f, reportClient, reportClaim, request, plan, formal, expected, frozen)
 }
 
 // The isolated host test exercises the real execution. This separate database
 // fixture exercises first admission and replay using controlled node evidence.
 func testConvolutionReportAdmission(t *testing.T, f referenceRequestFixture, c *workerclient.Acquirer, claim problemreference.WorkerClaim,
+	request problemreference.Request, plan problemreference.ExpectedPlan,
 	formal problem.ReferencePlan, expected problemvalidation.ConvolutionPlan, sources problemvalidation.ConvolutionSources,
 ) {
 	t.Helper()
@@ -236,6 +237,34 @@ func testConvolutionReportAdmission(t *testing.T, f referenceRequestFixture, c *
 		t.Fatal("out-of-field counterexample was admitted", err)
 	}
 	must(t, c.ReportReference(f.ctx, frozen))
+	view, err := f.store.AuthorReport(f.ctx, f.actor, request.RequestKey)
+	must(t, err)
+	if view.RequestID != claim.RequestID || view.Version != formal.Version ||
+		view.Formal != (problemreference.AuthorFormalResult{Verdict: "AC", Passed: len(formal.Cases), Total: len(formal.Cases)}) ||
+		view.Comparison == nil || view.Comparison.Status != "mismatch" || view.Comparison.Matched != 9 || view.Comparison.Total != 24 ||
+		!reflect.DeepEqual(view.Comparison.Counterexample, &problemreference.AuthorCounterexample{
+			Case: 10, Input: input, Expected: []uint32{3, 10, 8}, Actual: []uint32{4, 10, 8},
+		}) {
+		t.Fatal("author projection did not preserve the formal summary and first generated difference")
+	}
+	request.State = problemreference.Reported
+	legacy, err := problemreference.ProjectAuthorReport(request, plan, plan.SHA256, problemfixture.Hash(old.Evidence), old.Evidence)
+	must(t, err)
+	if legacy.Formal.Verdict != "AC" || legacy.Comparison != nil {
+		t.Fatal("formal-only history predating comparison admission did not project")
+	}
+	for _, test := range []struct {
+		formalSHA, evidenceSHA string
+		raw                    []byte
+	}{
+		{strings.Repeat("f", 64), problemfixture.Hash(frozen.Evidence), frozen.Evidence},
+		{plan.SHA256, strings.Repeat("f", 64), frozen.Evidence},
+		{plan.SHA256, problemfixture.Hash(bad.Evidence), bad.Evidence},
+	} {
+		if _, err := problemreference.ProjectAuthorReport(request, plan, test.formalSHA, test.evidenceSHA, test.raw); !errors.Is(err, problemreference.ErrInvalid) {
+			t.Fatal("invalid historical binding or counterexample was exposed", err)
+		}
+	}
 	var state string
 	var stored []byte
 	must(t, f.a.QueryRow(f.ctx, `SELECT r.state, p.evidence FROM problem_reference_requests r

@@ -328,7 +328,7 @@ python3 -B -m unittest discover -s tests/governance -p test_problem_drafts.py -v
 
 `internal/problem.Service` 的创建/本人读取必须传真实普通会话凭据；授权后把选定草稿的全部材料写入私有Store，再读会话，并在同一PG事务核对恢复/账号/角色及写元数据。`LoadBundle`的expectedSourceLock来自受信配置原字节；材料根与bundle均由维护者预建。可选HTTP接入见下节；管理页面、审核和发布仍待完成，完整边界、幂等、迁移与实测归[草稿合同](docs/problem-drafts.md#私有草稿入库与本人读取)。
 
-`internal/problemreference.Service` 提供[持久化参考验证申请](docs/reference-requests.md)：绑定实际会话及本人草稿，保存受信来源、完整导入修订、Profile 原字节和原授权快照，并支持原键回执与取消。参考申请默认没有准入 policy，须受信维护显式配置后才接受新申请。作者显式准备后，服务冻结对象并重验授权；固定卷积的新申请同时保存[独立对拍计划](docs/reference-requests.md#卷积独立对拍的预期计划)。对拍执行尚未接入，草稿保持 `not-run`，发布仍阻断。精确升级与回退条件见[迁移与回退](docs/reference-requests.md#迁移与回退)。
+`internal/problemreference.Service` 提供[持久化参考验证申请](docs/reference-requests.md)：绑定实际会话及本人草稿，保存受信来源、完整导入修订、Profile 原字节和原授权快照，并支持原键回执与取消。参考申请默认没有准入 policy，须受信维护显式配置后才接受新申请。作者显式准备后，服务冻结对象并重验授权；固定卷积的新申请同时保存[独立对拍计划](docs/reference-requests.md#卷积独立对拍的预期计划)，供专用参考 Worker 在正式验证后执行。作者可回读本人终态摘要；草稿保持 `not-run`，发布仍阻断。精确升级与回退条件见[迁移与回退](docs/reference-requests.md#迁移与回退)。
 
 参考领取为显式内部操作：控制端仅在设置 `OJ_WORKER_REFERENCE_NODE_ID` 后启用。节点须已由受信维护配置，持有 `spiffe://onlinejudge/reference-worker/{node_id}/{credential_version}` 客户端证书。沿用 Worker 的控制端地址、CA、证书和私钥配置，清空双槽和 M0 槽覆盖变量，以原回执中的申请 ID、固定来源及预期 Plan 摘要运行：
 
@@ -383,7 +383,7 @@ env -u OJ_WORKER_M0_SLOT -u OJ_WORKER_M0_DUAL_EXPERIMENT OJ_SANDBOX_EXPERIMENT=1
 .local/bin/migrate reference-backlog 4 2
 ```
 
-命令使用既有私有 `OJ_DATABASE_URL`，只写参考队列额度，要求当前 schema，不自动迁移。随后可在本人草稿预览提交、查原键回执、显式准备材料计划和取消；见[作者申请合同](docs/reference-requests.md#作者申请入口)。API 不执行题源，不更新草稿验证状态。
+命令使用既有私有 `OJ_DATABASE_URL`，只写参考队列额度，要求当前 schema，不自动迁移。随后可在本人草稿预览提交、查原键回执、显式准备材料计划和取消。收到报告后可点击“查看验证结果”，查看正式判定和可用的独立对拍摘要；见[作者申请合同](docs/reference-requests.md#作者申请入口)。API 不执行题源，不更新草稿验证状态。
 
 `GET /api/v1/problem-drafts/草稿ID/preview`返回本人已入库版本的`markdown`、有序`examples`（id/input/output）和可选`images`，不依赖当前候选版本；仍须有效普通会话和当前出题权。先核对全部引用与总预算，再逐份验证快照，读取后复核同一凭据和PG授权，失败不返回部分结果。原始markdown/input/output/显式原图合计至多1MiB，重复对象按返回次数计数；图片完整解码后限长重编码为静态PNG，输出PNG与原文/样例另限1MiB。图片角色/格式/像素/路径及回退限制见[图片合同](docs/problem-drafts.md#显式题面图片)。JSON文本转义至多六倍，图片base64另加元数据。文本严格UTF-8，保留空格、CRLF及末尾换行，不替换或截断。它是管理页数据，不提供一般材料下载或发布；正式测试与程序源码不进入预览。最终会话读取之后的退出及最终PG授权之后的撤权沿已接受在途合同，不能原子撤回已经开始发送的响应。关闭整个`private_drafts`能力即可停止入口，已入库资料保留。
 

@@ -39,7 +39,7 @@ function Preview({ id }: { id: string }) {
       <StatementMarkdown source={data.markdown} images={data.images} />
       <section aria-label="原始样例"><h2>样例</h2>{data.examples.map(example => <div key={example.id}><h3>{example.id}</h3><div className="samples"><Sample label="输入" text={example.input} /><Sample label="输出" text={example.output} /></div></div>)}</section>
     </article>}
-    {data && <ReferenceRequests draft={id} />}
+    {data && <ReferenceRequests key={id} draft={id} />}
   </>
 }
 

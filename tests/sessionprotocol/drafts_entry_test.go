@@ -179,6 +179,14 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	if string(foreignRef.body) != string(missingRef.body) {
 		t.Fatal("reference receipt disclosed another author's existence")
 	}
+	resultPath := "/" + entryTerminalReferenceKey + "/report"
+	foreignReport := authorReferenceCall(x, "GET", resultPath, "", strangerCookies, stranger.ID)
+	missingReport := authorReferenceCall(x, "GET", "/missing-reference-fixture/report", "", strangerCookies, stranger.ID)
+	loginStatus(t, foreignReport, 404)
+	loginStatus(t, missingReport, 404)
+	if string(foreignReport.body) != string(missingReport.body) {
+		t.Fatal("reference report disclosed another author's existence")
+	}
 	foreign, missing := get(x, draft.ID, strangerCookies), get(x, strings.Repeat("f", 32), strangerCookies)
 	loginStatus(t, foreign, 404)
 	loginStatus(t, missing, 404)
@@ -201,9 +209,14 @@ func testEntryDraftMode(t *testing.T, f *fixture, binary, mode string) {
 	loginStatus(t, importGET(y, entrySourcesPath, cookies), 403)
 	loginStatus(t, importGET(y, entryImportsPath+"/"+pinnedReceipt.RequestKey, cookies), 403)
 	loginStatus(t, loginCall(y, entryImportsPath, pinnedBody(t, pinnedReceipt.RequestKey, pinnedReceipt.SourceID, pinnedReceipt.ImportRevision), cookies, nil), 403)
+	loginStatus(t, authorReferenceCall(y, "GET", resultPath, "", cookies, subject.ID), 403)
+	_, err = access.SetAuthorRole(f.ctx, identity.ProblemRoleChange{SubjectID: subject.ID, Enabled: true, ExpectedRevision: 2, Operator: "entry-fixture", Reason: "restore author"})
+	must(t, err)
+	loginStatus(t, authorReferenceCall(y, "GET", resultPath, "", cookies, subject.ID), 200)
 	loginStatus(t, loginCall(x, "/api/v1/session/logout", "", cookies, nil), 204)
 	loginStatus(t, get(y, draft.ID, cookies), 401)
 	loginStatus(t, authorReferenceCall(y, "GET", "/author-reference-fixture", "", cookies, subject.ID), 401)
+	loginStatus(t, authorReferenceCall(y, "GET", resultPath, "", cookies, subject.ID), 401)
 	loginStatus(t, ownListGET(y, cookies, subject.ID, ""), 401)
 	loginStatus(t, get(y, draft.ID+"/preview", cookies), 401)
 	loginStatus(t, importGET(y, entrySourcesPath, cookies), 401)

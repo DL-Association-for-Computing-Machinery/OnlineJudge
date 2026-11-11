@@ -1,5 +1,11 @@
 # 工程交付记录
 
+## 2026-11-11：本人草稿回读参考验证结果
+
+基于 `origin/main 15311be`，[本人预览](reference-requests.md#作者申请入口)按原申请键显式读取终态结果。普通会话和 PostgreSQL 核对当前作者与草稿身份；旧报告按原计划投影，独立对拍只返回一致数和首个生成差异，不公开正式数据、逐点证据或 Worker 资料。
+
+两台本地 TLS API 联合临时 PostgreSQL 和 Redis 验证原键回读；专用 mTLS 入库专项以实际卷积题包和受控结果核对首差异投影。Chromium 用替身 HTTP 响应检查桌面和 390px 的显式读取、键盘展开、通过、旧报告和重新聚焦清除。对应日志在 `/private/tmp/oj-results-session-final.log`、`/private/tmp/oj-results-go-final.log` 和 `/private/tmp/oj-results-browser.log`。本阶段无 schema 变化或部署，草稿、审核与发布状态不变。
+
 ## 2026-11-11：持槽卷积对拍与组合报告接纳
 
 基于 `origin/main d182db8`，[持槽运行](reference-requests.md#同机持槽参考执行)在同一次受权运行内顺序执行正式点、朴素解和候选解。已有对拍计划的首次正式 AC 必须携带对应的确定对拍证据；失败差异可审查，旧证据按原字节重放。无 schema 变化。
