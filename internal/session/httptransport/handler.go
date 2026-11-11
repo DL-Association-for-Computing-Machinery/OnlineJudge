@@ -45,6 +45,7 @@ type handler struct {
 	references     ReferenceRequests
 	preparation    ReferencePreparation
 	reviewIntake   ReviewIntake
+	reviewEvidence ReviewEvidenceReader
 }
 
 // New builds three explicit endpoints without registering any application route:
@@ -81,6 +82,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	isDraft := IsPrivateDraftPath(r.URL.Path)
 	refMethod, refKey := referenceRequestRoute(r.URL.Path)
 	reviewMethod, reviewKey := reviewIntakeRoute(r.URL.Path)
+	reviewID := reviewEvidenceID(r.URL.Path)
 	switch r.URL.Path {
 	case "/api/v1/session":
 		method = http.MethodGet
@@ -99,6 +101,14 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		method = http.MethodPost
 	default:
+		if reviewID != "" {
+			if h.reviewEvidence == nil {
+				problem(w, http.StatusNotFound, "NOT_FOUND", "接口不存在")
+				return
+			}
+			method = http.MethodGet
+			break
+		}
 		if reviewMethod != "" {
 			if h.reviewIntake == nil {
 				problem(w, http.StatusNotFound, "NOT_FOUND", "接口不存在")
@@ -151,6 +161,10 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if reviewMethod != "" {
 		h.serveReviewIntake(w, r, reviewKey)
+		return
+	}
+	if reviewID != "" {
+		h.serveReviewEvidence(w, r, reviewID)
 		return
 	}
 	if isDraft {

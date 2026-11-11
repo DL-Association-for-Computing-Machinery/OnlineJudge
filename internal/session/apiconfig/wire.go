@@ -29,6 +29,7 @@ type privateDraftsWire struct {
 	MaxInFlight       int      `json:"max_in_flight"`
 	ReferenceRequests bool     `json:"reference_requests"`
 	ReviewIntake      bool     `json:"review_intake"`
+	ReviewAccess      bool     `json:"review_access"`
 }
 
 type passwordChangeWire struct {

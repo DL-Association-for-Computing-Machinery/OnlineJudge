@@ -17,7 +17,7 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
 )
 
-func TestReviewIntakeSchemaRequires15(t *testing.T) {
+func TestReviewIntakeSchemaMigration(t *testing.T) {
 	f := newBacklogFixture(t)
 	must(t, db.CheckSchema(f.ctx, f.a))
 	_, err := f.provider.DownTo(f.ctx, 14)

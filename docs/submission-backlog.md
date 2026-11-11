@@ -31,11 +31,11 @@ schema9另有[持久化参考验证申请](reference-requests.md)的独立queued
 ## 升级与回退
 
 1. 停止全部旧版写入 API，并确认在途接收结束；启动模式检查不能阻止已运行旧二进制绕过新准入，**不支持新旧写入 API 滚动混用**。
-2. 通过独立维护流程执行 `migrate up` 到当前 schema 15（本页积压能力始于6，[私有草稿](problem-drafts.md#私有草稿入库与本人读取)始于7，列表索引始于8，[参考申请](reference-requests.md)始于9）；索引为普通事务索引，维护窗口须考虑建索引及锁等待。固定实验若需初始化材料，再执行 `migrate fixture`，材料版本与各进程一致。
+2. 通过独立维护流程执行 `migrate up` 到当前 schema 16（本页积压能力始于6，[私有草稿](problem-drafts.md#私有草稿入库与本人读取)始于7，列表索引始于8，[参考申请](reference-requests.md)始于9）；索引为普通事务索引，维护窗口须考虑建索引及锁等待。固定实验若需初始化材料，再执行 `migrate fixture`，材料版本与各进程一致。
 3. 显式执行 `migrate backlog <global> <subject>`，检查配置成功后启动同版本 API。无生产默认数值；专项临时库的 `10000 10000` 只为合成夹具。
 4. 已有积压超过新额度时不迁移或删除任务，等待正常完成后再接受新提交。管理员更新策略也等待在途准入释放同一策略锁。
 
-上述命令使用 Docker 构建的 `.local/bin/migrate` 和私有 `OJ_DATABASE_URL`；维护凭据不下放 Worker 或浏览器。当前二进制只接受 schema 15，启动检查不自动迁移。[Down15](problem-drafts.md#作者送审回执)仅允许空送审账本；Down14 仅允许无对拍计划时回退；Down13 仅允许空领取历史回退；Down12 仅允许空报告与终态回退；Down11 仅允许空预留表回退；Down10 仅允许空计划表回退；Down9 仅在参考申请历史及其policy均为空时允许，已配置、queued或cancelled均拒绝，精确合同见[参考申请回退](reference-requests.md#迁移与回退)。schema8仅索引的回退和schema7数据保护条件见[草稿合同](problem-drafts.md#入库版本与迁移)；schema6的 Down 继续在与接收一致的表锁顺序下，仅允许**没有任何提交且没有策略行**的空库回退；已配置或已接受数据须向前修复，不通过清表或删除策略绕过保护。更换schema时须排空/停止旧API、Worker及维护写入，不因仅停止写入API就混跑版本；停用浏览器页面不会取消已接受工作。本次没有迁移现有持久化localdev或部署服务器。
+上述命令使用 Docker 构建的 `.local/bin/migrate` 和私有 `OJ_DATABASE_URL`；维护凭据不下放 Worker 或浏览器。当前二进制只接受 schema 16，启动检查不自动迁移。[Down16](problem-drafts.md#审核人分配与证据摘要)仅允许空访问历史；[Down15](problem-drafts.md#作者送审回执)仅允许空送审账本；Down14 仅允许无对拍计划时回退；Down13 仅允许空领取历史回退；Down12 仅允许空报告与终态回退；Down11 仅允许空预留表回退；Down10 仅允许空计划表回退；Down9 仅在参考申请历史及其policy均为空时允许，已配置、queued或cancelled均拒绝，精确合同见[参考申请回退](reference-requests.md#迁移与回退)。schema8仅索引的回退和schema7数据保护条件见[草稿合同](problem-drafts.md#入库版本与迁移)；schema6的 Down 继续在与接收一致的表锁顺序下，仅允许**没有任何提交且没有策略行**的空库回退；已配置或已接受数据须向前修复，不通过清表或删除策略绕过保护。更换schema时须排空/停止旧API、Worker及维护写入，不因仅停止写入API就混跑版本；停用浏览器页面不会取消已接受工作。本次没有迁移现有持久化localdev或部署服务器。
 
 ## 验证入口
 

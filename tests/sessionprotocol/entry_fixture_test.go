@@ -247,7 +247,7 @@ func entryConfigWithWriteTimeout(t *testing.T, c sessionruntime.Config, ca *test
 	if d := c.PrivateDrafts; d != nil {
 		doc["private_drafts"] = map[string]any{"material_root": d.MaterialRoot, "bundle_directory": d.BundleDirectory,
 			"source_lock_file": d.SourceLockFile, "source_ids": d.SourceIDs, "timeout": d.Timeout.String(), "max_in_flight": d.MaxInFlight,
-			"reference_requests": d.ReferenceRequests}
+			"reference_requests": d.ReferenceRequests, "review_intake": d.ReviewIntake, "review_access": d.ReviewAccess}
 	}
 	body, err := json.Marshal(doc)
 	must(t, err)

@@ -130,6 +130,12 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 				return nil, ErrConfig
 			}
 		}
+		if drafts.evidence != nil {
+			handler, err = httptransport.WithReviewEvidence(handler, drafts.evidence)
+			if err != nil {
+				return nil, ErrConfig
+			}
+		}
 	}
 	if err := startup.Err(); err != nil {
 		return nil, err
