@@ -74,13 +74,19 @@ func TestLiveReferenceReports(t *testing.T) {
 	plans, err := problemreference.NewPlanService(sessions, store, f.repository, materials, lock)
 	must(t, err)
 	serverDone := serveLiveReferences(t, ctx, out, f, store, materials, lock)
-	for _, source := range []struct {
+	type fixtureSource struct {
 		id    string
 		cases int
-	}{
+	}
+	sources := []fixtureSource{
 		{"aplusb", 12}, {"unionfind", 18}, {"zalgorithm", 29}, {"suffixarray", 50}, {"primality_test", 13},
 		{"static_range_sum", 11}, {"associative_array", 20}, {"point_add_range_sum", 21}, {"staticrmq", 27}, {"convolution_mod", 53},
-	} {
+	}
+	localZAlgorithm := os.Getenv("OJ_LIVE_ZALGORITHM_LOCAL_DATA") == "1"
+	if localZAlgorithm {
+		sources = []fixtureSource{{"zalgorithm", 31}}
+	}
+	for _, source := range sources {
 		if !t.Run(source.id, func(t *testing.T) {
 			sourceID := "library-checker:" + source.id
 			prepared, err := problem.LoadBundle(bundle, sourceID, lock)
@@ -105,6 +111,11 @@ func TestLiveReferenceReports(t *testing.T) {
 				formal.Version != identity.Version || formal.ImportRevision != identity.ImportRevision ||
 				len(formal.Cases) != source.cases || (plan.Differential != nil) != (source.id == "convolution_mod") {
 				t.Fatal("persisted request does not match the frozen draft and fixed source")
+			}
+			if localZAlgorithm && (formal.Version != "965239246cbdbd63f1641cfcf551d9c8f3a65cd558e194668ad845cac1e39711" ||
+				formal.Cases[29].ID != "case-0030" || formal.Cases[29].Input.Size != 2 ||
+				formal.Cases[30].ID != "case-0031" || formal.Cases[30].Input.Size != 500001) {
+				t.Fatal("persisted plan lacks the pinned local boundary points")
 			}
 			writeLiveReferenceJSON(t, out, "ready-"+source.id, problemreference.ClaimInput{RequestID: request.ID, SourceID: sourceID, PlanSHA256: plan.SHA256})
 			report := readLiveReferenceReport(t, ctx, serverDone, f, request.ID)
@@ -167,7 +178,7 @@ func TestLiveReferenceReports(t *testing.T) {
 	must(t, f.b.QueryRow(ctx, `SELECT (SELECT count(*) FROM problem_drafts),
 		(SELECT count(*) FROM problem_reference_requests WHERE state='reported'),
 		(SELECT count(*) FROM problem_reference_worker_reports)`).Scan(&draftsCount, &requestsCount, &reportsCount))
-	if draftsCount != 10 || requestsCount != 10 || reportsCount != 10 {
+	if draftsCount != len(sources) || requestsCount != len(sources) || reportsCount != len(sources) {
 		t.Fatal("incomplete or duplicate live reference history")
 	}
 }

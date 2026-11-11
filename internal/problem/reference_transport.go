@@ -20,6 +20,9 @@ func (p ReferencePlan) ValidateMaterials() error {
 		p.SourcePath != a.entry || len(p.Dependencies) != len(a.dependencies) || len(p.Cases) == 0 || len(p.Cases) > a.limits.Cases || p.SourceData != nil {
 		return ErrReferenceUnsupported
 	}
+	if _, ok := upstreamPlanSize(p); !ok {
+		return ErrReferenceUnsupported
+	}
 	var total, source int64
 	check := func(o materialstore.Object, max int64) bool {
 		if !validHash(o.SHA256) || o.Size < 0 || o.Size > max || o.Size > a.limits.TotalBytes-total {
@@ -104,8 +107,9 @@ func (p ReferencePlan) freezeMaterials(ctx, lifetime context.Context, reader fun
 		if err != nil {
 			return ReferencePlan{}, nil, err
 		}
-		catalog, digests, err := referenceCatalog(info, hashes, len(p.Cases))
-		if err != nil || len(catalog) != len(p.Cases) {
+		upstream, ok := upstreamPlanSize(p)
+		catalog, digests, err := referenceCatalog(info, hashes, upstream)
+		if !ok || err != nil || len(catalog) != upstream {
 			return ReferencePlan{}, nil, ErrReferenceUnsupported
 		}
 		for i, c := range catalog {
