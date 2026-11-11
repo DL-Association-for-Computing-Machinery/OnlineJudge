@@ -169,6 +169,7 @@ def run(bundle, toolchain, out, supplement):
             require(not docker("ps", "-a", "--filter", "label=run=" + owner, "--format", "{{.ID}}"),
                     "temporary fixture container was not removed")
             formal, comparison = {
+                "suffixarray": (52, 0),
                 "convolution_mod": (55, 24),
                 "zalgorithm-alternating": (32, 0),
                 "primality_test": (15, 0),
@@ -195,6 +196,8 @@ def main():
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--start-stopped-slots", required=True, action="store_true")
     local = parser.add_mutually_exclusive_group()
+    local.add_argument("--suffixarray-local-data", dest="supplement", action="store_const", const="suffixarray",
+                       help="run only the pinned 52-point local suffix array revision")
     local.add_argument("--convolution-local-data", dest="supplement", action="store_const", const="convolution_mod",
                        help="run only the pinned 55-point local convolution revision")
     local.add_argument("--primality-test-local-data", dest="supplement", action="store_const", const="primality_test",
