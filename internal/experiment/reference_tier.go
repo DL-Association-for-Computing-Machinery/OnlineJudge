@@ -6,6 +6,9 @@ import "errors"
 // runtime budgets. Zero is not a reference tier; M0 remains a separate entry.
 type ReferenceTier uint8
 
+// ConvolutionComparisonOutputBytes bounds the fixed small-corpus solver output.
+const ConvolutionComparisonOutputBytes = 512
+
 const (
 	// ReferenceSmall preserves the original unionfind configuration.
 	ReferenceSmall ReferenceTier = 1
