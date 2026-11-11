@@ -24,6 +24,10 @@ func TestAdmittedInputValidatorRequiresExactBinding(t *testing.T) {
 	if !ok || ev.Inputs != 12 || ev.Controls != 4 || !problem.ValidImportRevision(ev.ReportSHA256) {
 		t.Fatalf("known complete v6 binding was not admitted: %+v", ev)
 	}
+	independent, ok := AdmittedIndependentCorrectness(want, plan)
+	if !ok || independent.Cases != 25 || independent.Suite != "lc-small-oracles.v1" || independent.ReportSHA256 != ev.ReportSHA256 {
+		t.Fatalf("known complete v6 binding was not admitted for independent correctness: %+v", independent)
+	}
 	other := strings.Repeat("f", 64)
 	for _, tc := range []struct {
 		name   string
@@ -41,13 +45,16 @@ func TestAdmittedInputValidatorRequiresExactBinding(t *testing.T) {
 			if ev, ok := AdmittedInputValidator(got, hash); ok || ev != (InputValidatorEvidence{}) {
 				t.Fatalf("different binding inherited trusted validator evidence: %+v", ev)
 			}
+			if ev, ok := AdmittedIndependentCorrectness(got, hash); ok || ev != (IndependentCorrectnessEvidence{}) {
+				t.Fatalf("different binding inherited independent correctness evidence: %+v", ev)
+			}
 		})
 	}
 }
 
 // This re-derives all ten bindings from the original immutable bundle, without
 // compiling or running any imported program. Ordinary CI does not have the bundle.
-func TestInputValidatorBindingsMatchV6Bundle(t *testing.T) {
+func TestReviewEvidenceBindingsMatchV6Bundle(t *testing.T) {
 	dir := os.Getenv("OJ_V6_INPUT_EVIDENCE_BUNDLE")
 	if dir == "" {
 		t.Skip("requires the verified Library Checker v6 private bundle")
@@ -70,10 +77,19 @@ func TestInputValidatorBindingsMatchV6Bundle(t *testing.T) {
 				ID   string `json:"id"`
 				Exit *int   `json:"exit_code"`
 			} `json:"input_controls"`
+			Independent struct {
+				Suite     string `json:"suite"`
+				Reference string `json:"reference_sha256"`
+				Cases     []struct {
+					ValidatorExit *int `json:"validator_exit"`
+					ReferenceExit *int `json:"reference_exit"`
+					CheckerExit   *int `json:"checker_exit"`
+				} `json:"cases"`
+			} `json:"independent"`
 		} `json:"problems"`
 	}
 	if err := json.Unmarshal(raw, &report); err != nil || report.Schema != "oj.source-validation.v6" ||
-		len(report.Problems) != 10 || len(admittedInputValidatorBindings) != 10 {
+		len(report.Problems) != 10 || len(reviewedV6Bindings) != 10 {
 		t.Fatal("unexpected source validation inventory", err)
 	}
 	lock, err := os.ReadFile("../../config/problem-sources/library-checker.json")
@@ -82,7 +98,7 @@ func TestInputValidatorBindingsMatchV6Bundle(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
 	defer cancel()
-	total := 0
+	total, independentTotal := 0, 0
 	seen := map[string]bool{}
 	for _, row := range report.Problems {
 		if seen[row.SourceID] {
@@ -90,6 +106,7 @@ func TestInputValidatorBindingsMatchV6Bundle(t *testing.T) {
 		}
 		seen[row.SourceID] = true
 		total += row.Cases
+		independentTotal += len(row.Independent.Cases)
 		t.Run(row.SourceID, func(t *testing.T) {
 			if row.Validator != "passed-all" || len(row.Controls) != 4 {
 				t.Fatal("missing validator verdict or controls")
@@ -108,10 +125,32 @@ func TestInputValidatorBindingsMatchV6Bundle(t *testing.T) {
 			if !ok || ev.Inputs != len(plan.Cases) || ev.Inputs != row.Cases || ev.Controls != len(row.Controls) {
 				t.Fatalf("review binding does not match verified source material: %+v", ev)
 			}
+			if row.Independent.Suite != "lc-small-oracles.v1" || row.Independent.Reference != plan.Source.SHA256 {
+				t.Fatal("independent oracle report does not bind the frozen reference solution")
+			}
+			for _, c := range row.Independent.Cases {
+				for _, status := range []*int{c.ValidatorExit, c.ReferenceExit, c.CheckerExit} {
+					if status == nil || *status != 0 {
+						t.Fatal("missing or failed recorded oracle outcome")
+					}
+				}
+			}
+			independent, ok := AdmittedIndependentCorrectness(id, plan.Digest())
+			if row.SourceID == ConvolutionSourceID {
+				if ok || independent != (IndependentCorrectnessEvidence{}) || len(row.Independent.Cases) != 6 {
+					t.Fatal("convolution source preparation replaced its station differential requirement")
+				}
+			} else if !ok || independent.Suite != row.Independent.Suite ||
+				independent.ReportSHA256 != ev.ReportSHA256 || independent.Cases != len(row.Independent.Cases) {
+				t.Fatalf("reviewed oracle evidence does not match the frozen report: %+v", independent)
+			}
 		})
 	}
 	if total != 254 {
 		t.Fatalf("validator report contains %d inputs, want 254", total)
+	}
+	if independentTotal != 198 {
+		t.Fatalf("report contains %d oracle cases, want 198", independentTotal)
 	}
 }
 

@@ -30,13 +30,19 @@ import (
 func claimFixture(t *testing.T) (expectedPlanFixture, *referencepg.ReferenceClaimer, submission.NodeIdentity, problemreference.ClaimInput) {
 	t.Helper()
 	f := newExpectedPlanFixture(t)
+	claims, node, input := claimFixtureFor(t, f)
+	return f, claims, node, input
+}
+
+func claimFixtureFor(t *testing.T, f expectedPlanFixture) (*referencepg.ReferenceClaimer, submission.NodeIdentity, problemreference.ClaimInput) {
+	t.Helper()
 	node := submission.NodeIdentity{ID: "reference-node", CredentialVersion: 1}
 	_, err := f.a.Exec(f.ctx, `INSERT INTO worker_nodes(id,credential_version) VALUES($1,$2)`, node.ID, node.CredentialVersion)
 	must(t, err)
 	claims, err := referencepg.NewReferenceClaimer(f.store, submissionpg.LockReferenceNode, node.ID, f.request.Specification.Identity.SourceLockSHA256)
 	must(t, err)
 	input := problemreference.ClaimInput{RequestID: f.request.ID, SourceID: f.request.Specification.Identity.SourceID, PlanSHA256: f.want.SHA256}
-	return f, claims, node, input
+	return claims, node, input
 }
 
 func prepareClaim(t *testing.T, f expectedPlanFixture, key string) {

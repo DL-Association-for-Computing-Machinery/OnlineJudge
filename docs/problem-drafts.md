@@ -121,7 +121,7 @@ schema 16 新增两张只追加的历史表。主体／项和修订的复合主�
 
 ### 批准准入状态
 
-`GET /api/v1/problem-review/{review_id}/eligibility` 沿用审核开关、普通会话和预期主体头。仅当前被分配的非作者可读；同一短事务核验完整导入修订、冻结计划及已接纳报告，查询同材料是否已退回及同绑定的作者确认。响应包含固定证据摘要、策略版本 `oj.review-approval.v3`、`eligible: false` 及阻断码。读取不写决定，不能作为批准凭证。
+`GET /api/v1/problem-review/{review_id}/eligibility` 沿用审核开关、普通会话和预期主体头。仅当前被分配的非作者可读；同一短事务核验完整导入修订、冻结计划及已接纳报告，查询同材料是否已退回及同绑定的作者确认。响应包含固定证据摘要、策略版本 `oj.review-approval.v4`、`eligible: false` 及阻断码。读取不写决定，不能作为批准凭证。
 
 | 阻断码 | 需要处理的事项 |
 | --- | --- |
@@ -129,7 +129,7 @@ schema 16 新增两张只追加的历史表。主体／项和修订的复合主�
 | `policy_unavailable` | 来源、来源锁或参考 Profile 不在当前支持范围；旧证据仍可回读 |
 | `formal_failed` | 正式验证结论不是 AC |
 | `comparison_missing`、`comparison_mismatch` | 卷积缺已接纳的本站对拍通过证据，或记录了差异 |
-| `independent_correctness_missing` | 其他来源暂无经接纳的独立正确性证据或明确适用规则 |
+| `independent_correctness_missing` | 非卷积题未命中可信独立正确性证据 |
 | `statement_quality_missing`、`test_coverage_missing` | 尚无绑定完整修订的题面质量或正式数据覆盖证据 |
 | `input_validator_missing` | 当前绑定没有受信输入校验证据 |
 | `checker_admission_missing`、`target_runtime_missing` | 尚无该修订的生产检查器或目标节点资源准入证据 |
@@ -138,6 +138,8 @@ schema 16 新增两张只追加的历史表。主体／项和修订的复合主�
 题面、数据覆盖、生产检查器和目标环境仍没有可信证据入口，始终阻止批准。即使正式点、卷积对拍、输入校验及作者确认都通过，也不会开放批准。不接收客户端指定的规则版本或证据；报告绑定不一致则返回 503，不返回部分结果。
 
 仅当现行 Profile、来源锁、题目来源、内容版本、完整导入修订和正式计划摘要同时命中已审查的 Library Checker v6 绑定，才返回 `input_validator_evidence`。其字段为报告摘要 `report_sha256`、该题已校验输入数 `inputs` 和对照数 `controls`（每题一个接受、三个拒绝）。完整修订绑定报告和材料；正式计划绑定送审用例的顺序与字节摘要。旧修订、替换材料、陌生报告或未命中绑定继续阻断，响应省略证据对象。此证据记录题源准备阶段已完成的校验，不证明当前目标节点、生产检查器或数据覆盖。
+
+九道非卷积题以同样的精确绑定返回 `independent_correctness_evidence`，包含报告摘要、固定套件 `lc-small-oracles.v1` 和本题用例数。已冻结的标程输出在这些用例上与独立计算的答案逐 token 一致。该证据只满足固定小用例的独立正确性要求，不能覆盖本站正式验证失败、退回或正式数据覆盖。卷积仍须有本站对拍通过的已接纳报告，不采信题源报告里的六个卷积小用例来替代。
 
 ### 审核材料读取
 

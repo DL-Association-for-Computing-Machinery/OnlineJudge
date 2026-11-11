@@ -208,7 +208,7 @@ components:
       required: [evidence, policy_version, eligible, blockers]
       properties:
         evidence: { $ref: '#/components/schemas/ReviewEvidence' }
-        policy_version: { const: 'oj.review-approval.v3' }
+        policy_version: { const: 'oj.review-approval.v4' }
         eligible: { const: false }
         input_validator_evidence:
           type: object
@@ -219,6 +219,15 @@ components:
             report_sha256: { $ref: '#/components/schemas/SHA256' }
             inputs: { type: integer, minimum: 1 }
             controls: { const: 4 }
+        independent_correctness_evidence:
+          type: object
+          additionalProperties: false
+          description: 仅精确匹配已审查 v6 绑定的非卷积题返回。记录固定小用例的独立结果，不替代卷积本站对拍。
+          required: [report_sha256, suite, cases]
+          properties:
+            report_sha256: { $ref: '#/components/schemas/SHA256' }
+            suite: { const: 'lc-small-oracles.v1' }
+            cases: { type: integer, minimum: 1 }
         blockers:
           type: array
           minItems: 1

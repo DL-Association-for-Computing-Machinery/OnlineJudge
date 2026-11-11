@@ -357,7 +357,7 @@ func assertConvolutionInputValidator(t *testing.T, f referenceRequestFixture, st
 	// report binding and approval policy below still use the real database.
 	got, err := access.EligibilityForSubject(f.ctx, redisstore.Credential{}, reader.SubjectID, itemID)
 	must(t, err)
-	if got.Eligible || !slices.Contains(got.Blockers, "comparison_mismatch") ||
+	if got.Eligible || got.IndependentCorrectness != nil || !slices.Contains(got.Blockers, "comparison_mismatch") ||
 		!slices.Contains(got.Blockers, "checker_admission_missing") || !slices.Contains(got.Blockers, "target_runtime_missing") {
 		t.Fatal("input validator evidence weakened independent review blockers")
 	}
