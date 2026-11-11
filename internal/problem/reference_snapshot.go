@@ -157,6 +157,62 @@ func (s *ReferenceSnapshot) ReadAnswer(ctx context.Context, index int) ([]byte, 
 	return s.read(ctx, s.caseStart+1+2*index)
 }
 
+// AnswerAt borrows a read-only span without exposing the backing file. Close
+// invalidates all borrowed readers and synchronizes with reads in progress.
+func (s *ReferenceSnapshot) AnswerAt(ctx context.Context, index int) (io.ReaderAt, int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if ctx == nil || s.closed || s.file == nil || index < 0 || index >= len(s.plan.Cases) {
+		return nil, 0, ErrInvalid
+	}
+	if err := errors.Join(ctx.Err(), s.ctx.Err()); err != nil {
+		return nil, 0, err
+	}
+	span := s.spans[s.caseStart+1+2*index]
+	return snapshotAnswer{snapshot: s, ctx: ctx, span: span}, span.size, nil
+}
+
+// ReadInput returns one bounded frozen input without loading the answer.
+func (s *ReferenceSnapshot) ReadInput(ctx context.Context, index int) ([]byte, error) {
+	if index < 0 || index >= len(s.plan.Cases) {
+		return nil, ErrInvalid
+	}
+	return s.read(ctx, s.caseStart+2*index)
+}
+
+type snapshotAnswer struct {
+	snapshot *ReferenceSnapshot
+	ctx      context.Context
+	span     referenceSpan
+}
+
+func (a snapshotAnswer) ReadAt(p []byte, offset int64) (int, error) {
+	s := a.snapshot
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed || offset < 0 {
+		return 0, ErrInvalid
+	}
+	if err := errors.Join(a.ctx.Err(), s.ctx.Err()); err != nil {
+		return 0, err
+	}
+	if offset >= a.span.size {
+		return 0, io.EOF
+	}
+	want := int(min(int64(len(p)), a.span.size-offset))
+	n, err := s.file.ReadAt(p[:want], a.span.offset+offset)
+	if e := errors.Join(a.ctx.Err(), s.ctx.Err()); e != nil {
+		return 0, e
+	}
+	if n != want || (err != nil && err != io.EOF) {
+		return n, errors.New("reference snapshot read failed")
+	}
+	if n < len(p) {
+		return n, io.EOF
+	}
+	return n, nil
+}
+
 // ReadCase loads only one frozen input and answer. Callers release these slices
 // before loading the next point; this API does not retain them internally.
 func (s *ReferenceSnapshot) ReadCase(ctx context.Context, index int) ([]byte, []byte, error) {

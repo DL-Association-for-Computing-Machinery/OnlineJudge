@@ -1,7 +1,9 @@
 package problemvalidation
 
 import (
+	"bytes"
 	"context"
+	"io"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 )
@@ -9,8 +11,8 @@ import (
 type referenceReader interface {
 	ReadSource(context.Context) ([]byte, error)
 	ReadDependencies(context.Context) ([]problem.ReferenceSourceFile, error)
-	ReadAnswer(context.Context, int) ([]byte, error)
-	ReadCase(context.Context, int) ([]byte, []byte, error)
+	AnswerAt(context.Context, int) (io.ReaderAt, int64, error)
+	ReadInput(context.Context, int) ([]byte, error)
 	Close() error
 }
 
@@ -36,13 +38,13 @@ func (m memoryReference) ReadSource(ctx context.Context) ([]byte, error) {
 	return m.plan.SourceData, ctx.Err()
 }
 
-func (m memoryReference) ReadAnswer(ctx context.Context, i int) ([]byte, error) {
-	return m.plan.Cases[i].AnswerData, ctx.Err()
+func (m memoryReference) AnswerAt(ctx context.Context, i int) (io.ReaderAt, int64, error) {
+	data := m.plan.Cases[i].AnswerData
+	return bytes.NewReader(data), int64(len(data)), ctx.Err()
 }
 
-func (m memoryReference) ReadCase(ctx context.Context, i int) ([]byte, []byte, error) {
-	c := m.plan.Cases[i]
-	return c.InputData, c.AnswerData, ctx.Err()
+func (m memoryReference) ReadInput(ctx context.Context, i int) ([]byte, error) {
+	return m.plan.Cases[i].InputData, ctx.Err()
 }
 
 func (m memoryReference) Close() error { return nil }

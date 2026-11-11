@@ -178,6 +178,7 @@ func TestPinnedLibraryChecker(t *testing.T) {
 		}
 		write(t, reference, ref)
 		write(t, output, out)
+		checkFrozenComparison(t, reference, output, int64(len(ref)), int64(len(out)), limits, want)
 		code := child(t, 5*time.Second, binary, input, output, reference)
 		if code != 0 && code != 1 {
 			t.Fatalf("%s: checker failure %d, not an AC/WA result", label, code)
@@ -228,7 +229,33 @@ func TestPinnedLibraryChecker(t *testing.T) {
 		t.Fatalf("0xFF must not be accepted: %v %v", ok, err)
 	}
 	lockHash := sha256.Sum256(lockBytes)
-	t.Logf("component=%s lock_sha256=%x cases=%d comparisons=%d answer_bytes=%d max_answer_bytes=%d answers_over_M0=%d limits=%+v; domain exclusions verified; draft validation remains not-run", judging.LibraryCheckerTextVersion, lockHash, len(cases), comparisons, total, maxAnswer, overM0, limits)
+	t.Logf("component=%s lock_sha256=%x cases=%d slice_and_frozen_comparisons=%d answer_bytes=%d max_answer_bytes=%d answers_over_M0=%d limits=%+v; domain exclusions verified; draft validation remains not-run", judging.LibraryCheckerTextVersion, lockHash, len(cases), comparisons, total, maxAnswer, overM0, limits)
+}
+
+func checkFrozenComparison(t *testing.T, ref, out string, refSize, outSize int64, limits judging.TextLimits, want bool) {
+	t.Helper()
+	open := func(path string) *os.File {
+		f, err := os.Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	answer := open(ref)
+	closeFile := func(f *os.File) {
+		if err := f.Close(); err != nil {
+			t.Error(err)
+		}
+	}
+	defer closeFile(answer)
+	actual := open(out)
+	defer closeFile(actual)
+	got, err := judging.CompareLibraryCheckerTextAt(t.Context(),
+		judging.FrozenText{Reader: answer, Size: refSize},
+		judging.FrozenText{Reader: actual, Size: outSize}, limits)
+	if got != want || err != nil {
+		t.Fatalf("frozen site=%v err=%v expected=%v", got, err, want)
+	}
 }
 
 func checkHash(t *testing.T, raw []byte, want string) {
