@@ -133,6 +133,37 @@ func (s *ReviewStore) ReviewEvidence(ctx context.Context, actor identity.Problem
 	return item.evidence, nil
 }
 
+// ReviewComparison binds the accepted report to the review item under the
+// same role and assignment locks used for the evidence summary.
+func (s *ReviewStore) ReviewComparison(ctx context.Context, actor identity.ProblemActor, id string) (problemreference.ReviewComparison, error) {
+	var zero problemreference.ReviewComparison
+	if !s.validRead(ctx, actor, id) {
+		return zero, problemreference.ErrInvalid
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if err != nil {
+		return zero, storageError{err}
+	}
+	defer rollback(tx)
+	item, err := s.lockAssignedReview(ctx, tx, actor, id)
+	if err != nil {
+		return zero, err
+	}
+	frozen, err := loadHistoricalReviewEvidence(ctx, referencedb.New(tx), item)
+	if err != nil {
+		return zero, storageError{err}
+	}
+	if err := commitTx(ctx, tx, false); err != nil {
+		return zero, err
+	}
+	if err := ctx.Err(); err != nil {
+		return zero, err
+	}
+	return problemreference.ReviewComparison{Evidence: item.evidence, Comparison: frozen.comparison}, nil
+}
+
 func (s *ReviewStore) validRead(ctx context.Context, actor identity.ProblemActor, id string) bool {
 	return s != nil && s.pool != nil && s.auth != nil && ctx != nil && actor.Valid() && identity.ValidID(id)
 }

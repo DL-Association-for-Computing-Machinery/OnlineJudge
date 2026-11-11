@@ -53,11 +53,15 @@ func (s *ReviewMaterialStore) ReviewMaterialSnapshot(ctx context.Context, actor 
 	if err != nil {
 		return zero, storageError{err}
 	}
-	bound, plan, err := historicalReviewPlan(ctx, referencedb.New(tx), item)
+	frozen, err := loadHistoricalReviewEvidence(ctx, referencedb.New(tx), item)
 	if err != nil {
 		return zero, storageError{err}
 	}
-	manifest, err := draft.PrepareReviewMaterials(item.evidence.DraftID, item.owner, bound, plan)
+	var plan problem.ReferencePlan
+	if err := json.Unmarshal(frozen.expected.Encoding, &plan); err != nil {
+		return zero, storageError{err}
+	}
+	manifest, err := draft.PrepareReviewMaterials(item.evidence.DraftID, item.owner, frozen.bound, plan)
 	if err != nil {
 		return zero, storageError{err}
 	}
@@ -71,35 +75,40 @@ func (s *ReviewMaterialStore) ReviewMaterialSnapshot(ctx context.Context, actor 
 		RoleRevision: item.roleRevision, Manifest: manifest}, nil
 }
 
-func historicalReviewPlan(ctx context.Context, q *referencedb.Queries, item assignedReview) (problem.ImportIdentity, problem.ReferencePlan, error) {
-	var zero problem.ImportIdentity
-	var plan problem.ReferencePlan
+type historicalReviewEvidence struct {
+	bound      problem.ImportIdentity
+	expected   problemreference.ExpectedPlan
+	comparison *problemreference.AuthorComparisonResult
+}
+
+func loadHistoricalReviewEvidence(ctx context.Context, q *referencedb.Queries, item assignedReview) (historicalReviewEvidence, error) {
+	var zero historicalReviewEvidence
 	e := item.evidence
 	row, err := q.ReportedReferenceForReview(ctx, referencedb.ReportedReferenceForReviewParams{
 		ID: e.ReferenceRequestID, Owner: item.owner, Draft: e.DraftID})
 	if err != nil {
-		return zero, plan, err
+		return zero, err
 	}
 	r, err := readRequest(row)
 	if err != nil {
-		return zero, plan, err
+		return zero, err
 	}
 	bound := problem.ImportIdentity{SourceID: e.SourceID, Version: e.ContentVersion,
 		ImportRevision: e.ImportRevision, SourceLockSHA256: e.SourceLockSHA256}
 	if r.Specification.Identity != bound || r.Specification.ProfileSHA256 != e.ProfileSHA256 {
-		return zero, plan, problemreference.ErrInvalid
+		return zero, problemreference.ErrInvalid
 	}
 	expected, err := loadExpectedPlan(ctx, q, r)
 	if err != nil {
-		return zero, plan, err
+		return zero, err
 	}
 	report, err := q.ReferenceWorkerReport(ctx, r.ID)
 	if err != nil {
-		return zero, plan, err
+		return zero, err
 	}
 	projected, err := problemreference.ProjectAuthorReport(r, expected, report.PlanSha256, report.EvidenceSha256, report.Evidence)
 	if err != nil {
-		return zero, plan, err
+		return zero, err
 	}
 	var diffPlan, diffOutcome string
 	if expected.Differential != nil {
@@ -110,10 +119,7 @@ func historicalReviewPlan(ctx context.Context, q *referencedb.Queries, item assi
 	}
 	if expected.SHA256 != e.FormalPlanSHA256 || report.EvidenceSha256 != e.EvidenceSHA256 ||
 		projected.Formal.Verdict != e.FormalVerdict || diffPlan != e.ComparisonPlan || diffOutcome != e.ComparisonOutcome {
-		return zero, plan, problemreference.ErrInvalid
+		return zero, problemreference.ErrInvalid
 	}
-	if err := json.Unmarshal(expected.Encoding, &plan); err != nil {
-		return zero, problem.ReferencePlan{}, err
-	}
-	return bound, plan, nil
+	return historicalReviewEvidence{bound: bound, expected: expected, comparison: projected.Comparison}, nil
 }

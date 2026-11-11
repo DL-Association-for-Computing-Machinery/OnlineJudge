@@ -84,7 +84,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	isDraft := IsPrivateDraftPath(r.URL.Path)
 	refMethod, refKey := referenceRequestRoute(r.URL.Path)
 	reviewMethod, reviewKey, authorReturn := reviewIntakeRoute(r.URL.Path)
-	reviewID, readMaterials := reviewReadRoute(r.URL.Path)
+	reviewID, reviewRead := reviewReadRoute(r.URL.Path)
 	returnID, returnKey, returnMethod := reviewReturnRoute(r.URL.Path)
 	switch r.URL.Path {
 	case "/api/v1/session":
@@ -113,7 +113,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		if reviewID != "" {
-			if h.reviewEvidence == nil || (readMaterials && h.reviewMaterials == nil) {
+			if h.reviewEvidence == nil || (reviewRead == "materials" && h.reviewMaterials == nil) {
 				problem(w, http.StatusNotFound, "NOT_FOUND", "接口不存在")
 				return
 			}
@@ -179,7 +179,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if reviewID != "" {
-		h.serveReviewRead(w, r, reviewID, readMaterials)
+		h.serveReviewRead(w, r, reviewID, reviewRead)
 		return
 	}
 	if isDraft {

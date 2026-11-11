@@ -18,6 +18,7 @@ import (
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/execution"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materialstore"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
@@ -276,5 +277,58 @@ func testConvolutionReportAdmission(t *testing.T, f referenceRequestFixture, c *
 	if err := c.ReportReference(f.ctx, old); !errors.Is(err, problemreference.ErrClaimUnavailable) {
 		t.Fatal("different bytes confirmed as an exact replay", err)
 	}
+	assertConvolutionReview(t, f, request, plan, frozen.Evidence, view.Comparison)
 	t.Log("mTLS/PG: formal-only AC and invalid counterexample refused; mismatch persisted and replayed exactly")
+}
+
+func assertConvolutionReview(t *testing.T, f referenceRequestFixture, request problemreference.Request,
+	plan problemreference.ExpectedPlan, report []byte, want *problemreference.AuthorComparisonResult,
+) {
+	t.Helper()
+	bound := request.Specification.Identity
+	item, err := f.store.SubmitReview(f.ctx, f.actor, problemreference.ReviewIntent{RequestKey: "review-convolution-mismatch",
+		DraftID: request.DraftID, ImportRevision: bound.ImportRevision, ReferenceRequestID: request.ID})
+	must(t, err)
+	reviews, err := referencepg.NewReviewStore(f.b, f.access)
+	must(t, err)
+	reader := f.actor
+	reader.SubjectID = identityID(1101)
+	grant := func(subject string, rev int64, enabled bool) {
+		t.Helper()
+		_, err := f.access.SetReviewerRole(f.ctx, identity.ProblemRoleChange{SubjectID: subject, ExpectedRevision: rev, Enabled: enabled,
+			Operator: "comparison-fixture", Reason: "verify private mismatch access"})
+		must(t, err)
+	}
+	denied := func(actor identity.ProblemActor, id string, want error) {
+		t.Helper()
+		view, err := reviews.ReviewComparison(f.ctx, actor, id)
+		requireReviewError(t, err, want)
+		if view != (problemreference.ReviewComparison{}) {
+			t.Fatal("failed comparison read returned a partial result")
+		}
+	}
+	grant(reader.SubjectID, 0, true)
+	grant(f.actor.SubjectID, 0, true)
+	denied(reader, item.ID, problemreference.ErrNotFound)
+	_, err = reviews.SetAssignment(f.ctx, problemreference.ReviewAssignmentChange{ReviewID: item.ID, ReviewerSubjectID: reader.SubjectID,
+		ExpectedReviewerRevision: 1, Operator: "comparison-fixture", Reason: "assign synthetic non-author"})
+	must(t, err)
+	got, err := reviews.ReviewComparison(f.ctx, reader, item.ID)
+	must(t, err)
+	summary, err := reviews.ReviewEvidence(f.ctx, reader, item.ID)
+	must(t, err)
+	if !got.Valid() || got.Evidence != summary || summary.ReviewID != item.ID ||
+		summary.ImportRevision != bound.ImportRevision || summary.ContentVersion != bound.Version ||
+		summary.ComparisonPlan != plan.Differential.SHA256 || summary.EvidenceSHA256 != problemfixture.Hash(report) ||
+		!reflect.DeepEqual(got.Comparison, want) {
+		t.Fatal("assigned comparison did not preserve the fixed revision, report identity and generated counterexample")
+	}
+	denied(f.actor, item.ID, problemreference.ErrNotFound)
+	denied(reader, request.ID, problemreference.ErrNotFound)
+	// Even a separately valid summary cannot authorize a different report digest.
+	_, err = f.a.Exec(f.ctx, `UPDATE problem_review_submissions SET evidence_sha256=$1 WHERE id=$2`, strings.Repeat("f", 64), item.ID)
+	must(t, err)
+	denied(reader, item.ID, problemreference.ErrStore)
+	grant(reader.SubjectID, 1, false)
+	denied(reader, item.ID, identity.ErrReviewerRequired)
 }

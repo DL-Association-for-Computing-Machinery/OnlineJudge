@@ -139,6 +139,23 @@ components:
       required: true
       schema: {$ref: '#/components/schemas/Key'}
   schemas:
+    GeneratedComparison:
+      type: [object, 'null']
+      additionalProperties: false
+      required: [status, matched, total, counterexample]
+      properties:
+        status: {type: string, enum: [passed, mismatch]}
+        matched: {type: integer, minimum: 0, maximum: 24}
+        total: {const: 24}
+        counterexample:
+          type: [object, 'null']
+          additionalProperties: false
+          required: [case, input, expected, actual]
+          properties:
+            case: {type: integer, minimum: 1, maximum: 24}
+            input: {type: string, minLength: 1, maxLength: 512}
+            expected: {$ref: '#/components/schemas/Coefficients'}
+            actual: {$ref: '#/components/schemas/Coefficients'}
     ID: {type: string, pattern: '^[a-f0-9]{32}$'}
     Key: {type: string, pattern: '^[A-Za-z0-9_-]{16,128}$'}
     Coefficients:
@@ -168,23 +185,7 @@ components:
                   verdict: {type: string, enum: [AC, WA, CE, TLE, MLE, RE, OLE]}
                   passed: {type: integer, minimum: 0, maximum: 64}
                   total: {type: integer, minimum: 1, maximum: 64}
-              comparison:
-                type: [object, 'null']
-                additionalProperties: false
-                required: [status, matched, total, counterexample]
-                properties:
-                  status: {type: string, enum: [passed, mismatch]}
-                  matched: {type: integer, minimum: 0, maximum: 24}
-                  total: {const: 24}
-                  counterexample:
-                    type: [object, 'null']
-                    additionalProperties: false
-                    required: [case, input, expected, actual]
-                    properties:
-                      case: {type: integer, minimum: 1, maximum: 24}
-                      input: {type: string, minLength: 1, maxLength: 512}
-                      expected: {$ref: '#/components/schemas/Coefficients'}
-                      actual: {$ref: '#/components/schemas/Coefficients'}
+              comparison: {$ref: '#/components/schemas/GeneratedComparison'}
     Ready:
       description: 是否已有可按原键核验的持久计划；202 固定为 false。
       content:

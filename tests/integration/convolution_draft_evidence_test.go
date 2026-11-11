@@ -240,6 +240,15 @@ func testConvolutionPlanPersistence(t *testing.T, f referenceRequestFixture, mat
 	if _, err := f.provider.DownTo(f.ctx, 13); err == nil || !strings.Contains(err.Error(), "cannot discard differential reference plans") {
 		t.Fatalf("Down14 did not preserve comparison history: %v", err)
 	}
+	// Goose rolls back each version separately; the failed Down14 leaves
+	// that migration applied but does not undo the newer successful downs.
+	var version int64
+	must(t, f.a.QueryRow(f.ctx, `SELECT version_id FROM goose_db_version ORDER BY id DESC LIMIT 1`).Scan(&version))
+	if version != 14 {
+		t.Fatalf("failed Down14 left schema %d, want 14", version)
+	}
+	_, err = f.provider.Up(f.ctx)
+	must(t, err)
 	must(t, db.CheckSchema(f.ctx, f.a))
 	_, err = f.a.Exec(f.ctx, `UPDATE problem_reference_expected_plans SET differential_encoding=$1,differential_sha256=$2 WHERE request_id=$3`,
 		recovered.Differential.Encoding, recovered.Differential.SHA256, original.ID)
