@@ -378,4 +378,23 @@ func TestExpectedPlanQueryUsesRequestPrimaryKey(t *testing.T) {
 	must(t, err)
 	mustAnalyzeClaimLookup("ReferenceRequestByIDForUpdate", "@id", "problem_reference_requests_pkey")
 	mustAnalyzeClaimLookup("ReferenceExpectedPlanForShare", "@request_id", "problem_reference_expected_plans_pkey")
+
+	_, err = tx.Exec(f.ctx, `UPDATE problem_reference_requests SET state = 'reported'`)
+	must(t, err)
+	_, err = tx.Exec(f.ctx, `INSERT INTO problem_reference_worker_reports
+		(request_id,node_id,credential_version,token_sha256,plan_sha256,evidence,evidence_sha256)
+		SELECT request_id,'fixture',1,repeat('a',64),plan_sha256,
+		       convert_to('{}','UTF8'),encode(sha256(convert_to('{}','UTF8')),'hex')
+		FROM problem_reference_expected_plans`)
+	must(t, err)
+	_, err = tx.Exec(f.ctx, `ANALYZE problem_reference_worker_reports`)
+	must(t, err)
+	reportSQL, err := os.ReadFile("../../db/queries/problemreference/worker_reports.sql")
+	must(t, err)
+	reportQuery := strings.SplitN(strings.SplitN(string(reportSQL), "\n", 2)[1], "\n\n", 2)[0]
+	must(t, tx.QueryRow(f.ctx, "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) "+strings.ReplaceAll(reportQuery, "@request_id", "$1"), f.request.ID).Scan(&evidence))
+	if !strings.Contains(evidence, "problem_reference_worker_reports_pkey") || !strings.Contains(evidence, "Index Cond") {
+		t.Fatal("reference replay lost its primary-key bound", evidence)
+	}
+	t.Log(evidence)
 }

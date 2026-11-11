@@ -124,7 +124,7 @@ func readRequest(row referencedb.ProblemReferenceRequest) (problemreference.Requ
 	spec := problemreference.Specification{Identity: problem.ImportIdentity{SourceID: row.SourceID, Version: row.ContentVersion, ImportRevision: row.ImportRevision, SourceLockSHA256: row.SourceLockSha256},
 		Protocol: row.IdentityProtocol, ProfileJSON: append([]byte(nil), row.ProfileEncoding...), ProfileSHA256: row.ProfileSha256}
 	authority := identity.ProblemAuthorSnapshot{Actor: identity.ProblemActor{SubjectID: row.OwnerSubjectID, SessionVersion: identity.SessionVersion{AuthGeneration: row.AuthGeneration, RecoveryID: row.RecoveryID}}, RoleRevision: row.AuthorRevision}
-	if !spec.Valid() || !authority.Actor.Valid() || authority.RoleRevision < 1 || (row.State != problemreference.Queued && row.State != problemreference.Cancelled) || row.CancelledAt.Valid != (row.State == problemreference.Cancelled) {
+	if !spec.Valid() || !authority.Actor.Valid() || authority.RoleRevision < 1 || (row.State != problemreference.Queued && row.State != problemreference.Cancelled && row.State != problemreference.Reported) || row.CancelledAt.Valid != (row.State == problemreference.Cancelled) {
 		return problemreference.Request{}, storageError{problemreference.ErrInvalid}
 	}
 	result := problemreference.Request{ID: row.ID, Owner: row.OwnerSubjectID, RequestKey: row.RequestKey, DraftID: row.DraftID,

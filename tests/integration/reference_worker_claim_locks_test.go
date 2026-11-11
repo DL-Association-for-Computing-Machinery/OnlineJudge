@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/db"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
 	referencepg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference/postgres"
 	submissionpg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
@@ -48,6 +47,8 @@ func TestReferenceClaimReadsCancellationAfterWaiting(t *testing.T) {
 
 func TestReferenceClaimDown11WaitsForInFlightWrite(t *testing.T) {
 	f, claims, node, input := claimFixture(t)
+	_, err := f.provider.DownTo(f.ctx, 11)
+	must(t, err)
 	prepareClaim(t, f, expectedPlanKey)
 	tx, err := f.b.Begin(f.ctx)
 	must(t, err)
@@ -86,7 +87,11 @@ func TestReferenceClaimDown11WaitsForInFlightWrite(t *testing.T) {
 	if err := <-down; !errors.As(err, &pe) || pe.Code != "P0001" || !strings.Contains(pe.Message, "cannot discard reference claim state") {
 		t.Fatalf("Down11 did not preserve claim state: %v", err)
 	}
-	must(t, db.CheckSchema(f.ctx, f.a))
+	var version int64
+	must(t, f.a.QueryRow(f.ctx, `SELECT max(version_id) FROM goose_db_version WHERE is_applied`).Scan(&version))
+	if version != 11 {
+		t.Fatalf("Down11 changed the schema to %d", version)
+	}
 }
 
 func TestReferenceClaimLostCommitDoesNotAcknowledgeLease(t *testing.T) {

@@ -37,3 +37,14 @@ type ProblemReferenceWorkerClaim struct {
 	PlanSha256        string
 	LeaseUntil        pgtype.Timestamptz
 }
+
+type ProblemReferenceWorkerReport struct {
+	RequestID         string
+	NodeID            string
+	CredentialVersion int64
+	TokenSha256       string
+	PlanSha256        string
+	Evidence          []byte
+	EvidenceSha256    string
+	AcceptedAt        pgtype.Timestamptz
+}

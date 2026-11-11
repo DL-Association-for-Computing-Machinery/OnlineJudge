@@ -100,6 +100,10 @@ func (c *ReferenceClaimer) ClaimReference(ctx context.Context, node submission.N
 }
 
 func (c *ReferenceClaimer) lockClaimRequest(ctx context.Context, tx pgx.Tx, q *referencedb.Queries, input problemreference.ClaimInput, profile []byte) (problemreference.Request, error) {
+	return c.lockReferenceRequest(ctx, tx, q, input, profile, false)
+}
+
+func (c *ReferenceClaimer) lockReferenceRequest(ctx context.Context, tx pgx.Tx, q *referencedb.Queries, input problemreference.ClaimInput, profile []byte, reporting bool) (problemreference.Request, error) {
 	var zero problemreference.Request
 	// Read only to discover the original actor before taking predecessor locks.
 	row, err := q.ReferenceRequestByID(ctx, input.RequestID)
@@ -110,7 +114,7 @@ func (c *ReferenceClaimer) lockClaimRequest(ctx context.Context, tx pgx.Tx, q *r
 	if err != nil {
 		return zero, err
 	}
-	if original.State != problemreference.Queued || original.Specification.Identity.SourceID != input.SourceID {
+	if (original.State != problemreference.Queued && (!reporting || original.State != problemreference.Reported)) || original.Specification.Identity.SourceID != input.SourceID {
 		return zero, problemreference.ErrClaimUnavailable
 	}
 	actor := original.Authorization.Actor
@@ -125,6 +129,13 @@ func (c *ReferenceClaimer) lockClaimRequest(ctx context.Context, tx pgx.Tx, q *r
 	if err != nil {
 		return zero, referenceClaimError(err)
 	}
+	// A first report releases queued capacity. Acquire policy BEFORE the
+	// request row, in the same order as cancellation and admission.
+	if reporting && original.State == problemreference.Queued {
+		if _, err := lockPolicy(ctx, q); err != nil {
+			return zero, err
+		}
+	}
 	row, err = q.ReferenceRequestByIDForUpdate(ctx, original.ID)
 	if err != nil {
 		return zero, referenceClaimError(err)
@@ -134,13 +145,18 @@ func (c *ReferenceClaimer) lockClaimRequest(ctx context.Context, tx pgx.Tx, q *r
 		return zero, err
 	}
 	i := current.Specification.Identity
-	if current.State != problemreference.Queued || current.Authorization != authority ||
+	if current.Authorization != authority ||
 		current.ID != original.ID || current.Owner != actor.SubjectID || current.DraftID != original.DraftID ||
-		i != original.Specification.Identity || i.SourceLockSHA256 != c.sourceLock ||
+		i != original.Specification.Identity ||
 		!bytes.Equal(current.Specification.ProfileJSON, original.Specification.ProfileJSON) ||
-		!bytes.Equal(current.Specification.ProfileJSON, profile) ||
 		draft.ID != current.DraftID || draft.Owner != actor.SubjectID || draft.SourceID != i.SourceID ||
 		draft.Version != i.Version || draft.ImportRevision != i.ImportRevision {
+		return zero, problemreference.ErrClaimUnavailable
+	}
+	if reporting && current.State == problemreference.Reported {
+		return current, nil // Historical receipt, not a new execution/admission.
+	}
+	if current.State != problemreference.Queued || original.State != problemreference.Queued || i.SourceLockSHA256 != c.sourceLock || !bytes.Equal(current.Specification.ProfileJSON, profile) {
 		return zero, problemreference.ErrClaimUnavailable
 	}
 	return current, nil

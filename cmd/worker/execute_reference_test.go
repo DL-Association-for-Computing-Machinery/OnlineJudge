@@ -14,6 +14,7 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/workerclient"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/workerhost"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/tests/problemfixture"
 )
@@ -28,6 +29,10 @@ func (h *leasedReferenceHost) Stop(ctx context.Context) error {
 	h.stops++
 	h.beforeStop()
 	return h.referenceHost.Stop(ctx)
+}
+
+func (h *leasedReferenceHost) Identity() (string, string) {
+	return strings.Repeat("a", 64), "2026-11-11T00:00:00Z"
 }
 
 func claimedReferenceFixture(t *testing.T, source []byte) (problemreference.WorkerClaim, func(context.Context, problemreference.WorkerClaim) (referenceExecutionMaterials, error)) {
@@ -82,6 +87,8 @@ func TestClaimedReferenceHoldsHostUntilConfirmedStop(t *testing.T) {
 				h.stopErr = errors.New("stop unconfirmed")
 			}
 			fetched, started := false, false
+			var firstReport []byte
+			reports := 0
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			err := runClaimedReference(ctx, lock, claim, func(ctx context.Context, _ problemreference.WorkerClaim) (referenceExecutionMaterials, error) {
@@ -109,10 +116,27 @@ func TestClaimedReferenceHoldsHostUntilConfirmedStop(t *testing.T) {
 					return nil, errors.New("unbound start")
 				}
 				return h, nil
+			}, func(_ context.Context, input problemreference.WorkerReportInput) error {
+				checkHeld()
+				reports++
+				if h.stops != 1 {
+					t.Error("reported before stop")
+				}
+				if reports == 1 {
+					firstReport = bytes.Clone(input.Evidence)
+					return workerclient.ErrReportUnknown
+				}
+				if !bytes.Equal(firstReport, input.Evidence) || input.Token != claim.Token {
+					t.Error("retry changed frozen report binding")
+				}
+				return nil
 			})
 			lock.Close()
 			if (err == nil) != (kind == "confirmed") {
 				t.Fatal("unexpected lifecycle result", err)
+			}
+			if (kind == "confirmed" && reports != 2) || (kind != "confirmed" && reports != 0) {
+				t.Fatal("unexpected report sends", reports)
 			}
 			wantWork := kind != "preflight refused"
 			wantStop := wantWork && kind != "no bound host"

@@ -28,6 +28,7 @@ const (
 	IdentityProtocol = "oj.reference-request.v1"
 	Queued           = "queued"
 	Cancelled        = "cancelled"
+	Reported         = "reported"
 )
 
 // Request is an immutable intent and its current lifecycle receipt. The original

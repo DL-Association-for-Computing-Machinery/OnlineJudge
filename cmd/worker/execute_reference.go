@@ -55,9 +55,9 @@ func executeReference(ctx context.Context, args []string, logger *slog.Logger) e
 		}
 		return referenceExecutionMaterials{snapshot: materials.ReferenceSnapshot, close: materials.Close}, nil
 	}
-	err = runClaimedReference(ctx, lock, claim, fetch, renewal.RenewReference, startClaimedReference)
+	err = runClaimedReference(ctx, lock, claim, fetch, renewal.RenewReference, startClaimedReference, client.ReportReference)
 	if err == nil {
-		logger.Info("参考执行完成，停止已确认；未提交验证报告")
+		logger.Info("参考执行通过，停止已确认，报告已接纳")
 	}
 	return err
 }
@@ -91,7 +91,8 @@ type referenceExecutionMaterials struct {
 func runClaimedReference(ctx context.Context, lock *slotLock, claim problemreference.WorkerClaim,
 	fetch func(context.Context, problemreference.WorkerClaim) (referenceExecutionMaterials, error),
 	renew func(context.Context, problemreference.WorkerClaim) error,
-	start func(context.Context, string) (validationHost, error)) error {
+	start func(context.Context, string) (validationHost, error),
+	send func(context.Context, problemreference.WorkerReportInput) error) error {
 	_, tier, err := problemvalidation.ResolveSource(claim.SourceID)
 	if err != nil {
 		return err
@@ -101,6 +102,7 @@ func runClaimedReference(ctx context.Context, lock *slotLock, claim problemrefer
 	startupDone := make(chan struct{})
 	var host validationHost
 	var marked bool
+	var report problemvalidation.Report
 	work := func(ctx context.Context) (err error) {
 		startupFinished := false
 		defer func() {
@@ -138,14 +140,8 @@ func runClaimedReference(ctx context.Context, lock *slotLock, claim problemrefer
 				return err
 			}
 		}
-		report, err := problemvalidation.New(g).ValidateFrozen(ctx, materials.snapshot, claim.SourceID, claim.PlanSHA256)
-		if err != nil {
-			return err
-		}
-		if report.Verdict != "AC" {
-			return errors.New("reference validation did not pass")
-		}
-		return nil
+		report, err = problemvalidation.New(g).ValidateFrozen(ctx, materials.snapshot, claim.SourceID, claim.PlanSHA256)
+		return err
 	}
 	stop := func(ctx context.Context) error {
 		select {
@@ -166,5 +162,40 @@ func runClaimedReference(ctx context.Context, lock *slotLock, claim problemrefer
 	if marked && out.StopErr == nil {
 		cleanErr = lock.clean()
 	}
-	return errors.Join(out.WorkErr, out.StopErr, cleanErr)
+	if err := errors.Join(out.WorkErr, out.StopErr, cleanErr, ctx.Err()); err != nil {
+		return err
+	}
+	report.Slot = (workerhost.M0Slot{}).ContainerName()
+	if tier != 0 {
+		slot, err := workerhost.ReferenceSlotForTier(tier)
+		if err != nil {
+			return err
+		}
+		report.Slot = slot.ContainerName()
+	}
+	report.ContainerID, report.StartedAt = host.Identity()
+	if err := report.Finalize(nil, nil, nil); err != nil {
+		return err
+	}
+	input, err := problemreference.FreezeWorkerReport(claim, report)
+	if err != nil {
+		return err
+	}
+	if err := sendFrozenReferenceReport(ctx, input, send); err != nil {
+		return err
+	}
+	if report.Verdict != "AC" {
+		return errors.New("reference validation did not pass")
+	}
+	return nil
+}
+
+func sendFrozenReferenceReport(ctx context.Context, input problemreference.WorkerReportInput, send func(context.Context, problemreference.WorkerReportInput) error) error {
+	for attempt := 0; attempt < 3 && ctx.Err() == nil; attempt++ {
+		err := send(ctx, input)
+		if !errors.Is(err, workerclient.ErrReportUnknown) {
+			return err
+		}
+	}
+	return workerclient.ErrReportUnknown
 }

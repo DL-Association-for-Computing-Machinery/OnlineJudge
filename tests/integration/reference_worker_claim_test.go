@@ -253,5 +253,7 @@ func TestReferenceClaimDown11ProtectsHistory(t *testing.T) {
 	if _, err := f.provider.DownTo(f.ctx, 10); err == nil || !strings.Contains(err.Error(), "cannot discard reference claim state") {
 		t.Fatalf("rollback removed claim state: %v", err)
 	}
+	_, err = f.provider.Up(f.ctx)
+	must(t, err)
 	must(t, db.CheckSchema(f.ctx, f.a))
 }
