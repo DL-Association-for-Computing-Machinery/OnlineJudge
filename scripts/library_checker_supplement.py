@@ -25,6 +25,10 @@ class Supplement(NamedTuple):
 
 
 SUPPLEMENTS = {
+    "associative_array": Supplement("oj-local:associative-array-boundaries-v1",
+                                    "cb50459ffb3537de06ff6b931ea9047842d92a9420c39e37f9fb3efaa73e1271",
+                                    "4d6dd8e3fe97a0e1ec6585ff538219d811f660bdfff7cc2172bf6092cf858928",
+                                    "d5a23dd68deccc0ff55f928344287b96e3aa9f3cc023c727d0ad822dae140a1d"),
     "zalgorithm": Supplement("oj-local:zalgorithm-scale-v1",
                              "151da5a28d0bd733fe4837547ec909137a36b0e532409c93dfd7bf3c2a7e6b41",
                              "965239246cbdbd63f1641cfcf551d9c8f3a65cd558e194668ad845cac1e39711",
@@ -41,11 +45,19 @@ SUPPLEMENTS = {
                             "fd871a02594fcd663790cd0530153df2ad18bf95110559ce552a121c34705bed",
                             "42e62825925bf727c394f3435c2b50f850758576c392d082fb628f7219e4f07d",
                             "c5857fa3048311c6bcdb40dfde511c85c843c5feacedc56a552534436aa503d5"),
+    "static_range_sum": Supplement("oj-local:static-range-sum-singleton-v1",
+                                   "4d3adee969250c1834a61d59b456649f0c2cd0445902ad386b4a6f3e351a2f93",
+                                   "a93676964a96fb5dd0320441307eb0bb11ed41b0a1e1d4441c47d124a644e375",
+                                   "d518d555c9f33d57c574b06ac41fcd4b713fa31bd3f04d18e3daf329a4744841"),
 }
 
 
 def boundary_cases(problem):
-    if problem == "zalgorithm":
+    if problem == "associative_array":
+        maximum = 10**18
+        yield f"1\n1 {maximum}\n".encode("ascii"), b"0\n"
+        yield f"2\n0 {maximum} {maximum}\n1 {maximum}\n".encode("ascii"), f"{maximum}\n".encode("ascii")
+    elif problem == "zalgorithm":
         for n in (1, 500000):
             yield b"a" * n + b"\n", (" ".join(map(str, range(n, 0, -1))) + "\n").encode("ascii")
     elif problem == "aplusb":
@@ -59,6 +71,9 @@ def boundary_cases(problem):
     elif problem == "unionfind":
         yield b"1 1\n1 0 0\n", b"1\n"
         yield b"1 1\n0 0 0\n", b""
+    elif problem == "static_range_sum":
+        for value in (0, 10**9):
+            yield f"1 1\n{value}\n0 1\n".encode("ascii"), f"{value}\n".encode("ascii")
     else:
         raise ValueError("unrecognized supplement")
 
