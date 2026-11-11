@@ -91,6 +91,10 @@ func TestLiveReferenceReports(t *testing.T) {
 		sources = []fixtureSource{{"associative_array", 22}}
 		versionPin = "4d6dd8e3fe97a0e1ec6585ff538219d811f660bdfff7cc2172bf6092cf858928"
 		suffixSizes = []int64{24, 66}
+	case "suffixarray":
+		sources = []fixtureSource{{"suffixarray", 52}}
+		versionPin = "7ddd631ac3f2f76e4cf56f85b23ee71fbdc0d5f54c40bdc968d27e933297b777"
+		suffixSizes = []int64{17, 19}
 	case "zalgorithm":
 		sources = []fixtureSource{{"zalgorithm", 31}}
 		versionPin = "965239246cbdbd63f1641cfcf551d9c8f3a65cd558e194668ad845cac1e39711"
@@ -149,6 +153,12 @@ func TestLiveReferenceReports(t *testing.T) {
 				pos := len(formal.Cases) - len(suffixSizes) + i
 				if c := formal.Cases[pos]; c.ID != fmt.Sprintf("case-%04d", pos+1) || c.Input.Size != size {
 					t.Fatal("persisted plan lacks the pinned local boundary points")
+				}
+			}
+			if source.id == "suffixarray" && versionPin != "" {
+				if formal.Cases[50].Answer.SHA256 != liveReferenceDigest([]byte("8 0 12 4 10 2 14 6 9 1 13 5 11 3 15 7\n")) ||
+					formal.Cases[51].Answer.SHA256 != liveReferenceDigest([]byte("16 14 12 10 8 6 4 2 0 17 15 13 11 9 7 5 3 1\n")) {
+					t.Fatal("persisted suffix array plan lost its structure answers")
 				}
 			}
 			if source.id == "unionfind" && versionPin != "" {

@@ -33,6 +33,10 @@ SUPPLEMENTS = {
                              "151da5a28d0bd733fe4837547ec909137a36b0e532409c93dfd7bf3c2a7e6b41",
                              "965239246cbdbd63f1641cfcf551d9c8f3a65cd558e194668ad845cac1e39711",
                              "4a02a1c07dbddf2a4bb532f8a6d850c2a979c07ced6cd4533219788317fa8191"),
+    "suffixarray": Supplement("oj-local:suffixarray-structures-v1",
+                              "b7622607e0db239445f7b75b14bc9edc10b7992f1c6b6254fd4f784aa5cb0d97",
+                              "7ddd631ac3f2f76e4cf56f85b23ee71fbdc0d5f54c40bdc968d27e933297b777",
+                              "93b0f9b3ff0085d288186d4420a8ec97b36bba89f5467ac65359262cb1a9ae18"),
     "aplusb": Supplement("oj-local:aplusb-boundaries-v1",
                          "87ebb9680aa3abe190b61d4a5ccac1dc83e48b29656364e445e36fabe7467cc9",
                          "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd",
@@ -56,6 +60,9 @@ def boundary_cases(problem):
     elif problem == "zalgorithm":
         for n in (1, 500000):
             yield b"a" * n + b"\n", (" ".join(map(str, range(n, 0, -1))) + "\n").encode("ascii")
+    elif problem == "suffixarray":
+        yield b"abacabae" * 2 + b"\n", b"8 0 12 4 10 2 14 6 9 1 13 5 11 3 15 7\n"
+        yield b"ab" * 9 + b"\n", b"16 14 12 10 8 6 4 2 0 17 15 13 11 9 7 5 3 1\n"
     elif problem == "aplusb":
         for a, b in ((0, 0), (0, 1), (1, 0), (10**9, 10**9 - 1), (10**9 - 1, 10**9)):
             yield f"{a} {b}\n".encode("ascii"), f"{a+b}\n".encode("ascii")
