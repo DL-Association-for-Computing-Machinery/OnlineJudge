@@ -108,7 +108,7 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 		var view problemreference.ReviewEligibility
 		must(t, json.Unmarshal(result.body, &view))
 		if len(fields) != 4 || string(fields["evidence"]) != string(assigned.body) || string(fields["eligible"]) != "false" ||
-			view.PolicyVersion != "oj.review-approval.v4" || view.IndependentCorrectness != nil ||
+			view.PolicyVersion != "oj.review-approval.v4" || view.IndependentCorrectness != nil || view.WrongSolution != nil ||
 			!slices.Contains(view.Blockers, "independent_correctness_missing") ||
 			view.InputValidator != nil || !slices.Contains(view.Blockers, "input_validator_missing") ||
 			slices.Contains(view.Blockers, "solution_confirmation_missing") == confirmed || slices.Contains(view.Blockers, "formal_failed") ||
