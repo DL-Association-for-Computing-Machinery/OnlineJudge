@@ -241,6 +241,10 @@ func testConvolutionPlanPersistence(t *testing.T, f referenceRequestFixture, mat
 		t.Fatalf("Down14 did not preserve comparison history: %v", err)
 	}
 	must(t, db.CheckSchema(f.ctx, f.a))
+	_, err = f.a.Exec(f.ctx, `UPDATE problem_reference_expected_plans SET differential_encoding=$1,differential_sha256=$2 WHERE request_id=$3`,
+		recovered.Differential.Encoding, recovered.Differential.SHA256, original.ID)
+	must(t, err)
+	testConvolutionTransport(t, f, materials, original, recovered, objects)
 }
 
 func checkDifferentialPlanConstraints(t *testing.T, f referenceRequestFixture, id string, plan *problemreference.DifferentialExpectedPlan) {

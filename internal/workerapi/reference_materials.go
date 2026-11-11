@@ -10,28 +10,37 @@ import (
 	"time"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materialstore"
+	problemdata "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
 )
 
 const referenceDescribePath = "/api/v1/worker/reference/assignment"
 const referenceMaterialPath = "/api/v1/worker/reference/material"
+const differentialDescribePath = "/api/v1/worker/reference/differential/assignment"
+const differentialMaterialPath = "/api/v1/worker/reference/differential/material"
 
 func serveReferenceMaterials(w http.ResponseWriter, r *http.Request, s *problemreference.ReferenceMaterials, node submission.NodeIdentity, roots *x509.CertPool) {
-	var input struct {
-		problemreference.MaterialInput
-		Object materialstore.Object `json:"object"`
-	}
-	if !decode(w, r, &input) {
+	input, object, digest, ok := decodeReferenceMaterial(w, r)
+	if !ok {
 		return
 	}
-	if !input.Valid() {
+	if !input.Valid() || (r.URL.Path == differentialMaterialPath && !problemdata.ValidImportRevision(digest)) {
 		problem(w, 400, "INVALID_REQUEST", "参考材料请求无效")
 		return
 	}
-	if r.URL.Path == referenceDescribePath {
+	if r.URL.Path == referenceDescribePath || r.URL.Path == differentialDescribePath {
 		start := time.Now()
-		d, err := s.Describe(r.Context(), node, input.MaterialInput)
+		var body any
+		var remaining int64
+		var err error
+		if r.URL.Path == differentialDescribePath {
+			d, e := s.DescribeDifferential(r.Context(), node, input)
+			body, remaining, err = d, d.RemainingMS, e
+		} else {
+			d, e := s.Describe(r.Context(), node, input)
+			body, remaining, err = d, d.RemainingMS, e
+		}
 		if err != nil {
 			referenceMaterialError(w, err)
 			return
@@ -40,14 +49,22 @@ func serveReferenceMaterials(w http.ResponseWriter, r *http.Request, s *problemr
 			referenceMaterialError(w, submission.ErrNode)
 			return
 		}
-		if http.NewResponseController(w).SetWriteDeadline(start.Add(time.Duration(d.RemainingMS)*time.Millisecond)) != nil {
+		deadline := start.Add(time.Duration(remaining) * time.Millisecond)
+		if !time.Now().Before(deadline) || http.NewResponseController(w).SetWriteDeadline(deadline) != nil {
 			referenceMaterialError(w, problemreference.ErrClaimUnavailable)
 			return
 		}
-		writeJSON(w, d)
+		writeJSON(w, body)
 		return
 	}
-	file, deadline, err := s.Download(r.Context(), node, input.MaterialInput, input.Object)
+	var file *problemreference.ReferenceFile
+	var deadline time.Time
+	var err error
+	if r.URL.Path == differentialMaterialPath {
+		file, deadline, err = s.DownloadDifferential(r.Context(), node, input, digest, object)
+	} else {
+		file, deadline, err = s.Download(r.Context(), node, input, object)
+	}
 	if err != nil {
 		referenceMaterialError(w, err)
 		return
@@ -66,10 +83,34 @@ func serveReferenceMaterials(w http.ResponseWriter, r *http.Request, s *problemr
 	ctx, cancel := context.WithDeadline(r.Context(), deadline)
 	defer cancel()
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Length", strconv.FormatInt(input.Object.Size, 10))
-	w.Header().Set("X-Content-SHA256", input.Object.SHA256)
+	w.Header().Set("Content-Length", strconv.FormatInt(object.Size, 10))
+	w.Header().Set("X-Content-SHA256", object.SHA256)
 	// On failure leave a truncated body; never append JSON to private bytes.
 	_, _ = io.Copy(w, referenceDeadlineReader{ctx, file})
+}
+
+func decodeReferenceMaterial(w http.ResponseWriter, r *http.Request) (problemreference.MaterialInput, materialstore.Object, string, bool) {
+	switch r.URL.Path {
+	case differentialDescribePath:
+		var input problemreference.MaterialInput
+		ok := decode(w, r, &input)
+		return input, materialstore.Object{}, "", ok
+	case differentialMaterialPath:
+		var input struct {
+			problemreference.MaterialInput
+			Object materialstore.Object `json:"object"`
+			Digest string               `json:"differential_sha256"`
+		}
+		ok := decode(w, r, &input)
+		return input.MaterialInput, input.Object, input.Digest, ok
+	default:
+		var input struct {
+			problemreference.MaterialInput
+			Object materialstore.Object `json:"object"`
+		}
+		ok := decode(w, r, &input)
+		return input.MaterialInput, input.Object, "", ok
+	}
 }
 
 type referenceDeadlineReader struct {

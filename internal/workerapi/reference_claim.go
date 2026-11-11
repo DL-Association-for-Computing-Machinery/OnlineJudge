@@ -51,10 +51,11 @@ func withReference(next http.Handler, claims problemreference.WorkerClaimer, ren
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		materialPath := r.URL.Path == referenceDescribePath || r.URL.Path == referenceMaterialPath
+		differentialPath := r.URL.Path == differentialDescribePath || r.URL.Path == differentialMaterialPath
 		renewPath := r.URL.Path == referenceRenewPath
 		reportPath := r.URL.Path == referenceReportPath
 		dispatchPath := r.URL.Path == referenceDispatchPath
-		if r.URL.Path != referenceClaimPath && !materialPath && !renewPath && !reportPath && !dispatchPath {
+		if r.URL.Path != referenceClaimPath && !materialPath && !differentialPath && !renewPath && !reportPath && !dispatchPath {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -73,8 +74,8 @@ func withReference(next http.Handler, claims problemreference.WorkerClaimer, ren
 			problem(w, 405, "METHOD_NOT_ALLOWED", "请求方法不支持")
 			return
 		}
-		if materialPath {
-			if materials == nil {
+		if materialPath || differentialPath {
+			if materials == nil || (differentialPath && renew == nil) {
 				problem(w, 404, "NOT_FOUND", "接口不存在")
 				return
 			}

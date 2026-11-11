@@ -36,10 +36,20 @@ type MaterialAuthorizer interface {
 	AuthorizeReferenceMaterials(context.Context, submission.NodeIdentity, MaterialInput) (MaterialAuthorization, error)
 }
 
+type differentialMaterialAuthorizer interface {
+	AuthorizeDifferentialMaterials(context.Context, submission.NodeIdentity, MaterialInput) (MaterialAuthorization, error)
+}
+
 // MaterialDescriptor contains only the canonical, previously frozen plan.
 type MaterialDescriptor struct {
 	Encoding    []byte `json:"plan_encoding"`
 	RemainingMS int64  `json:"remaining_ms"`
+}
+
+// DifferentialDescriptor describes only the separately persisted comparison.
+type DifferentialDescriptor struct {
+	DifferentialExpectedPlan
+	RemainingMS int64 `json:"remaining_ms"`
 }
 
 // ReferenceMaterials couples live reservation checks to immutable object I/O.
@@ -91,26 +101,92 @@ func (s *ReferenceMaterials) Describe(ctx context.Context, node submission.NodeI
 // rechecks authority before returning any private byte. The caller must Close
 // the snapshot and enforce the returned deadline on actual response writes.
 func (s *ReferenceMaterials) Download(ctx context.Context, node submission.NodeIdentity, i MaterialInput, object materialstore.Object) (*ReferenceFile, time.Time, error) {
-	a, err := s.authority.AuthorizeReferenceMaterials(ctx, node, i)
-	if err != nil {
-		return nil, time.Time{}, err
-	}
+	return s.download(ctx, object, func(ctx context.Context) (MaterialAuthorization, error) {
+		return s.authority.AuthorizeReferenceMaterials(ctx, node, i)
+	}, formalObjectAllowed)
+}
+
+func formalObjectAllowed(a MaterialAuthorization, object materialstore.Object) bool {
 	var plan problem.ReferencePlan
 	if json.Unmarshal(a.Plan.Encoding, &plan) != nil {
-		return nil, time.Time{}, ErrClaimUnavailable
+		return false
 	}
 	objects, err := plan.MaterialObjects()
 	if err != nil {
-		return nil, time.Time{}, ErrClaimUnavailable
+		return false
 	}
-	found := false
 	for _, o := range objects {
 		if o == object {
-			found = true
-			break
+			return true
 		}
 	}
-	if !found {
+	return false
+}
+
+// DescribeDifferential is independent of the formal assignment response.
+func (s *ReferenceMaterials) DescribeDifferential(ctx context.Context, node submission.NodeIdentity, i MaterialInput) (DifferentialDescriptor, error) {
+	a, err := s.authorizeDifferential(ctx, node, i)
+	if err != nil {
+		return DifferentialDescriptor{}, err
+	}
+	remaining := time.Until(a.Deadline).Milliseconds()
+	if remaining <= 0 || remaining > 30000 {
+		return DifferentialDescriptor{}, ErrClaimUnavailable
+	}
+	return DifferentialDescriptor{DifferentialExpectedPlan{Encoding: bytes.Clone(a.Plan.Differential.Encoding), SHA256: a.Plan.Differential.SHA256}, remaining}, nil
+}
+
+// DownloadDifferential accepts only one of the two pinned comparison objects
+// and binds both checks to the descriptor digest the Worker observed.
+func (s *ReferenceMaterials) DownloadDifferential(ctx context.Context, node submission.NodeIdentity, i MaterialInput, digest string, object materialstore.Object) (*ReferenceFile, time.Time, error) {
+	return s.download(ctx, object, func(ctx context.Context) (MaterialAuthorization, error) {
+		return s.authorizeDifferential(ctx, node, i)
+	}, func(a MaterialAuthorization, object materialstore.Object) bool {
+		if a.Plan.Differential.SHA256 != digest {
+			return false
+		}
+		plan, err := a.Plan.Differential.CurrentPlan(i.PlanSHA256)
+		if err != nil {
+			return false
+		}
+		objects, err := plan.MaterialObjects(i.PlanSHA256)
+		return err == nil && (object == objects[0] || object == objects[1])
+	})
+}
+
+func (s *ReferenceMaterials) authorizeDifferential(ctx context.Context, node submission.NodeIdentity, i MaterialInput) (MaterialAuthorization, error) {
+	authority, ok := s.authority.(differentialMaterialAuthorizer)
+	if !ok {
+		return MaterialAuthorization{}, ErrClaimUnavailable
+	}
+	a, err := authority.AuthorizeDifferentialMaterials(ctx, node, i)
+	if err != nil {
+		return MaterialAuthorization{}, err
+	}
+	if a.Plan.Differential == nil {
+		return MaterialAuthorization{}, ErrClaimUnavailable
+	}
+	return a, nil
+}
+
+func sameMaterialPlans(a, b ExpectedPlan) bool {
+	if a.SHA256 != b.SHA256 || !bytes.Equal(a.Encoding, b.Encoding) {
+		return false
+	}
+	if a.Differential == nil || b.Differential == nil {
+		return a.Differential == nil && b.Differential == nil
+	}
+	return a.Differential.SHA256 == b.Differential.SHA256 && bytes.Equal(a.Differential.Encoding, b.Differential.Encoding)
+}
+
+func (s *ReferenceMaterials) download(ctx context.Context, object materialstore.Object,
+	authorize func(context.Context) (MaterialAuthorization, error), allowed func(MaterialAuthorization, materialstore.Object) bool,
+) (*ReferenceFile, time.Time, error) {
+	a, err := authorize(ctx)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	if !allowed(a, object) {
 		return nil, time.Time{}, ErrClaimUnavailable
 	}
 	ioctx, cancel := context.WithDeadline(ctx, a.Deadline)
@@ -124,8 +200,8 @@ func (s *ReferenceMaterials) Download(ctx context.Context, node submission.NodeI
 		cancel()
 		return nil, time.Time{}, errors.New("reference material unavailable")
 	}
-	current, e := s.authority.AuthorizeReferenceMaterials(ioctx, node, i)
-	if e != nil || !bytes.Equal(current.Plan.Encoding, a.Plan.Encoding) || current.Plan.SHA256 != a.Plan.SHA256 || file.Object != object || ioctx.Err() != nil {
+	current, e := authorize(ioctx)
+	if e != nil || !sameMaterialPlans(current.Plan, a.Plan) || file.Object != object || ioctx.Err() != nil {
 		_ = file.Close()
 		cancel()
 		if e != nil {
