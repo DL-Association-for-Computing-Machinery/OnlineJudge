@@ -44,7 +44,7 @@ func TestPreviewPreservesTextAndExcludesFormalMaterials(t *testing.T) {
 	if len(f.materials.opened) != 5 || f.repository.gets != 2 {
 		t.Fatal("preview read extra roles or skipped final authorization")
 	}
-	doc, _, err := previewFiles(f.repository.draft, identity.ProblemActor{SubjectID: f.sessions.view.SubjectID}, previewID)
+	doc, _, err := previewFiles(f.repository.draft, f.sessions.view.SubjectID, previewID)
 	if err != nil {
 		t.Fatal(err)
 	}

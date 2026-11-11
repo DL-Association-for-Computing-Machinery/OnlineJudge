@@ -14,7 +14,7 @@ func NewSessionHandler(session http.Handler) http.Handler {
 	bootstrap := NewHandler()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		draft := httptransport.IsPrivateDraftPath(r.URL.Path) || httptransport.IsReferenceRequestPath(r.URL.Path) ||
-			httptransport.IsReviewIntakePath(r.URL.Path) || httptransport.IsReviewEvidencePath(r.URL.Path)
+			httptransport.IsReviewIntakePath(r.URL.Path) || httptransport.IsReviewReadPath(r.URL.Path)
 		switch r.URL.Path {
 		case "/api/v1/session", "/api/v1/session/activity", "/api/v1/session/logout",
 			"/api/v1/session/login/begin", "/api/v1/session/login/complete", "/api/v1/session/login/abandon", "/api/v1/account/password":

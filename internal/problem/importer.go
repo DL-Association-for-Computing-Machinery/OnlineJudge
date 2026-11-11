@@ -86,6 +86,18 @@ func (i *Importer) acquire() error {
 	}
 }
 
+// AcquireMaterialSlot shares the draft runtime's per-instance material budget.
+// The caller owns the returned release and must call it exactly once.
+func (i *Importer) AcquireMaterialSlot() (func(), error) {
+	if i == nil {
+		return nil, ErrInvalid
+	}
+	if err := i.acquire(); err != nil {
+		return nil, err
+	}
+	return func() { <-i.slots }, nil
+}
+
 // Preview reads persisted owner-scoped statement/sample materials. It does not
 // depend on the current import catalog containing the old draft version.
 func (i *Importer) Preview(ctx context.Context, credential redisstore.Credential, id string) (Preview, error) {

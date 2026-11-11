@@ -16,13 +16,21 @@ import (
 )
 
 func reviewEvidenceGET(e *loginEndpoint, id string, cookies []*http.Cookie, subject string) loginResponse {
-	return loginCall(e, "/api/v1/problem-review/"+id+"/evidence", "", cookies, func(r *http.Request) {
+	return reviewReadGET(e, id+"/evidence", cookies, subject)
+}
+
+func reviewMaterialsGET(e *loginEndpoint, id string, cookies []*http.Cookie, subject string) loginResponse {
+	return reviewReadGET(e, id+"/materials", cookies, subject)
+}
+
+func reviewReadGET(e *loginEndpoint, tail string, cookies []*http.Cookie, subject string) loginResponse {
+	return loginCall(e, "/api/v1/problem-review/"+tail, "", cookies, func(r *http.Request) {
 		r.Method = http.MethodGet
 		r.Header.Set("X-OJ-Expected-Subject", subject)
 	})
 }
 
-func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access *identitypg.ProblemAccess, authorCookies []*http.Cookie, owner, draftID, referenceID string) string {
+func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access *identitypg.ProblemAccess, authorCookies []*http.Cookie, owner, draftID, referenceID, root, namespace string) string {
 	t.Helper()
 	var revision string
 	must(t, f.pools[0].QueryRow(f.ctx, `SELECT request_sha256 FROM problem_drafts WHERE id=$1`, draftID).Scan(&revision))
@@ -46,6 +54,9 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 	loginStatus(t, reviewEvidenceGET(x, receipt.ID, nil, reviewer.ID), 401)
 	loginStatus(t, reviewEvidenceGET(x, receipt.ID, cookies, owner), 409)
 	loginStatus(t, reviewEvidenceGET(x, receipt.ID, cookies, reviewer.ID), 403)
+	loginStatus(t, reviewMaterialsGET(x, receipt.ID, nil, reviewer.ID), 401)
+	loginStatus(t, reviewMaterialsGET(x, receipt.ID, cookies, owner), 409)
+	loginStatus(t, reviewMaterialsGET(x, receipt.ID, cookies, reviewer.ID), 403)
 	grant := func(subject string, revision int64, enabled bool) {
 		t.Helper()
 		_, err := access.SetReviewerRole(f.ctx, identity.ProblemRoleChange{SubjectID: subject, ExpectedRevision: revision,
@@ -56,6 +67,7 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 	grant(reviewer.ID, 0, true)
 	loginStatus(t, reviewEvidenceGET(y, receipt.ID, authorCookies, owner), 404)
 	loginStatus(t, reviewEvidenceGET(y, receipt.ID, cookies, reviewer.ID), 404)
+	loginStatus(t, reviewMaterialsGET(y, receipt.ID, cookies, reviewer.ID), 404)
 	store, err := referencepg.NewReviewStore(f.pools[0], access)
 	must(t, err)
 	_, err = store.SetAssignment(f.ctx, problemreference.ReviewAssignmentChange{ReviewID: receipt.ID,
@@ -73,9 +85,50 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 	}
 	loginStatus(t, reviewEvidenceGET(x, draftID, cookies, reviewer.ID), 404)
 	loginStatus(t, reviewEvidenceGET(x, receipt.ID, authorCookies, owner), 404)
+	material := reviewMaterialsGET(y, receipt.ID, cookies, reviewer.ID)
+	loginStatus(t, material, 200)
+	assertReviewMaterials(t, material, receipt, owner, reviewer.ID)
+	t.Run("corrupt_frozen_source", func(t *testing.T) {
+		var hash string
+		must(t, f.pools[0].QueryRow(f.ctx, `SELECT convert_from(plan_encoding,'UTF8')::jsonb #>> '{source,sha256}'
+			FROM problem_reference_expected_plans WHERE request_id=$1`, referenceID).Scan(&hash))
+		defer corruptReviewSource(t, root, hash)()
+		failed := reviewMaterialsGET(y, receipt.ID, cookies, reviewer.ID)
+		loginStatus(t, failed, 503)
+		if strings.Contains(string(failed.body), "Synthetic A + B") || strings.Contains(string(failed.body), "standard_solution") {
+			t.Fatal("corrupt source returned partial private material")
+		}
+	})
+	loginStatus(t, reviewMaterialsGET(x, draftID, cookies, reviewer.ID), 404)
+	loginStatus(t, reviewMaterialsGET(x, referenceID, cookies, reviewer.ID), 404)
+	loginStatus(t, reviewMaterialsGET(x, receipt.ID, authorCookies, owner), 404)
+	loginStatus(t, reviewReadGET(y, receipt.ID+"/materials?hash="+got.EvidenceSHA256, cookies, reviewer.ID), 400)
+	loginStatus(t, reviewReadGET(y, receipt.ID+"/materials/"+got.EvidenceSHA256, cookies, reviewer.ID), 404)
 	grant(reviewer.ID, 1, false)
 	loginStatus(t, reviewEvidenceGET(x, receipt.ID, cookies, reviewer.ID), 403)
+	loginStatus(t, reviewMaterialsGET(x, receipt.ID, cookies, reviewer.ID), 403)
 	grant(reviewer.ID, 2, true)
 	loginStatus(t, reviewEvidenceGET(y, receipt.ID, cookies, reviewer.ID), 404)
+	loginStatus(t, reviewMaterialsGET(y, receipt.ID, cookies, reviewer.ID), 404)
+	testReviewMaterialRaces(t, f, access, store, root, namespace, reviewer.ID, credential, receipt)
 	return receipt.ID
+}
+
+func assertReviewMaterials(t *testing.T, material loginResponse, receipt problemreference.ReviewReceipt, owner, reviewer string) {
+	t.Helper()
+	var got problemreference.ReviewMaterials
+	must(t, json.Unmarshal(material.body, &got))
+	if got.Evidence.ReviewID != receipt.ID || got.Evidence.ImportRevision != receipt.ImportRevision ||
+		got.Statement.DraftID != receipt.DraftID || got.Statement.Version != receipt.ContentVersion ||
+		got.Statement.Markdown != "# Synthetic A + B\n" || len(got.Statement.Examples) != 1 ||
+		got.Statement.Examples[0].Input != "1 2\n" || got.Statement.Examples[0].Output != "3\n" ||
+		got.StandardSolution.Source != "synthetic A+B material; not executed by this test\n" ||
+		len(got.StandardSolution.Dependencies) != 0 {
+		t.Fatal("review materials did not match exact frozen bytes and identity")
+	}
+	for _, denied := range []string{owner, reviewer, "retired-fixture", "original/source/", "correct.cpp", "request_key", "token_sha256", "references"} {
+		if strings.Contains(string(material.body), denied) {
+			t.Fatal("materials exposed private authority, internal paths or raw transport fields")
+		}
+	}
 }

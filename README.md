@@ -402,7 +402,7 @@ OJ_SANDBOX_EXPERIMENT=1 python3 -B tests/integration/live_reference.py \
 
 作者送审的 HTTP 入口可在上述配置内另设 `"review_intake": true`，默认关闭。入口保存本人草稿的完整导入修订和选中的已接纳报告，提供原键回执；见[送审合同](docs/problem-drafts.md#作者送审回执)。页面尚未接入送审，草稿状态不变。
 
-审核证据读取独立设 `"review_access": true`。当前只提供指定审核项的固定验证摘要，详见[审核合同](docs/problem-drafts.md#审核人分配与证据摘要)。维护者用 Docker 工具链构建的命令管理资格和分配，数据库连接由私有环境注入：
+审核证据读取独立设 `"review_access": true`。指定审核人可以按送审 ID 读取固定验证摘要、题面和标程（含计划固定的依赖），详见[审核材料](docs/problem-drafts.md#审核材料读取)。维护者用 Docker 工具链构建的命令管理资格和分配，数据库连接由私有环境注入：
 
 ```sh
 .local/bin/problem-review reviewer-set --subject REVIEWER_ID --expected-revision 0 --enabled true --operator MAINTAINER --reason 'confirmed non-author reviewer'
