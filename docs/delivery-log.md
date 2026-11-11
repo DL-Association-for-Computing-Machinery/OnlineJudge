@@ -1,5 +1,19 @@
 # 工程交付记录
 
+## 2026-11-11：新版题包维护参考复验中止
+
+以 `origin/main 342895601a6d50af7a8529e81bfbfecca719344a` 构建 Darwin arm64 Worker，在原有断网专用槽串行复验 [#151 新题包](#2026-11-11六题输入输出格式逐行排版)，索引 SHA-256 为 `3d52da88342d08c1fce6d2fa0bbeaa4784444a1f36b5dcbac15adf657b0ca537`。从题包重算五份报告的完整导入修订，核对来源锁、内容版本、固定源码和编译依赖、正式点顺序与材料、Plan/Profile 摘要。
+
+| 来源 | 正式点结果 | Worker 确认停机 |
+| --- | --- | --- |
+| `aplusb`、`unionfind`、`zalgorithm`、`suffixarray` | 分别 12、18、29、50 AC，共 109 点 | 是 |
+| `primality_test` | 11 AC；第 12 点 SE，第 13 点未运行 | 否 |
+| `static_range_sum`、`associative_array`、`point_add_range_sum`、`staticrmq`、`convolution_mod` | 批次中止，未启动 | 不适用 |
+
+素性测试第 12 点的宿主 inspect 成功，随后 Run 控制命令和清理超时；停机时排空及首次 inspect 成功，进程枚举和 kill 未在各自期限内返回。脱敏 Docker 事件显示第 12 点对应时段出现 `exec_start run`，kill 和容器退出事件晚于 Worker 失败回报。事后 inspect 为 `exited`、PID 0、未标记 OOM；这些观测不能补充当时缺失的进程确认，也不能确定超时根因。保留 medium 隔离标记；未换槽、清标记、重试或增加预算。
+
+本机私有证据目录为 `/private/tmp/oj-p4-current-run.7UPWTq`；证据校验清单 SHA-256 为 `4fc01aae7a328b37d128ef17e2c1d582b71425c9a21c43943a535eb167999439`。前四题是此次修订的维护验证证据，历史 254 点仅适用于原试验及其绑定身份。此次未执行站内申请、报告接纳或卷积对拍，无数据库、部署或发布状态变化。再次运行前须按[槽所有权与停止](reference-validation.md#槽所有权与停止)单独核验恢复前置证据，原失败仍保留。
+
 ## 2026-11-11：六题输入输出格式逐行排版
 
 基于 `origin/main 1243830`，[固定题源转换](problem-drafts.md#模板与语义映射)把六题九处输入输出格式的 LaTeX 字面量转成逐行显示公式。用同一已复验 v3 来源生成新私有题包，索引 SHA-256 为 `3d52da88342d08c1fce6d2fa0bbeaa4784444a1f36b5dcbac15adf657b0ca537`。逐项比较新旧清单，仅六份题面与对应草稿 JSON 改变，四题内容版本、18 对样例、254 对测试数据及来源证据保持。九处公式与独立按原行序构造的探针相符。

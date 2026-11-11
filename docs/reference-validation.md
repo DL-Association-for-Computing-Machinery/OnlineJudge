@@ -4,7 +4,7 @@ P4 的首个执行入口是维护者显式调用 `worker validate-reference`。�
 
 ## 当前支持范围
 
-只接收固定来源锁 SHA-256 `fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617`。`--source-id`默认A+B；当前版本十项254点均通过固定环境维护接纳，最终CI与合并状态见[交付记录](delivery-log.md#2026-11-04convolution_mod-十来源固定环境接纳)。路径均相对上游源目录：
+只接收固定来源锁 SHA-256 `fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617`。`--source-id`默认A+B。十项254点曾通过[固定环境维护接纳](delivery-log.md#2026-11-04convolution_mod-十来源固定环境接纳)；格式更新后的题包仅[复验通过四题109点](delivery-log.md#2026-11-11新版题包维护参考复验中止)，后续批次因宿主超时中止。路径均相对上游源目录：
 
 | source-id | 固定参考源码 | 完整点数 |
 | --- | --- | --- |
@@ -94,7 +94,7 @@ staticrmq使用独立`ReferenceStaticRMQ`档位（枚举5）、profile `p4-lc-st
 
 专用驱动先核验完整16 MiB输入及stdout8 MiB/stderr4096的全部字节，再核对stdout cap+1完整窄SIGXFSZ证据和stderr4097的固定collector错误。预期拒绝必须恰为一条`validate/stdout/invalid_evidence`且未截断，任何stdout/input清理错误或附加context都失败；合成实际Cached适配器回归验证此门禁，不能把预期负例与清理失败的join当通过。首组及其Stop成功才进入11点CLI。首轮启动失败与Stop未确认仍保留；受控恢复只确认当时安全。用户批准localdev专项重启后，以原源码/制品/预算登记的新观测通过全部字节边界、11AC/Stop，随后独立原五来源串行回归也通过。该证据只支持当前固定环境维护入口，不解释旧启动根因或证明长期稳定；完整证据见[交付记录](delivery-log.md)。物理copy-out默认1 MiB保持，cached stdout独立拉取与原始字节保真已实测。
 
-当前十题254点均完成固定环境维护参考验证，最终CI与合并状态见[交付记录](delivery-log.md#2026-11-04convolution_mod-十来源固定环境接纳)，历史失败保持。持久化申请和受信 Worker 报告见[参考报告接纳](reference-requests.md#参考报告接纳)；完整质量与非作者终审/发布仍未完成；草稿数据库仍为not-run、生产配置null、publication blocked，本入口不写入这些状态。
+持久化申请和受信 Worker 报告见[参考报告接纳](reference-requests.md#参考报告接纳)；完整质量与非作者终审/发布仍未完成；草稿数据库仍为not-run、生产配置null、publication blocked，本入口不写入这些状态。
 
 ### associative_array参考验证
 
@@ -188,7 +188,7 @@ inspect/command的`call_attempted`只证明调用该函数；`local_process_star
 
 新增数据不进入Profile/Plan；成功JSON/schema和既有错误`Is/As`语义保持。元数据检索与公开投影分别有64槽界限；公开投影在provider终止节点只读其自身类别，裸provider未声明类别时可为unknown，不重开嵌套遍历。总条目仍最多八条，字段不含命令/路径/缓存ID/材料/原错误；外来getter、Unwrap或类别方法自身成本不由槽计数保证。缺少`host_trace`可表示能力不适用、数据无效/歧义或检索受限，不能证明没有Host调用。
 
-范围只覆盖RoundTrip控制请求（GET元数据、POST/run、DELETE），不覆盖Host.Start/Stop/Verify或独立文件传输，也不能回溯已成功返回的输入回读内部耗时。Host成功返回、随后GoJudge JSON decode失败时没有Host trace，不通过成功响应侧通道补造证据。诊断字段本身不是故障修复、自动准入或重试授权；#114与#119原失败保持，具体版本的准入状态见[最新接纳记录](delivery-log.md#2026-11-04convolution_mod-十来源固定环境接纳)。如需继续调查，应另行预注册可检验假设。
+范围只覆盖RoundTrip控制请求（GET元数据、POST/run、DELETE），不覆盖Host.Start/Stop/Verify或独立文件传输，也不能回溯已成功返回的输入回读内部耗时。Host成功返回、随后GoJudge JSON decode失败时没有Host trace，不通过成功响应侧通道补造证据。诊断字段本身不是故障修复、自动准入或重试授权；#114与#119原失败保持，新版复验结果见[交付记录](delivery-log.md#2026-11-11新版题包维护参考复验中止)。如需继续调查，应另行预注册可检验假设。
 
 ## 槽所有权与停止
 
@@ -208,6 +208,6 @@ Host的文件能力与原M0 RoundTrip分开：仅固定loopback文件路由、�
 
 Stop内部仍为10秒总预算，保持原调用顺序和零重试。枚举/解析失败仍尝试kill；同时失败时优先记录kill诊断，不能由此推定枚举成功。每次探针成功后才递增confirmed，首个失败立即结束。`pid_probe/pid_present`仅表示该时刻PID路径存在，可能是PID复用，不证明原进程仍活着；`proc_unavailable`表示无法建立procfs前提。探针唯有明确“不存在”才成功，表达式/命令异常仍失败；超时不能被当作PID存在或退出证明。宿主命令的既有128KiB＋1字节输出界限由显式组合缓冲执行，避免标准库ReadFrom绕过限长Write。
 
-数据库中的草稿仍为`not-run`，既有来源准备报告不充当本站运行记录。十题维护参考验证已通过，持久化报告接纳见[参考申请合同](reference-requests.md#参考报告接纳)；后续须完成完整质量验证、非作者终审和原子发布。
+数据库中的草稿仍为`not-run`，既有来源准备报告不充当本站运行记录。持久化报告接纳见[参考申请合同](reference-requests.md#参考报告接纳)；后续须完成完整质量验证、非作者终审和原子发布。
 
 首轮真实专项曾完整通过，但另两次实测出现停止确认未通过：包括额外12点全部AC后仍返回SE、保留隔离。后续受控recover仅确认当时安全，不追认原报告；旧报告没有新诊断，不能用当前代码反推其失败原因。后来[PR #114](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/114)的旧suffixarray回归又出现第11点SE、Stop kill/deadline且原容器仍运行；外部停止和受控恢复不改变原失败结论。当前已补停止步骤与执行失败阶段诊断；原根因尚未定位，后续新版本已通过十来源固定环境维护接纳，长期稳定性仍未知，不自动重试至绿或放宽Stop。历史与本次证据见[交付记录](delivery-log.md)。
