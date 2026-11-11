@@ -16,8 +16,8 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
 )
 
-// VerifiedReference owns a complete anonymous snapshot, usable only within its
-// conservative reservation deadline and caller context. It never grants execution.
+// VerifiedReference owns a complete anonymous snapshot bound to its context.
+// The snapshot does not grant execution and cannot be rebound.
 type VerifiedReference struct {
 	*problem.ReferenceSnapshot
 	cancel context.CancelFunc
@@ -29,6 +29,17 @@ func (v *VerifiedReference) Close() error { v.cancel(); return v.ReferenceSnapsh
 // FetchReference downloads and hashes the complete expected material set once,
 // without caching, retries, renewal or execution. The caller must Close it.
 func (a *Acquirer) FetchReference(ctx context.Context, claim problemreference.WorkerClaim) (*VerifiedReference, error) {
+	return a.fetchReference(ctx, claim, false)
+}
+
+// FetchReferenceForExecution binds the snapshot to a single lease-supervised
+// context while still enforcing the descriptor's original download deadline.
+// It is only for a caller that holds the slot and cancels ctx on authority loss.
+func (a *Acquirer) FetchReferenceForExecution(ctx context.Context, claim problemreference.WorkerClaim) (*VerifiedReference, error) {
+	return a.fetchReference(ctx, claim, true)
+}
+
+func (a *Acquirer) fetchReference(ctx context.Context, claim problemreference.WorkerClaim, supervised bool) (*VerifiedReference, error) {
 	input := problemreference.MaterialInput{ClaimInput: problemreference.ClaimInput{RequestID: claim.RequestID, SourceID: claim.SourceID, PlanSHA256: claim.PlanSHA256}, Token: claim.Token}
 	if a == nil || ctx == nil || !claim.ValidFor(input.ClaimInput) || !input.Valid() {
 		return nil, problemreference.ErrInvalid
@@ -59,15 +70,24 @@ func (a *Acquirer) FetchReference(ctx context.Context, claim problemreference.Wo
 	if !time.Now().Before(deadline) {
 		return nil, ErrMaterials
 	}
-	fetchCtx, cancel := context.WithDeadline(ctx, deadline)
-	snapshot, err := plan.FreezeMaterials(fetchCtx, func(ctx context.Context, o materialstore.Object) (io.ReadCloser, error) {
+	open := func(ctx context.Context, o materialstore.Object) (io.ReadCloser, error) {
 		return a.referenceObject(ctx, input, o)
-	})
+	}
+	var snapshot *problem.ReferenceSnapshot
+	var lifetime context.Context
+	var cancel context.CancelFunc
+	if supervised {
+		lifetime, cancel = context.WithCancel(ctx)
+		snapshot, err = plan.FreezeMaterialsWithDownloadDeadline(lifetime, deadline, open)
+	} else {
+		lifetime, cancel = context.WithDeadline(ctx, deadline)
+		snapshot, err = plan.FreezeMaterials(lifetime, open)
+	}
 	if err != nil {
 		cancel()
 		return nil, ErrMaterials
 	}
-	if fetchCtx.Err() != nil {
+	if lifetime.Err() != nil || !time.Now().Before(deadline) {
 		_ = snapshot.Close()
 		cancel()
 		return nil, ErrMaterials

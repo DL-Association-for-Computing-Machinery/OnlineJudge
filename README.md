@@ -327,6 +327,10 @@ env -u OJ_WORKER_M0_SLOT -u OJ_WORKER_M0_DUAL_EXPERIMENT OJ_SANDBOX_EXPERIMENT=1
 
 命令获取同机槽后只发送一次领取，再在同一锁内下载并校验冻结计划的全部材料，关闭匿名快照后退出；数据库预留仍按原时钟在 30 秒后失效。控制端还须配置 `OJ_WORKER_REFERENCE_MATERIAL_ROOT`，使用草稿入库的已存在私有对象根（Linux、当前 UID、0700；上限 128 MiB/对象，同时一个快照），与 M0 的 `OJ_MATERIAL_ROOT` 含义不同。无题源执行、续租或回报；未知响应和下载失败不自动重试，低带宽下载大题可能超时。见[参考材料合同](docs/reference-requests.md#有效预留内的材料下发)。
 
+同机受信执行另需控制端 `OJ_WORKER_REFERENCE_EXECUTION=1`，以及已预配且停止的固定隔离槽。使用同一参数运行 `.local/bin/worker run-reference REQUEST_ID SOURCE_ID EXPECTED_PLAN_SHA256`（同样要求 `OJ_SANDBOX_EXPERIMENT=1` 且清空双槽/M0 槽覆盖）。命令在原锁内续期、下载、执行并确认停止；不创建、恢复或替换容器，不上报可信结果。停止无法确认时保留隔离，见[持槽执行合同](docs/reference-requests.md#同机持槽参考执行)。
+
+上述 Darwin 专项产物 `worker-validation.test` 可在专用固定离线槽运行 `-test.run '^TestClaimedReferenceOwnedSandbox$' -test.v`，显式设置 `OJ_REFERENCE_LEASED_SANDBOX_TEST=1 OJ_SANDBOX_EXPERIMENT=1` 并清空槽覆盖；须与其他宿主专项串行。只使用固定合成 A+B 和续期替身，分别验证真实执行与续期拒绝后的停止。
+
 
 ### 显式启用私有草稿 HTTP
 

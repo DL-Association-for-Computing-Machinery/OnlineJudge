@@ -133,8 +133,15 @@ func (r *LeasedRunner) Judge(ctx context.Context, token string, d materials.Desc
 }
 
 func (r *LeasedRunner) refresh(ctx context.Context, token string, previous time.Time) (time.Time, error) {
+	return refreshLease(ctx, func(ctx context.Context) error { return r.renew(ctx, token) }, previous, r.budget, r.requestTimeout)
+}
+
+func refreshLease(ctx context.Context, renew func(context.Context) error, previous time.Time, budget, timeout time.Duration) (time.Time, error) {
+	if err := ctx.Err(); err != nil {
+		return time.Time{}, err
+	}
 	start := time.Now()
-	deadline := start.Add(r.requestTimeout)
+	deadline := start.Add(timeout)
 	if previous.Before(deadline) {
 		deadline = previous
 	}
@@ -143,11 +150,11 @@ func (r *LeasedRunner) refresh(ctx context.Context, token string, previous time.
 	}
 	requestCtx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
-	err := r.renew(requestCtx, token)
+	err := renew(requestCtx)
 	if err == nil {
 		err = requestCtx.Err()
 	}
-	next := start.Add(r.budget)
+	next := start.Add(budget)
 	if err == nil && (!time.Now().Before(deadline) || !time.Now().Before(next)) {
 		err = ErrLeaseLost
 	}

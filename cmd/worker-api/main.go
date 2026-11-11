@@ -32,6 +32,12 @@ func main() {
 }
 
 func run(ctx context.Context, logger *slog.Logger) error {
+	referenceNodeID := os.Getenv("OJ_WORKER_REFERENCE_NODE_ID")
+	referenceRoot := os.Getenv("OJ_WORKER_REFERENCE_MATERIAL_ROOT")
+	referenceExecution, err := referenceExecutionEnabled(os.Getenv("OJ_WORKER_REFERENCE_EXECUTION"), referenceNodeID, referenceRoot)
+	if err != nil {
+		return err
+	}
 	addr := os.Getenv("OJ_WORKER_API_ADDR")
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil || net.ParseIP(host) == nil || !net.ParseIP(host).IsLoopback() {
@@ -74,11 +80,11 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		materialService = materials.New(store, reader)
 	}
 	var referenceObjects problem.ReferenceObjectReader
-	if root := os.Getenv("OJ_WORKER_REFERENCE_MATERIAL_ROOT"); root != "" {
-		if os.Getenv("OJ_WORKER_REFERENCE_NODE_ID") == "" {
+	if referenceRoot != "" {
+		if referenceNodeID == "" {
 			return errors.New("reference material root requires a reference node")
 		}
-		objects, err := materialstore.OpenLocal(materialstore.Config{Root: root, MaxObjectBytes: 128 << 20, MaxInFlight: 1})
+		objects, err := materialstore.OpenLocal(materialstore.Config{Root: referenceRoot, MaxObjectBytes: 128 << 20, MaxInFlight: 1})
 		if err != nil {
 			return err
 		}
@@ -86,7 +92,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		referenceObjects = objects
 	}
 	handler, err := configureReferenceClaims(workerapi.NewHandler(store, tlsConfig.ClientCAs, materialService),
-		pool, tlsConfig.ClientCAs, os.Getenv("OJ_WORKER_REFERENCE_NODE_ID"), referenceObjects)
+		pool, tlsConfig.ClientCAs, referenceNodeID, referenceObjects, referenceExecution)
 	if err != nil {
 		return err
 	}

@@ -11,18 +11,34 @@ import (
 )
 
 const referenceClaimPath = "/api/v1/worker/reference/claim"
+const referenceRenewPath = "/api/v1/worker/reference/renew"
 
 var referenceIdentityURI = regexp.MustCompile(`^spiffe://onlinejudge/reference-worker/([A-Za-z0-9_-]{1,128})/([1-9][0-9]{0,18})$`)
 
 // WithReferenceClaims adds the opt-in route without accepting reference
 // credentials on submission routes or regular credentials on reference claims.
 func WithReferenceClaims(next http.Handler, claims problemreference.WorkerClaimer, roots *x509.CertPool, materials ...*problemreference.ReferenceMaterials) http.Handler {
+	var service *problemreference.ReferenceMaterials
+	if len(materials) != 0 {
+		service = materials[0]
+	}
+	return withReference(next, claims, nil, roots, service)
+}
+
+// WithReferenceExecution additionally enables renewal for the dedicated node.
+// Only the loopback single-host Worker may use this capability.
+func WithReferenceExecution(next http.Handler, claims problemreference.WorkerClaimer, renew problemreference.WorkerRenewer, roots *x509.CertPool, materials *problemreference.ReferenceMaterials) http.Handler {
+	return withReference(next, claims, renew, roots, materials)
+}
+
+func withReference(next http.Handler, claims problemreference.WorkerClaimer, renew problemreference.WorkerRenewer, roots *x509.CertPool, materials *problemreference.ReferenceMaterials) http.Handler {
 	if claims == nil {
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		materialPath := r.URL.Path == referenceDescribePath || r.URL.Path == referenceMaterialPath
-		if r.URL.Path != referenceClaimPath && !materialPath {
+		renewPath := r.URL.Path == referenceRenewPath
+		if r.URL.Path != referenceClaimPath && !materialPath && !renewPath {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -42,11 +58,35 @@ func WithReferenceClaims(next http.Handler, claims problemreference.WorkerClaime
 			return
 		}
 		if materialPath {
-			if len(materials) == 0 || materials[0] == nil {
+			if materials == nil {
 				problem(w, 404, "NOT_FOUND", "接口不存在")
 				return
 			}
-			serveReferenceMaterials(w, r, materials[0], node, roots)
+			serveReferenceMaterials(w, r, materials, node, roots)
+			return
+		}
+		if renewPath {
+			if renew == nil || materials == nil {
+				problem(w, 404, "NOT_FOUND", "接口不存在")
+				return
+			}
+			var input problemreference.MaterialInput
+			if !decode(w, r, &input) {
+				return
+			}
+			if !input.Valid() {
+				problem(w, 400, "INVALID_REQUEST", "参考续期格式无效")
+				return
+			}
+			claim, err := renew.RenewReference(r.Context(), node, input)
+			switch {
+			case err != nil:
+				referenceMaterialError(w, err)
+			case !claim.ValidFor(input.ClaimInput) || claim.Token != input.Token:
+				problem(w, 503, "WORKER_UNAVAILABLE", "续期状态未知；必须停止")
+			default:
+				writeJSON(w, claim)
+			}
 			return
 		}
 		var input problemreference.ClaimInput
