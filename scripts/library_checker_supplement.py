@@ -25,6 +25,10 @@ class Supplement(NamedTuple):
 
 
 SUPPLEMENTS = {
+    "associative_array": Supplement("oj-local:associative-array-boundaries-v1",
+                                    "cb50459ffb3537de06ff6b931ea9047842d92a9420c39e37f9fb3efaa73e1271",
+                                    "4d6dd8e3fe97a0e1ec6585ff538219d811f660bdfff7cc2172bf6092cf858928",
+                                    "d5a23dd68deccc0ff55f928344287b96e3aa9f3cc023c727d0ad822dae140a1d"),
     "zalgorithm": Supplement("oj-local:zalgorithm-scale-v1",
                              "151da5a28d0bd733fe4837547ec909137a36b0e532409c93dfd7bf3c2a7e6b41",
                              "965239246cbdbd63f1641cfcf551d9c8f3a65cd558e194668ad845cac1e39711",
@@ -41,7 +45,11 @@ SUPPLEMENTS = {
 
 
 def boundary_cases(problem):
-    if problem == "zalgorithm":
+    if problem == "associative_array":
+        maximum = 10**18
+        yield f"1\n1 {maximum}\n".encode("ascii"), b"0\n"
+        yield f"2\n0 {maximum} {maximum}\n1 {maximum}\n".encode("ascii"), f"{maximum}\n".encode("ascii")
+    elif problem == "zalgorithm":
         for n in (1, 500000):
             yield b"a" * n + b"\n", (" ".join(map(str, range(n, 0, -1))) + "\n").encode("ascii")
     elif problem == "aplusb":
