@@ -172,6 +172,8 @@ phase为verify、upload、readback、control、stdout_read、validate、delete�
 
 覆盖缓存适配器Verify/Compile/Run/Remove、Runner调用/结果校验、快照关闭及最终取消；不承诺覆盖Host.Start、材料预检或所有操作系统错误。control仅表示控制调用失败，不证明服务端执行或daemon接收。执行与停止诊断可同时持久化，均不改变SE、停止/dirty门禁、资源预算、零重试或publication blocked；旧报告不反推新字段，也不提供恢复权限。
 
+专用 `run-reference` 和 `run-next-reference` 在已领取任务的执行或收尾失败后，向 Worker 本地日志写一条 `参考执行未完成` 事件。已有逐点诊断时保留同样的有界 `execution_diagnostic`；`stop_state` 区分 `not_attempted`、`confirmed` 和 `unconfirmed`，停止未确认时附 `stop_diagnostic`，清除槽标记失败另用 `slot_cleanup_failed` 标识。事件只包含固定来源 ID 和这些诊断，不包含申请 ID、令牌、材料、缓存 ID 或原始错误。它不写失败报告到控制端，也不修改原退出错误、隔离、续期或停机规则。没有逐点诊断的失败不补造点号；旧日志不因此获得新证据。
+
 `Host.RoundTrip`失败时，对应条目可选`host_trace`保留以下固定阶段的前缀，最多五项：
 
 | 阶段 | 范围 |

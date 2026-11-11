@@ -110,7 +110,7 @@ MediumBulk的共享槽/原tier保留、两端256/512MiB累计额度及失败清�
 
 SIGXFSZ/OLE的纯响应、分类和冻结摘要回归随普通root后端race执行；真实单文件写入、同一Worker/LeasedRunner及容器生命周期继续AC、持久结果和双控制端回放由显式 `report` 专项执行，普通CI不运行该沙箱程序。准确Run-only支持边界见[判题设计](architecture/judging-design.md#53-统一结果分类与单点异常归因)。
 
-执行诊断的阶段/角色/安全类别、主错及多清理错误、独立context、64槽宽/深/循环/空分支、8/9条全局上限、并发副本和成功JSON兼容回归随backend运行。控制transport/body/decode与宿主inspect/file transfer分别验证既有context及错误接口契约；owner验证执行与停止诊断同时失败的Finalize、报告持久化和quarantine。测试使用替身，不制造真实Docker停止失败；普通CI不据此解释#114的旧故障。
+执行诊断的阶段/角色/安全类别、主错及多清理错误、独立context、64槽宽/深/循环/空分支、8/9条全局上限、并发副本和成功JSON兼容回归随backend运行。控制transport/body/decode与宿主inspect/file transfer分别验证既有context及错误接口契约；owner验证执行与停止诊断同时失败的Finalize、报告持久化和quarantine。专用 Worker 另经实际 owner 注入第一个点的输入上传超时，分别验证停机确认与不明的 JSON 诊断、脱敏和零报告。测试使用替身，不制造真实Docker停止失败；普通CI不据此解释历史故障。
 
 ### 当前治理流水线
 

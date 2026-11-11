@@ -112,7 +112,7 @@ func TestClaimedConvolutionOwnedSandbox(t *testing.T) {
 	reported := false
 	fault := os.Getenv("OJ_CONVOLUTION_LEASE_LOSS") == "1"
 	ready := make(chan struct{})
-	err = runClaimedReference(t.Context(), lock, claim, func(context.Context, problemreference.WorkerClaim) (referenceExecutionMaterials, error) {
+	err = runClaimedReference(t.Context(), lock, claim, nil, func(context.Context, problemreference.WorkerClaim) (referenceExecutionMaterials, error) {
 		return referenceExecutionMaterials{snapshot: snapshot, close: snapshot.Close, comparison: &frozen}, nil
 	}, func(context.Context, problemreference.WorkerClaim) error {
 		select {
