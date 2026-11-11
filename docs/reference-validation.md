@@ -4,7 +4,7 @@ P4 的首个执行入口是维护者显式调用 `worker validate-reference`。�
 
 ## 当前支持范围
 
-只接收固定来源锁 SHA-256 `fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617`。`--source-id`默认A+B。十项254点曾通过[固定环境维护接纳](delivery-log.md#2026-11-04convolution_mod-十来源固定环境接纳)；格式更新后的题包仅[复验通过四题109点](delivery-log.md#2026-11-11新版题包维护参考复验中止)，后续批次因宿主超时中止。路径均相对上游源目录：
+只接收固定来源锁 SHA-256 `fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617`。`--source-id` 默认 A+B。[#151 新题包](delivery-log.md#2026-11-11新版题包十题参考复验与卷积报告接纳)在固定环境中取得十题254点 AC 及停止确认，第一次批次中止的失败仍保留。路径均相对上游源目录：
 
 | source-id | 固定参考源码 | 完整点数 |
 | --- | --- | --- |
@@ -188,7 +188,7 @@ inspect/command的`call_attempted`只证明调用该函数；`local_process_star
 
 新增数据不进入Profile/Plan；成功JSON/schema和既有错误`Is/As`语义保持。元数据检索与公开投影分别有64槽界限；公开投影在provider终止节点只读其自身类别，裸provider未声明类别时可为unknown，不重开嵌套遍历。总条目仍最多八条，字段不含命令/路径/缓存ID/材料/原错误；外来getter、Unwrap或类别方法自身成本不由槽计数保证。缺少`host_trace`可表示能力不适用、数据无效/歧义或检索受限，不能证明没有Host调用。
 
-范围只覆盖RoundTrip控制请求（GET元数据、POST/run、DELETE），不覆盖Host.Start/Stop/Verify或独立文件传输，也不能回溯已成功返回的输入回读内部耗时。Host成功返回、随后GoJudge JSON decode失败时没有Host trace，不通过成功响应侧通道补造证据。诊断字段本身不是故障修复、自动准入或重试授权；#114与#119原失败保持，新版复验结果见[交付记录](delivery-log.md#2026-11-11新版题包维护参考复验中止)。如需继续调查，应另行预注册可检验假设。
+范围只覆盖RoundTrip控制请求（GET元数据、POST/run、DELETE），不覆盖Host.Start/Stop/Verify或独立文件传输，也不能回溯已成功返回的输入回读内部耗时。Host成功返回、随后GoJudge JSON decode失败时没有Host trace，不通过成功响应侧通道补造证据。诊断字段本身不是故障修复、自动准入或重试授权；#114与#119原失败保持，新版素性测试超时证据见[首轮中止记录](delivery-log.md#2026-11-11新版题包维护参考复验中止)。如需继续调查，应另行预注册可检验假设。
 
 ## 槽所有权与停止
 
