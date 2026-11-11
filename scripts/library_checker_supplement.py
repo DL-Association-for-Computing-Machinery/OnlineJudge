@@ -37,6 +37,10 @@ SUPPLEMENTS = {
                          "87ebb9680aa3abe190b61d4a5ccac1dc83e48b29656364e445e36fabe7467cc9",
                          "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd",
                          "d8426964248ef07e1aae00ab12c8de690a9fdae147117b0251fa853cb4769c7b"),
+    "staticrmq": Supplement("oj-local:staticrmq-single-query-max-v1",
+                            "c5eef70e8f853a4525257371c895f01bd2ac40222d12cc72b83f3782a712186c",
+                            "194da8b53c88aa634cb5c030c684a355a59b224a00c7d74422bc35b333d3a5f0",
+                            "e9efcad95444d941be0bef86d9a9e834b340b69d0f921e6e7b81eedb300257b8"),
     "point_add_range_sum": Supplement("oj-local:point-add-range-sum-boundaries-v1",
                                       "e1fb107ff818b642bb5976ff35e7aaff5e8bb2ceb333972cb3acaf1256476bb1",
                                       "188f392cd74cc6bb2156a0a444d0f232d0ea71ee746cb0523fba2c914d79dc25",
@@ -71,6 +75,9 @@ def boundary_cases(problem):
     elif problem == "unionfind":
         yield b"1 1\n1 0 0\n", b"1\n"
         yield b"1 1\n0 0 0\n", b""
+    elif problem == "staticrmq":
+        maximum = 10**9
+        yield f"4 1\n0 {maximum} {maximum} 1\n1 3\n".encode("ascii"), f"{maximum}\n".encode("ascii")
     elif problem == "static_range_sum":
         for value in (0, 10**9):
             yield f"1 1\n{value}\n0 1\n".encode("ascii"), f"{value}\n".encode("ascii")

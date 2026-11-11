@@ -50,14 +50,18 @@ func testChangedLocalPlan(t *testing.T, version string, revision localReferenceR
 	if revision.sourceID == otherSource {
 		otherSource = "library-checker:zalgorithm"
 	}
+	swapWith := first + 1
+	if len(revision.suffix) == 1 {
+		swapWith = first - 1 // Move the sole local point into the upstream prefix.
+	}
 	for _, tc := range []struct {
 		name   string
 		change func(*ReferencePlan)
 	}{
 		{"omitted point", func(p *ReferencePlan) { p.Cases = p.Cases[:len(p.Cases)-1] }},
-		{"swapped points", func(p *ReferencePlan) { p.Cases[first], p.Cases[first+1] = p.Cases[first+1], p.Cases[first] }},
-		{"different input", func(p *ReferencePlan) { p.Cases[first+1].Input = p.Cases[first].Input }},
-		{"different answer", func(p *ReferencePlan) { p.Cases[first+1].Answer = p.Cases[first].Answer }},
+		{"swapped points", func(p *ReferencePlan) { p.Cases[first], p.Cases[swapWith] = p.Cases[swapWith], p.Cases[first] }},
+		{"different input", func(p *ReferencePlan) { p.Cases[first].Input.SHA256 = p.Version }},
+		{"different answer", func(p *ReferencePlan) { p.Cases[first].Answer.SHA256 = p.Version }},
 		{"different problem", func(p *ReferencePlan) { p.SourceID = otherSource }},
 		{"different source", func(p *ReferencePlan) { p.Source = p.Definition }},
 		{"different upstream catalog", func(p *ReferencePlan) { p.Hashes = p.Definition }},

@@ -169,7 +169,7 @@ def run(bundle, toolchain, out, supplement):
                     "temporary fixture container was not removed")
             formal, comparison = {
                 "associative_array": (22, 0), "zalgorithm": (31, 0), "aplusb": (17, 0), "unionfind": (20, 0),
-                "static_range_sum": (13, 0), "point_add_range_sum": (23, 0), "": (254, 24),
+                "static_range_sum": (13, 0), "point_add_range_sum": (23, 0), "staticrmq": (28, 0), "": (254, 24),
             }[supplement]
             require(sum(row["formal_ac"] for row in result) == formal and sum(row["comparison_matched"] for row in result) == comparison,
                     "incomplete accepted coverage")
@@ -199,6 +199,8 @@ def main():
                        help="run only the pinned 17-point local A+B revision")
     local.add_argument("--unionfind-local-data", dest="supplement", action="store_const", const="unionfind",
                        help="run only the pinned 20-point local unionfind revision")
+    local.add_argument("--static-rmq-local-data", dest="supplement", action="store_const", const="staticrmq",
+                       help="run only the pinned 28-point local static range minimum revision")
     local.add_argument("--point-add-range-sum-local-data", dest="supplement", action="store_const", const="point_add_range_sum",
                        help="run only the pinned 23-point local point-add range sum revision")
     local.add_argument("--static-range-sum-local-data", dest="supplement", action="store_const", const="static_range_sum",

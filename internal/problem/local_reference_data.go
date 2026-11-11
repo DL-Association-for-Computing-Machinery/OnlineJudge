@@ -7,6 +7,7 @@ const (
 	zAlgorithmLocalVersion   = "965239246cbdbd63f1641cfcf551d9c8f3a65cd558e194668ad845cac1e39711"
 	aPlusBLocalVersion       = "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd"
 	unionFindLocalVersion    = "42e62825925bf727c394f3435c2b50f850758576c392d082fb628f7219e4f07d"
+	staticRMQLocalVersion    = "194da8b53c88aa634cb5c030c684a355a59b224a00c7d74422bc35b333d3a5f0"
 	pointAddLocalVersion     = "188f392cd74cc6bb2156a0a444d0f232d0ea71ee746cb0523fba2c914d79dc25"
 	staticSumLocalVersion    = "a93676964a96fb5dd0320441307eb0bb11ed41b0a1e1d4441c47d124a644e375"
 )
@@ -89,6 +90,19 @@ var localReferenceRevisions = map[string]localReferenceRevision{
 				ID:     "case-0017",
 				Input:  materialstore.Object{SHA256: "4d0b3116b1f3552d37cd16d57c533acc42ae47e198d201c0173bd7979528b1e2", Size: 21},
 				Answer: materialstore.Object{SHA256: "873cf3b1e4f23454700801f646b785edf54fe87150bbda8c8c0a7f657fc01979", Size: 11},
+			},
+		},
+	},
+	staticRMQLocalVersion: {
+		label: "oj-local:staticrmq-single-query-max-v1", sourceID: "library-checker:staticrmq", upstream: 27,
+		source:     materialstore.Object{SHA256: "a5586c48fa83887a773876dc5377ab6c5f7b59264051d6484ea7712ca5aafb3c", Size: 1890},
+		definition: materialstore.Object{SHA256: "6efb4f756209387d8046d01b25cd927151205f2b5b074fb171b5c8fc983263cd", Size: 488},
+		hashes:     materialstore.Object{SHA256: "18e6c6649f5a76cb68f0ddf67c1273b43d032b1c17ebbd8a5c002b90b5ab14bb", Size: 4817},
+		suffix: []ReferenceCase{
+			{
+				ID:     "case-0028",
+				Input:  materialstore.Object{SHA256: "30ad661dba75866c8b8ae4977d14abd8081b2cdf190133af4eb4d027cc263fe0", Size: 34},
+				Answer: materialstore.Object{SHA256: "8bd5a23c3aef1243c78bac155b39b9d57a43d8c49665ccf6f42acf2992a94afa", Size: 11},
 			},
 		},
 	},
