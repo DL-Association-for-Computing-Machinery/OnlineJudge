@@ -25,6 +25,7 @@ type referenceHost struct {
 	stopCancel context.CancelFunc
 	fileIDs    int
 	fileData   map[string][]byte
+	stdout     []byte
 }
 
 func (h *referenceHost) UploadFile(ctx context.Context, data []byte) (string, error) {
@@ -70,6 +71,9 @@ func (h *referenceHost) RoundTrip(r *http.Request) (*http.Response, error) {
 		if h.requests > 1 {
 			id := "stdout-" + strconv.Itoa(h.requests)
 			h.fileData[id] = []byte("3\n")
+			if h.stdout != nil {
+				h.fileData[id] = h.stdout
+			}
 			body = `[{"status":"Accepted","exitStatus":0,"time":1,"memory":1,"files":{"stderr":""},"fileIds":{"stdout":"` + id + `"}}]`
 			if h.cancel != nil {
 				h.cancel()

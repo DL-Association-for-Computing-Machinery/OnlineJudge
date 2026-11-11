@@ -87,6 +87,20 @@ go run ./cmd/checker-candidate --bundle "$PRIVATE_BUNDLE" \
 
 成功时输出候选配置和摘要。命令只检查冻结答案，既不运行题源程序，也不采纳生产限额；见[预检契约](docs/checker-admission.md#生产检查器候选预检)。
 
+### 候选检查器原始输出试跑
+
+在已配置且停止的专用参考槽上，可用上一步生成、另行核验的候选摘要试跑 A+B。沿用下节构建的宿主 `worker`，将来源锁、题包和输出目录写成绝对路径；输出目录必须新建且在题包之外。此固定槽的采集上限是 262144 字节，候选必须明确指定同一上限和自己的 token 限额；这些不是生产默认值。
+
+```sh
+env -u OJ_WORKER_M0_SLOT -u OJ_WORKER_M0_DUAL_EXPERIMENT OJ_SANDBOX_EXPERIMENT=1 \
+  .local/validation-host/worker validate-checker-candidate --start-stopped-slot \
+  --bundle "$PRIVATE_BUNDLE" --source-lock "$PWD/config/problem-sources/library-checker.json" \
+  --expected-plan "$TRUSTED_FORMAL_PLAN_SHA256" --expected-candidate "$TRUSTED_CANDIDATE_SHA256" \
+  --bytes "$CANDIDATE_BYTES" --token-bytes "$CANDIDATE_TOKEN_BYTES" --output "$NEW_TRIAL_REPORT"
+```
+
+报告只含候选、计划和档位绑定及运行结果，不含原始输出。运行或停止未确认时保留 `INCOMPLETE`，启动失败可能没有报告；如需恢复，只按现有参考槽恢复流程核对同一容器身份。见[试跑契约](docs/checker-admission.md#候选检查器原始输出试跑)。
+
 ### 私有草稿参考验证
 
 [#151 新题包](docs/delivery-log.md#2026-11-11新版题包十题参考复验与卷积报告接纳)的十题254点均通过固定环境维护参考验证并确认停止。最初批次因素性测试宿主超时中止，受控恢复后以新报告完成余下六题；[原失败](docs/delivery-log.md#2026-11-11新版题包维护参考复验中止)仍保留，根因未知。维护入口不写数据库验证状态或发布。需要已配置且停止的专用槽、已有固定镜像与 Docker Desktop、macOS arm64；命令不会自动创建、替换或恢复槽。使用已有 Go 1.26.11 工具链镜像构建独立宿主产物（不与 Linux 检查共用输出）：
@@ -328,7 +342,7 @@ python3 -B -m unittest discover -s tests/governance -p test_problem_drafts.py -v
 
 输入须为稳定私有快照；输出为仓库外、与输入不重叠的新目录。工具重新核对源码和全部数据哈希，生成自含的10题/254点/18样例草稿、英文Markdown题面、来源映射与许可对象。所有路径相对bundle，移到其他目录后可独立复验，不依赖原候选目录。失败保留 `INCOMPLETE` 和部分文件，重试用新目录；临时目录不是持久备份。格式、权限及发布阻断见[草稿合同](docs/problem-drafts.md)。已增加私有草稿入库服务；审核和生产判题配置仍未接通；已有按ID本人题面预览。
 
-从已审查的 v6 题包派生 [Z 算法](docs/problem-sources.md#z-算法规模边界修订)或 [A+B](docs/problem-sources.md#ab-值域边界修订)边界修订时，另建私有单题包，保留原包供旧修订使用：
+从已审查的 v6 题包派生边界修订时，另建私有单题包，保留原包供旧修订使用。已核验的用例及范围见[题目来源记录](docs/problem-sources.md#输入覆盖盘点)：
 
 ```sh
 python3 -B scripts/supplement-zalgorithm.py \
@@ -336,9 +350,27 @@ python3 -B scripts/supplement-zalgorithm.py \
   --output /private/tmp/oj-zalgorithm-scale
 python3 -B scripts/import-library-checker.py \
   --verify-bundle /private/tmp/oj-zalgorithm-scale/bundle
+python3 -B scripts/supplement-associative-array.py \
+  --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
+  --output /private/tmp/oj-associative-array-boundaries
+python3 -B scripts/supplement-primality-test.py \
+  --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
+  --output /private/tmp/oj-primality-single-query
 python3 -B scripts/supplement-aplusb.py \
   --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
   --output /private/tmp/oj-aplusb-boundaries
+python3 -B scripts/supplement-unionfind.py \
+  --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
+  --output /private/tmp/oj-unionfind-singleton
+python3 -B scripts/supplement-static-rmq.py \
+  --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
+  --output /private/tmp/oj-static-rmq-boundary
+python3 -B scripts/supplement-point-add-range-sum.py \
+  --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
+  --output /private/tmp/oj-point-add-range-sum-boundaries
+python3 -B scripts/supplement-static-range-sum.py \
+  --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
+  --output /private/tmp/oj-static-range-sum-singleton
 ```
 
 离线盘点输入覆盖时，对各题包分别生成报告。只读取已核验题包，不执行题源程序；用私有输出路径保留报告：
@@ -400,7 +432,15 @@ OJ_SANDBOX_EXPERIMENT=1 python3 -B tests/integration/live_reference.py \
 
 题包父目录须归当前用户所有、权限为 0700，且只含题包；挂载整个父目录可保留 Linux 读到的题包所有者。工具链须已缓存依赖并提供 PostgreSQL 工具，以非 root 用户运行。输出须是已有父目录下的新目录，位于仓库与题包父目录之外。五个预配槽须已停止且无隔离标记；命令不创建、替换或恢复槽。临时控制端只向宿主回环发布，数据库使用容器内 Unix socket。执行仍在原断网槽，首个失败即停止批次，原始日志保留；成功才写 `summary.json`。见[报告接纳专项](docs/reference-requests.md#十题实物报告接纳专项)。
 
-验证单题修订时，在同一命令追加 `--zalgorithm-local-data`（31 点）或 `--aplusb-local-data`（17 点），将 `--bundle` 指向对应的单题包，并为 `--output` 另选新目录。专项要求冻结和接纳同一份计划。A+B 还核对指定非作者读取覆盖、输入校验、独立小用例与历史渲染摘要，作者和未分配者被拒。夹具确认只解除题面缺项，撤回分配后重分配及退回会恢复该缺项；退回还恢复覆盖缺项。原 v6 的 A+B 保留原质量摘要且无覆盖摘要。
+验证单题修订时，在同一命令追加 `--zalgorithm-local-data`（31 点）、`--aplusb-local-data`（17 点）、`--unionfind-local-data`（20 点）或 `--static-range-sum-local-data`（13 点），将 `--bundle` 指向对应的单题包，并为 `--output` 另选新目录。专项要求冻结和接纳同一份计划；并查集还核对仅合并用例的零字节答案，静态区间和核对两个整段查询的固定答案。A+B 还核对指定非作者读取覆盖、输入校验、独立小用例与历史渲染摘要，作者和未分配者被拒。夹具确认只解除题面缺项，撤回分配后重分配及退回会恢复该缺项；退回还恢复覆盖缺项。原 v6 的 A+B 保留原质量摘要且无覆盖摘要。
+
+关联数组的同一专项使用 `--associative-array-local-data`（22 点），额外核对两个边界点的固定答案。
+
+静态区间最小值使用 `--static-rmq-local-data`（28 点），额外核对只查询一次时的上界答案。
+
+单点加与区间求和使用 `--point-add-range-sum-local-data`（23 点），额外核对加零及累加到 3×10⁹ 时的固定答案。
+
+素性测试使用 `--primality-test-local-data`（15 点），额外核对两个单次查询的 `Yes` 与 `No` 答案。
 
 上述 Darwin 专项产物 `worker-validation.test` 可在专用固定离线槽运行 `-test.run '^TestClaimedReferenceOwnedSandbox$' -test.v`，显式设置 `OJ_REFERENCE_LEASED_SANDBOX_TEST=1 OJ_SANDBOX_EXPERIMENT=1` 并清空槽覆盖；须与其他宿主专项串行。只使用固定合成 A+B 和续期替身，分别验证真实执行与续期拒绝后的停止。
 
