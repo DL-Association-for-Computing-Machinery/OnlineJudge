@@ -19,7 +19,7 @@ import uuid
 
 sys.dont_write_bytecode = True
 
-from library_checker_quality import SLOW_SOLUTION_SCHEMA
+from library_checker_oracles import ORACLE_SCHEMA
 from problem_source_common import MAX_EXPORT, digest, expected_materials, parse_lock, read_regular, snapshot
 from problem_source_export import extract, validate_report
 
@@ -107,7 +107,8 @@ def run(args):
         (inputs / "source-lock.json").write_bytes(lock_bytes)
         drivers = staging / "driver"
         drivers.mkdir()
-        for script in ("problem_source_common.py", "library_checker_quality.py", "validate_library_checker.py"):
+        for script in ("problem_source_common.py", "library_checker_quality.py", "library_checker_oracles.py",
+                       "validate_library_checker.py"):
             shutil.copyfile(ROOT / "scripts" / script, drivers / script)
         for directory in (inputs, drivers):
             directory.chmod(0o755)
@@ -150,7 +151,7 @@ def run(args):
             candidate = output / "materials.partial"
             candidate.mkdir(mode=0o700)
             report, size = extract(archive, candidate, expected)
-            validate_report(report, lock, catalog, inventory=expected, required_schema=SLOW_SOLUTION_SCHEMA)
+            validate_report(report, lock, catalog, inventory=expected, required_schema=ORACLE_SCHEMA)
             document = {"schema": "oj.private-source-corpus.v1", "status": "private-unpublished",
                         "repository": lock["repository"], "commit": lock["commit"],
                         "source_lock_sha256": digest(lock_bytes),
@@ -159,6 +160,7 @@ def run(args):
                         "validation_driver_sha256": digest((drivers / "validate_library_checker.py").read_bytes()),
                         "source_reader_sha256": digest((drivers / "problem_source_common.py").read_bytes()),
                         "input_controls_driver_sha256": digest((drivers / "library_checker_quality.py").read_bytes()),
+                        "oracle_driver_sha256": digest((drivers / "library_checker_oracles.py").read_bytes()),
                         "compiler_flags": "-O2 -std=c++17 -Wall -Wextra -Werror -Wno-unused-result -I common",
                         "isolation": {"network": "none", "user": "65532:65532", "cpus": 2,
                                       "memory_bytes": 4 << 30, "pids": 128, "read_only_root": True,
@@ -169,7 +171,7 @@ def run(args):
                         "notices": ["source/LICENSE", "source/common/testlib.h", "source/*/checker.cpp"],
                         "validation_scope": ("pinned hashes, all input validators, input boundary controls, "
                                              "reference and negative checker controls, three fixed wrong solutions, "
-                                             "one fixed slow-solution CPU control"),
+                                             "one fixed slow-solution CPU control, ten fixed small-oracle suites"),
                         "publication_blockers": ["P4 import/authorization/review/publish not implemented",
                                                  "statement templates not converted or rendered",
                                                  "checker and resource limits not admitted to production"],

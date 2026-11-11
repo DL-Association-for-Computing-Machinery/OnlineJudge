@@ -5,6 +5,7 @@ import importlib.util
 import json
 import logging
 from pathlib import Path
+import re
 import resource
 import signal
 import subprocess
@@ -15,9 +16,10 @@ import tomllib
 import types
 
 from library_checker_quality import (
-    SLOW_CPU_SECONDS, SLOW_HARD_CPU_SECONDS, SLOW_SOLUTION, SLOW_SOLUTION_SCHEMA, SLOW_SOURCE, SLOW_WALL_SECONDS,
+    SLOW_CPU_SECONDS, SLOW_HARD_CPU_SECONDS, SLOW_SOLUTION, SLOW_SOURCE, SLOW_WALL_SECONDS,
     WRONG_SOLUTIONS, control_result, input_controls, slow_solution_result, wrong_solution_result,
 )
+from library_checker_oracles import MAX_OUTPUT_BYTES, ORACLE_SCHEMA, WALL_SECONDS, oracle_result, small_cases
 from problem_source_common import digest, expected_materials, load_lock, read_regular, snapshot
 
 
@@ -104,6 +106,28 @@ def run_slow_solution(base, item, inventory, output):
     raise ValueError("no formal point exhausted the slow solution's CPU budget")
 
 
+def tokens(data):
+    return re.split(rb"[ \t\r\n]+", data.strip(b" \t\r\n"))
+
+
+def run_small_oracles(base, item, inventory, directory):
+    probes = small_cases(item["source_id"])
+    infile, output, expected = (directory / name for name in ("probe.in", "actual.out", "expected.out"))
+    for case, data, answer in probes:
+        try:
+            checked([str(base / "verifier")], input=data, timeout=WALL_SECONDS)
+            infile.write_bytes(data)
+            expected.write_bytes(answer)
+            with output.open("wb") as stream:
+                checked([str(base / "sol" / "correct")], input=data, stdout=stream, timeout=WALL_SECONDS)
+            if tokens(read_regular(directory, output.name, MAX_OUTPUT_BYTES)) != tokens(answer):
+                raise ValueError("reference and independent oracle disagree")
+            checked([str(base / "checker"), str(infile), str(output), str(expected)], timeout=WALL_SECONDS)
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            raise ValueError(f"{item['source_id']}: independent oracle {case} failed: {exc}") from exc
+    return oracle_result(item, inventory, probes)
+
+
 def main():
     if Path.cwd() != Path("/work") or not Path("/input/source-lock.json").is_file():
         raise ValueError("run only through prepare-library-checker.py")
@@ -159,11 +183,14 @@ def main():
                 slow_solution = run_slow_solution(base, item, expected, Path(directory) / "actual.out")
             print(item["source_id"], "slow solution exceeded CPU budget at formal position",
                   slow_solution["case_position"], flush=True)
+        with tempfile.TemporaryDirectory(dir="/work") as directory:
+            independent = run_small_oracles(base, item, expected, Path(directory))
         report.append({"source_id": item["source_id"], "cases": len(item["cases"]),
                        "input_validator": "passed-all", "reference_checker": "passed-all",
                        "invalid_output_checker_exit": result.returncode, "input_controls": controls,
-                       "wrong_solution": wrong_solution, "slow_solution": slow_solution})
-        print(item["source_id"], len(item["cases"]), "cases and", len(controls), "input controls validated", flush=True)
+                       "wrong_solution": wrong_solution, "slow_solution": slow_solution, "independent": independent})
+        print(item["source_id"], len(item["cases"]), "formal and", len(independent["cases"]),
+              "independent cases validated", flush=True)
     export = Path("/work/export")
     export.mkdir()
     for path, entry in expected.items():
@@ -181,7 +208,7 @@ def main():
         target.parent.mkdir(parents=True, exist_ok=True)
         # Hard links avoid a second copy of the generated data in bounded tmpfs.
         target.hardlink_to(original)
-    validation = {"schema": SLOW_SOLUTION_SCHEMA, "commit": lock["commit"],
+    validation = {"schema": ORACLE_SCHEMA, "commit": lock["commit"],
                   "elapsed_seconds": round(time.monotonic() - start, 3),
                   "compiler": subprocess.check_output(["g++", "--version"], text=True).splitlines()[0],
                   "python": sys.version.split()[0], "problems": report}
