@@ -208,8 +208,17 @@ components:
       required: [evidence, policy_version, eligible, blockers]
       properties:
         evidence: { $ref: '#/components/schemas/ReviewEvidence' }
-        policy_version: { const: 'oj.review-approval.v2' }
+        policy_version: { const: 'oj.review-approval.v3' }
         eligible: { const: false }
+        input_validator_evidence:
+          type: object
+          additionalProperties: false
+          description: 仅完整修订与正式计划精确匹配受信 v6 报告时返回；不是本站运行或生产准入结果。
+          required: [report_sha256, inputs, controls]
+          properties:
+            report_sha256: { $ref: '#/components/schemas/SHA256' }
+            inputs: { type: integer, minimum: 1 }
+            controls: { const: 4 }
         blockers:
           type: array
           minItems: 1

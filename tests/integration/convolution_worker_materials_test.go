@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -24,6 +25,7 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
 	referencepg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference/postgres"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/redisstore"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
 	submissionpg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/testpki"
@@ -328,6 +330,7 @@ func assertConvolutionReview(t *testing.T, f referenceRequestFixture, request pr
 	if snapshot.Returned || snapshot.Evidence != summary || snapshot.Evidence.ComparisonOutcome != "mismatch" {
 		t.Fatal("eligibility did not receive the verified mismatch from the frozen report")
 	}
+	assertConvolutionInputValidator(t, f, reviews, reader, item.ID, bound)
 	denied(f.actor, item.ID, problemreference.ErrNotFound)
 	denied(reader, request.ID, problemreference.ErrNotFound)
 	// Even a separately valid summary cannot authorize a different report digest.
@@ -341,4 +344,35 @@ func assertConvolutionReview(t *testing.T, f referenceRequestFixture, request pr
 	}
 	grant(reader.SubjectID, 1, false)
 	denied(reader, item.ID, identity.ErrReviewerRequired)
+}
+
+func assertConvolutionInputValidator(t *testing.T, f referenceRequestFixture, store *referencepg.ReviewStore,
+	reader identity.ProblemActor, itemID string, bound problem.ImportIdentity,
+) {
+	t.Helper()
+	sessions := fixedDraftSession{view: redisstore.View{SubjectID: reader.SubjectID, AuthGeneration: reader.AuthGeneration, RecoveryID: reader.RecoveryID}}
+	access, err := problemreference.NewReviewAccess(sessions, store)
+	must(t, err)
+	// The fixture substitutes the session observation; reviewer authorization,
+	// report binding and approval policy below still use the real database.
+	got, err := access.EligibilityForSubject(f.ctx, redisstore.Credential{}, reader.SubjectID, itemID)
+	must(t, err)
+	if got.Eligible || !slices.Contains(got.Blockers, "comparison_mismatch") ||
+		!slices.Contains(got.Blockers, "checker_admission_missing") || !slices.Contains(got.Blockers, "target_runtime_missing") {
+		t.Fatal("input validator evidence weakened independent review blockers")
+	}
+	const v6 = "e1c721627cd97dec382d90bfe559e766b7f3811d9257ce89946404befe009975"
+	blocked := slices.Contains(got.Blockers, "input_validator_missing")
+	if bound.ImportRevision != v6 {
+		if got.InputValidator != nil || !blocked {
+			t.Fatal("older revision inherited v6 validator evidence")
+		}
+		return
+	}
+	const report = "cc6907675c87d93e6c0dd08fc637d13bcd34ff6b4ba9e497fbce4c6681578a9d"
+	if got.InputValidator == nil || got.InputValidator.ReportSHA256 != report ||
+		got.InputValidator.Inputs != 53 || got.InputValidator.Controls != 4 || blocked {
+		t.Fatal("verified v6 revision did not expose its own input validator evidence")
+	}
+	t.Log("verified v6 input evidence admitted; comparison mismatch still blocks approval")
 }
