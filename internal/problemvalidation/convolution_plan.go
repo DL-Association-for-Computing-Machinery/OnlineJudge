@@ -31,6 +31,13 @@ const ConvolutionPlanProtocol = "oj.convolution-differential-plan.v1"
 // Digest identifies the canonical differential plan encoding.
 func (p ConvolutionPlan) Digest() string { return digest(p) }
 
+// ValidHistoricalOutcome checks the frozen v1 corpus without depending on the
+// Worker environment, current source lock or admission configuration.
+func (p ConvolutionPlan) ValidHistoricalOutcome(status string, matched int, counter *ConvolutionCounterexample) bool {
+	return p.ValidIdentity() && p.CorpusSHA256 == convolutionCorpusDigest(smallConvolutionCorpus()) &&
+		p.ValidOutcome(status, matched, counter)
+}
+
 // ValidOutcome checks that determinate counts and any first counterexample
 // belong to the fixed corpus. Node attestation still supplies the run outcome.
 func (p ConvolutionPlan) ValidOutcome(status string, matched int, counter *ConvolutionCounterexample) bool {

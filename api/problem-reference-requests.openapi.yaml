@@ -1,11 +1,11 @@
 openapi: 3.1.0
 info:
   title: OnlineJudge Author Reference Requests
-  version: 0.2.0
+  version: 0.3.0
   description: >-
     默认关闭。使用普通 HTTPS 会话、固定 Host 和同源 POST。
     所有操作须匹配实际会话与预期主体，再检查当前出题权限与本人范围。
-    不允许 query 或路径编码别名。响应均不缓存，不包含材料、配置、预留或报告正文。
+    不允许 query 或路径编码别名。响应均不缓存。结果只返回受限摘要，不包含正式材料、配置、预留或原始 Worker 报告。
 security:
   - ordinarySession: []
 paths:
@@ -108,6 +108,22 @@ paths:
         '405': {$ref: '#/components/responses/Failure'}
         '409': {$ref: '#/components/responses/Failure'}
         '503': {$ref: '#/components/responses/Failure'}
+  /api/v1/problem-draft-management/reference-requests/{request_key}/report:
+    parameters:
+      - $ref: '#/components/parameters/ExpectedSubject'
+      - $ref: '#/components/parameters/RequestKey'
+    get:
+      operationId: readOwnReferenceResult
+      description: 读取当前作者本人的已报告结果；最多 2048 字节。仅返回正式点聚合及可选对拍结果。
+      responses:
+        '200': {$ref: '#/components/responses/Result'}
+        '400': {$ref: '#/components/responses/Failure'}
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '405': {$ref: '#/components/responses/Failure'}
+        '409': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
 components:
   securitySchemes:
     ordinarySession: {type: apiKey, in: cookie, name: __Host-oj_session}
@@ -125,7 +141,50 @@ components:
   schemas:
     ID: {type: string, pattern: '^[a-f0-9]{32}$'}
     Key: {type: string, pattern: '^[A-Za-z0-9_-]{16,128}$'}
+    Coefficients:
+      type: array
+      minItems: 1
+      maxItems: 31
+      items: {type: integer, minimum: 0, maximum: 998244352}
   responses:
+    Result:
+      description: 当前作者持有的终态申请结果；旧正式报告的 comparison 为 null。
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [request_id, request_key, draft_id, content_version, formal, comparison]
+            properties:
+              request_id: {$ref: '#/components/schemas/ID'}
+              request_key: {$ref: '#/components/schemas/Key'}
+              draft_id: {$ref: '#/components/schemas/ID'}
+              content_version: {type: string, pattern: '^[a-f0-9]{64}$'}
+              formal:
+                type: object
+                additionalProperties: false
+                required: [verdict, passed, total]
+                properties:
+                  verdict: {type: string, enum: [AC, WA, CE, TLE, MLE, RE, OLE]}
+                  passed: {type: integer, minimum: 0, maximum: 64}
+                  total: {type: integer, minimum: 1, maximum: 64}
+              comparison:
+                type: [object, 'null']
+                additionalProperties: false
+                required: [status, matched, total, counterexample]
+                properties:
+                  status: {type: string, enum: [passed, mismatch]}
+                  matched: {type: integer, minimum: 0, maximum: 24}
+                  total: {const: 24}
+                  counterexample:
+                    type: [object, 'null']
+                    additionalProperties: false
+                    required: [case, input, expected, actual]
+                    properties:
+                      case: {type: integer, minimum: 1, maximum: 24}
+                      input: {type: string, minLength: 1, maxLength: 512}
+                      expected: {$ref: '#/components/schemas/Coefficients'}
+                      actual: {$ref: '#/components/schemas/Coefficients'}
     Ready:
       description: 是否已有可按原键核验的持久计划；202 固定为 false。
       content:

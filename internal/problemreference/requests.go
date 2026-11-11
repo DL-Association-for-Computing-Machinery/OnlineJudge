@@ -79,4 +79,5 @@ type Repository interface {
 	Enqueue(context.Context, identity.ProblemActor, string, string, *Catalog) (Request, error)
 	Receipt(context.Context, identity.ProblemActor, string) (Request, error)
 	Cancel(context.Context, identity.ProblemActor, string) (Request, error)
+	AuthorReport(context.Context, identity.ProblemActor, string) (AuthorReport, error)
 }

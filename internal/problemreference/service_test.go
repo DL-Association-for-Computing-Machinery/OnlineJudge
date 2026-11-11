@@ -70,6 +70,10 @@ func (r *serviceRepository) Receipt(_ context.Context, actor identity.ProblemAct
 func (r *serviceRepository) Cancel(_ context.Context, actor identity.ProblemActor, key string) (Request, error) {
 	return r.record(actor, "cancel", key)
 }
+func (r *serviceRepository) AuthorReport(_ context.Context, actor identity.ProblemActor, key string) (AuthorReport, error) {
+	request, err := r.record(actor, "report", key)
+	return AuthorReport{Owner: request.Owner, RequestID: request.ID, RequestKey: key, DraftID: request.DraftID}, err
+}
 
 func newServiceFixture(t *testing.T) (*Service, *serviceSessions, *serviceRepository, redisstore.Credential) {
 	t.Helper()

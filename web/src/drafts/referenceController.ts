@@ -1,9 +1,9 @@
 import type { AccountController } from '../account/controller'
-import { ReferenceRequestError, sendReferenceRequest, sendReferencePreparation, type ReferenceAction, type ReferencePreparationAction, type ReferenceReceipt } from '../services/referenceRequests'
+import { ReferenceRequestError, sendReferenceRequest, sendReferencePreparation, sendReferenceReport, type ReferenceAction, type ReferencePreparationAction, type ReferenceReceipt, type ReferenceReport } from '../services/referenceRequests'
 import { referenceJournal, type ReferenceJournal } from './referenceJournal'
 
-interface ReferenceState { receipt: ReferenceReceipt | null; ready: boolean | null; busy: boolean; notice: string }
-const initial: ReferenceState = { receipt: null, ready: null, busy: false, notice: '可提交新的参考验证申请，也可查询此浏览器保留的申请。' }
+interface ReferenceState { receipt: ReferenceReceipt | null; ready: boolean | null; report: ReferenceReport | null; busy: boolean; notice: string }
+const initial: ReferenceState = { receipt: null, ready: null, report: null, busy: false, notice: '可提交新的参考验证申请，也可查询此浏览器保留的申请。' }
 const notices: Record<string, string> = {
   REFERENCE_NOT_FOUND: '当前未查到回执。请保留原申请，可用同一请求再次提交。',
   NOT_FOUND: '参考验证入口尚未启用，请保留原申请。',
@@ -23,7 +23,8 @@ export class ReferenceController {
   private unsubscribe?: () => void
   private active?: AbortController
   constructor(private account: AccountController, private draft: string, private journal: ReferenceJournal = referenceJournal,
-    private send: typeof sendReferenceRequest = sendReferenceRequest, private preparation: typeof sendReferencePreparation = sendReferencePreparation) {}
+    private send: typeof sendReferenceRequest = sendReferenceRequest, private preparation: typeof sendReferencePreparation = sendReferencePreparation,
+    private fetchReport: typeof sendReferenceReport = sendReferenceReport) {}
   getSnapshot = () => this.state
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => this.listeners.delete(listener) }
   private publish(state: ReferenceState) { this.state = state; for (const listener of this.listeners) listener() }
@@ -31,18 +32,19 @@ export class ReferenceController {
   clear = () => { this.active?.abort(); this.active = undefined; this.publish(initial) }
   disconnect() { this.unsubscribe?.(); this.unsubscribe = undefined; this.clear() }
 
-  async run(action: ReferenceAction | ReferencePreparationAction) {
+  async run(action: ReferenceAction | ReferencePreparationAction | 'report') {
     const account = this.account.getSnapshot()
     const previous = this.state.receipt
-    if (!this.unsubscribe || this.active || account.busy || account.status !== 'authenticated' || !account.session ||
-      (action !== 'read' && action !== 'create' && previous?.state !== 'queued') || (action === 'create' && previous?.state === 'queued')) return
+    const available = action === 'read' || (action === 'create' ? previous?.state !== 'queued' :
+      action === 'report' ? previous?.state === 'reported' : previous?.state === 'queued')
+    if (!available || !this.unsubscribe || this.active || account.busy || account.status !== 'authenticated' || !account.session) return
     const owner = account.session.subject_id
     const deadline = Math.min(Date.parse(account.session.idle_expires_at), Date.parse(account.session.absolute_deadline))
     if (!(Date.now() < deadline)) { this.clear(); return }
     const abort = new AbortController()
     this.active = abort
     const current = () => this.active === abort && Date.now() < deadline && this.account.getSnapshot() === account
-    this.publish({ ...this.state, busy: true, notice: '正在读取或更新本人申请…' })
+    this.publish({ ...this.state, report: null, busy: true, notice: '正在读取或更新本人申请…' })
     let key: string | undefined
     try {
       key = action === 'create' ? await this.journal.select(owner, this.draft, previous?.request_key) : await this.journal.read(owner, this.draft)
@@ -53,15 +55,28 @@ export class ReferenceController {
       }
       if (action === 'prepare' || action === 'plan') {
         const ready = await this.preparation(action, owner, key, abort.signal)
-        if (current()) this.publish({ receipt: previous, ready, busy: false, notice: ready ? '材料计划已准备。'
+        if (current()) this.publish({ receipt: previous, ready, report: null, busy: false, notice: ready ? '材料计划已准备。'
           : action === 'prepare' ? '已受理准备请求，请稍后查看材料状态。' : '尚未确认材料计划，可稍后查看或用原申请重新准备。' })
         return
       }
+      if (action === 'report') {
+        if (!previous) throw new ReferenceRequestError()
+        const report = await this.fetchReport(owner, previous, abort.signal)
+        if (!current()) return
+        const latestKey = await this.journal.read(owner, this.draft)
+        if (!current()) return
+        if (latestKey !== key) {
+          this.publish({ ...initial, notice: '本地申请已变化，请重新查看当前回执。' })
+        } else {
+          this.publish({ ...initial, receipt: previous, report, notice: '已取得本人验证结果。' })
+        }
+        return
+      }
       const receipt = await this.send(action, owner, this.draft, key, abort.signal)
-      if (current()) this.publish({ receipt, ready: null, busy: false, notice: '已取得本人申请回执。' })
+      if (current()) this.publish({ ...initial, receipt, notice: '已取得本人申请回执。' })
     } catch (err) {
       const code = err instanceof ReferenceRequestError ? err.code : ''
-      const keepReceipt = (action === 'prepare' || action === 'plan') && key !== undefined &&
+      const keepReceipt = (action === 'prepare' || action === 'plan' || action === 'report') && key !== undefined &&
         !['REFERENCE_SUBJECT_CHANGED', 'SESSION_REQUIRED', 'PROBLEM_AUTHOR_REQUIRED', 'REFERENCE_NOT_FOUND'].includes(code)
       if (current()) this.publish({ ...initial, notice: !key
         ? '本地申请记录不可用，未发送请求。'

@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { AccountController } from '../account/controller'
-import { decodeReferenceReceipt, type ReferenceReceipt, type sendReferenceRequest } from '../services/referenceRequests'
+import { decodeReferenceReceipt, decodeReferenceReport, type ReferenceReceipt, type ReferenceReport, type sendReferenceReport, type sendReferenceRequest } from '../services/referenceRequests'
 import { ReferenceController } from './referenceController'
 import type { ReferenceJournal } from './referenceJournal'
 
@@ -14,6 +14,9 @@ const receipt = (state: ReferenceReceipt['state'] = 'queued'): ReferenceReceipt 
   id: 'd'.repeat(32), draft_id: draft, request_key: key, state, created_at: '2026-11-11T00:00:00Z',
   cancelled_at: state === 'cancelled' ? '2026-11-11T01:00:00Z' : null,
 })
+const report: ReferenceReport = { request_id: receipt().id, request_key: key, draft_id: draft, content_version: 'e'.repeat(64),
+  formal: { verdict: 'AC', passed: 53, total: 53 }, comparison: { status: 'mismatch', matched: 9, total: 24,
+    counterexample: { case: 10, input: '2 2\n1 2\n3 4\n', expected: [3, 10, 8], actual: [4, 10, 8] } } }
 afterEach(() => vi.unstubAllGlobals())
 
 async function setup() {
@@ -25,9 +28,10 @@ async function setup() {
   await vi.waitFor(() => expect(account.getSnapshot().status).toBe('authenticated'))
   const journal = { read: vi.fn<ReferenceJournal['read']>().mockResolvedValue(key), select: vi.fn<ReferenceJournal['select']>().mockResolvedValue(key) }
   const send = vi.fn<typeof sendReferenceRequest>().mockResolvedValue(receipt())
-  const controller = new ReferenceController(account, draft, journal, send)
+  const fetchReport = vi.fn<typeof sendReferenceReport>().mockResolvedValue(report)
+  const controller = new ReferenceController(account, draft, journal, send, undefined, fetchReport)
   controller.connect()
-  return { account, journal, send, controller, stop: () => { controller.disconnect(); account.disconnect() } }
+  return { account, journal, send, fetchReport, controller, stop: () => { controller.disconnect(); account.disconnect() } }
 }
 
 it('recovers an unknown write by the same key and only on explicit actions', async () => {
@@ -90,4 +94,38 @@ it('permits a fresh key only after a terminal receipt and rejects an overbroad r
   expect(() => decodeReferenceReceipt(receipt(), draft, another)).toThrow()
   expect(decodeReferenceReceipt(receipt('cancelled'), draft, key).state).toBe('cancelled')
   f.stop()
+})
+
+it('reads results only on request and drops responses after session or journal changes', async () => {
+  const f = await setup()
+  await f.controller.run('report')
+  f.send.mockResolvedValue(receipt('reported'))
+  await f.controller.run('read')
+  expect(f.fetchReport).not.toHaveBeenCalled()
+  await f.controller.run('report')
+  expect(f.fetchReport).toHaveBeenCalledWith(owner, receipt('reported'), expect.any(AbortSignal))
+  expect(f.controller.getSnapshot().report).toEqual(report)
+  let resolve!: (report: ReferenceReport) => void
+  f.fetchReport.mockImplementationOnce(() => new Promise(done => { resolve = done }))
+  const pending = f.controller.run('report')
+  await vi.waitFor(() => expect(f.fetchReport).toHaveBeenCalledTimes(2))
+  await f.account.run('check')
+  resolve(report)
+  await pending
+  expect(f.controller.getSnapshot().report).toBeNull()
+  await f.controller.run('read')
+  f.journal.read.mockResolvedValueOnce(key).mockResolvedValueOnce(another)
+  await f.controller.run('report')
+  expect(f.controller.getSnapshot().receipt).toBeNull()
+  expect(f.controller.getSnapshot().report).toBeNull()
+  f.stop()
+})
+
+it('rejects unbound, overbroad and impossible report responses', () => {
+  const terminal = receipt('reported')
+  expect(decodeReferenceReport(report, terminal)).toEqual(report)
+  expect(() => decodeReferenceReport(report, receipt())).toThrow()
+  expect(() => decodeReferenceReport({ ...report, request_id: 'a'.repeat(32) }, terminal)).toThrow()
+  expect(() => decodeReferenceReport({ ...report, worker: 'node' }, terminal)).toThrow()
+  expect(() => decodeReferenceReport({ ...report, comparison: { ...report.comparison, matched: 24 } }, terminal)).toThrow()
 })

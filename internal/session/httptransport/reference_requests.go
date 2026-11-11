@@ -25,6 +25,7 @@ type ReferenceRequests interface {
 	EnqueueForSubject(context.Context, redisstore.Credential, string, string, string) (problemreference.Request, error)
 	ReceiptForSubject(context.Context, redisstore.Credential, string, string) (problemreference.Request, error)
 	CancelForSubject(context.Context, redisstore.Credential, string, string) (problemreference.Request, error)
+	ReportForSubject(context.Context, redisstore.Credential, string, string) (problemreference.AuthorReport, error)
 }
 
 // ReferencePreparation starts bounded work and exposes only durable readiness.
@@ -58,6 +59,9 @@ func referenceRequestRoute(path string) (method, key string) {
 		return "", ""
 	}
 	if key, ok := strings.CutSuffix(tail, "/plan"); ok && draftproblem.ValidKey(key) {
+		return http.MethodGet, key
+	}
+	if key, ok := strings.CutSuffix(tail, "/report"); ok && draftproblem.ValidKey(key) {
 		return http.MethodGet, key
 	}
 	key, mutation := strings.CutSuffix(tail, "/prepare")
@@ -96,6 +100,10 @@ func (h *handler) serveReferenceRequest(w http.ResponseWriter, r *http.Request, 
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), h.draftTimeout)
 	defer cancel()
+	if strings.HasSuffix(r.URL.Path, "/report") {
+		h.serveAuthorReport(ctx, w, credential, expected, key)
+		return
+	}
 	if strings.HasSuffix(r.URL.Path, "/prepare") || strings.HasSuffix(r.URL.Path, "/plan") {
 		h.serveReferencePreparation(ctx, w, r.Method, credential, expected, key)
 		return
@@ -129,6 +137,27 @@ func (h *handler) serveReferenceRequest(w http.ResponseWriter, r *http.Request, 
 		CancelledAt *time.Time `json:"cancelled_at"`
 	}{result.ID, result.RequestKey, result.DraftID, result.State, result.CreatedAt, result.CancelledAt})
 	if err != nil || ctx.Err() != nil {
+		referenceRequestError(w, problemreference.ErrStore)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(body)
+}
+
+func (h *handler) serveAuthorReport(ctx context.Context, w http.ResponseWriter, credential redisstore.Credential, expected, key string) {
+	report, err := h.references.ReportForSubject(ctx, credential, expected, key)
+	if err != nil {
+		referenceRequestError(w, err)
+		return
+	}
+	if report.Owner != expected || report.RequestKey != key || !identity.ValidID(report.RequestID) || !identity.ValidID(report.DraftID) ||
+		!draftproblem.ValidImportRevision(report.Version) {
+		referenceRequestError(w, problemreference.ErrStore)
+		return
+	}
+	body, err := json.Marshal(report)
+	if err != nil || len(body) > problemreference.MaxAuthorReportBytes || ctx.Err() != nil {
 		referenceRequestError(w, problemreference.ErrStore)
 		return
 	}

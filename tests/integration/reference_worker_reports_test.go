@@ -137,6 +137,9 @@ func TestReferenceReportDown12WaitsAndPreservesConcurrentReport(t *testing.T) {
 func TestReferenceReportCommitsTerminalStateAndExactReplay(t *testing.T) {
 	f, claims, node, input := acceptedReportFixture(t, "WA")
 	f.limits(t, 1, 1)
+	if _, err := f.store.AuthorReport(f.ctx, f.actor, expectedPlanKey); !errors.Is(err, problemreference.ErrNotFound) {
+		t.Fatal("unreported request exposed a result", err)
+	}
 	start := make(chan struct{})
 	done := make(chan error, 2)
 	for range 2 {
@@ -151,6 +154,11 @@ func TestReferenceReportCommitsTerminalStateAndExactReplay(t *testing.T) {
 	must(t, f.a.QueryRow(f.ctx, `SELECT evidence FROM problem_reference_worker_reports WHERE request_id=$1`, input.RequestID).Scan(&saved))
 	if count != 1 || !bytes.Equal(saved, input.Evidence) {
 		t.Fatal("accepted evidence changed or duplicated")
+	}
+	view, err := f.store.AuthorReport(f.ctx, f.actor, expectedPlanKey)
+	must(t, err)
+	if view.RequestID != input.RequestID || view.Formal.Verdict != "WA" || view.Formal.Passed >= view.Formal.Total || view.Comparison != nil {
+		t.Fatal("historical formal-only report did not project")
 	}
 	got, err := f.store.Cancel(f.ctx, f.actor, expectedPlanKey)
 	must(t, err)
@@ -188,6 +196,11 @@ func TestReferenceReportCommitsTerminalStateAndExactReplay(t *testing.T) {
 	must(t, f.a.QueryRow(f.ctx, `SELECT validation_state FROM problem_drafts WHERE id=$1`, f.draft.ID).Scan(&state))
 	if state != "not-run" {
 		t.Fatal("reference report changed draft validation")
+	}
+	_, err = f.a.Exec(f.ctx, `UPDATE problem_drafts SET request_sha256=$1 WHERE id=$2`, strings.Repeat("f", 64), f.draft.ID)
+	must(t, err)
+	if _, err := f.store.AuthorReport(f.ctx, f.actor, expectedPlanKey); !errors.Is(err, problemreference.ErrNotFound) {
+		t.Fatal("result was visible after its draft import identity changed", err)
 	}
 }
 

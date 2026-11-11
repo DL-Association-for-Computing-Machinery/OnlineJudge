@@ -53,12 +53,19 @@ type WorkerComparison struct {
 // DecodeEvidence checks syntax and canonical bytes. In particular unknown,
 // missing, and duplicate evidence fields cannot silently change the meaning.
 func (i WorkerReportInput) DecodeEvidence() (WorkerEvidence, error) {
+	if !i.Valid() {
+		return WorkerEvidence{}, ErrInvalid
+	}
+	return decodeWorkerEvidence(i.Evidence)
+}
+
+func decodeWorkerEvidence(data []byte) (WorkerEvidence, error) {
 	var e WorkerEvidence
-	if !i.Valid() || len(i.Evidence) == 0 || len(i.Evidence) > MaxWorkerEvidenceBytes || json.Unmarshal(i.Evidence, &e) != nil {
+	if len(data) == 0 || len(data) > MaxWorkerEvidenceBytes || json.Unmarshal(data, &e) != nil {
 		return WorkerEvidence{}, ErrInvalid
 	}
 	raw, err := json.Marshal(e)
-	if err != nil || !bytes.Equal(raw, i.Evidence) || !e.validShape() {
+	if err != nil || !bytes.Equal(raw, data) || !e.validShape() {
 		return WorkerEvidence{}, ErrInvalid
 	}
 	return e, nil
@@ -81,9 +88,6 @@ func (e WorkerEvidence) ValidFor(spec Specification, expected ExpectedPlan) bool
 		!expected.ValidFor(spec) || json.Unmarshal(expected.Encoding, &plan) != nil || plan.ValidateMaterials() != nil || len(e.Points) != len(plan.Cases) {
 		return false
 	}
-	if e.Verdict != "CE" && (e.CompileUsage.CPU > profile.Runtime.Compile.CPU || e.CompileUsage.Memory > profile.Runtime.Compile.Memory) {
-		return false
-	}
 	_, tier, err := problemvalidation.ResolveSource(plan.SourceID)
 	if err != nil {
 		return false
@@ -96,7 +100,12 @@ func (e WorkerEvidence) ValidFor(spec Specification, expected ExpectedPlan) bool
 		}
 		slot = target.ContainerName()
 	}
-	if e.Slot != slot {
+	return e.Slot == slot && e.validFormalResults(plan, profile)
+}
+
+func (e WorkerEvidence) validFormalResults(plan problem.ReferencePlan, profile problemvalidation.Profile) bool {
+	if len(e.Points) != len(plan.Cases) || e.Verdict != "CE" &&
+		(e.CompileUsage.CPU > profile.Runtime.Compile.CPU || e.CompileUsage.Memory > profile.Runtime.Compile.Memory) {
 		return false
 	}
 	ended := e.Verdict == "CE"
