@@ -24,12 +24,7 @@ type TestCoverageEvidence struct {
 // AdmittedTestCoverage only admits the reviewed A+B supplement and profile.
 // The caller must first verify the stored plan and accepted report.
 func AdmittedTestCoverage(id problem.ImportIdentity, planSHA256, profileSHA256 string) (TestCoverageEvidence, bool) {
-	const lock = "fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617"
-	if id.SourceID != "library-checker:aplusb" || id.SourceLockSHA256 != lock ||
-		id.Version != "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd" ||
-		id.ImportRevision != "e96d280c89a6e5d3da76ee5347c0581d4153d7052e9afceddffb2fdbb3d2036d" ||
-		planSHA256 != "fe4e1968ae66dbfbe23afb96c03ed62dba8957d06e3b88602ebd653faf1c80f5" ||
-		profileSHA256 != "658fef827daa872a726e6a728ad05c84a08103bd9857c71606fe76cff92c1437" {
+	if !matchesReviewedApPlusBPlan(id, planSHA256, profileSHA256) {
 		return TestCoverageEvidence{}, false
 	}
 	return TestCoverageEvidence{

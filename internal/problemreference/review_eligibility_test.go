@@ -123,11 +123,15 @@ func TestReviewCoverageRequiresCurrentCompleteApPlusBPlan(t *testing.T) {
 	s := ReviewEligibilitySnapshot{Evidence: e}
 	got := assessReviewEligibility(s)
 	coverage := got.TestCoverage
-	want := []string{"independent_correctness_missing", "statement_quality_missing", "input_validator_missing",
-		"checker_admission_missing", "target_runtime_missing", "solution_confirmation_missing"}
+	want := []string{"statement_quality_missing", "checker_admission_missing", "target_runtime_missing", "solution_confirmation_missing"}
 	if got.Eligible || coverage == nil || !slices.Equal(got.Blockers, want) ||
-		got.InputValidator != nil || got.IndependentCorrectness != nil || got.WrongSolution != nil || got.StatementRendering != nil {
-		t.Fatalf("coverage must clear only its own blocker: %+v", got)
+		got.InputValidator == nil || got.IndependentCorrectness == nil || got.WrongSolution != nil || got.StatementRendering != nil {
+		t.Fatalf("review did not admit only the three independently verified checks: %+v", got)
+	}
+	if got.InputValidator.Inputs != 17 || got.InputValidator.Controls != 4 || got.IndependentCorrectness.Cases != 25 ||
+		got.InputValidator.ReportSHA256 != got.IndependentCorrectness.ReportSHA256 ||
+		got.InputValidator.ReportSHA256 == coverage.ReportSHA256 {
+		t.Fatalf("the two quality summaries must refer to the new probe report, not the coverage report: %+v", got)
 	}
 	if coverage.Points != 17 || coverage.SamplePoints != 2 || coverage.NonSampleCriteria != 7 ||
 		coverage.SampleOnlyCriteria != 1 || coverage.MaximumSumSamplePosition != 2 ||
@@ -135,21 +139,22 @@ func TestReviewCoverageRequiresCurrentCompleteApPlusBPlan(t *testing.T) {
 		t.Fatalf("coverage projection drifted from the reviewed report: %+v", coverage)
 	}
 	for _, tc := range []struct {
-		name   string
-		change func(*ReviewEligibilitySnapshot)
+		name              string
+		change            func(*ReviewEligibilitySnapshot)
+		historicalBlocker string
 	}{
-		{"other source", func(x *ReviewEligibilitySnapshot) { x.Evidence.SourceID = problemvalidation.ConvolutionSourceID }},
-		{"other source lock", func(x *ReviewEligibilitySnapshot) { x.Evidence.SourceLockSHA256 = strings.Repeat("1", 64) }},
-		{"other version", func(x *ReviewEligibilitySnapshot) { x.Evidence.ContentVersion = strings.Repeat("2", 64) }},
-		{"other import", func(x *ReviewEligibilitySnapshot) { x.Evidence.ImportRevision = strings.Repeat("3", 64) }},
-		{"other plan", func(x *ReviewEligibilitySnapshot) { x.Evidence.FormalPlanSHA256 = strings.Repeat("4", 64) }},
-		{"other profile", func(x *ReviewEligibilitySnapshot) { x.Evidence.ProfileSHA256 = strings.Repeat("5", 64) }},
-		{"formal failure", func(x *ReviewEligibilitySnapshot) { x.Evidence.FormalVerdict = "WA" }},
+		{"other source", func(x *ReviewEligibilitySnapshot) { x.Evidence.SourceID = problemvalidation.ConvolutionSourceID }, ""},
+		{"other source lock", func(x *ReviewEligibilitySnapshot) { x.Evidence.SourceLockSHA256 = strings.Repeat("1", 64) }, ""},
+		{"other version", func(x *ReviewEligibilitySnapshot) { x.Evidence.ContentVersion = strings.Repeat("2", 64) }, ""},
+		{"other import", func(x *ReviewEligibilitySnapshot) { x.Evidence.ImportRevision = strings.Repeat("3", 64) }, ""},
+		{"other plan", func(x *ReviewEligibilitySnapshot) { x.Evidence.FormalPlanSHA256 = strings.Repeat("4", 64) }, ""},
+		{"other profile", func(x *ReviewEligibilitySnapshot) { x.Evidence.ProfileSHA256 = strings.Repeat("5", 64) }, ""},
+		{"formal failure", func(x *ReviewEligibilitySnapshot) { x.Evidence.FormalVerdict = "WA" }, "formal_failed"},
 		{"unexpected comparison", func(x *ReviewEligibilitySnapshot) {
 			x.Evidence.ComparisonPlan = strings.Repeat("6", 64)
 			x.Evidence.ComparisonOutcome = "mismatch"
-		}},
-		{"returned material", func(x *ReviewEligibilitySnapshot) { x.Returned = true }},
+		}, ""},
+		{"returned material", func(x *ReviewEligibilitySnapshot) { x.Returned = true }, "materials_returned"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			changed := s
@@ -157,6 +162,15 @@ func TestReviewCoverageRequiresCurrentCompleteApPlusBPlan(t *testing.T) {
 			result := assessReviewEligibility(changed)
 			if result.Eligible || result.TestCoverage != nil || !slices.Contains(result.Blockers, "test_coverage_missing") {
 				t.Fatalf("coverage evidence escaped its admitted binding: %+v", result)
+			}
+			if tc.historicalBlocker != "" {
+				if result.InputValidator == nil || result.IndependentCorrectness == nil ||
+					!slices.Contains(result.Blockers, tc.historicalBlocker) {
+					t.Fatalf("historical checks must not replace the current prerequisite: %+v", result)
+				}
+			} else if result.InputValidator != nil || result.IndependentCorrectness != nil ||
+				!slices.Contains(result.Blockers, "input_validator_missing") {
+				t.Fatalf("quality evidence escaped its binding: %+v", result)
 			}
 		})
 	}
