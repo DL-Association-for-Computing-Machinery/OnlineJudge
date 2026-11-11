@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OnlineJudge Private Worker API
-  version: 0.5.0
+  version: 0.6.0
   description: >-
     独立 loopback HTTPS 控制端，TLS 1.3 双向认证。判题客户端证书唯一 URI SAN 为
     spiffe://onlinejudge/worker/{node_id}/{credential_version}，不接受请求自报身份。
@@ -24,7 +24,7 @@ paths:
       operationId: claimReferenceReservation
       description: >-
         仅供显式配置的参考节点。按申请 ID 领取，事务内复核原授权、申请状态、
-        来源配置和预期计划。单一 30 秒预留的材料读取须逐次重新授权，不授予执行权限，无续租或报告接口。
+        来源配置和预期计划。单一 30 秒预留的材料读取须逐次重新授权；执行前须收到单独启用的续期确认。无参考报告接口。
       requestBody:
         required: true
         content:
@@ -57,6 +57,30 @@ paths:
         '403': {$ref: '#/components/responses/Forbidden'}
         '409':
           description: 请求缺失、未准备、取消、失权、计划不匹配或参考容量已占用
+        '413': {$ref: '#/components/responses/TooLarge'}
+        '415': {$ref: '#/components/responses/MediaType'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/v1/worker/reference/renew:
+    post:
+      operationId: renewReferenceReservation
+      description: >-
+        仅同机专用参考节点且 OJ_WORKER_REFERENCE_EXECUTION=1。复核原授权及固定计划，
+        只延长未过期的相同预留。回执未知或失败须停止；数据库过期不是沙箱停止证明。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - {$ref: '#/components/schemas/ReferenceMaterialInput'}
+                - not: {required: [object]}
+      responses:
+        '200': {$ref: '#/paths/~1api~1v1~1worker~1reference~1claim/post/responses/200'}
+        '400': {$ref: '#/components/responses/Invalid'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {description: 参考执行未显式启用}
+        '409': {description: 预留过期、绑定不符，或原申请及授权已失效}
         '413': {$ref: '#/components/responses/TooLarge'}
         '415': {$ref: '#/components/responses/MediaType'}
         '503': {$ref: '#/components/responses/Unavailable'}

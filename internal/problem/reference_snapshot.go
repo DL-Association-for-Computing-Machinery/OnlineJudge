@@ -64,7 +64,7 @@ func (p *Prepared) prepareDiskReference(ctx context.Context, sourceID string, ad
 }
 
 func freezeReferenceSnapshot(ctx context.Context, content Content, sourceID string, admission diskReferenceAdmission, open referenceOpen, release func()) (_ *ReferenceSnapshot, err error) {
-	return freezeSnapshot(ctx, open, release, func() (ReferencePlan, []fileReference, error) {
+	return freezeSnapshot(ctx, ctx, open, release, func() (ReferencePlan, []fileReference, error) {
 		plan, d, err := referenceMetadata(content, admission.limits, sourceID, admission.path)
 		if err != nil {
 			return plan, nil, err
@@ -85,14 +85,14 @@ func freezeReferenceSnapshot(ctx context.Context, content Content, sourceID stri
 	})
 }
 
-func freezeSnapshot(ctx context.Context, open referenceOpen, release func(), prepare func() (ReferencePlan, []fileReference, error)) (_ *ReferenceSnapshot, err error) {
+func freezeSnapshot(ctx, lifetime context.Context, open referenceOpen, release func(), prepare func() (ReferencePlan, []fileReference, error)) (_ *ReferenceSnapshot, err error) {
 	if !referenceSnapshotActive.CompareAndSwap(false, true) {
 		if release != nil {
 			release()
 		}
 		return nil, ErrBusy
 	}
-	s := &ReferenceSnapshot{ctx: ctx, release: func() {
+	s := &ReferenceSnapshot{ctx: lifetime, release: func() {
 		if release != nil {
 			release()
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materialstore"
 )
@@ -65,6 +66,23 @@ func (p ReferencePlan) MaterialObjects() ([]materialstore.Object, error) {
 // into the shared bounded anonymous snapshot. It does not rederive import
 // provenance or grant execution; the caller pins the trusted expected digest.
 func (p ReferencePlan) FreezeMaterials(ctx context.Context, reader func(context.Context, materialstore.Object) (io.ReadCloser, error)) (*ReferenceSnapshot, error) {
+	return p.freezeMaterials(ctx, ctx, reader)
+}
+
+// FreezeMaterialsWithDownloadDeadline limits acquisition without shortening the
+// lifetime of the completed file. The caller must supply a lease-supervised
+// context and close the snapshot. Its lifetime is fixed at construction; a
+// canceled snapshot cannot be rebound. This method does not grant authority.
+func (p ReferencePlan) FreezeMaterialsWithDownloadDeadline(ctx context.Context, deadline time.Time, reader func(context.Context, materialstore.Object) (io.ReadCloser, error)) (*ReferenceSnapshot, error) {
+	if ctx == nil || deadline.IsZero() {
+		return nil, ErrInvalid
+	}
+	download, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
+	return p.freezeMaterials(download, ctx, reader)
+}
+
+func (p ReferencePlan) freezeMaterials(ctx, lifetime context.Context, reader func(context.Context, materialstore.Object) (io.ReadCloser, error)) (*ReferenceSnapshot, error) {
 	if ctx == nil || reader == nil {
 		return nil, ErrInvalid
 	}
@@ -77,7 +95,7 @@ func (p ReferencePlan) FreezeMaterials(ctx context.Context, reader func(context.
 	p.Dependencies = append([]ReferenceDependency(nil), p.Dependencies...)
 	open := referenceOpen(func(ctx context.Context, ref fileReference) (io.ReadCloser, error) { return reader(ctx, ref.object()) })
 	ref := func(o materialstore.Object) fileReference { return fileReference{SHA256: o.SHA256, Size: o.Size} }
-	return freezeSnapshot(ctx, open, nil, func() (ReferencePlan, []fileReference, error) {
+	return freezeSnapshot(ctx, lifetime, open, nil, func() (ReferencePlan, []fileReference, error) {
 		info, err := open.read(ctx, ref(p.Definition))
 		if err != nil {
 			return ReferencePlan{}, nil, err

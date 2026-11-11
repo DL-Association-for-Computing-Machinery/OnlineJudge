@@ -2,6 +2,7 @@ package workerclient
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -89,6 +90,33 @@ func TestFetchReferenceSnapshotExpires(t *testing.T) {
 	time.Sleep(time.Until(start.Add(550 * time.Millisecond)))
 	if raw, err := got.ReadSource(t.Context()); err == nil || raw != nil {
 		t.Fatal("snapshot readable after conservative deadline", err)
+	}
+}
+
+func TestExecutionSnapshotUsesOnlyItsSupervisedLifetimeAfterDownload(t *testing.T) {
+	plan, objects := referenceMaterialsFixture(t)
+	claim, encoding := referenceClaim(t, plan)
+	var calls atomic.Int32
+	a := acquisitionServer(t, referenceHandler(t, claim, encoding, 700, objects, "", &calls))
+	lifetime, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	start := time.Now()
+	snapshot, err := a.FetchReferenceForExecution(lifetime, claim)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := snapshot.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	time.Sleep(time.Until(start.Add(750 * time.Millisecond)))
+	if got, err := snapshot.ReadSource(t.Context()); err != nil || !bytes.Equal(got, objects[plan.Source.SHA256]) {
+		t.Fatal("completed download did not retain its supervised lifetime", err)
+	}
+	cancel()
+	if got, err := snapshot.ReadSource(t.Context()); got != nil || !errors.Is(err, context.Canceled) {
+		t.Fatal("a fresh call context revived the canceled snapshot", err)
 	}
 }
 

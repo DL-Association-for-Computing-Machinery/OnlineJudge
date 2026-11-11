@@ -89,13 +89,42 @@ func (r *Runner) ValidateSource(ctx context.Context, prepared *problem.Prepared,
 }
 
 func (r *Runner) validate(ctx context.Context, prepared *problem.Prepared, profile Profile, sourceID string) (report Report, err error) {
+	return r.validateMaterials(ctx, profile, sourceID, true, func(ctx context.Context) (problem.ReferencePlan, referenceReader, error) {
+		if prepared == nil || prepared.Content().SourceID != sourceID {
+			return problem.ReferencePlan{}, nil, errors.New("reference source identity mismatch")
+		}
+		return freezeReferences(ctx, prepared, profile, sourceID != "library-checker:aplusb")
+	})
+}
+
+// ValidateFrozen consumes an already verified snapshot using the same fixed
+// profiles and complete checker preflight as maintenance validation. The
+// caller retains snapshot ownership and must supervise authority and confirm
+// sandbox stop; a matching plan is not an execution grant.
+func (r *Runner) ValidateFrozen(ctx context.Context, snapshot *problem.ReferenceSnapshot, sourceID, expectedPlanSHA256 string) (Report, error) {
+	profile, _, err := ResolveSource(sourceID)
+	if err != nil {
+		return Report{}, err
+	}
+	return r.validateMaterials(ctx, profile, sourceID, false, func(context.Context) (problem.ReferencePlan, referenceReader, error) {
+		if snapshot == nil || !problem.ValidImportRevision(expectedPlanSHA256) {
+			return problem.ReferencePlan{}, nil, problem.ErrInvalid
+		}
+		plan := snapshot.Plan()
+		if plan.SourceID != sourceID || plan.SourceLockSHA256 != SourceLockSHA256 || plan.Digest() != expectedPlanSHA256 || plan.ValidateMaterials() != nil {
+			return problem.ReferencePlan{}, nil, errors.New("frozen reference plan does not match admission")
+		}
+		return plan, snapshot, nil
+	})
+}
+
+type referencePreparation func(context.Context) (problem.ReferencePlan, referenceReader, error)
+
+func (r *Runner) validateMaterials(ctx context.Context, profile Profile, sourceID string, ownSnapshot bool, prepare referencePreparation) (report Report, err error) {
 	report = Report{Schema: "oj.reference-validation.v1", Status: "reference-validation-failed", Publication: "blocked", Profile: profile, ProfileSHA256: profile.Digest(), Verdict: "SE", Points: []Point{}}
 	admitted, _, admissionErr := ResolveSource(sourceID)
 	if r == nil || ctx == nil || r.sandbox == nil || admissionErr != nil || !r.used.CompareAndSwap(false, true) || !reflect.DeepEqual(profile, admitted) {
 		return report, errors.New("unsupported or occupied reference validation")
-	}
-	if prepared.Content().SourceID != sourceID {
-		return report, errors.New("reference source identity mismatch")
 	}
 	ctx, cancel := context.WithTimeout(ctx, profile.Wall)
 	defer cancel()
@@ -106,7 +135,7 @@ func (r *Runner) validate(ctx context.Context, prepared *problem.Prepared, profi
 			err = errors.Join(err, e)
 		}
 	}()
-	plan, frozen, err := freezeReferences(ctx, prepared, profile, sourceID != "library-checker:aplusb")
+	plan, frozen, err := prepare(ctx)
 	report.Plan = plan
 	for _, c := range plan.Cases {
 		report.Points = append(report.Points, Point{ID: c.ID, Verdict: "NOT_RUN"})
@@ -114,13 +143,15 @@ func (r *Runner) validate(ctx context.Context, prepared *problem.Prepared, profi
 	if err != nil {
 		return report, err
 	}
-	defer func() {
-		if e := frozen.Close(); e != nil {
-			report.Verdict = "SE"
-			report.recordExecution("snapshot_close", 0, e)
-			err = errors.Join(err, e)
-		}
-	}()
+	if ownSnapshot {
+		defer func() {
+			if e := frozen.Close(); e != nil {
+				report.Verdict = "SE"
+				report.recordExecution("snapshot_close", 0, e)
+				err = errors.Join(err, e)
+			}
+		}()
+	}
 	if plan.SourceID != sourceID {
 		return report, errors.New("frozen reference source identity mismatch")
 	}
