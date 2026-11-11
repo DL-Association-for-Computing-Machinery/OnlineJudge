@@ -74,7 +74,7 @@ docker --context desktop-linux run --rm --network none --read-only \
 
 ### 私有草稿参考验证
 
-维护入口已验证固定Library Checker A+B完整12点、unionfind完整18点、zalgorithm完整29点、suffixarray完整50点、primality_test固定依赖/完整13点、static_range_sum完整11点、associative_array完整20点、point_add_range_sum完整21点、staticrmq完整27点及convolution_mod完整53点。历史启动/运行故障仍保留，根因未知，不据新通过宣称故障修复或长期稳定，证据归[交付记录](docs/delivery-log.md)。入口不写数据库验证状态或发布。需要已配置且停止的专用槽、已有固定镜像与Docker Desktop、macOS arm64；命令不会自动创建、替换或恢复槽。使用已有Go1.26.11工具链镜像构建独立宿主产物（不与Linux检查共用输出）：
+维护入口曾验证固定Library Checker A+B完整12点、unionfind完整18点、zalgorithm完整29点、suffixarray完整50点、primality_test固定依赖/完整13点、static_range_sum完整11点、associative_array完整20点、point_add_range_sum完整21点、staticrmq完整27点及convolution_mod完整53点。历史启动/运行故障仍保留，根因未知，不据新通过宣称故障修复或长期稳定，见[历史接纳记录](docs/delivery-log.md#2026-11-04convolution_mod-十来源固定环境接纳)。[#151 新题包的复验](docs/delivery-log.md#2026-11-11新版题包维护参考复验中止)通过前四题后因宿主超时中止，medium 槽保留隔离。入口不写数据库验证状态或发布。需要已配置且停止的专用槽、已有固定镜像与Docker Desktop、macOS arm64；命令不会自动创建、替换或恢复槽。使用已有Go1.26.11工具链镜像构建独立宿主产物（不与Linux检查共用输出）：
 
 `associative_array`使用512MiB完整材料总预算、input48MiB、stdout/checker8MiB、payload1GiB，独立CPU5秒/wall10秒，保留更严的整体3分钟和原medium物理槽/锁。同次48MiB输入→8MiB输出、完整20AC/Stop及随后独立原六来源回归已通过；[参考合同](docs/reference-validation.md#associative_array参考验证)与旧失败限制分开记录。
 
@@ -127,7 +127,7 @@ Host控制失败时，执行诊断条目可附带有界`host_trace`，区分入�
   -test.run='^(TestControlTrace.*|TestHostTraceCrossesExecutionTransportWithoutOldCause|TestSuccessfulHostThenDecodeFailureHasNoHostTrace)$' -test.timeout=1m
 ```
 
-维护入口使用独立缓存文件通路：源码/输入上传后回读核对SHA-256，输出原始字节拉取，参考答案留在宿主。默认A+B保留2MiB材料/4KiB输出，unionfind使用64MiB匿名磁盘快照与256KiB运行stdout。zalgorithm使用64MiB快照，suffixarray独立准入128MiB快照；两者共用4MiB stdout及256MiB累计传输档位。primality_test独立冻结32MiB以内材料及固定4个头文件，stdout512KiB、6个缓存对象。point_add_range_sum使用input16MiB/完整快照256MiB、stdout4MiB及双端payload512MiB，Runtime保持Medium。staticrmq使用原256MiB完整材料、input16MiB、stdout4MiB与payload512MiB，原失败记录保持。static_range_sum使用256MiB完整快照、input16MiB、raw stdout/checker8MiB、payload512MiB。associative_array预算见上段。zalgorithm、suffixarray、point_add_range_sum、primality_test、staticrmq、static_range_sum、associative_array共用原medium槽锁；convolution_mod使用独立16MiB输出槽与独立锁，snapshot512MiB、input/answer及stdout/checker各16MiB、payload2GiB，所有磁盘来源共用进程内一份快照额度，两端账本均按档位计量。编译双流/运行stderr仍各4KiB；associative_array与convolution_mod独立使用CPU5秒/wall10秒，其余磁盘来源CPU1秒/wall5秒保持，memory128MiB不变。当前版本十来源254点已通过固定环境维护接纳，最终CI与合并状态见[交付记录](docs/delivery-log.md#2026-11-04convolution_mod-十来源固定环境接纳)，生产配置不变。
+维护入口使用独立缓存文件通路：源码/输入上传后回读核对SHA-256，输出原始字节拉取，参考答案留在宿主。默认A+B保留2MiB材料/4KiB输出，unionfind使用64MiB匿名磁盘快照与256KiB运行stdout。zalgorithm使用64MiB快照，suffixarray独立准入128MiB快照；两者共用4MiB stdout及256MiB累计传输档位。primality_test独立冻结32MiB以内材料及固定4个头文件，stdout512KiB、6个缓存对象。point_add_range_sum使用input16MiB/完整快照256MiB、stdout4MiB及双端payload512MiB，Runtime保持Medium。staticrmq使用原256MiB完整材料、input16MiB、stdout4MiB与payload512MiB，原失败记录保持。static_range_sum使用256MiB完整快照、input16MiB、raw stdout/checker8MiB、payload512MiB。associative_array预算见上段。zalgorithm、suffixarray、point_add_range_sum、primality_test、staticrmq、static_range_sum、associative_array共用原medium槽锁；convolution_mod使用独立16MiB输出槽与独立锁，snapshot512MiB、input/answer及stdout/checker各16MiB、payload2GiB，所有磁盘来源共用进程内一份快照额度，两端账本均按档位计量。编译双流/运行stderr仍各4KiB；associative_array与convolution_mod独立使用CPU5秒/wall10秒，其余磁盘来源CPU1秒/wall5秒保持，memory128MiB不变。生产配置不变。
 
 unionfind使用独立固定`oj-reference-sandbox`及`slot-reference.lock`，拒非空`OJ_WORKER_M0_SLOT`。维护者确认容器不存在后，可用已有固定镜像显式创建停止槽；已有槽不能替换，须核验owner/配置和停止状态：
 
