@@ -166,7 +166,8 @@ def pre_push(stream):
         if len(fields) != 4:
             raise PolicyError("Invalid pre-push input; refusing push.")
         if fields[2] in PROTECTED:
-            raise PolicyError("Direct update/deletion of remote main/master is blocked; use PR review.")
+            raise PolicyError("Direct update/deletion of remote main/master is blocked. "
+                              "Push related commits to a task branch and open a PR for one acceptance goal.")
 
 
 def bootstrap_ci():

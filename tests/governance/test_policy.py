@@ -263,18 +263,30 @@ class PolicyTests(unittest.TestCase):
         self.assertNotEqual(blocked.returncode, 0)
         self.assertIn("main/master", blocked.stderr)
 
-    def test_installed_push_hook_checks_actual_local_git_push(self):
+    def test_installed_hooks_allow_multi_commit_task_push_and_block_main(self):
         self.install_fixture()
         installed = self.command("sh", "scripts/install-hooks.sh")
         self.assertEqual(installed.returncode, 0, installed.stderr)
         self.run_git("add", ".")
         self.run_git("commit", "-m", "test: seed push verification")
+        first = self.run_git("rev-parse", "HEAD").strip()
+        self.write("follow-up.txt", "second change for the same acceptance goal\n")
+        self.run_git("add", "follow-up.txt")
+        invalid = self.command("git", "commit", "-m", "invalid follow-up")
+        self.assertNotEqual(invalid.returncode, 0)
+        self.assertIn("Conventional Commit", invalid.stderr)
+        self.assertEqual(self.run_git("rev-parse", "HEAD").strip(), first)
+        self.run_git("commit", "-m", "test: add task follow-up")
+        second = self.run_git("rev-parse", "HEAD").strip()
         with tempfile.TemporaryDirectory(prefix="oj-policy-remote-") as destination:
             self.run_git("init", "--bare", "--template=", destination)
             self.run_git("push", destination, "HEAD:refs/heads/codex/test")
+            history = self.run_git("--git-dir", destination, "rev-list", "refs/heads/codex/test")
+            self.assertEqual(history.splitlines(), [second, first])
             blocked = self.command("git", "push", destination, "HEAD:refs/heads/main")
             self.assertNotEqual(blocked.returncode, 0)
             self.assertIn("main/master", blocked.stderr)
+            self.assertIn("Push related commits to a task branch", blocked.stderr)
             absent = self.command("git", "--git-dir", destination, "show-ref", "--verify", "refs/heads/main")
             self.assertNotEqual(absent.returncode, 0)
 
