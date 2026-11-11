@@ -1,12 +1,12 @@
 openapi: 3.1.0
 info:
   title: OnlineJudge Private Worker API
-  version: 0.6.0
+  version: 0.7.0
   description: >-
     独立 loopback HTTPS 控制端，TLS 1.3 双向认证。判题客户端证书唯一 URI SAN 为
     spiffe://onlinejudge/worker/{node_id}/{credential_version}，不接受请求自报身份。
     每次操作验证证书及数据库节点状态/凭据版本；租约令牌绑定节点、尝试与代次。
-    全部响应 Cache-Control 为 no-store，请求体上限 1024 字节。
+    全部响应 Cache-Control 为 no-store；参考报告请求体上限 24 KiB，其余请求体上限 1024 字节。
     无证书、错误 CA、错误用途或握手时过期的证书在 TLS 层失败，无 HTTP 响应。
     未知路径 404，不支持方法 405。材料接口仅在配置 OJ_MATERIAL_ROOT 后开启。
     参考领取仅在配置 OJ_WORKER_REFERENCE_NODE_ID 时开启，并使用独立的
@@ -24,7 +24,7 @@ paths:
       operationId: claimReferenceReservation
       description: >-
         仅供显式配置的参考节点。按申请 ID 领取，事务内复核原授权、申请状态、
-        来源配置和预期计划。单一 30 秒预留的材料读取须逐次重新授权；执行前须收到单独启用的续期确认。无参考报告接口。
+        来源配置和预期计划。单一 30 秒预留的材料读取须逐次重新授权；执行前须收到单独启用的续期确认。
       requestBody:
         required: true
         content:
@@ -81,6 +81,36 @@ paths:
         '403': {$ref: '#/components/responses/Forbidden'}
         '404': {description: 参考执行未显式启用}
         '409': {description: 预留过期、绑定不符，或原申请及授权已失效}
+        '413': {$ref: '#/components/responses/TooLarge'}
+        '415': {$ref: '#/components/responses/MediaType'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/v1/worker/reference/report:
+    post:
+      operationId: acceptReferenceWorkerEvidence
+      description: >-
+        仅显式启用执行的专用参考节点。首次接纳须匹配有效预留、原授权、草稿和控制端冻结计划；
+        完全相同的历史重放仅确认既有结果，不改变任何预留或发布状态。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [request_id, source_id, plan_sha256, lease_token, evidence]
+              properties:
+                request_id: {type: string, pattern: '^[0-9a-f]{32}$'}
+                source_id: {type: string, minLength: 1, maxLength: 128}
+                plan_sha256: {$ref: '#/components/schemas/Digest'}
+                lease_token: {$ref: '#/components/schemas/Digest'}
+                evidence: {type: string, contentEncoding: base64, maxLength: 21848, description: 最多 16 KiB 的规范参考证据 JSON}
+      responses:
+        '204': {description: 首次接纳已提交或完全相同的历史报告已确认}
+        '400': {$ref: '#/components/responses/Invalid'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {description: 参考执行未显式启用}
+        '409': {description: 授权或预留失效、证据不匹配或与历史报告冲突}
         '413': {$ref: '#/components/responses/TooLarge'}
         '415': {$ref: '#/components/responses/MediaType'}
         '503': {$ref: '#/components/responses/Unavailable'}

@@ -131,12 +131,16 @@ func validToken(w http.ResponseWriter, token string) bool {
 }
 
 func decode(w http.ResponseWriter, r *http.Request, value any) bool {
+	return decodeBounded(w, r, value, 1024)
+}
+
+func decodeBounded(w http.ResponseWriter, r *http.Request, value any, limit int64) bool {
 	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || media != "application/json" {
 		problem(w, 415, "UNSUPPORTED_MEDIA_TYPE", "请使用 JSON 请求")
 		return false
 	}
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024))
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, limit))
 	decoder.DisallowUnknownFields()
 	// A pointer to the supplied DTO also detects JSON null instead of treating it as {}.
 	err = decoder.Decode(&value)

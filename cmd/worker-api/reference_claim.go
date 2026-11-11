@@ -48,7 +48,7 @@ func configureReferenceClaims(next http.Handler, pool *pgxpool.Pool, roots *x509
 		}
 	}
 	if execution {
-		return workerapi.WithReferenceExecution(next, claims, claims, roots, materials), nil
+		return workerapi.WithReferenceExecution(next, claims, claims, roots, materials, claims), nil
 	}
 	return workerapi.WithReferenceClaims(next, claims, roots, materials), nil
 }

@@ -155,7 +155,7 @@ func (s *Store) Cancel(ctx context.Context, actor identity.ProblemActor, key str
 	if err != nil {
 		return problemreference.Request{}, err
 	}
-	if result.State == problemreference.Cancelled {
+	if result.State != problemreference.Queued {
 		return commit(ctx, tx, result, false)
 	}
 	row, err = q.CancelReferenceRequest(ctx, referencedb.CancelReferenceRequestParams{Owner: actor.SubjectID, RequestKey: key})

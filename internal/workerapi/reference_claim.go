@@ -12,6 +12,7 @@ import (
 
 const referenceClaimPath = "/api/v1/worker/reference/claim"
 const referenceRenewPath = "/api/v1/worker/reference/renew"
+const referenceReportPath = "/api/v1/worker/reference/report"
 
 var referenceIdentityURI = regexp.MustCompile(`^spiffe://onlinejudge/reference-worker/([A-Za-z0-9_-]{1,128})/([1-9][0-9]{0,18})$`)
 
@@ -22,23 +23,28 @@ func WithReferenceClaims(next http.Handler, claims problemreference.WorkerClaime
 	if len(materials) != 0 {
 		service = materials[0]
 	}
-	return withReference(next, claims, nil, roots, service)
+	return withReference(next, claims, nil, nil, roots, service)
 }
 
 // WithReferenceExecution additionally enables renewal for the dedicated node.
 // Only the loopback single-host Worker may use this capability.
-func WithReferenceExecution(next http.Handler, claims problemreference.WorkerClaimer, renew problemreference.WorkerRenewer, roots *x509.CertPool, materials *problemreference.ReferenceMaterials) http.Handler {
-	return withReference(next, claims, renew, roots, materials)
+func WithReferenceExecution(next http.Handler, claims problemreference.WorkerClaimer, renew problemreference.WorkerRenewer, roots *x509.CertPool, materials *problemreference.ReferenceMaterials, reports ...problemreference.WorkerReporter) http.Handler {
+	var reporter problemreference.WorkerReporter
+	if len(reports) != 0 {
+		reporter = reports[0]
+	}
+	return withReference(next, claims, renew, reporter, roots, materials)
 }
 
-func withReference(next http.Handler, claims problemreference.WorkerClaimer, renew problemreference.WorkerRenewer, roots *x509.CertPool, materials *problemreference.ReferenceMaterials) http.Handler {
+func withReference(next http.Handler, claims problemreference.WorkerClaimer, renew problemreference.WorkerRenewer, reports problemreference.WorkerReporter, roots *x509.CertPool, materials *problemreference.ReferenceMaterials) http.Handler {
 	if claims == nil {
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		materialPath := r.URL.Path == referenceDescribePath || r.URL.Path == referenceMaterialPath
 		renewPath := r.URL.Path == referenceRenewPath
-		if r.URL.Path != referenceClaimPath && !materialPath && !renewPath {
+		reportPath := r.URL.Path == referenceReportPath
+		if r.URL.Path != referenceClaimPath && !materialPath && !renewPath && !reportPath {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -63,6 +69,24 @@ func withReference(next http.Handler, claims problemreference.WorkerClaimer, ren
 				return
 			}
 			serveReferenceMaterials(w, r, materials, node, roots)
+			return
+		}
+		if reportPath {
+			if reports == nil || renew == nil || materials == nil {
+				problem(w, 404, "NOT_FOUND", "接口不存在")
+				return
+			}
+			var input problemreference.WorkerReportInput
+			if !decodeBounded(w, r, &input, 24<<10) {
+				return
+			}
+			if err := reports.ReportReference(r.Context(), node, input); errors.Is(err, problemreference.ErrInvalid) && !errors.Is(err, problemreference.ErrStore) {
+				problem(w, 400, "INVALID_REQUEST", "参考报告格式无效")
+			} else if err != nil {
+				referenceMaterialError(w, err)
+			} else {
+				w.WriteHeader(http.StatusNoContent)
+			}
 			return
 		}
 		if renewPath {
