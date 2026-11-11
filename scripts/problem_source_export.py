@@ -5,7 +5,9 @@ import json
 from pathlib import PurePosixPath
 import tarfile
 
-from library_checker_quality import control_result, input_controls
+from library_checker_quality import (
+    INPUT_CONTROL_SCHEMA, WRONG_SOLUTIONS, WRONG_SOLUTION_SCHEMA, control_result, input_controls, wrong_solution_result,
+)
 from problem_source_common import MAX_DATA_FILE, MAX_EXPORT, MAX_REPORT, safe_path
 
 
@@ -92,19 +94,32 @@ def extract(archive, destination, expected):
     return report, total
 
 
-def validate_report(report, lock, catalog, *, require_controls=False):
+def validate_report(report, lock, catalog, *, inventory=None, required_schema=None):
     """A source-validation report is evidence, never a production verdict."""
     schema = report.get("schema")
-    with_controls = schema == "oj.source-validation.v2"
-    if (not with_controls and (require_controls or schema != "oj.source-validation.v1")
+    if (schema not in ("oj.source-validation.v1", INPUT_CONTROL_SCHEMA, WRONG_SOLUTION_SCHEMA)
+            or required_schema is not None and schema != required_schema
             or report.get("commit") != lock["commit"]):
         raise ValueError("invalid validation report identity")
+    actual = report.get("problems")
+    if not isinstance(actual, list) or len(actual) != len(catalog):
+        raise ValueError("incomplete validation results")
     expected = [{"source_id": p["source_id"], "cases": len(p["cases"]),
                  "input_validator": "passed-all", "reference_checker": "passed-all",
                  "invalid_output_checker_exit": 1} for p in catalog]
-    if with_controls:
+    if schema in (INPUT_CONTROL_SCHEMA, WRONG_SOLUTION_SCHEMA):
         for problem in expected:
             problem["input_controls"] = [control_result(*probe) for probe in input_controls(problem["source_id"])]
+    if schema == WRONG_SOLUTION_SCHEMA:
+        if inventory is None:
+            raise ValueError("missing pinned inventory for wrong-solution results")
+        for item, row, observed in zip(catalog, expected, actual, strict=True):
+            row["wrong_solution"] = None
+            if item["path"] in WRONG_SOLUTIONS:
+                result = observed.get("wrong_solution") if isinstance(observed, dict) else None
+                if not isinstance(result, dict):
+                    raise ValueError("missing wrong-solution witness")
+                row["wrong_solution"] = wrong_solution_result(item, result.get("case_position"), inventory)
     # JSON comparison also distinguishes numbers from booleans and fractions.
-    if json.dumps(report.get("problems"), sort_keys=True) != json.dumps(expected, sort_keys=True):
+    if json.dumps(actual, sort_keys=True) != json.dumps(expected, sort_keys=True):
         raise ValueError("incomplete validation results")

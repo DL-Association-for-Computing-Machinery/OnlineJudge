@@ -8,11 +8,14 @@ from pathlib import Path
 import resource
 import subprocess
 import sys
+import tempfile
 import time
 import tomllib
 import types
 
-from library_checker_quality import control_result, input_controls
+from library_checker_quality import (
+    WRONG_SOLUTIONS, WRONG_SOLUTION_SCHEMA, control_result, input_controls, wrong_solution_result,
+)
 from problem_source_common import digest, expected_materials, load_lock, read_regular, snapshot
 
 
@@ -33,6 +36,26 @@ def run_input_controls(verifier, source_id):
             raise ValueError(f"{source_id}: input validator control {name} exited {result.returncode}, expected {expected_exit}")
         observations.append(control_result(name, payload, result.returncode))
     return observations
+
+
+def run_wrong_solution(base, item, inventory, output):
+    name = WRONG_SOLUTIONS[item["path"]]
+    for position, case in enumerate(item["cases"], 1):
+        if case["sample"]:
+            continue
+        infile = base / "in" / (case["id"] + ".in")
+        answer = base / "out" / (case["id"] + ".out")
+        with infile.open("rb") as stream, output.open("wb") as actual:
+            candidate = checked([str(base / "sol" / Path(name).stem)], stdin=stream,
+                                stdout=actual, timeout=15, check=False)
+        if candidate.returncode != 0:
+            raise ValueError(f"{item['source_id']}: wrong solution exited {candidate.returncode} at point {position}")
+        result = checked([str(base / "checker"), str(infile), str(output), str(answer)], timeout=15, check=False)
+        if result.returncode == 1:
+            return wrong_solution_result(item, position, inventory)
+        if result.returncode != 0:
+            raise ValueError(f"{item['source_id']}: checker exited {result.returncode} at point {position}")
+    raise ValueError(f"{item['source_id']}: no formal point rejected the wrong solution")
 
 
 def main():
@@ -76,9 +99,17 @@ def main():
         if result.returncode != 1:
             raise ValueError("negative checker control did not return WA")
         controls = run_input_controls(base / "verifier", item["source_id"])
+        wrong_solution = None
+        if name := WRONG_SOLUTIONS.get(item["path"]):
+            module.compile(base / "sol" / name, source)
+            with tempfile.TemporaryDirectory(dir="/work") as directory:
+                wrong_solution = run_wrong_solution(base, item, expected, Path(directory) / "actual.out")
+            print(item["source_id"], "wrong solution rejected at formal position",
+                  wrong_solution["case_position"], flush=True)
         report.append({"source_id": item["source_id"], "cases": len(item["cases"]),
                        "input_validator": "passed-all", "reference_checker": "passed-all",
-                       "invalid_output_checker_exit": result.returncode, "input_controls": controls})
+                       "invalid_output_checker_exit": result.returncode, "input_controls": controls,
+                       "wrong_solution": wrong_solution})
         print(item["source_id"], len(item["cases"]), "cases and", len(controls), "input controls validated", flush=True)
     export = Path("/work/export")
     export.mkdir()
@@ -97,7 +128,7 @@ def main():
         target.parent.mkdir(parents=True, exist_ok=True)
         # Hard links avoid a second copy of the generated data in bounded tmpfs.
         target.hardlink_to(original)
-    validation = {"schema": "oj.source-validation.v2", "commit": lock["commit"],
+    validation = {"schema": WRONG_SOLUTION_SCHEMA, "commit": lock["commit"],
                   "elapsed_seconds": round(time.monotonic() - start, 3),
                   "compiler": subprocess.check_output(["g++", "--version"], text=True).splitlines()[0],
                   "python": sys.version.split()[0], "problems": report}

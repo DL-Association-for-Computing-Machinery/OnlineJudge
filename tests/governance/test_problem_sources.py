@@ -176,7 +176,7 @@ class ExportTests(TemporaryCase):
         old = {"schema": "oj.source-validation.v1", "commit": "pinned", "problems": [result]}
         export.validate_report(old, lock, catalog)
         with self.assertRaisesRegex(ValueError, "identity"):
-            export.validate_report(old, lock, catalog, require_controls=True)
+            export.validate_report(old, lock, catalog, required_schema="oj.source-validation.v2")
 
         report = copy.deepcopy(old)
         report["schema"] = "oj.source-validation.v2"
@@ -189,7 +189,7 @@ class ExportTests(TemporaryCase):
                 ("trailing-data", b"0 1000000000\n0\n", 3),
             )
         ]
-        export.validate_report(report, lock, catalog, require_controls=True)
+        export.validate_report(report, lock, catalog, required_schema="oj.source-validation.v2")
         for change in ("missing", "wrong-input", "untyped-exit", "crash"):
             with self.subTest(change=change):
                 damaged = copy.deepcopy(report)
@@ -203,7 +203,7 @@ class ExportTests(TemporaryCase):
                 else:
                     controls[1]["exit_code"] = -9
                 with self.assertRaisesRegex(ValueError, "incomplete"):
-                    export.validate_report(damaged, lock, catalog, require_controls=True)
+                    export.validate_report(damaged, lock, catalog, required_schema="oj.source-validation.v2")
 
 
 class InputControlTests(unittest.TestCase):
@@ -215,6 +215,86 @@ class InputControlTests(unittest.TestCase):
                 runner.run_input_controls(Path("/fixture/verifier"), "library-checker:convolution_mod")
             self.assertEqual(checked.call_count, 2)
             self.assertEqual(checked.call_args.kwargs["input"], b"1 1\n0\n998244353\n")
+
+
+class WrongSolutionTests(TemporaryCase):
+    def setUp(self):
+        super().setUp()
+        self.item = {"source_id": "library-checker:aplusb", "path": "sample/aplusb", "cases": [
+            {"id": "example_00", "sample": True},
+            {"id": "formal_00", "sample": False},
+            {"id": "formal_01", "sample": False},
+        ]}
+        (self.root / "in").mkdir()
+        self.inventory = {
+            "source/sample/aplusb/sol/wa.cpp": {"sha256": "a" * 64},
+            "source/sample/aplusb/checker.cpp": {"sha256": "b" * 64},
+        }
+        for case in self.item["cases"]:
+            name = case["id"]
+            (self.root / "in" / (name + ".in")).write_bytes(name.encode())
+            self.inventory[f"problems/aplusb/in/{name}.in"] = {"sha256": common.digest(name.encode())}
+            self.inventory[f"problems/aplusb/out/{name}.out"] = {"sha256": "d" * 64}
+        self.witness = {
+            "solution": "wa.cpp", "solution_sha256": "a" * 64, "checker_sha256": "b" * 64,
+            "case_id": "formal_00", "case_position": 2, "input_sha256": common.digest(b"formal_00"),
+            "answer_sha256": "d" * 64, "candidate_exit": 0, "checker_exit": 1,
+        }
+
+    def run_probe(self):
+        return runner.run_wrong_solution(self.root, self.item, self.inventory, self.root / "actual")
+
+    def test_first_formal_wa_records_witness_and_stops(self):
+        def run(command, **options):
+            if "stdin" in options:
+                self.assertEqual(options["stdin"].read(), b"formal_00")
+                return subprocess.CompletedProcess(command, 0)
+            self.assertEqual(Path(command[1]).name, "formal_00.in")
+            return subprocess.CompletedProcess(command, 1)
+        with patch.object(runner, "checked", side_effect=run) as checked:
+            self.assertEqual(self.run_probe(), self.witness)
+        self.assertEqual(checked.call_count, 2)
+
+    def test_exits_without_a_formal_wa_cannot_supply_evidence(self):
+        for codes, message in [((1,), "wrong solution exited"), ((0, 2), "checker exited"),
+                               ((0, 0, 0, 0), "no formal point")]:
+            with self.subTest(codes=codes), patch.object(
+                runner, "checked", side_effect=[subprocess.CompletedProcess([], n) for n in codes],
+            ) as checked, self.assertRaisesRegex(ValueError, message):
+                try:
+                    self.run_probe()
+                finally:
+                    self.assertEqual(checked.call_count, len(codes))
+        with patch.object(runner, "checked", side_effect=subprocess.TimeoutExpired("candidate", 15)):
+            with self.assertRaises(subprocess.TimeoutExpired):
+                self.run_probe()
+
+    def test_host_rejects_forged_or_missing_wrong_solution_evidence(self):
+        from library_checker_quality import control_result, input_controls
+
+        lock = {"commit": "pinned"}
+        catalog = [self.item]
+        row = {"source_id": self.item["source_id"], "cases": 3, "input_validator": "passed-all",
+               "reference_checker": "passed-all", "invalid_output_checker_exit": 1,
+               "input_controls": [control_result(*c) for c in input_controls(self.item["source_id"])]}
+        old = {"schema": "oj.source-validation.v2", "commit": "pinned", "problems": [row]}
+        new = {"schema": "oj.source-validation.v3", "commit": "pinned",
+               "problems": [{**row, "wrong_solution": self.witness}]}
+        export.validate_report(old, lock, catalog, inventory=self.inventory)
+        with self.assertRaisesRegex(ValueError, "identity"):
+            export.validate_report(old, lock, catalog, required_schema=new["schema"])
+        export.validate_report(new, lock, catalog, inventory=self.inventory, required_schema=new["schema"])
+        for field, value in [("case_position", 1), ("case_position", True), ("case_position", 4),
+                             ("case_id", "formal_01"), ("input_sha256", "e" * 64),
+                             ("answer_sha256", "e" * 64), ("solution_sha256", "e" * 64),
+                             ("checker_sha256", "e" * 64), ("candidate_exit", -9), ("checker_exit", 2)]:
+            with self.subTest(field=field, value=value):
+                damaged = copy.deepcopy(new)
+                damaged["problems"][0]["wrong_solution"][field] = value
+                with self.assertRaises(ValueError):
+                    export.validate_report(damaged, lock, catalog, inventory=self.inventory)
+        with self.assertRaisesRegex(ValueError, "missing wrong-solution"):
+            export.validate_report({**new, "problems": [row]}, lock, catalog, inventory=self.inventory)
 
 
 class DriverTests(TemporaryCase):

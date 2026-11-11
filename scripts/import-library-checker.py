@@ -61,7 +61,7 @@ def run(corpus, output):
             or document.get("problems") != catalog):
         raise ValueError("source catalog differs from pinned mapping")
     report_bytes = read_regular(corpus, "validation.json", MAX_REPORT)
-    validate_report(json.loads(report_bytes), lock, catalog)
+    validate_report(json.loads(report_bytes), lock, catalog, inventory=expected)
     output.mkdir(mode=0o700)
     write_new(output, "INCOMPLETE", b"Import incomplete. Do not use or publish.\n")
     partial = output / "bundle.partial"
