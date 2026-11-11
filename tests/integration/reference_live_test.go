@@ -103,10 +103,18 @@ func TestLiveReferenceReports(t *testing.T) {
 		sources = []fixtureSource{{"staticrmq", 28}}
 		versionPin = "194da8b53c88aa634cb5c030c684a355a59b224a00c7d74422bc35b333d3a5f0"
 		suffixSizes = []int64{34}
+	case "point_add_range_sum":
+		sources = []fixtureSource{{"point_add_range_sum", 23}}
+		versionPin = "188f392cd74cc6bb2156a0a444d0f232d0ea71ee746cb0523fba2c914d79dc25"
+		suffixSizes = []int64{12, 63}
 	case "unionfind":
 		sources = []fixtureSource{{"unionfind", 20}}
 		versionPin = "42e62825925bf727c394f3435c2b50f850758576c392d082fb628f7219e4f07d"
 		suffixSizes = []int64{10, 10}
+	case "static_range_sum":
+		sources = []fixtureSource{{"static_range_sum", 13}}
+		versionPin = "a93676964a96fb5dd0320441307eb0bb11ed41b0a1e1d4441c47d124a644e375"
+		suffixSizes = []int64{10, 19}
 	default:
 		t.Fatal("unknown supplement fixture")
 	}
@@ -142,6 +150,12 @@ func TestLiveReferenceReports(t *testing.T) {
 			if source.id == "staticrmq" && versionPin != "" && formal.Cases[27].Answer.SHA256 != liveReferenceDigest([]byte("1000000000\n")) {
 				t.Fatal("persisted static RMQ plan lost its boundary answer")
 			}
+			if source.id == "static_range_sum" && versionPin != "" {
+				if formal.Cases[11].Answer.SHA256 != liveReferenceDigest([]byte("0\n")) ||
+					formal.Cases[12].Answer.SHA256 != liveReferenceDigest([]byte("1000000000\n")) {
+					t.Fatal("persisted static range sum plan lost its boundary answers")
+				}
+			}
 			for i, size := range suffixSizes {
 				pos := len(formal.Cases) - len(suffixSizes) + i
 				if c := formal.Cases[pos]; c.ID != fmt.Sprintf("case-%04d", pos+1) || c.Input.Size != size {
@@ -152,6 +166,12 @@ func TestLiveReferenceReports(t *testing.T) {
 				if formal.Cases[18].Answer.Size != 2 || formal.Cases[19].Answer.Size != 0 ||
 					formal.Cases[19].Answer.SHA256 != liveReferenceDigest(nil) {
 					t.Fatal("persisted unionfind plan lost its singleton answers")
+				}
+			}
+			if source.id == "point_add_range_sum" && versionPin != "" {
+				if formal.Cases[21].Answer.SHA256 != liveReferenceDigest([]byte("0\n")) ||
+					formal.Cases[22].Answer.SHA256 != liveReferenceDigest([]byte("1000000000\n3000000000\n")) {
+					t.Fatal("persisted point-add range sum plan lost its boundary answers")
 				}
 			}
 			if source.id == "associative_array" && versionPin != "" {

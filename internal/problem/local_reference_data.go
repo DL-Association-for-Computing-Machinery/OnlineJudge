@@ -8,6 +8,8 @@ const (
 	aPlusBLocalVersion       = "74c7797f5484daf9df01b1be2e5a537eba7b05b1ef20efc08110c61e3c1490fd"
 	unionFindLocalVersion    = "42e62825925bf727c394f3435c2b50f850758576c392d082fb628f7219e4f07d"
 	staticRMQLocalVersion    = "194da8b53c88aa634cb5c030c684a355a59b224a00c7d74422bc35b333d3a5f0"
+	pointAddLocalVersion     = "188f392cd74cc6bb2156a0a444d0f232d0ea71ee746cb0523fba2c914d79dc25"
+	staticSumLocalVersion    = "a93676964a96fb5dd0320441307eb0bb11ed41b0a1e1d4441c47d124a644e375"
 )
 
 const associativeArrayLocalVersion = "4d6dd8e3fe97a0e1ec6585ff538219d811f660bdfff7cc2172bf6092cf858928"
@@ -37,6 +39,24 @@ var localReferenceRevisions = map[string]localReferenceRevision{
 				ID:     "case-0031",
 				Input:  materialstore.Object{SHA256: "069af87ff42316e1bbe6cc65d3ed71a71cdcf9cc972257c93a7d934b435c8ad2", Size: 500001},
 				Answer: materialstore.Object{SHA256: "9a3768bb91a7c39e5777767f091605ebb81cac9a047140ba7832bc5f067ab434", Size: 3388895},
+			},
+		},
+	},
+	staticSumLocalVersion: {
+		label: "oj-local:static-range-sum-singleton-v1", sourceID: "library-checker:static_range_sum", upstream: 11,
+		source:     materialstore.Object{SHA256: "ce9cc2b97c96f7d58c35f73e4a666ba2d3657a52158253fc0bd1827525ab4721", Size: 328},
+		definition: materialstore.Object{SHA256: "4bb9d46e0588f7ccb82300e122a9a28c137629f4c592f521306d1d9bf61dc9ec", Size: 398},
+		hashes:     materialstore.Object{SHA256: "31429aeefb0ff6d0692774fa374cc2f4b7d96a83554a5a0dbab745b2c40c520f", Size: 1947},
+		suffix: []ReferenceCase{
+			{
+				ID:     "case-0012",
+				Input:  materialstore.Object{SHA256: "44da26b5b66dcf1623863d95d7e7d480612c22415a3c11783b7b0d2fe1cbb2c0", Size: 10},
+				Answer: materialstore.Object{SHA256: "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa", Size: 2},
+			},
+			{
+				ID:     "case-0013",
+				Input:  materialstore.Object{SHA256: "59e68f510f84ca808f1e2c7ca2053fb5d6b9e3a5f6840ebcb5b11e20d5ec4e29", Size: 19},
+				Answer: materialstore.Object{SHA256: "8bd5a23c3aef1243c78bac155b39b9d57a43d8c49665ccf6f42acf2992a94afa", Size: 11},
 			},
 		},
 	},
@@ -83,6 +103,24 @@ var localReferenceRevisions = map[string]localReferenceRevision{
 				ID:     "case-0028",
 				Input:  materialstore.Object{SHA256: "30ad661dba75866c8b8ae4977d14abd8081b2cdf190133af4eb4d027cc263fe0", Size: 34},
 				Answer: materialstore.Object{SHA256: "8bd5a23c3aef1243c78bac155b39b9d57a43d8c49665ccf6f42acf2992a94afa", Size: 11},
+			},
+		},
+	},
+	pointAddLocalVersion: {
+		label: "oj-local:point-add-range-sum-boundaries-v1", sourceID: "library-checker:point_add_range_sum", upstream: 21,
+		source:     materialstore.Object{SHA256: "3d57829f581030f3f97c7f282ffbb51a6a30247e4d28d540d663da139b9aacfe", Size: 1382},
+		definition: materialstore.Object{SHA256: "e4bc11b1c68357961379ed2d14344e723bb91aaa85406094c6b75063e054aaf2", Size: 392},
+		hashes:     materialstore.Object{SHA256: "04f182429d0d58a6f30ef60b2c60d4645ed3bbc9ac15a034d9a2ec4565a7091a", Size: 3657},
+		suffix: []ReferenceCase{
+			{
+				ID:     "case-0022",
+				Input:  materialstore.Object{SHA256: "b51a4a556eba251c8884e032eeafbbeb0de410b3da47062c2aab1b55ddf8024a", Size: 12},
+				Answer: materialstore.Object{SHA256: "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa", Size: 2},
+			},
+			{
+				ID:     "case-0023",
+				Input:  materialstore.Object{SHA256: "c97fdf50a506fb3aa94025726ed7b742a343cd68cabff5391a537fee852f6be5", Size: 63},
+				Answer: materialstore.Object{SHA256: "1c8e7642152280a3e5bee17531c30bbbd84003d3cba9fdb220b617a990c8a432", Size: 22},
 			},
 		},
 	},
