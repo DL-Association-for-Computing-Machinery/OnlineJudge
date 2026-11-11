@@ -27,3 +27,13 @@ type ProblemReferenceRequest struct {
 	CreatedAt        pgtype.Timestamptz
 	CancelledAt      pgtype.Timestamptz
 }
+
+type ProblemReferenceWorkerClaim struct {
+	Singleton         bool
+	RequestID         string
+	NodeID            string
+	CredentialVersion int64
+	LeaseToken        string
+	PlanSha256        string
+	LeaseUntil        pgtype.Timestamptz
+}
