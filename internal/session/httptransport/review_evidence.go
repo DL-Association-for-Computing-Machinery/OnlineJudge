@@ -14,9 +14,10 @@ import (
 
 const reviewEvidencePrefix = "/api/v1/problem-review/"
 
-// ReviewEvidenceReader exposes only the scoped read operation to HTTP.
+// ReviewEvidenceReader exposes only the scoped validation results to HTTP.
 type ReviewEvidenceReader interface {
 	EvidenceForSubject(context.Context, redisstore.Credential, string, string) (problemreference.ReviewEvidence, error)
+	ComparisonForSubject(context.Context, redisstore.Credential, string, string) (problemreference.ReviewComparison, error)
 }
 
 // ReviewMaterialsReader exposes the bounded, reauthorized material projection.
@@ -25,7 +26,7 @@ type ReviewMaterialsReader interface {
 }
 
 // WithReviewEvidence adds reviewer access to the configured draft runtime.
-// A nil materials reader leaves only the summary route available.
+// A nil materials reader leaves the validation result routes available.
 func WithReviewEvidence(base http.Handler, reader ReviewEvidenceReader, materials ReviewMaterialsReader, returns ReviewReturns) (http.Handler, error) {
 	h, ok := base.(*handler)
 	if !ok || h == nil || h.drafts == nil || h.reviewEvidence != nil || reader == nil {
@@ -43,19 +44,24 @@ func IsReviewReadPath(path string) bool {
 	return id != ""
 }
 
-func reviewReadRoute(path string) (id string, materials bool) {
+func reviewReadRoute(path string) (id string, leaf string) {
 	tail, ok := strings.CutPrefix(path, reviewEvidencePrefix)
 	if !ok {
-		return "", false
+		return "", ""
 	}
 	id, leaf, found := strings.Cut(tail, "/")
-	if !found || !identity.ValidID(id) || (leaf != "evidence" && leaf != "materials") {
-		return "", false
+	if !found || !identity.ValidID(id) {
+		return "", ""
 	}
-	return id, leaf == "materials"
+	switch leaf {
+	case "evidence", "comparison", "materials":
+		return id, leaf
+	default:
+		return "", ""
+	}
 }
 
-func (h *handler) serveReviewRead(w http.ResponseWriter, r *http.Request, id string, materials bool) {
+func (h *handler) serveReviewRead(w http.ResponseWriter, r *http.Request, id, leaf string) {
 	expected, ok := expectedSubject(r)
 	if !ok || r.URL.RawQuery != "" || r.URL.ForceQuery || r.URL.RawPath != "" || r.ContentLength != 0 || len(r.TransferEncoding) != 0 {
 		problem(w, 400, "INVALID_REVIEW_EVIDENCE_REQUEST", "审核证据请求格式无效")
@@ -71,11 +77,18 @@ func (h *handler) serveReviewRead(w http.ResponseWriter, r *http.Request, id str
 	var result any
 	var e problemreference.ReviewEvidence
 	var valid bool
-	if materials {
+	limit := problemreference.MaxReviewComparisonBytes
+	switch leaf {
+	case "materials":
+		limit = problemreference.MaxReviewMaterialResponse
 		var m problemreference.ReviewMaterials
 		m, err = h.reviewMaterials.MaterialsForSubject(ctx, credential, expected, id)
 		result, e, valid = m, m.Evidence, m.Valid()
-	} else {
+	case "comparison":
+		var c problemreference.ReviewComparison
+		c, err = h.reviewEvidence.ComparisonForSubject(ctx, credential, expected, id)
+		result, e, valid = c, c.Evidence, c.Valid()
+	case "evidence":
 		e, err = h.reviewEvidence.EvidenceForSubject(ctx, credential, expected, id)
 		result, valid = e, e.Valid()
 	}
@@ -101,7 +114,7 @@ func (h *handler) serveReviewRead(w http.ResponseWriter, r *http.Request, id str
 		return
 	}
 	body, err := json.Marshal(result)
-	if err != nil || len(body) > problemreference.MaxReviewMaterialResponse || ctx.Err() != nil {
+	if err != nil || len(body) > limit || ctx.Err() != nil {
 		problem(w, 503, "REVIEW_UNAVAILABLE", "审核证据暂不可用")
 		return
 	}

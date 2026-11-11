@@ -19,6 +19,10 @@ func (e unavailableEvidence) EvidenceForSubject(context.Context, redisstore.Cred
 	return problemreference.ReviewEvidence{}, e.err
 }
 
+func (e unavailableEvidence) ComparisonForSubject(context.Context, redisstore.Credential, string, string) (problemreference.ReviewComparison, error) {
+	return problemreference.ReviewComparison{}, e.err
+}
+
 func TestReviewEvidenceSessionFailurePriority(t *testing.T) {
 	for _, tc := range []struct {
 		err  error

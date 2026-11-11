@@ -85,6 +85,41 @@ func (e ReviewEvidence) Valid() bool {
 // same transaction used to read the immutable evidence projection.
 type ReviewEvidenceRepository interface {
 	ReviewEvidence(context.Context, identity.ProblemActor, string) (ReviewEvidence, error)
+	ReviewComparison(context.Context, identity.ProblemActor, string) (ReviewComparison, error)
+}
+
+// MaxReviewComparisonBytes bounds the evidence summary and generated difference.
+const MaxReviewComparisonBytes = 4096
+
+// ReviewComparison contains the fixed evidence identity and its generated comparison.
+// A nil comparison means that no outcome was recorded in the accepted report.
+type ReviewComparison struct {
+	Evidence   ReviewEvidence          `json:"evidence"`
+	Comparison *AuthorComparisonResult `json:"comparison"`
+}
+
+// Valid checks that the comparison is consistent with its evidence summary.
+func (r ReviewComparison) Valid() bool {
+	if !r.Evidence.Valid() {
+		return false
+	}
+	c := r.Comparison
+	if c == nil {
+		return r.Evidence.ComparisonOutcome == ""
+	}
+	if r.Evidence.ComparisonPlan == "" || c.Status != r.Evidence.ComparisonOutcome || c.Total < 1 {
+		return false
+	}
+	switch c.Status {
+	case "passed":
+		return c.Matched == c.Total && c.Counterexample == nil
+	case "mismatch":
+		d := c.Counterexample
+		return c.Matched >= 0 && c.Matched < c.Total && d != nil && d.Case == c.Matched+1 &&
+			d.Input != "" && len(d.Expected) > 0 && len(d.Expected) == len(d.Actual)
+	default:
+		return false
+	}
 }
 
 // ReviewAccess binds the reviewer read to a fresh ordinary session.
@@ -104,6 +139,45 @@ func NewReviewAccess(sessions SessionReader, repo ReviewEvidenceRepository) (*Re
 // EvidenceForSubject reads a single assigned item's fixed evidence.
 func (s *ReviewAccess) EvidenceForSubject(ctx context.Context, c redisstore.Credential, expected, id string) (ReviewEvidence, error) {
 	var zero ReviewEvidence
+	actor, err := s.reviewActor(ctx, c, expected, id)
+	if err != nil {
+		return zero, err
+	}
+	e, err := s.repo.ReviewEvidence(ctx, actor, id)
+	if err != nil {
+		return zero, err
+	}
+	if err := ctx.Err(); err != nil {
+		return zero, err
+	}
+	if !e.Valid() || e.ReviewID != id || e.Reviewer != expected {
+		return zero, ErrStore
+	}
+	return e, nil
+}
+
+// ComparisonForSubject reads the comparison from the item's accepted report.
+func (s *ReviewAccess) ComparisonForSubject(ctx context.Context, c redisstore.Credential, expected, id string) (ReviewComparison, error) {
+	var zero ReviewComparison
+	actor, err := s.reviewActor(ctx, c, expected, id)
+	if err != nil {
+		return zero, err
+	}
+	r, err := s.repo.ReviewComparison(ctx, actor, id)
+	if err != nil {
+		return zero, err
+	}
+	if err := ctx.Err(); err != nil {
+		return zero, err
+	}
+	if !r.Valid() || r.Evidence.ReviewID != id || r.Evidence.Reviewer != expected {
+		return zero, ErrStore
+	}
+	return r, nil
+}
+
+func (s *ReviewAccess) reviewActor(ctx context.Context, c redisstore.Credential, expected, id string) (identity.ProblemActor, error) {
+	var zero identity.ProblemActor
 	if s == nil || s.sessions == nil || s.repo == nil || ctx == nil || !identity.ValidID(expected) || !identity.ValidID(id) {
 		return zero, ErrInvalid
 	}
@@ -117,15 +191,5 @@ func (s *ReviewAccess) EvidenceForSubject(ctx context.Context, c redisstore.Cred
 	if actor.SubjectID != expected {
 		return zero, ErrSubjectChanged
 	}
-	e, err := s.repo.ReviewEvidence(ctx, actor, id)
-	if err != nil {
-		return zero, err
-	}
-	if err := ctx.Err(); err != nil {
-		return zero, err
-	}
-	if !e.Valid() || e.ReviewID != id || e.Reviewer != expected {
-		return zero, ErrStore
-	}
-	return e, nil
+	return actor, nil
 }

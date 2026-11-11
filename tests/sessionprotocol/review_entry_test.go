@@ -57,6 +57,12 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 	loginStatus(t, reviewMaterialsGET(x, receipt.ID, nil, reviewer.ID), 401)
 	loginStatus(t, reviewMaterialsGET(x, receipt.ID, cookies, owner), 409)
 	loginStatus(t, reviewMaterialsGET(x, receipt.ID, cookies, reviewer.ID), 403)
+	comparison := func(endpoint *loginEndpoint, id string, c []*http.Cookie, subject string) loginResponse {
+		return reviewReadGET(endpoint, id+"/comparison", c, subject)
+	}
+	loginStatus(t, comparison(x, receipt.ID, nil, reviewer.ID), 401)
+	loginStatus(t, comparison(x, receipt.ID, cookies, owner), 409)
+	loginStatus(t, comparison(x, receipt.ID, cookies, reviewer.ID), 403)
 	grant := func(subject string, revision int64, enabled bool) {
 		t.Helper()
 		_, err := access.SetReviewerRole(f.ctx, identity.ProblemRoleChange{SubjectID: subject, ExpectedRevision: revision,
@@ -68,6 +74,7 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 	loginStatus(t, reviewEvidenceGET(y, receipt.ID, authorCookies, owner), 404)
 	loginStatus(t, reviewEvidenceGET(y, receipt.ID, cookies, reviewer.ID), 404)
 	loginStatus(t, reviewMaterialsGET(y, receipt.ID, cookies, reviewer.ID), 404)
+	loginStatus(t, comparison(y, receipt.ID, cookies, reviewer.ID), 404)
 	store, err := referencepg.NewReviewStore(f.pools[0], access)
 	must(t, err)
 	_, err = store.SetAssignment(f.ctx, problemreference.ReviewAssignmentChange{ReviewID: receipt.ID,
@@ -85,6 +92,23 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 	}
 	loginStatus(t, reviewEvidenceGET(x, draftID, cookies, reviewer.ID), 404)
 	loginStatus(t, reviewEvidenceGET(x, receipt.ID, authorCookies, owner), 404)
+	for _, endpoint := range []*loginEndpoint{x, y} {
+		result := comparison(endpoint, receipt.ID, cookies, reviewer.ID)
+		loginStatus(t, result, 200)
+		var body map[string]json.RawMessage
+		must(t, json.Unmarshal(result.body, &body))
+		if len(body) != 2 || string(body["comparison"]) != "null" || string(body["evidence"]) != string(assigned.body) {
+			t.Fatal("formal-only evidence did not return the same summary and explicit null comparison")
+		}
+	}
+	loginStatus(t, comparison(x, draftID, cookies, reviewer.ID), 404)
+	loginStatus(t, comparison(x, receipt.ID, authorCookies, owner), 404)
+	loginStatus(t, reviewReadGET(y, receipt.ID+"/comparison?hash="+got.EvidenceSHA256, cookies, reviewer.ID), 400)
+	loginStatus(t, reviewReadGET(y, receipt.ID+"/%63omparison", cookies, reviewer.ID), 400)
+	loginStatus(t, loginCall(y, "/api/v1/problem-review/"+receipt.ID+"/comparison", "{}", cookies, func(r *http.Request) {
+		r.Method = http.MethodGet
+		r.Header.Set("X-OJ-Expected-Subject", reviewer.ID)
+	}), 400)
 	material := reviewMaterialsGET(y, receipt.ID, cookies, reviewer.ID)
 	loginStatus(t, material, 200)
 	assertReviewMaterials(t, material, receipt, owner, reviewer.ID)
@@ -108,9 +132,11 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 	grant(reviewer.ID, 1, false)
 	loginStatus(t, reviewEvidenceGET(x, receipt.ID, cookies, reviewer.ID), 403)
 	loginStatus(t, reviewMaterialsGET(x, receipt.ID, cookies, reviewer.ID), 403)
+	loginStatus(t, comparison(x, receipt.ID, cookies, reviewer.ID), 403)
 	grant(reviewer.ID, 2, true)
 	loginStatus(t, reviewEvidenceGET(y, receipt.ID, cookies, reviewer.ID), 404)
 	loginStatus(t, reviewMaterialsGET(y, receipt.ID, cookies, reviewer.ID), 404)
+	loginStatus(t, comparison(y, receipt.ID, cookies, reviewer.ID), 404)
 	testReviewMaterialRaces(t, f, access, store, root, namespace, reviewer.ID, credential, receipt)
 	return receipt.ID
 }

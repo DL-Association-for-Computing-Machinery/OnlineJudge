@@ -4,7 +4,7 @@ info:
   version: 0.1.0
   description: >-
     默认关闭的独立审核读取能力。使用普通 HTTPS 会话及当前审核资格；
-    每次只按明确分配读取一项的固定验证结论或审核材料。退回另需显式开启；不提供批准或发布。
+    每次只按明确分配读取一项的固定验证结论、对拍详情或审核材料。退回另需显式开启；不提供批准或发布。
 security:
   - ordinarySession: []
 paths:
@@ -28,6 +28,35 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ReviewEvidence' }
+        '400': { $ref: '#/components/responses/Failure' }
+        '401': { $ref: '#/components/responses/Failure' }
+        '403': { $ref: '#/components/responses/Failure' }
+        '404': { $ref: '#/components/responses/Failure' }
+        '405': { $ref: '#/components/responses/Failure' }
+        '409': { $ref: '#/components/responses/Failure' }
+        '503': { $ref: '#/components/responses/Failure' }
+  /api/v1/problem-review/{review_id}/comparison:
+    parameters:
+      - $ref: './problem-draft-management.openapi.yaml#/components/parameters/ExpectedSubject'
+      - $ref: '#/components/parameters/ReviewID'
+    get:
+      operationId: getAssignedReviewComparison
+      description: >-
+        沿用审核证据的普通会话、当前资格及分配检查。只按送审 ID 读取与完整导入修订、对拍计划及
+        已接纳证据摘要绑定的结果。拒绝 query、请求体和转义路径别名。响应至多 4096 字节；
+        对拍未记录为 null，通过时没有反例，差异时只返回首个生成输入及两份输出。响应 no-store/nosniff。
+      responses:
+        '200':
+          description: 送审证据与固定的独立对拍结果
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [evidence, comparison]
+                properties:
+                  evidence: { $ref: '#/components/schemas/ReviewEvidence' }
+                  comparison: { $ref: './problem-reference-requests.openapi.yaml#/components/schemas/GeneratedComparison' }
         '400': { $ref: '#/components/responses/Failure' }
         '401': { $ref: '#/components/responses/Failure' }
         '403': { $ref: '#/components/responses/Failure' }
