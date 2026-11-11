@@ -325,6 +325,18 @@ python3 -B scripts/import-library-checker.py \
   --verify-bundle /private/tmp/oj-zalgorithm-scale/bundle
 ```
 
+离线盘点输入覆盖时，对两份题包分别生成报告。只读取已核验题包，不执行题源程序；用私有输出路径保留报告：
+
+```sh
+umask 077
+python3 -B scripts/audit-library-checker-coverage.py \
+  --bundle /private/tmp/oj-library-checker-drafts/bundle >/private/tmp/oj-v6-input-coverage.json
+python3 -B scripts/audit-library-checker-coverage.py \
+  --bundle /private/tmp/oj-zalgorithm-scale/bundle >/private/tmp/oj-zalgorithm-input-coverage.json
+```
+
+判定口径、版本及已观测缺口见[输入覆盖盘点](docs/problem-sources.md#输入覆盖盘点)。
+
 ### 出题角色维护与草稿入库服务
 
 出题角色始于schema 7，当前 schema 19仍默认不给任何账号授予角色。受信维护者先独立迁移，再用 Docker 工具链构建的命令明确授予/撤销；`OJ_DATABASE_URL` 通过既有私有环境注入，不把真实连接信息写入命令或日志：
