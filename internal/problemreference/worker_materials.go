@@ -40,6 +40,10 @@ type differentialMaterialAuthorizer interface {
 	AuthorizeDifferentialMaterials(context.Context, submission.NodeIdentity, MaterialInput) (MaterialAuthorization, error)
 }
 
+// ErrDifferentialNotPrepared is observed only after authenticating a live
+// reservation whose historical formal plan has no comparison metadata.
+var ErrDifferentialNotPrepared = errors.New("reference comparison plan not recorded")
+
 // MaterialDescriptor contains only the canonical, previously frozen plan.
 type MaterialDescriptor struct {
 	Encoding    []byte `json:"plan_encoding"`
@@ -133,6 +137,9 @@ func (s *ReferenceMaterials) DescribeDifferential(ctx context.Context, node subm
 	if remaining <= 0 || remaining > 30000 {
 		return DifferentialDescriptor{}, ErrClaimUnavailable
 	}
+	if a.Plan.Differential == nil {
+		return DifferentialDescriptor{}, ErrDifferentialNotPrepared
+	}
 	return DifferentialDescriptor{DifferentialExpectedPlan{Encoding: bytes.Clone(a.Plan.Differential.Encoding), SHA256: a.Plan.Differential.SHA256}, remaining}, nil
 }
 
@@ -142,7 +149,7 @@ func (s *ReferenceMaterials) DownloadDifferential(ctx context.Context, node subm
 	return s.download(ctx, object, func(ctx context.Context) (MaterialAuthorization, error) {
 		return s.authorizeDifferential(ctx, node, i)
 	}, func(a MaterialAuthorization, object materialstore.Object) bool {
-		if a.Plan.Differential.SHA256 != digest {
+		if a.Plan.Differential == nil || a.Plan.Differential.SHA256 != digest {
 			return false
 		}
 		plan, err := a.Plan.Differential.CurrentPlan(i.PlanSHA256)
@@ -162,9 +169,6 @@ func (s *ReferenceMaterials) authorizeDifferential(ctx context.Context, node sub
 	a, err := authority.AuthorizeDifferentialMaterials(ctx, node, i)
 	if err != nil {
 		return MaterialAuthorization{}, err
-	}
-	if a.Plan.Differential == nil {
-		return MaterialAuthorization{}, ErrClaimUnavailable
 	}
 	return a, nil
 }

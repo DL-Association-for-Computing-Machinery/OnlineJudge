@@ -71,3 +71,36 @@ func TestConvolutionCoefficientsRequireCompleteFiniteFieldOutput(t *testing.T) {
 		t.Fatalf("field boundaries were not accepted: %v, %v", got, err)
 	}
 }
+
+func TestConvolutionEvidenceRequiresTheFixedFirstMismatch(t *testing.T) {
+	p := ConvolutionPlan{Cases: 24}
+	const input = "2 2\n1 2\n3 4\n"
+	fresh := func() *ConvolutionCounterexample {
+		return &ConvolutionCounterexample{Case: 10, Input: input, InputSHA256: convolutionSHA256([]byte(input)),
+			Expected: []uint32{3, 10, 8}, Actual: []uint32{4, 10, 8}}
+	}
+	if !p.ValidOutcome("passed", 24, nil) || p.ValidOutcome("passed", 23, nil) ||
+		p.ValidOutcome("passed", 24, fresh()) || !p.ValidOutcome("mismatch", 9, fresh()) {
+		t.Fatal("determinate success/mismatch contract changed")
+	}
+	for name, edit := range map[string]func(*ConvolutionCounterexample){
+		"wrong point":  func(c *ConvolutionCounterexample) { c.Case++ },
+		"wrong digest": func(c *ConvolutionCounterexample) { c.InputSHA256 = strings.Repeat("a", 64) },
+		"wrong input with valid digest": func(c *ConvolutionCounterexample) {
+			c.Input = "1 1\n0\n0\n"
+			c.InputSHA256 = convolutionSHA256([]byte(c.Input))
+		},
+		"wrong anchor": func(c *ConvolutionCounterexample) { c.Expected[0] = 5 },
+		"out of field": func(c *ConvolutionCounterexample) { c.Actual[0] = 998244353 },
+		"identical":    func(c *ConvolutionCounterexample) { c.Actual = c.Expected },
+		"short output": func(c *ConvolutionCounterexample) { c.Actual = c.Actual[:2] },
+	} {
+		t.Run(name, func(t *testing.T) {
+			c := fresh()
+			edit(c)
+			if p.ValidOutcome("mismatch", 9, c) {
+				t.Fatal("invalid counterexample accepted")
+			}
+		})
+	}
+}

@@ -343,6 +343,8 @@ env -u OJ_WORKER_M0_SLOT -u OJ_WORKER_M0_DUAL_EXPERIMENT OJ_SANDBOX_EXPERIMENT=1
 
 另外显式设置控制端 `OJ_WORKER_REFERENCE_DISPATCH=1` 后，可使用 `.local/bin/worker run-next-reference SOURCE_ID [AFTER_ID]` 按来源选择并执行一个此前未领取的已准备申请。槽忙不发请求；空页可用输出的 `next_after` 显式继续。未知领取不自动重试，旧计划不会自动进入选择，见[选择合同](docs/reference-requests.md#按来源选择已准备申请)。
 
+对有独立对拍计划的卷积申请，上述两个执行入口会在正式点通过后继续用同一槽对拍，确认停止后一次提交两份证据。合法首差异会保留为失败证据，命令返回失败。实物专项使用上方 Darwin arm64 构建的 `worker-validation.test`，设置 `OJ_CONVOLUTION_LEASED_SANDBOX_TEST=1`、`OJ_SANDBOX_EXPERIMENT=1`、`OJ_CONVOLUTION_BUNDLE`、`OJ_CONVOLUTION_SOURCE_ROOT` 和 `OJ_CONVOLUTION_SOURCE_LOCK`，清空两个槽覆盖并运行 `-test.run='^TestClaimedConvolutionOwnedSandbox$' -test.count=1 -test.timeout=4m`。确认原槽已停止后，可另设 `OJ_CONVOLUTION_LEASE_LOSS=1` 做续期失效对照。真实 mTLS／PostgreSQL 报告接纳与宿主执行证据分别记录。
+
 上述 Darwin 专项产物 `worker-validation.test` 可在专用固定离线槽运行 `-test.run '^TestClaimedReferenceOwnedSandbox$' -test.v`，显式设置 `OJ_REFERENCE_LEASED_SANDBOX_TEST=1 OJ_SANDBOX_EXPERIMENT=1` 并清空槽覆盖；须与其他宿主专项串行。只使用固定合成 A+B 和续期替身，分别验证真实执行与续期拒绝后的停止。
 
 

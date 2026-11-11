@@ -72,6 +72,14 @@ func (c *ReferenceClaimer) ReportReference(ctx context.Context, node submission.
 	if plan.SHA256 != input.PlanSHA256 || !evidence.ValidFor(request.Specification, plan) {
 		return problemreference.ErrClaimUnavailable
 	}
+	if evidence.Verdict == "AC" && request.Specification.Identity.SourceID == problemvalidation.ConvolutionSourceID {
+		if err := loadCurrentComparison(ctx, q, request, &plan); err != nil {
+			return err
+		}
+	}
+	if !evidence.ValidComparison(plan) {
+		return problemreference.ErrClaimUnavailable
+	}
 	if _, err := q.ReferenceWorkerClaimForUpdate(ctx); err != nil {
 		return referenceClaimError(err)
 	}
