@@ -55,7 +55,7 @@ func TestReferencePreparationIsBoundedAndDoesNotPublishAfterLoss(t *testing.T) {
 				}
 				return f.session.Read(ctx, credential)
 			})
-			plans, err := problemreference.NewPlanService(sessions, f.store, f.repository, gate)
+			plans, err := problemreference.NewPlanService(sessions, f.store, f.repository, gate, nil)
 			must(t, err)
 			prepare, err := problemreference.NewPreparation(plans)
 			must(t, err)

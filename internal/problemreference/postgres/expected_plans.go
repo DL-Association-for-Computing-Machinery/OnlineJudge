@@ -10,7 +10,9 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference/postgres/referencedb"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 var _ problemreference.PlanRepository = (*Store)(nil)
@@ -22,7 +24,8 @@ func (s *Store) PersistExpectedPlan(ctx context.Context, actor identity.ProblemA
 	if ctx == nil || original.Owner != actor.SubjectID || original.Authorization.Actor != actor ||
 		!identity.ValidID(original.ID) || !identity.ValidID(original.DraftID) || !problem.ValidKey(original.RequestKey) ||
 		original.State != problemreference.Queued || original.CancelledAt != nil ||
-		!original.Specification.Valid() || !plan.ValidFor(original.Specification) {
+		!original.Specification.Valid() || !plan.ValidForRequest(original) ||
+		original.ExpectsDifferential() != (plan.Differential != nil) {
 		return problemreference.ExpectedPlan{}, problemreference.ErrInvalid
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -77,9 +80,7 @@ func (s *Store) PersistExpectedPlan(ctx context.Context, actor identity.ProblemA
 	wrote := errors.Is(err, problemreference.ErrNotFound)
 	switch {
 	case wrote:
-		err = q.InsertReferenceExpectedPlan(ctx, referencedb.InsertReferenceExpectedPlanParams{
-			RequestID: current.ID, PlanEncoding: plan.Encoding, PlanSha256: plan.SHA256,
-		})
+		err = insertExpectedPlan(ctx, q, current.ID, plan)
 		if err != nil {
 			return problemreference.ExpectedPlan{}, storageError{err}
 		}
@@ -87,6 +88,12 @@ func (s *Store) PersistExpectedPlan(ctx context.Context, actor identity.ProblemA
 		return problemreference.ExpectedPlan{}, err
 	case previous.SHA256 != plan.SHA256 || !bytes.Equal(previous.Encoding, plan.Encoding):
 		return problemreference.ExpectedPlan{}, problemreference.ErrPlanConflict
+	case previous.Differential != nil && (plan.Differential == nil ||
+		previous.Differential.SHA256 != plan.Differential.SHA256 || !bytes.Equal(previous.Differential.Encoding, plan.Differential.Encoding)):
+		return problemreference.ExpectedPlan{}, problemreference.ErrPlanConflict
+	default:
+		// A formal plan from before migration 14 remains unchanged on replay.
+		plan = previous
 	}
 	if err := commitTx(ctx, tx, wrote); err != nil {
 		return problemreference.ExpectedPlan{}, err
@@ -98,6 +105,18 @@ func (s *Store) PersistExpectedPlan(ctx context.Context, actor identity.ProblemA
 		return problemreference.ExpectedPlan{}, err
 	}
 	return plan, nil
+}
+
+func insertExpectedPlan(ctx context.Context, q *referencedb.Queries, id string, plan problemreference.ExpectedPlan) error {
+	if d := plan.Differential; d != nil {
+		return q.InsertReferencePlanWithDifferential(ctx, referencedb.InsertReferencePlanWithDifferentialParams{
+			RequestID: id, PlanEncoding: plan.Encoding, PlanSha256: plan.SHA256,
+			DifferentialEncoding: d.Encoding, DifferentialSha256: pgtype.Text{String: d.SHA256, Valid: true},
+		})
+	}
+	return q.InsertReferenceExpectedPlan(ctx, referencedb.InsertReferenceExpectedPlanParams{
+		RequestID: id, PlanEncoding: plan.Encoding, PlanSha256: plan.SHA256,
+	})
 }
 
 // ExpectedPlan observes a prior write by original owner/key under current
@@ -135,15 +154,30 @@ func (s *Store) ExpectedPlan(ctx context.Context, actor identity.ProblemActor, k
 }
 
 func loadExpectedPlan(ctx context.Context, q *referencedb.Queries, request problemreference.Request) (problemreference.ExpectedPlan, error) {
-	row, err := q.ReferenceExpectedPlan(ctx, request.ID)
+	var result problemreference.ExpectedPlan
+	var err error
+	// Old comparison rows remain readable even if their lock is retired.
+	if request.Specification.Identity.SourceID == problemvalidation.ConvolutionSourceID {
+		row, queryErr := q.ReferenceConvolutionExpectedPlan(ctx, request.ID)
+		err = queryErr
+		result = problemreference.ExpectedPlan{Encoding: row.PlanEncoding, SHA256: row.PlanSha256}
+		if row.DifferentialEncoding != nil || row.DifferentialSha256.Valid {
+			result.Differential = &problemreference.DifferentialExpectedPlan{
+				Encoding: row.DifferentialEncoding, SHA256: row.DifferentialSha256.String,
+			}
+		}
+	} else {
+		row, queryErr := q.ReferenceExpectedPlan(ctx, request.ID)
+		err = queryErr
+		result = problemreference.ExpectedPlan{Encoding: row.PlanEncoding, SHA256: row.PlanSha256}
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return problemreference.ExpectedPlan{}, problemreference.ErrNotFound
 	}
 	if err != nil {
 		return problemreference.ExpectedPlan{}, storageError{err}
 	}
-	result := problemreference.ExpectedPlan{Encoding: row.PlanEncoding, SHA256: row.PlanSha256}
-	if !result.ValidFor(request.Specification) {
+	if !result.ValidForRequest(request) {
 		return problemreference.ExpectedPlan{}, storageError{problemreference.ErrInvalid}
 	}
 	return result, nil

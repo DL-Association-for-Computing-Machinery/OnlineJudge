@@ -145,7 +145,7 @@ func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore
 		if err != nil {
 			return nil, nil, ErrStartup
 		}
-		plans, err := problemreference.NewPlanService(sessions, repo, repository, materials)
+		plans, err := problemreference.NewPlanService(sessions, repo, repository, materials, lock)
 		if err != nil {
 			return nil, nil, ErrStartup
 		}

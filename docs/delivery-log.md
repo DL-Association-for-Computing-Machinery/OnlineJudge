@@ -1,5 +1,13 @@
 # 工程交付记录
 
+## 2026-11-11：作者准备时持久化卷积对拍计划
+
+基于 `origin/main de36dfb`，[作者准备](reference-requests.md#卷积独立对拍的预期计划)从固定来源锁的已入库卷积草稿核验两份解法，并与正式计划在原授权事务中一次提交。独立摘要绑定草稿修订、固定语料、两份解法、Profile 和正式计划摘要。schema 14 保留历史正式计划，不回填；存在对拍记录时拒绝 Down14。
+
+断网 Docker 的临时 PostgreSQL 实物专项通过：旧计划回放与空对拍迁移可逆，候选读取失败无写入，真实 COMMIT 回执丢失后按原键恢复两份原值，规范但不同的对拍计划不得覆盖，半记录和错误摘要被数据库拒绝。两种计划读取的 `EXPLAIN ANALYZE` 均命中申请主键。日志：`/private/tmp/oj-convolution-expected-plan-postgres-final.log` 和 `/private/tmp/oj-convolution-expected-plan-postgres.log`。
+
+本阶段没有执行对拍题源，也没有改变 Worker 正式点协议、草稿状态、报告接纳或发布。未迁移持久化 localdev 或目标服务器。最终 CI 与合并状态以 PR 回读为准。
+
 ## 2026-11-11：已入库卷积草稿的对拍材料
 
 基于 `origin/main f5d9fa0`，[草稿材料冻结](reference-validation.md#已入库草稿的卷积对拍材料)用完整导入修订和固定来源锁绑定朴素解与候选解。材料绑定报告保留草稿 ID、内容版本和导入修订，维护命令旧格式保持；任何一份对象损坏都不返回部分材料。

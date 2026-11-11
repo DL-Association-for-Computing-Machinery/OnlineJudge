@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
 )
 
 var (
@@ -23,8 +24,9 @@ const MaxExpectedPlanBytes = 64 << 10
 // ExpectedPlan holds the exact ReferencePlan JSON and its digest. It contains
 // identities, not private material bytes, an execution grant or a verdict.
 type ExpectedPlan struct {
-	Encoding []byte
-	SHA256   string
+	Encoding     []byte
+	SHA256       string
+	Differential *DifferentialExpectedPlan
 }
 
 // ValidFor checks the bounded canonical encoding and its historical import
@@ -45,6 +47,51 @@ func (p ExpectedPlan) ValidFor(spec Specification) bool {
 	return err == nil && bytes.Equal(raw, p.Encoding)
 }
 
+// MaxDifferentialPlanBytes bounds the optional metadata stored alongside the
+// formal plan. Neither encoding contains private material.
+const MaxDifferentialPlanBytes = 2 << 10
+
+// DifferentialExpectedPlan holds the separate canonical plan for the reviewed
+// fixed convolution comparison. The formal plan digest remains unchanged.
+type DifferentialExpectedPlan struct {
+	Encoding []byte
+	SHA256   string
+}
+
+// ExpectsDifferential identifies requests eligible for the reviewed v1
+// comparison when a plan is first written. It does not change historical rows.
+func (r Request) ExpectsDifferential() bool {
+	i := r.Specification.Identity
+	return i.SourceID == problemvalidation.ConvolutionSourceID && i.SourceLockSHA256 == problemvalidation.SourceLockSHA256
+}
+
+// ValidForRequest checks the formal plan and, when present, the independently
+// hashed comparison plan against the original request and exact draft.
+func (p ExpectedPlan) ValidForRequest(r Request) bool {
+	if !p.ValidFor(r.Specification) {
+		return false
+	}
+	d := p.Differential
+	if d == nil {
+		return true
+	}
+	if len(d.Encoding) == 0 || len(d.Encoding) > MaxDifferentialPlanBytes ||
+		profileDigest(d.Encoding) != d.SHA256 {
+		return false
+	}
+	var plan problemvalidation.ConvolutionPlan
+	if json.Unmarshal(d.Encoding, &plan) != nil || !plan.ValidIdentity() {
+		return false
+	}
+	i := r.Specification.Identity
+	if plan.SourceID != i.SourceID || plan.SourceLock != i.SourceLockSHA256 || plan.Draft.ID != r.DraftID || plan.FormalSHA256 != p.SHA256 ||
+		plan.Draft.Version != i.Version || plan.Draft.ImportRevision != i.ImportRevision || plan.ProfileSHA256 != r.Specification.ProfileSHA256 {
+		return false
+	}
+	raw, err := json.Marshal(plan)
+	return err == nil && bytes.Equal(raw, d.Encoding)
+}
+
 // PreparedPlan is produced only after the internal service freezes and closes a
 // complete snapshot. Persistence never accepts a caller-supplied plan or digest.
 type PreparedPlan struct {
@@ -57,5 +104,10 @@ func (p PreparedPlan) Values() (Request, ExpectedPlan) {
 	r, plan := p.request, p.plan
 	r.Specification = r.Specification.Clone()
 	plan.Encoding = bytes.Clone(plan.Encoding)
+	if plan.Differential != nil {
+		differential := *plan.Differential
+		differential.Encoding = bytes.Clone(differential.Encoding)
+		plan.Differential = &differential
+	}
 	return r, plan
 }
