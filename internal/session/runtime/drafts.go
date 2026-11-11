@@ -29,10 +29,14 @@ type PrivateDraftsConfig struct {
 	Timeout                                       time.Duration
 	MaxInFlight                                   int
 	ReferenceRequests                             bool
+	ReviewIntake                                  bool
 }
 
 // Validate checks bounded lexical configuration without accessing files.
 func (c PrivateDraftsConfig) Validate() error {
+	if c.ReviewIntake && !c.ReferenceRequests {
+		return ErrConfig
+	}
 	for _, path := range []string{c.MaterialRoot, c.BundleDirectory, c.SourceLockFile} {
 		if len(path) > 4096 || !filepath.IsAbs(path) || filepath.Clean(path) != path || strings.ContainsRune(path, 0) {
 			return ErrConfig
@@ -60,6 +64,7 @@ type draftCapabilities struct {
 	importer    *problem.Importer
 	references  *problemreference.Service
 	preparation *problemreference.Preparation
+	review      *problemreference.ReviewIntake
 }
 
 func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore.Store, pool *pgxpool.Pool) (*draftCapabilities, func() error, error) {
@@ -144,6 +149,12 @@ func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore
 		result.references, err = problemreference.New(sessions, repo, catalog)
 		if err != nil {
 			return nil, nil, ErrStartup
+		}
+		if c.ReviewIntake {
+			result.review, err = problemreference.NewReviewIntake(sessions, repo)
+			if err != nil {
+				return nil, nil, ErrStartup
+			}
 		}
 		plans, err := problemreference.NewPlanService(sessions, repo, repository, materials, lock)
 		if err != nil {
