@@ -127,13 +127,20 @@ func (h *Host) Stop(ctx context.Context) (result error) {
 // Preserve time for termination after enumeration and for evidence after kill.
 // This bounds scheduled command work, not process teardown or OS scheduling.
 func stopPhaseContext(parent context.Context) (context.Context, context.CancelFunc) {
-	budget := 2 * time.Second
+	const budget = 2 * time.Second
+	now := time.Now()
+	phaseDeadline := now.Add(budget)
 	if deadline, ok := parent.Deadline(); ok {
-		if reserve := time.Until(deadline) / 2; reserve < budget {
-			budget = reserve
+		remaining := deadline.Sub(now)
+		if remaining <= 0 {
+			// A later deadline would depend on parent cancellation reaching
+			// this child, even though the parent's time is already exhausted.
+			phaseDeadline = deadline
+		} else {
+			phaseDeadline = now.Add(min(budget, remaining/2))
 		}
 	}
-	return context.WithTimeout(parent, budget)
+	return context.WithDeadline(parent, phaseDeadline)
 }
 
 func parsePIDs(out string, initPID int) ([]int, error) {
