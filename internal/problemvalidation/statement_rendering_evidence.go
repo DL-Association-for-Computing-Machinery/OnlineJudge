@@ -4,13 +4,21 @@ import "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/p
 
 const statementRenderingReport = "8054f52499d7f987eedd78c64a16877b0391555909b74bb735409a51355f42f3"
 
+// StatementRenderingMatch records why an earlier browser observation also
+// applies to a different content version with identical rendering inputs.
+type StatementRenderingMatch struct {
+	ObservedContentVersion string `json:"observed_content_version"`
+	ReportSHA256           string `json:"report_sha256"`
+}
+
 // StatementRenderingEvidence summarizes the historical desktop and mobile
 // browser checks on matching content. It does not attest to statement semantics.
 type StatementRenderingEvidence struct {
-	ReportSHA256 string `json:"report_sha256"`
-	Examples     int    `json:"examples"`
-	Formulas     int    `json:"formulas"`
-	FormatBlocks int    `json:"format_blocks"`
+	ReportSHA256    string                   `json:"report_sha256"`
+	Examples        int                      `json:"examples"`
+	Formulas        int                      `json:"formulas"`
+	FormatBlocks    int                      `json:"format_blocks"`
+	HistoricalMatch *StatementRenderingMatch `json:"historical_match,omitempty"`
 }
 
 type statementRenderingCounts struct {
@@ -38,7 +46,29 @@ func AdmittedStatementRendering(identity problem.ImportIdentity, planSHA256 stri
 	if _, ok := admittedV6Binding(identity, planSHA256); !ok {
 		return StatementRenderingEvidence{}, false
 	}
-	counts, ok := reviewedStatementRendering[identity.SourceID]
+	return historicalStatementRendering(identity.SourceID)
+}
+
+// AdmittedApPlusBStatementRendering uses the reviewed equivalence of the
+// historical browser inputs and current A+B preview, not a new browser run.
+// The caller must first verify the stored plan and accepted report.
+func AdmittedApPlusBStatementRendering(id problem.ImportIdentity, planSHA256, profileSHA256 string) (StatementRenderingEvidence, bool) {
+	if !matchesReviewedApPlusBPlan(id, planSHA256, profileSHA256) {
+		return StatementRenderingEvidence{}, false
+	}
+	ev, ok := historicalStatementRendering(id.SourceID)
+	if !ok {
+		return StatementRenderingEvidence{}, false
+	}
+	ev.HistoricalMatch = &StatementRenderingMatch{
+		ObservedContentVersion: "87ebb9680aa3abe190b61d4a5ccac1dc83e48b29656364e445e36fabe7467cc9",
+		ReportSHA256:           "3c8ec439df6cd551a87ea40e405cd06990d0f9476ad2e3413c4ecbc894329644",
+	}
+	return ev, true
+}
+
+func historicalStatementRendering(sourceID string) (StatementRenderingEvidence, bool) {
+	counts, ok := reviewedStatementRendering[sourceID]
 	if !ok {
 		return StatementRenderingEvidence{}, false
 	}

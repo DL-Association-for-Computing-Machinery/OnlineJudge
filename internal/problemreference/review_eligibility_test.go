@@ -125,8 +125,15 @@ func TestReviewCoverageRequiresCurrentCompleteApPlusBPlan(t *testing.T) {
 	coverage := got.TestCoverage
 	want := []string{"statement_quality_missing", "checker_admission_missing", "target_runtime_missing", "solution_confirmation_missing"}
 	if got.Eligible || coverage == nil || !slices.Equal(got.Blockers, want) ||
-		got.InputValidator == nil || got.IndependentCorrectness == nil || got.WrongSolution != nil || got.StatementRendering != nil {
-		t.Fatalf("review did not admit only the three independently verified checks: %+v", got)
+		got.InputValidator == nil || got.IndependentCorrectness == nil || got.WrongSolution != nil || got.StatementRendering == nil ||
+		got.StatementRendering.HistoricalMatch == nil || got.StatementSemanticsConfirmed {
+		t.Fatalf("rendering evidence must not replace the human checklist: %+v", got)
+	}
+	confirmed := s
+	confirmed.StatementConfirmed = true
+	ready := assessReviewEligibility(confirmed)
+	if ready.Eligible || !ready.StatementSemanticsConfirmed || !slices.Equal(ready.Blockers, want[1:]) {
+		t.Fatalf("current confirmation must clear only the statement blocker: %+v", ready)
 	}
 	if got.InputValidator.Inputs != 17 || got.InputValidator.Controls != 4 || got.IndependentCorrectness.Cases != 25 ||
 		got.InputValidator.ReportSHA256 != got.IndependentCorrectness.ReportSHA256 ||
@@ -164,11 +171,11 @@ func TestReviewCoverageRequiresCurrentCompleteApPlusBPlan(t *testing.T) {
 				t.Fatalf("coverage evidence escaped its admitted binding: %+v", result)
 			}
 			if tc.historicalBlocker != "" {
-				if result.InputValidator == nil || result.IndependentCorrectness == nil ||
+				if result.InputValidator == nil || result.IndependentCorrectness == nil || result.StatementRendering == nil ||
 					!slices.Contains(result.Blockers, tc.historicalBlocker) {
 					t.Fatalf("historical checks must not replace the current prerequisite: %+v", result)
 				}
-			} else if result.InputValidator != nil || result.IndependentCorrectness != nil ||
+			} else if result.InputValidator != nil || result.IndependentCorrectness != nil || result.StatementRendering != nil ||
 				!slices.Contains(result.Blockers, "input_validator_missing") {
 				t.Fatalf("quality evidence escaped its binding: %+v", result)
 			}

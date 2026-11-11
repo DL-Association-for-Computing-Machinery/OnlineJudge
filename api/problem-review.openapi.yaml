@@ -280,7 +280,7 @@ components:
       required: [evidence, policy_version, eligible, blockers]
       properties:
         evidence: { $ref: '#/components/schemas/ReviewEvidence' }
-        policy_version: { const: 'oj.review-approval.v7' }
+        policy_version: { const: 'oj.review-approval.v8' }
         eligible: { const: false }
         statement_semantics_confirmed:
           const: true
@@ -321,13 +321,21 @@ components:
         statement_rendering_evidence:
           type: object
           additionalProperties: false
-          description: 仅精确命中已审查 v6 绑定时返回。桌面和移动端曾验证相同内容版本；不是题意人工确认。
+          description: 仅精确命中已审查绑定时返回。包含原 v6 历史浏览器证据和已证明预览等价的 A+B 修订；不是题意人工确认。
           required: [report_sha256, examples, formulas, format_blocks]
           properties:
             report_sha256: { $ref: '#/components/schemas/SHA256' }
             examples: { type: integer, minimum: 1 }
             formulas: { type: integer, minimum: 1 }
             format_blocks: { type: integer, minimum: 0 }
+            historical_match:
+              type: object
+              additionalProperties: false
+              description: 仅在依据等价预览使用另一个内容版本的浏览器观察时返回。
+              required: [observed_content_version, report_sha256]
+              properties:
+                observed_content_version: { $ref: '#/components/schemas/SHA256' }
+                report_sha256: { $ref: '#/components/schemas/SHA256' }
         test_coverage_evidence:
           type: object
           additionalProperties: false

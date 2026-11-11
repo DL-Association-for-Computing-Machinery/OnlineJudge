@@ -53,7 +53,7 @@ func TestStatementRenderingMatchesHistoricalBrowserReport(t *testing.T) {
 		identity := problem.ImportIdentity{SourceID: row.SourceID, Version: row.Version,
 			ImportRevision: binding.revision, SourceLockSHA256: SourceLockSHA256}
 		got, ok := AdmittedStatementRendering(identity, binding.plan)
-		if !ok || got.Examples != row.Examples || got.Formulas != row.Formulas || got.FormatBlocks != row.FormatBlocks {
+		if !ok || got.Examples != row.Examples || got.Formulas != row.Formulas || got.FormatBlocks != row.FormatBlocks || got.HistoricalMatch != nil {
 			t.Fatalf("%s: stored evidence does not match the historical observation: %+v", row.SourceID, got)
 		}
 		examples += row.Examples
@@ -62,5 +62,33 @@ func TestStatementRenderingMatchesHistoricalBrowserReport(t *testing.T) {
 	}
 	if examples != 18 || formulas != 82 || formatBlocks != 9 {
 		t.Fatalf("unexpected browser totals: examples=%d formulas=%d format blocks=%d", examples, formulas, formatBlocks)
+	}
+}
+
+func TestApPlusBRenderingEvidenceMatchesReviewedEquivalence(t *testing.T) {
+	raw, err := os.ReadFile("../../docs/evidence/aplusb-render-equivalence-20261112.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report struct {
+		Browser        string `json:"browser_report_sha256"`
+		Observed       string `json:"historical_content_version"`
+		Local          string `json:"local_content_version"`
+		ImportRevision string `json:"local_import_revision"`
+		Plan           string `json:"local_formal_plan_sha256"`
+		Profile        string `json:"profile_sha256"`
+	}
+	if err := json.Unmarshal(raw, &report); err != nil {
+		t.Fatal(err)
+	}
+	id := problem.ImportIdentity{SourceID: "library-checker:aplusb", Version: report.Local,
+		ImportRevision: report.ImportRevision, SourceLockSHA256: SourceLockSHA256}
+	e, ok := AdmittedApPlusBStatementRendering(id, report.Plan, report.Profile)
+	digest := sha256.Sum256(raw)
+	if !ok || e.ReportSHA256 != report.Browser || e.HistoricalMatch == nil ||
+		e.HistoricalMatch.ReportSHA256 != hex.EncodeToString(digest[:]) ||
+		e.HistoricalMatch.ObservedContentVersion != report.Observed || report.Observed == report.Local ||
+		e.Examples != 2 || e.Formulas != 6 || e.FormatBlocks != 2 {
+		t.Fatal("historical rendering does not match the reviewed equivalence for the local revision")
 	}
 }
