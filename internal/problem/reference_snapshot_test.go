@@ -163,9 +163,10 @@ func TestBorrowedAnswerBoundsLifetimeAndConcurrentClose(t *testing.T) {
 			n, err := reader.ReadAt(dest[:], 0)
 			readComplete := n == 2 && err == nil && string(dest[:]) == "3\n"
 			alreadyClosed := n == 0 && errors.Is(err, problem.ErrInvalid)
-			if !(readComplete || alreadyClosed) {
-				t.Errorf("read/close returned %d, %v", n, err)
+			if readComplete || alreadyClosed {
+				return
 			}
+			t.Errorf("read/close returned %d, %v", n, err)
 		})
 	}
 	if err := s.Close(); err != nil {
