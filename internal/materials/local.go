@@ -51,16 +51,26 @@ func OpenLocal(path string) (*Local, error) {
 // Close releases the directory descriptor after the server has drained requests.
 func (s *Local) Close() error { return s.root.Close() }
 
+// Verify reads the named file and checks its digest without creating a snapshot.
+func (s *Local) Verify(ctx context.Context, hash string) error {
+	if err := s.acquire(ctx); err != nil {
+		return err
+	}
+	defer func() { <-s.slots }()
+	source, err := s.source(hash)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = source.Close() }()
+	_, err = verify(ctx, source, io.Discard, hash)
+	return err
+}
+
 // Open verifies bytes before releasing any response and never serves a mutable
 // original after verification. Snapshots are unlinked immediately on these Unix hosts.
 func (s *Local) Open(ctx context.Context, hash string) (*File, error) {
-	if !digestPattern.MatchString(hash) {
-		return nil, ErrUnavailable
-	}
-	select {
-	case s.slots <- struct{}{}:
-	default:
-		return nil, ErrUnavailable
+	if err := s.acquire(ctx); err != nil {
+		return nil, err
 	}
 	release := func() { <-s.slots }
 	success := false
@@ -69,21 +79,12 @@ func (s *Local) Open(ctx context.Context, hash string) (*File, error) {
 			release()
 		}
 	}()
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	// NOFOLLOW rejects symlinks; NONBLOCK prevents an injected FIFO from hanging
-	// before Stat can reject non-regular files. Root also confines path resolution.
-	source, err := s.root.OpenFile(hash, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	source, err := s.source(hash)
 	if err != nil {
 		return nil, ErrUnavailable
 	}
 	// Cleanup does not change the completed operation or its primary error.
 	defer func() { _ = source.Close() }()
-	info, err := source.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Size() > MaxFileBytes {
-		return nil, ErrUnavailable
-	}
 	file, err := os.CreateTemp("", "oj-material-*")
 	if err != nil {
 		return nil, ErrUnavailable
@@ -97,13 +98,9 @@ func (s *Local) Open(ctx context.Context, hash string) (*File, error) {
 	if err := os.Remove(file.Name()); err != nil {
 		return nil, ErrUnavailable
 	}
-	h := sha256.New()
-	size, err := io.Copy(io.MultiWriter(file, h), io.LimitReader(contextReader{ctx, source}, MaxFileBytes+1))
+	size, err := verify(ctx, source, file, hash)
 	if err != nil {
 		return nil, err
-	}
-	if size > MaxFileBytes || hex.EncodeToString(h.Sum(nil)) != hash {
-		return nil, ErrUnavailable
 	}
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		return nil, ErrUnavailable
@@ -113,6 +110,47 @@ func (s *Local) Open(ctx context.Context, hash string) (*File, error) {
 	}
 	success = true
 	return &File{ReadCloser: &snapshot{File: file, release: release}, SHA256: hash, Size: size}, nil
+}
+
+func (s *Local) acquire(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	select {
+	case s.slots <- struct{}{}:
+		return nil
+	default:
+		return ErrUnavailable
+	}
+}
+
+func (s *Local) source(hash string) (*os.File, error) {
+	if !digestPattern.MatchString(hash) {
+		return nil, ErrUnavailable
+	}
+	// NOFOLLOW rejects symlinks; NONBLOCK prevents a FIFO from hanging before Stat.
+	file, err := s.root.OpenFile(hash, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, ErrUnavailable
+	}
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Size() > MaxFileBytes {
+		_ = file.Close()
+		return nil, ErrUnavailable
+	}
+	return file, nil
+}
+
+func verify(ctx context.Context, source io.Reader, snapshot io.Writer, hash string) (int64, error) {
+	h := sha256.New()
+	size, err := io.Copy(io.MultiWriter(snapshot, h), io.LimitReader(contextReader{ctx, source}, MaxFileBytes+1))
+	if err != nil {
+		return 0, err
+	}
+	if size > MaxFileBytes || hex.EncodeToString(h.Sum(nil)) != hash {
+		return 0, ErrUnavailable
+	}
+	return size, ctx.Err()
 }
 
 type contextReader struct {

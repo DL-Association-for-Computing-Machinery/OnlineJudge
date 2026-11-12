@@ -28,14 +28,16 @@ type Store struct {
 
 // New binds the store to a canonical JSON material manifest.
 func New(pool *pgxpool.Pool, version string, manifest []byte) (*Store, error) {
-	canonical, hash, err := canonicalManifest(manifest)
+	canonical, hash, err := CanonicalManifest(manifest)
 	if err != nil || version == "" {
 		return nil, submission.ErrMaterial
 	}
 	return &Store{pool: pool, version: version, manifestHash: hash, manifest: canonical}, nil
 }
 
-func canonicalManifest(data []byte) ([]byte, string, error) {
+// CanonicalManifest converts PostgreSQL JSONB output into the bytes and digest
+// used to register, restore and serve an immutable submission material version.
+func CanonicalManifest(data []byte) ([]byte, string, error) {
 	var value map[string]any
 	if err := json.Unmarshal(data, &value); err != nil {
 		return nil, "", err
@@ -82,7 +84,7 @@ func (s *Store) checkMaterial(ctx context.Context, q *submissiondb.Queries) erro
 	if err != nil {
 		return err
 	}
-	_, actual, err := canonicalManifest(row.Manifest)
+	_, actual, err := CanonicalManifest(row.Manifest)
 	if err != nil || row.ManifestSha256 != s.manifestHash || actual != s.manifestHash {
 		return submission.ErrMaterial
 	}

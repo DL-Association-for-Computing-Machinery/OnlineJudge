@@ -8,7 +8,7 @@ import (
 	"errors"
 	"io/fs"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/pressly/goose/v3/lock"
@@ -35,9 +35,11 @@ func Provider(conn *sql.DB) (*goose.Provider, error) {
 }
 
 // CheckSchema refuses uninitialized, older or newer schemas without migrating.
-func CheckSchema(ctx context.Context, pool *pgxpool.Pool) error {
+func CheckSchema(ctx context.Context, connection interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}) error {
 	var version int64
-	if err := pool.QueryRow(ctx, `SELECT version_id FROM goose_db_version ORDER BY id DESC LIMIT 1`).Scan(&version); err != nil {
+	if err := connection.QueryRow(ctx, `SELECT version_id FROM goose_db_version ORDER BY id DESC LIMIT 1`).Scan(&version); err != nil {
 		return errors.New("database schema unavailable; run the independent migration step")
 	}
 	if version != 20 {

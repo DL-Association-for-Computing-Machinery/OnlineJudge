@@ -119,4 +119,22 @@ func parseManifest(value submission.TaskMaterials) (manifest, error) {
 	}
 	return m, nil
 }
+
+// ManifestDigests validates an archived canonical judge manifest and returns
+// the input and answer identities it references, without authorizing access.
+func ManifestDigests(version, digest string, canonical []byte) ([]string, error) {
+	if version == "" || len(version) > 128 || len(canonical) > 16384 || checksum(canonical) != digest {
+		return nil, ErrUnavailable
+	}
+	m, err := parseManifest(submission.TaskMaterials{Version: version, Language: "gnu++17", Manifest: canonical})
+	if err != nil {
+		return nil, err
+	}
+	result := make([]string, 0, 2*len(m.Tests))
+	for _, c := range m.Tests {
+		result = append(result, c.Input, c.Answer)
+	}
+	return result, nil
+}
+
 func checksum(data []byte) string { h := sha256.Sum256(data); return hex.EncodeToString(h[:]) }
