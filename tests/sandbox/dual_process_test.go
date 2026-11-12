@@ -89,6 +89,12 @@ func dualController(t *testing.T, ca *testpki.Authority, clientCert tls.Certific
 
 func controllerForFixture(t *testing.T, ca *testpki.Authority, clientCert tls.Certificate, root, version string) string {
 	t.Helper()
+	endpoint, _ := controllerForDatabase(t, ca, clientCert, root, version, os.Getenv("OJ_TEST_DATABASE_URL"))
+	return endpoint
+}
+
+func controllerForDatabase(t *testing.T, ca *testpki.Authority, clientCert tls.Certificate, root, version, dsn string) (string, *dualProcess) {
+	t.Helper()
 	_, cert, key := ca.Issue(t, "", x509.ExtKeyUsageServerAuth, time.Now().Add(time.Hour))
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -99,7 +105,7 @@ func controllerForFixture(t *testing.T, ca *testpki.Authority, clientCert tls.Ce
 	p := startDualProcess(t, "worker-api", []string{
 		"OJ_WORKER_API_ADDR=" + addr, "OJ_WORKER_CA_FILE=" + ca.CAFile,
 		"OJ_WORKER_CERT_FILE=" + cert, "OJ_WORKER_KEY_FILE=" + key,
-		"OJ_DATABASE_URL=" + os.Getenv("OJ_TEST_DATABASE_URL"), "OJ_MATERIAL_ROOT=" + root,
+		"OJ_DATABASE_URL=" + dsn, "OJ_MATERIAL_ROOT=" + root,
 		"OJ_EXPERIMENT_MATERIAL_VERSION=" + version,
 	})
 	transport := &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13, RootCAs: ca.Roots, Certificates: []tls.Certificate{clientCert}}}
@@ -112,13 +118,13 @@ func controllerForFixture(t *testing.T, ca *testpki.Authority, clientCert tls.Ce
 		if err == nil {
 			_ = resp.Body.Close() // Cleanup; the operation outcome is checked separately.
 			if resp.StatusCode == http.StatusNotFound {
-				return endpoint
+				return endpoint, p
 			}
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
 	t.Fatal("controller readiness timeout")
-	return ""
+	return "", nil
 }
 
 func dualWorker(t *testing.T, ca *testpki.Authority, cert, key, endpoint, slot string) *dualProcess {
