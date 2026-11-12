@@ -36,6 +36,22 @@ type TestCoverageEvidence struct {
 // AdmittedTestCoverage only admits exact reviewed plans and profiles.
 // The caller must first verify the stored plan and current accepted report.
 func AdmittedTestCoverage(id problem.ImportIdentity, planSHA256, profileSHA256 string) (TestCoverageEvidence, bool) {
+	if matchesReviewedZAlgorithmPlan(id, planSHA256, profileSHA256) {
+		return TestCoverageEvidence{
+			ReportSHA256: "534a0ef4a53275d234921710838ec00b1578642dc938b1b7c25eea4ef55f7554",
+			Points:       32, SamplePoints: 4, NonSampleCriteria: 6,
+			WrongSolutions: [4]CoverageWrongSolution{
+				{Candidate: "zero-at-origin", RejectedPoints: 28},
+				{Candidate: "only-first-character", RejectedPoints: 27},
+				{Candidate: "ignore-overlap", RejectedPoints: 13},
+				{Candidate: "suffix-must-reach-end", RejectedPoints: 20},
+			},
+			LocalCPUProbe: &CoverageLocalCPUProbe{
+				Candidate: "quadratic-prefix-scan", SmallControlsAccepted: 62, NonSamplePoints: 1, CPUSoftLimitMS: 5000,
+				CandidateOutcome: "cpu_limit_exceeded", ReferenceOutcome: "accepted",
+			},
+		}, true
+	}
 	if matchesReviewedUnionFindPlan(id, planSHA256, profileSHA256) {
 		return TestCoverageEvidence{
 			ReportSHA256: "c7b67173c8fe054d44ea3e4b9267aa5618ec5c109e6c3cd6b006c35e12d7f9df",
