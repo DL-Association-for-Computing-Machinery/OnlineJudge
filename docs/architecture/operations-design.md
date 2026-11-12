@@ -111,6 +111,12 @@
 
 该测试覆盖这对版本、同一 schema 及固定材料的有序切换。未验证带 schema 变更的兼容性、仍在执行的任务、试用机拓扑、真实离线发布包或比赛现场切换。
 
+### 实验判题离线包
+
+[专用 Ubuntu 实验](../../README.md#专用-ubuntu-vm-判题实验)封存 API、控制端、Worker、迁移工具、测试驱动和两份固定的无标签镜像。独立取得的清单摘要绑定文件及声明的源码版本；接收端核对精确路径、权限、大小和摘要，并检查镜像归档的固定 OCI 描述、Linux arm64 运行层和 Docker 导入条目。核验不解包镜像或连接 Docker。受控 VM 脚本核验成功后才导入，回读镜像 ID，再禁止拉取并执行真实合成判题。
+
+摘要由可信构建方单独提供，不能替代签名或证明制品确实由所声明提交构建。接收目录由 root 控制，在核验、导入和运行之间保持静止。专项使用已安装 Docker Engine 的专用 VM，不证明空镜像库安装、整个 VM 断网、完整应用离线包、冷浏览器、校内 DNS／HTTPS／时间或现场发布可用。
+
 ## 6. 测试路线与实施阶段
 
 采用 Go 标准 testing 验证核心规则；真实 PostgreSQL/Redis 集成优先验证 Testcontainers for Go；前端采用 Vitest＋React Testing Library，端到端采用 Playwright。骨架已建立 Go 与 Vitest 测试及实际构建命令，见 README；React Testing Library、数据库集成与端到端自动化尚未接入，真实远端 CI 尚未运行。后续组件版本与资源条件实施时准入。

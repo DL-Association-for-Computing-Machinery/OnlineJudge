@@ -5,15 +5,17 @@ import os
 from pathlib import Path
 import platform
 import re
+import stat
 import subprocess
+import tarfile
 import time
 import uuid
+
+from offline_judge_bundle import ARCHIVE, IMAGES, POSTGRES, SANDBOX, verify
 
 
 DOCKER = ("/usr/bin/docker", "--host=unix:///var/run/docker.sock")
 ENV = {"HOME": "/", "PATH": "/usr/bin:/bin", "LANG": "C"}
-SANDBOX = "sha256:cd40ffdb32619806a8d97e59fe03e890fe4066835f57efa6ae13f919ef3262c5"
-POSTGRES = "sha256:4ea9e5ed06591da7ea23eb65465e8d3187fe79f4d5ec3ae976d29a33b013e77a"
 SLOT = "oj-m0-sandbox"
 LABEL = "onlinejudge.ubuntu-test"
 ID = re.compile(r"[0-9a-f]{64}")
@@ -49,9 +51,28 @@ def require_guest():
         raise RuntimeError("requires the fixed local guest without host shares")
     if docker("info", "--format", "{{.OSType}}/{{.Architecture}}/{{.CgroupVersion}}") != "linux/aarch64/2":
         raise RuntimeError("wrong local Docker Engine")
-    for image in (SANDBOX, POSTGRES):
+
+
+def load_bundle(layout, expected):
+    revision = verify(layout, expected)
+    print(f"Verified offline judging bundle: {revision}", flush=True)
+    docker("image", "load", "--input", str(layout / ARCHIVE), timeout=180)
+    for image in IMAGES:
         if docker("image", "inspect", "--format", "{{.Id}} {{.Os}}/{{.Architecture}}", image) != image + " linux/arm64":
             raise RuntimeError("wrong offline image")
+    print("Loaded both pinned Linux arm64 images; fixture starts with --pull=never", flush=True)
+
+
+def require_receiver_parents(layout):
+    # A private child can still be swapped through a writable parent. The root
+    # receiver may use /tmp: sticky directories protect root-owned entries.
+    if ".." in layout.parts:
+        raise ValueError("receiver path must not contain parent traversal")
+    for parent in reversed(layout.parents):
+        info = parent.lstat()
+        if (not stat.S_ISDIR(info.st_mode) or info.st_uid != 0
+                or (info.st_mode & 0o022 and not info.st_mode & stat.S_ISVTX)):
+            raise ValueError("receiver ancestors must be root controlled")
 
 
 def clean_owned(ident, owner, sandbox, passed):
@@ -75,15 +96,17 @@ def clean_owned(ident, owner, sandbox, passed):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("layout", type=Path, help="temporary root with .local/bin and tests/sandbox")
+    parser.add_argument("layout", type=Path, help="private receiver directory with a sealed offline bundle")
+    parser.add_argument("--manifest-sha256", required=True, help="trusted sender manifest digest")
     args = parser.parse_args()
     require_guest()
-    layout = args.layout.resolve(strict=True)
+    layout = args.layout.absolute()
+    try:
+        require_receiver_parents(layout)
+        load_bundle(layout, args.manifest_sha256)
+    except (OSError, ValueError, tarfile.TarError) as exc:
+        parser.exit(1, f"offline bundle: {exc}\n")
     binaries = layout / ".local/bin"
-    for name in ("api", "worker", "worker-api", "migrate", "sandbox.test"):
-        path = binaries / name
-        if path.is_symlink() or not path.is_file() or not os.access(path, os.X_OK):
-            raise RuntimeError("expected prebuilt Linux arm64 test artifacts")
     owner = uuid.uuid4().hex
     db = slot = None
     passed = False

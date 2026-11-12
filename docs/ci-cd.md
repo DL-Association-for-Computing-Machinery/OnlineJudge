@@ -128,6 +128,8 @@ MediumBulk的共享槽/原tier保留、两端256/512MiB累计额度及失败清�
 
 `rollback-loop` 是单独的 Desktop 专项：从固定 Git 历史构建旧版，与当前版本在同一个临时库上切换，验证原回执、已完成报告和排队提交。普通 CI 静态检查其源码，不构建历史版本或启动特权槽。
 
+实验判题离线包的清单、文件和镜像拒绝行为由普通治理测试验证，不调用 Docker；接收、导入和禁拉取的真实判题由[专用 Ubuntu 实验](../README.md#专用-ubuntu-vm-判题实验)验证。
+
 `http_address_test.go` 的有界启动日志解析是普通 root race 用例，不启动进程或调用 Docker。双提交 API、mTLS 控制端及真实 Worker 的 HTTP 判题和过载恢复由 Desktop 和 Ubuntu 的手动 sandbox 专项验证。普通 CI 只编译/静态分析这些源码。准入及证据边界见 [README](../README.md#http-到真实判题终态专项)。
 
 普通 PostgreSQL 集成测试从独立临时集群的逻辑备份还原在途租约，实跑[恢复提交租约](architecture/operations-design.md#恢复提交租约)命令，验证到期前拒绝旧租约、原任务重领、恢复前后尝试预算以及错误回滚；不访问试用库或执行选手程序。

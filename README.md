@@ -765,18 +765,29 @@ Worker 启动完成后，向该 Worker 进程发送 `SIGUSR1`（`kill -USR1 PID`
 
 仅供无宿主共享目录的本地 Ubuntu 24.04 arm64 实验 VM。固定 Linux `6.8.0-106-generic`、Apple 虚拟化、go-judge/GCC 镜像及原生 Docker Unix socket。提交 API、控制器和 Worker 同时显式设置 `OJ_EXPERIMENT_MATERIAL_VERSION=m0-sum-ubuntu-arm64-v1`；运行和恢复只用 VM 内同一专用 root 账号的主槽。错误版本在领取前返回 412，不消耗尝试。禁止双槽、参考执行及浏览器模式；Desktop 默认仍用 `m0-sum-v3`。
 
-在 Docker Desktop 工具链中构建独立 Linux 产物，再将 `layout`、脚本和 SHA-256 清单通过 VM 通道复制到 VM 内的专用临时目录，读回校验后运行：
+从干净的受信提交构建 Linux 产物，并按 [固定 ID](scripts/offline_judge_bundle.py) 导出本机已有的两个镜像。导出按 ID 进行，不能加标签。以下要求 Python 3.11 及以上，输出使用新临时目录：
 
 ```sh
-mkdir -p /tmp/oj-ubuntu-layout/.local/bin /tmp/oj-ubuntu-layout/tests/sandbox
+stage=$(mktemp -d)
 docker --context desktop-linux build --target host-artifacts \
   --build-arg HOSTOS=linux --build-arg HOSTARCH=arm64 \
-  --output type=local,dest=/tmp/oj-ubuntu-layout/.local/bin .
-# 以下只在已核验隔离的 Ubuntu VM 内运行；layout 为复制后的目录
-sudo -n env OJ_SANDBOX_EXPERIMENT=1 python3 -B test-ubuntu-worker.py /path/to/layout
+  --output "type=local,dest=$stage/bin" .
+docker --context desktop-linux image save -o "$stage/images.tar" \
+  sha256:cd40ffdb32619806a8d97e59fe03e890fe4066835f57efa6ae13f919ef3262c5 \
+  sha256:4ea9e5ed06591da7ea23eb65465e8d3187fe79f4d5ec3ae976d29a33b013e77a
+python3 -B scripts/offline_judge_bundle.py pack --binaries "$stage/bin" \
+  --images "$stage/images.tar" --revision "$(git rev-parse HEAD)" "$stage/bundle"
 ```
 
-[专项脚本](scripts/test-ubuntu-worker.py)只使用预先校验并导入的固定 Linux arm64 镜像，不拉取镜像。它启动独占沙箱和回环临时 PostgreSQL，执行上述同一 HTTP 判题和过载恢复断言，并验证原槽已停止、原客体 PID 消失。失败时保留已停止的自有沙箱供诊断；不要删除隔离标记或用旧版/Desktop 恢复命令处理 Ubuntu 槽。试用服务器和整机容量不在本专项验收范围。
+通过本地 VM 通道复制 `bundle`，保留目录和文件权限，放入 root 控制的私有目录，由 root 持有整棵目录。另从受信提交复制 `test-ubuntu-worker.py` 和 `offline_judge_bundle.py` 到同一个受控脚本目录；它们不从待验证的包中运行。独立记录并传递 `pack` 输出的清单 SHA-256，不从接收包自行计算预期值。验证和运行期间目录保持静止。
+
+```sh
+# 只在已核验隔离的专用 Ubuntu VM 内运行。替换路径和清单摘要占位符。
+sudo -n env OJ_SANDBOX_EXPERIMENT=1 python3 -B /path/to/trusted/test-ubuntu-worker.py \
+  --manifest-sha256 TRUSTED_MANIFEST_SHA256 /path/to/private/bundle
+```
+
+[专项脚本](scripts/test-ubuntu-worker.py)先校验清单、每份文件和固定镜像，再导入归档并以 `--pull=never` 启动独占沙箱和回环临时 PostgreSQL。它执行真实 HTTP 判题与过载恢复，并确认原槽已停止、原客体 PID 消失。失败时保留已停止的自有沙箱供诊断；不要删除隔离标记或用旧版/Desktop 恢复命令处理 Ubuntu 槽。该包只用于实验判题，不覆盖完整试用离线发布。
 
 ### M0 最小浏览器实验页
 
