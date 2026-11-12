@@ -1,5 +1,11 @@
 # 工程交付记录
 
+## 2026-11-12：Firefox 私有草稿与参考申请写入
+
+严格 HTTPS 的真实 Firefox 登录并刷新后，草稿导入 POST 返回 403；修复草稿客户端后，导入返回 200，未修复的参考申请创建仍返回 403。两个客户端的 POST 改为只发送站点来源后，真实界面导入并预览私有草稿，创建参考申请，按原键查回排队回执并取消，再查回同一申请的取消结果。服务端同源校验不变，GET 继续使用 `no-referrer`。
+
+Firefox 四组、原 Chromium 15 组、前端 lint／类型／112 项测试及隔离夹具清理通过。Firefox 断言报告 SHA-256 `d2bb85b7144f3d2ddeaee2aac4cc8cffdbae8bf9ca7ef02cfdef6cc5aa65a7de`。见[浏览器账号专项](../README.md#浏览器账号专项)。参考申请准备操作仅有客户端单元测试；未运行参考 Worker、作者审查、题目发布或试用部署。
+
 ## 2026-11-12：Firefox 冷 HTTPS 入口与同源账号登录
 
 全新 Firefox 拒绝未知测试 CA；另一个浏览器进程在启动策略中只导入该测试 CA，正常证书校验下，桌面和 390px 窄屏加载真实构建的同源 JS/CSS，打开题库与登录页，未观测到外部页面资源请求。桌面通过真实 API、PostgreSQL 和 Redis 登录，安全 HttpOnly Cookie 保持刷新后的同一账号身份。原 Firefox 登录 POST 返回 403；独立回环探针确认 `no-referrer` 产生 `Origin: null`，改为账号 POST 仅发送站点来源后通过。服务端同源校验未变，GET 仍不发送 Referer。
