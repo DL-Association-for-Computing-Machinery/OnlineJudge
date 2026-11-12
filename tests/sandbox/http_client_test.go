@@ -54,11 +54,16 @@ func migrateHTTPLoop(t *testing.T, ctx context.Context, dsn, root string) {
 
 func migrateHTTPFixture(t *testing.T, ctx context.Context, dsn, root, version, backlogLimit string) {
 	t.Helper()
-	binary, err := filepath.Abs("../../.local/bin/migrate")
+	runFixtureMigration(t, ctx, "../../.local/bin", dsn, root, version, []string{"up"}, []string{"fixture"}, []string{"backlog", backlogLimit, backlogLimit})
+}
+
+func runFixtureMigration(t *testing.T, ctx context.Context, directory, dsn, root, version string, steps ...[]string) {
+	t.Helper()
+	binary, err := filepath.Abs(filepath.Join(directory, "migrate"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, step := range [][]string{{"up"}, {"fixture"}, {"backlog", backlogLimit, backlogLimit}} {
+	for _, step := range steps {
 		log, err := os.CreateTemp(t.TempDir(), "migration-log-")
 		if err != nil {
 			t.Fatal(err)
@@ -77,9 +82,14 @@ func migrateHTTPFixture(t *testing.T, ctx context.Context, dsn, root, version, b
 
 func startHTTPLoopAPI(t *testing.T, ctx context.Context, client *http.Client, dsn, tokenFile string, options ...string) loopAPI {
 	t.Helper()
+	return startHTTPLoopAPIFrom(t, ctx, "../../.local/bin", client, dsn, tokenFile, options...)
+}
+
+func startHTTPLoopAPIFrom(t *testing.T, ctx context.Context, directory string, client *http.Client, dsn, tokenFile string, options ...string) loopAPI {
+	t.Helper()
 	env := httpLoopEnvironment("OJ_API_ADDR=127.0.0.1:0", "OJ_DATABASE_URL="+dsn,
 		"OJ_EXPERIMENT_TOKEN_FILE="+tokenFile, "OJ_EXPERIMENT_MATERIAL_VERSION="+experiment.PinnedVersion)
-	p := startDualProcess(t, "api", append(env, options...))
+	p := startDualProcessFrom(t, directory, "api", append(env, options...))
 	log, ok := p.cmd.Stdout.(*os.File)
 	if !ok {
 		t.Fatal("API process does not own a private log")

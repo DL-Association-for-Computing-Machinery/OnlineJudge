@@ -12,6 +12,7 @@ from pathlib import Path
 import platform
 import shutil
 import subprocess
+import tempfile
 import time
 import uuid
 
@@ -19,6 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DOCKER = ["docker", "--context", "desktop-linux"]
 OWNER = "onlinejudge.desktop-test"
 SLOTS = ["oj-m0-sandbox", "oj-m0-sandbox-secondary"]
+ROLLBACK_REVISION = "771ff3ffa977dee790a918363c34d3076836c700"
 
 
 def browser_environment(args):
@@ -54,6 +56,19 @@ def docker(*args, capture=False):
                           stdout=subprocess.PIPE if capture else None).stdout
 
 
+def build_rollback_release(work):
+    """Build the checked-in prior release without switching the checkout."""
+    subprocess.run(["git", "merge-base", "--is-ancestor", ROLLBACK_REVISION, "HEAD"],
+                   cwd=ROOT, check=True)
+    source, archive, output = work / "source", work / "release.tar", work / "bin"
+    source.mkdir()
+    subprocess.run(["git", "archive", "--format=tar", "-o", str(archive), ROLLBACK_REVISION],
+                   cwd=ROOT, check=True)
+    subprocess.run(["tar", "-xf", str(archive), "-C", str(source)], cwd=ROOT, check=True)
+    docker("build", "--target", "host-artifacts", "--output", f"type=local,dest={output}", str(source))
+    return {"OJ_ROLLBACK_BIN": str(output), "OJ_ROLLBACK_REVISION": ROLLBACK_REVISION}
+
+
 def ready(name):
     docker("start", name)
     for _ in range(100):
@@ -83,7 +98,7 @@ def start_database(owned):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("suite", choices=["all", "sandbox", "report", "dual-worker", "worker-fault", "slot-recovery", "network-fault", "compile-lease", "resource-bounds", "http-loop", "browser-loop", "restore-loop"])
+    parser.add_argument("suite", choices=["all", "sandbox", "report", "dual-worker", "worker-fault", "slot-recovery", "network-fault", "compile-lease", "resource-bounds", "http-loop", "browser-loop", "restore-loop", "rollback-loop"])
     parser.add_argument("--playwright-module", type=Path)
     parser.add_argument("--chromium-executable", type=Path)
     parser.add_argument("--output-dir", type=Path)
@@ -98,7 +113,12 @@ def main():
            "deploy/experiments/go-judge.Dockerfile", "deploy/experiments")
     owned = []
     databases = []
+    old_build = None
     try:
+        rollback_env = {}
+        if args.suite == "rollback-loop":
+            old_build = tempfile.TemporaryDirectory(prefix="oj-worker-rollback-")
+            rollback_env = build_rollback_release(Path(old_build.name))
         for slot in SLOTS:
             exists = subprocess.run(DOCKER + ["inspect", slot], stdout=subprocess.DEVNULL,
                                     stderr=subprocess.DEVNULL).returncode == 0
@@ -124,10 +144,13 @@ def main():
             env.update(OJ_SANDBOX_EXPERIMENT="1",
                        OJ_TEST_DATABASE_URL=f"host=127.0.0.1 port={port} user=oj_test dbname={database} sslmode=disable")
             env.update(browser_env)
+            env.update(rollback_env)
             if suite == "restore-loop":
                 target, _ = start_database(databases)
                 docker("exec", target, "createdb", "-U", "oj_test", database)
                 env.update(OJ_RESTORE_SOURCE_CONTAINER=db, OJ_RESTORE_TARGET_CONTAINER=target, OJ_RESTORE_DATABASE=database)
+            if suite == "rollback-loop":
+                env.update(OJ_ROLLBACK_CONTAINER=db, OJ_ROLLBACK_DATABASE=database)
             selection = {"report": ("OJ_SANDBOX_REPORT", "TestExecutionReport"),
                          "dual-worker": ("OJ_SANDBOX_DUAL", "TestDualWorkerRecovery"),
                          "worker-fault": ("OJ_SANDBOX_FAULT", "TestWorkerFaults"),
@@ -137,6 +160,7 @@ def main():
                          "resource-bounds": ("OJ_SANDBOX_RESOURCES", "TestSandboxResourceBounds"),
                          "http-loop": ("OJ_SANDBOX_HTTP", "TestHTTPJudgeLoop"),
                          "restore-loop": ("OJ_SANDBOX_RESTORE", "TestRestoreJudgeLoop"),
+                         "rollback-loop": ("OJ_SANDBOX_ROLLBACK", "TestCompatibleRollbackLoop"),
                          "browser-loop": ("OJ_SANDBOX_BROWSER", "TestBrowserJudgeLoop")}
             command = [str(ROOT / ".local/bin/sandbox.test"), "-test.v", "-test.count=1", "-test.timeout=10m"]
             if suite in selection:
@@ -149,6 +173,8 @@ def main():
             subprocess.run(DOCKER + ["stop", slot], check=False)
         for db in reversed(databases):
             subprocess.run(DOCKER + ["rm", "-f", db], check=False)
+        if old_build is not None:
+            old_build.cleanup()
 
 
 if __name__ == "__main__":
