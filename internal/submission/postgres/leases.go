@@ -16,11 +16,10 @@ import (
 )
 
 // Claim atomically takes one queued task without retaining any execution-time lock.
-// M0 uses FIFO; user fairness and shared quotas remain required before M1.
 func (s *Store) Claim(ctx context.Context, node submission.NodeIdentity) (submission.Lease, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
 		return submission.Lease{}, err
 	}
@@ -40,13 +39,20 @@ func (s *Store) Claim(ctx context.Context, node submission.NodeIdentity) (submis
 	if count >= int64(record.Capacity) {
 		return submission.Lease{}, submission.ErrNoTask
 	}
-	id, err := q.ClaimCandidate(ctx, s.version)
+	floor, err := q.LockTrainingClock(ctx, s.version)
+	if err != nil {
+		return submission.Lease{}, err
+	}
+	// Take a new snapshot after waiting for the clock. A temporarily locked
+	// queue head must not let a later submission jump the line.
+	candidate, err := q.ClaimCandidate(ctx, s.version)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return submission.Lease{}, submission.ErrNoTask
 	}
 	if err != nil {
 		return submission.Lease{}, err
 	}
+	id := candidate.SubmissionID
 	task, err := q.BeginAttempt(ctx, id)
 	if err != nil {
 		return submission.Lease{}, err
@@ -61,6 +67,11 @@ func (s *Store) Claim(ctx context.Context, node submission.NodeIdentity) (submis
 		AttemptNumber: task.AttemptNumber, NodeID: node.ID, CredentialVersion: node.CredentialVersion, LeaseSeconds: 30})
 	if err != nil {
 		return submission.Lease{}, err
+	}
+	if candidate.VirtualFinish > floor {
+		if err := q.AdvanceTrainingClock(ctx, submissiondb.AdvanceTrainingClockParams{VersionID: s.version, Floor: candidate.VirtualFinish}); err != nil {
+			return submission.Lease{}, err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return submission.Lease{}, err

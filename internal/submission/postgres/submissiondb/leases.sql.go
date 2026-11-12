@@ -11,10 +11,24 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const advanceTrainingClock = `-- name: AdvanceTrainingClock :exec
+UPDATE training_queue_clock SET floor = $1::bigint WHERE version_id = $2
+`
+
+type AdvanceTrainingClockParams struct {
+	Floor     int64
+	VersionID string
+}
+
+func (q *Queries) AdvanceTrainingClock(ctx context.Context, arg AdvanceTrainingClockParams) error {
+	_, err := q.db.Exec(ctx, advanceTrainingClock, arg.Floor, arg.VersionID)
+	return err
+}
+
 const beginAttempt = `-- name: BeginAttempt :one
 UPDATE judge_tasks SET state='running', attempt_number=attempt_number+1
 WHERE submission_id=$1 AND state='queued'
-RETURNING submission_id, state, judge_generation, recovery_generation, attempt_number, verdict
+RETURNING submission_id, state, judge_generation, recovery_generation, attempt_number, verdict, queue_version, virtual_finish, enqueue_order
 `
 
 func (q *Queries) BeginAttempt(ctx context.Context, submissionID string) (JudgeTask, error) {
@@ -27,21 +41,30 @@ func (q *Queries) BeginAttempt(ctx context.Context, submissionID string) (JudgeT
 		&i.RecoveryGeneration,
 		&i.AttemptNumber,
 		&i.Verdict,
+		&i.QueueVersion,
+		&i.VirtualFinish,
+		&i.EnqueueOrder,
 	)
 	return i, err
 }
 
 const claimCandidate = `-- name: ClaimCandidate :one
-SELECT t.submission_id FROM judge_tasks t JOIN submissions s ON s.id=t.submission_id
-WHERE t.state='queued' AND s.material_version=$1
-ORDER BY s.created_at, s.id LIMIT 1 FOR UPDATE OF t SKIP LOCKED
+SELECT t.submission_id, t.virtual_finish::bigint AS virtual_finish
+FROM judge_tasks t JOIN submissions s ON s.id = t.submission_id
+WHERE t.state = 'queued' AND t.queue_version = $1::text AND s.material_version = $1::text
+ORDER BY t.virtual_finish, t.enqueue_order, t.submission_id LIMIT 1 FOR UPDATE OF t
 `
 
-func (q *Queries) ClaimCandidate(ctx context.Context, materialVersion string) (string, error) {
-	row := q.db.QueryRow(ctx, claimCandidate, materialVersion)
-	var submission_id string
-	err := row.Scan(&submission_id)
-	return submission_id, err
+type ClaimCandidateRow struct {
+	SubmissionID  string
+	VirtualFinish int64
+}
+
+func (q *Queries) ClaimCandidate(ctx context.Context, versionID string) (ClaimCandidateRow, error) {
+	row := q.db.QueryRow(ctx, claimCandidate, versionID)
+	var i ClaimCandidateRow
+	err := row.Scan(&i.SubmissionID, &i.VirtualFinish)
+	return i, err
 }
 
 const completeAttempt = `-- name: CompleteAttempt :execrows

@@ -8,7 +8,7 @@
 
 | 验收项 | 当前证据入口 | 尚需完成或明确的边界 |
 | --- | --- | --- |
-| P1 同事务接收、跨 API 幂等、迁移与查询计划 | [TestAcceptance](../tests/integration/submissions_test.go)、[双 API 进程](../tests/integration/api_processes.py)；包含写后异常整事务回滚、原键核验、并发迁移/锁等待和含数据回退拒绝 | 合成主体、实验接口；未知回执不等于回滚。后续已增加[共享积压准入](submission-backlog.md)，频率限流、公平调度及真实产品参数仍待试用前完成，不能宣称整个 P1 已完成 |
+| P1 同事务接收、跨 API 幂等、迁移与查询计划 | [TestAcceptance](../tests/integration/submissions_test.go)、[双 API 进程](../tests/integration/api_processes.py)；包含写后异常整事务回滚、原键核验、并发迁移/锁等待和含数据回退拒绝 | 合成主体、实验接口；未知回执不等于回滚。后续已验证[共享积压准入](submission-backlog.md)及[固定材料的训练虚拟时间](submission-backlog.md#训练虚拟时间)；提交频率、真实身份和试用容量仍待完成 |
 | P2 GNU++17 文本提交到结果 | [TestBoundedExecution](../tests/sandbox/execution_test.go)、[TestExecutionReport](../tests/sandbox/report_test.go)、[文本规则](../internal/judging/text_test.go)；AC/WA/CE/RE/TLE/MLE/OLE、编译一次、固定顺序及首次失败停止 | SE 分类与失败不发布结果由[执行规则](../internal/execution/execution_test.go)及故障专项补充，不把正常退出当 AC；仅固定合成题、单文件和文本检查 |
 | 至少双 API/双 Worker，认领、租约、身份、重复及迟到回报 | [租约数据库实验](../tests/integration/leases_test.go)、[真实双 Worker](../tests/sandbox/dual_worker_test.go)、[网络故障](../tests/sandbox/network_fault_test.go)、[编译失权](../tests/sandbox/compile_lease_test.go) | 数据库用例含人工过期，真实专项另验证自然到期；部分专项先后启动 Worker，不冒充每项均双 Worker 同时运行或跨主机高可用 |
 | 会话跨 API 撤销、名额和故障恢复 | [独立会话实验](../tests/sessionexperiment/README.md)、[正式普通协议](../tests/sessionprotocol/protocol_test.go)；前者含独立 API 进程、真实 Redis 旧 RDB 及 PostgreSQL 专用 schema 恢复 | 独立模块不由根 `go test ./...` 或普通 CI 执行行为套件；旧备份恢复标识废止会话，不恢复备份后的账号封禁/改密事实，不能据此许可生产复服 |
@@ -23,7 +23,7 @@
 
 计划中 P1 的额度/公平调度明确以“试用开放前”为完成节点；这里保留为 P1 后续子项，不将其新增为 M0 技术实验前置。M0 的 P1 状态须按本阶段子项报告，不能把技术实验通过扩写为全部 P1 或试用准入通过。
 
-后续 schema 6/共享积压改动及新回归归[准入说明](submission-backlog.md)和[交付日志](delivery-log.md)。M0验收页及JSON索引固定 #93 审计时的源码/证据；其中“owning路径无变化”是该快照比较结果，不作为后续 Store/SQL 版本仍未改变的声明。
+后续 schema 6 共享积压和 schema 20 训练虚拟时间的行为及回归归[训练队列合同](submission-backlog.md)和[交付日志](delivery-log.md)。M0验收页及JSON索引固定 #93 审计时的源码/证据；其中“owning路径无变化”是该快照比较结果，不作为后续 Store/SQL 版本仍未改变的声明。
 
 ## M0 固定合成题最小浏览器页（2026-11-03）
 

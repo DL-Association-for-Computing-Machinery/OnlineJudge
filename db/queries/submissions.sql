@@ -6,7 +6,20 @@ ON CONFLICT (subject_id, context_id, idempotency_key) DO NOTHING
 RETURNING id;
 
 -- name: CreateTask :exec
-INSERT INTO judge_tasks (submission_id) VALUES ($1);
+INSERT INTO judge_tasks (submission_id, queue_version, virtual_finish, enqueue_order)
+VALUES (sqlc.arg(submission_id), sqlc.arg(queue_version)::text, sqlc.arg(virtual_finish)::bigint,
+    nextval('training_enqueue_order'));
+
+-- name: EnsureTrainingClock :exec
+INSERT INTO training_queue_clock (version_id) VALUES ($1) ON CONFLICT (version_id) DO NOTHING;
+
+-- name: LockTrainingClock :one
+SELECT floor FROM training_queue_clock WHERE version_id = $1 FOR NO KEY UPDATE;
+
+-- name: MaxQueuedTrainingRank :one
+SELECT COALESCE(max(t.virtual_finish), 0)::bigint FROM judge_tasks t JOIN submissions s ON s.id = t.submission_id
+WHERE t.state = 'queued' AND t.queue_version = sqlc.arg(version_id)::text
+    AND s.material_version = sqlc.arg(version_id)::text AND s.subject_id = sqlc.arg(subject_id);
 
 -- name: GetReceipt :one
 SELECT s.id, s.request_sha256, s.material_version, s.language, s.created_at,

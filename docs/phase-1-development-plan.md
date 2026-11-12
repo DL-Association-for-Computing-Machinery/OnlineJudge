@@ -70,7 +70,7 @@
 | 开发包 | 前置条件 | 所属里程碑 | 状态入口 / 待补条件 |
 | --- | --- | --- | --- |
 | P0 范围与环境 | 用户及管理员补齐对应条件 | 分别支撑 M0、M1、M2 | 本机数据库/Docker 专项已有证据；产品与运维目标待补 |
-| P1 持久化与任务协议 | 可用测试数据库及关键组件准入 | M0 | [M0 记录](m0-experiment.md)；额度/公平调度待完成 |
+| P1 持久化与任务协议 | 可用测试数据库及关键组件准入 | M0 | [M0 记录](m0-experiment.md)；固定材料的积压及公平领取已验证，试用容量待验证 |
 | P2 GNU++17 文本判题 | P1、可用隔离 Linux 节点 | M0 | [M0 记录](m0-experiment.md)；完整验收待完成 |
 | P3 账号与权限 | P1 数据访问基础；会话实验在 M0 完成 | M0 实验、M1 产品、M2 补齐 | [会话实验](../tests/sessionexperiment/README.md)、[凭据持久化](architecture/session-design.md#72-主体凭据持久化与条件更新)、[浏览器账号](account-browser.md)已有分项；邮箱注册/找回、设备管理、权限及完整恢复验证待完成 |
 | P4 题库与发布 | P1、P2 受限验证、P3 权限 | M1 | 已有十题私有适配/管理/预览；[文本组件](checker-admission.md)、独立字节通路和磁盘快照接入[A+B12点/unionfind18点/zalgorithm29点/suffixarray50点/primality固定依赖13点/static_range_sum11点/associative_array20点/point_add_range_sum21点/staticrmq27点/convolution_mod53点参考验证](reference-validation.md)，尚未更新草稿状态/生产配置；十题254点/26个原子子测试固定环境维护参考验证通过，旧失败与根因未知结论保留；[内部持久化申请/回执/取消](reference-requests.md)已接PG，内部准备可校验持久化对象并冻结材料 Plan；已支持冻结后重验授权并持久化 expected Plan；判题与维护参考验证命令默认共享同机执行槽；专用参考 Worker 已接同机槽、受权领取、下载校验，并可显式启用续期和持槽执行至确认停止；确定结果可按原授权和冻结计划受信接纳，作者可通过真实会话 HTTP 创建、查回执与取消本人参考申请；作者可显式启动有界准备，专用 Worker 可在持槽时按来源选择一个未领过的已准备申请；质量/非作者终审/发布仍待完成，最终CI与合并状态见[交付记录](delivery-log.md)；新来源通过不追认历史失败或证明长期稳定 |
@@ -122,7 +122,7 @@
 
 ### P1 提交持久化与任务协议
 
-已验证子项增加[跨 API 共享积压准入](submission-backlog.md)：单一显式策略、全局/主体未终结计数及原回执优先，schema 6 升级与配置独立维护。用户于2026-11-03确认同一用户跨训练场景统计queued＋running，每提交计一次、终态释放，超额仅拒绝新增，同键重试保留原语义；具体限额显式配置，生产数值仍待确认。频率限流、团队/比赛额度和 DOMjudge 虚拟时间公平调度尚未完成，不据此标记整个 P1 或试用准入通过。
+已验证子项：[跨 API 共享积压准入](submission-backlog.md)按主体跨训练上下文统计 queued＋running，超额仅拒绝新增，同键保留原回执；[训练虚拟时间](submission-backlog.md#训练虚拟时间)采用 DOMjudge 的思路，在固定材料 Store 内按版本和主体分配领取顺位。生产限额、提交频率、真实身份、比赛/团队策略和混合负载仍待完成，不据此标记整个 P1 或试用准入通过。
 
 依照[总体架构](architecture/system-design.md)和[接口与 Worker 协议](architecture/api-worker-design.md)，接入真实 PostgreSQL、sqlc/pgx、Goose。实现最小提交、任务、执行尝试、结果和材料版本引用模型，并先定义 OpenAPI 输入、输出、错误及幂等语义。
 
