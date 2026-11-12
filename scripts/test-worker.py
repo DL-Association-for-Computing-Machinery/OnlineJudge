@@ -73,7 +73,8 @@ def start_database(owned):
            "--tmpfs", "/var/lib/postgresql/data", "postgres:14-alpine")
     owned.append(name)
     for _ in range(100):
-        if subprocess.run(DOCKER + ["exec", name, "pg_isready", "-U", "oj_test"],
+        # The image briefly starts a socket-only server to initialize the DB.
+        if subprocess.run(DOCKER + ["exec", name, "pg_isready", "-h", "127.0.0.1", "-U", "oj_test"],
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
             return name, docker("port", name, "5432", capture=True).strip().split(":")[-1]
         time.sleep(.2)
@@ -91,6 +92,8 @@ def main():
         raise RuntimeError("Pinned Desktop experiment requires macOS arm64; other profiles need validation")
     browser_env = browser_environment(args)
     docker("build", "--target", "host-artifacts", "--output", "type=local,dest=.local/bin", ".")
+    if args.suite in {"all", "restore-loop"}:
+        docker("build", "--target", "restore-artifacts", "--output", "type=local,dest=.local/bin", ".")
     docker("build", "--provenance=false", "-t", "oj-m0-sandbox:local", "-f",
            "deploy/experiments/go-judge.Dockerfile", "deploy/experiments")
     owned = []

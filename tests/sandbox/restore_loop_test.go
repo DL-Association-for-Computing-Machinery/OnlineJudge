@@ -6,9 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/x509"
-	"encoding/hex"
 	"os"
-	"path/filepath"
 	"regexp"
 	"testing"
 	"time"
@@ -41,11 +39,7 @@ func TestRestoreJudgeLoop(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sourceRoot, backupRoot, targetRoot := t.TempDir(), t.TempDir(), t.TempDir()
-	backupMaterials := filepath.Join(backupRoot, "materials")
-	if err := os.Mkdir(backupMaterials, 0700); err != nil {
-		t.Fatal(err)
-	}
+	sourceRoot := t.TempDir()
 	migrateHTTPFixture(t, ctx, source.dsn, sourceRoot, version, "2")
 	if _, err := source.pool.Exec(ctx, `INSERT INTO worker_nodes(id,credential_version) VALUES($1,1)`, restoreNode); err != nil {
 		t.Fatal("cannot register the synthetic Worker")
@@ -92,20 +86,7 @@ func TestRestoreJudgeLoop(t *testing.T) {
 	judge(source, sourceRoot, original)
 	history := restoreAttempt(t, ctx, source.pool, accepted.ID, 1)
 
-	// Stop the source cluster after capturing the quiescent fixture. No live source
-	// database can serve the second judgment, and no fixture is seeded on the target.
-	const archivePath = "/tmp/oj-restore-loop.dump"
-	archive := filepath.Join(backupRoot, "submission.dump")
-	dualDocker(t, "exec", source.container, "pg_dump", "-U", "oj_test", "-Fc", "-f", archivePath, source.name)
-	dualDocker(t, "cp", source.container+":"+archivePath, archive)
-	copyRestoreMaterials(t, sourceRoot, backupMaterials)
-	dualDocker(t, "stop", source.container)
-	if dualDocker(t, "inspect", "--format", "{{.State.Running}}", source.container) != "false" {
-		t.Fatal("source database stop not confirmed")
-	}
-	dualDocker(t, "cp", archive, target.container+":"+archivePath)
-	dualDocker(t, "exec", target.container, "pg_restore", "-U", "oj_test", "--single-transaction", "--no-owner", "--no-privileges", "-d", target.name, archivePath)
-	copyRestoreMaterials(t, backupMaterials, targetRoot)
+	targetRoot := restoreSealedPackage(t, source, target, sourceRoot)
 	if err := db.CheckSchema(ctx, target.pool); err != nil {
 		t.Fatal(err)
 	}
@@ -133,6 +114,7 @@ func TestRestoreJudgeLoop(t *testing.T) {
 	}
 	restartDrainedSandbox(t, slotID)
 	verifyEnvironment(t)
+	rejudgeStart := time.Now()
 	judge(target, targetRoot, restored)
 	if restoreAttempt(t, ctx, target.pool, accepted.ID, 1) != history {
 		t.Fatal("real rejudge changed the historical attempt")
@@ -142,7 +124,7 @@ func TestRestoreJudgeLoop(t *testing.T) {
 	if err := target.pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM submissions), (SELECT count(*) FROM judge_attempts)`).Scan(&submissions, &attempts); err != nil || submissions != 1 || attempts != 2 {
 		t.Fatal("rejudge must not resubmit or create extra attempts")
 	}
-	t.Logf("one submission, two real AC generations, historical result unchanged; source SHA-256=%x; source database stopped", sha256.Sum256([]byte(sourceText)))
+	t.Logf("one submission, two real AC generations, historical result unchanged; source SHA-256=%x; source database stopped; rejudge=%s", sha256.Sum256([]byte(sourceText)), time.Since(rejudgeStart))
 }
 
 type restoreLoopDatabase struct {
@@ -193,31 +175,4 @@ func restoreAttempt(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id st
 		t.Fatal("cannot read the expected completed Worker attempt")
 	}
 	return attempt
-}
-
-func copyRestoreMaterials(t *testing.T, from, to string) {
-	t.Helper()
-	entries, err := os.ReadDir(from)
-	if err != nil {
-		t.Fatal(err)
-	}
-	digest := regexp.MustCompile(`^[a-f0-9]{64}$`)
-	count := 0
-	for _, entry := range entries {
-		if !entry.Type().IsRegular() || !digest.MatchString(entry.Name()) {
-			t.Fatal("unexpected file in synthetic material directory")
-		}
-		data, err := os.ReadFile(filepath.Join(from, entry.Name()))
-		sum := sha256.Sum256(data)
-		if err != nil || len(data) == 0 || len(data) > 128 || hex.EncodeToString(sum[:]) != entry.Name() {
-			t.Fatal("cannot read bounded synthetic material")
-		}
-		if err := os.WriteFile(filepath.Join(to, entry.Name()), data, 0600); err != nil {
-			t.Fatal(err)
-		}
-		count++
-	}
-	if count != 4 {
-		t.Fatal("expected four backed-up synthetic material files")
-	}
 }

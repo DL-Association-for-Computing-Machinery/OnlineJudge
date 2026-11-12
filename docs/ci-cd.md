@@ -124,6 +124,8 @@ MediumBulk的共享槽/原tier保留、两端256/512MiB累计额度及失败清�
 
 特权判题实验不进入普通 PR CI。本机使用 `python3 scripts/test-worker.py all`（也可选择 sandbox/report/dual-worker/worker-fault/slot-recovery/network-fault/compile-lease/resource-bounds/http-loop/restore-loop），运行合成材料的隔离、回报、双 Worker 接管、异常槽解封、网络故障、编译在途失权、资源预算、HTTP 真实判题闭环及恢复后重判验证；不得在普通 runner 执行生产不可信提交。原专用 VM 与当前 Docker Desktop 的边界、失败诊断和历史结果见 [M0 实验记录](m0-experiment.md)及交付日志，不以普通 CI 代替专项验收。
 
+`restore-loop` 另外导出 Linux 维护工具，由两个临时 PostgreSQL 容器执行捕获、接收核验和还原后检查；宿主仍运行 Darwin Worker 与控制端。普通 CI 对该沙箱源码做静态检查，真实备份到重判的组合验证由 Desktop 专项完成。
+
 `http_address_test.go` 的有界启动日志解析是普通 root race 用例，不启动进程或调用 Docker。双提交 API、mTLS 控制端及真实 Worker 的 HTTP 判题和过载恢复由 Desktop 和 Ubuntu 的手动 sandbox 专项验证。普通 CI 只编译/静态分析这些源码。准入及证据边界见 [README](../README.md#http-到真实判题终态专项)。
 
 普通 PostgreSQL 集成测试从独立临时集群的逻辑备份还原在途租约，实跑[恢复提交租约](architecture/operations-design.md#恢复提交租约)命令，验证到期前拒绝旧租约、原任务重领、恢复前后尝试预算以及错误回滚；不访问试用库或执行选手程序。
