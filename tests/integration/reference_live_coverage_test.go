@@ -71,7 +71,8 @@ func verifyLiveCoverageReview(t *testing.T, ctx context.Context, f draftFixture,
 	}
 	views := map[string]any{"current": got}
 	if local {
-		got = verifyLiveRenderingConfirmation(t, ctx, reviews, objects, credential, reviewer, read, got, views)
+		const payloadSHA256 = "4edd12c6982688522fce113cfe129f620159229d19ee7a4f11896ea8413f5baf"
+		got = verifyLiveRenderingConfirmation(t, ctx, reviews, objects, credential, reviewer, read, got, views, payloadSHA256)
 	}
 	_, err = reviews.ReturnReview(ctx, reviewer, item.ID, problemreference.ReturnIntent{
 		RequestKey: "live-coverage-return", AssignmentRevision: got.Evidence.AssignmentRevision,
@@ -92,7 +93,7 @@ func verifyLiveCoverageReview(t *testing.T, ctx context.Context, f draftFixture,
 
 func verifyLiveRenderingConfirmation(t *testing.T, ctx context.Context, reviews *referencepg.ReviewStore, objects problem.ReferenceObjectReader,
 	credential redisstore.Credential, reviewer identity.ProblemActor, read *problemreference.ReviewAccess,
-	initial problemreference.ReviewEligibility, views map[string]any,
+	initial problemreference.ReviewEligibility, views map[string]any, payloadSHA256 string,
 ) problemreference.ReviewEligibility {
 	t.Helper()
 	id := initial.Evidence.ReviewID
@@ -115,7 +116,7 @@ func verifyLiveRenderingConfirmation(t *testing.T, ctx context.Context, reviews 
 	preview.Version, preview.DraftID = "", ""
 	raw, err := json.Marshal(preview)
 	must(t, err)
-	if liveReferenceDigest(raw) != "4edd12c6982688522fce113cfe129f620159229d19ee7a4f11896ea8413f5baf" {
+	if liveReferenceDigest(raw) != payloadSHA256 {
 		t.Fatal("current review preview does not match the historical render inputs")
 	}
 	checklist, err := problemreference.NewStatementConfirmations(sessions, materials, objects, acquire)

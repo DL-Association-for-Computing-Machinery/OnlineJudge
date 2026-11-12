@@ -49,21 +49,30 @@ func AdmittedStatementRendering(identity problem.ImportIdentity, planSHA256 stri
 	return historicalStatementRendering(identity.SourceID)
 }
 
-// AdmittedApPlusBStatementRendering uses the reviewed equivalence of the
-// historical browser inputs and current A+B preview, not a new browser run.
+// AdmittedRevisedStatementRendering uses reviewed equivalence between
+// historical browser inputs and a current preview, not a new browser run.
 // The caller must first verify the stored plan and accepted report.
-func AdmittedApPlusBStatementRendering(id problem.ImportIdentity, planSHA256, profileSHA256 string) (StatementRenderingEvidence, bool) {
-	if !matchesReviewedApPlusBPlan(id, planSHA256, profileSHA256) {
+func AdmittedRevisedStatementRendering(id problem.ImportIdentity, planSHA256, profileSHA256 string) (StatementRenderingEvidence, bool) {
+	var match StatementRenderingMatch
+	switch {
+	case matchesReviewedApPlusBPlan(id, planSHA256, profileSHA256):
+		match = StatementRenderingMatch{
+			ObservedContentVersion: "87ebb9680aa3abe190b61d4a5ccac1dc83e48b29656364e445e36fabe7467cc9",
+			ReportSHA256:           "3c8ec439df6cd551a87ea40e405cd06990d0f9476ad2e3413c4ecbc894329644",
+		}
+	case matchesReviewedUnionFindPlan(id, planSHA256, profileSHA256):
+		match = StatementRenderingMatch{
+			ObservedContentVersion: "fd871a02594fcd663790cd0530153df2ad18bf95110559ce552a121c34705bed",
+			ReportSHA256:           "3dd77d0fa9bc501ae23a3c352e0c83486b71d6b8d619de4451b27534db86d453",
+		}
+	default:
 		return StatementRenderingEvidence{}, false
 	}
 	ev, ok := historicalStatementRendering(id.SourceID)
 	if !ok {
 		return StatementRenderingEvidence{}, false
 	}
-	ev.HistoricalMatch = &StatementRenderingMatch{
-		ObservedContentVersion: "87ebb9680aa3abe190b61d4a5ccac1dc83e48b29656364e445e36fabe7467cc9",
-		ReportSHA256:           "3c8ec439df6cd551a87ea40e405cd06990d0f9476ad2e3413c4ecbc894329644",
-	}
+	ev.HistoricalMatch = &match
 	return ev, true
 }
 
