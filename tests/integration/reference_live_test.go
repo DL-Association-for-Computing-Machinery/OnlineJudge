@@ -271,7 +271,7 @@ func TestLiveReferenceReports(t *testing.T) {
 				})
 			}
 			if source.id == "unionfind" && versionPin != "" {
-				verifyLiveUnionFindQuality(t, ctx, f, store, credential, other, out, problemreference.ReviewIntent{
+				verifyLiveUnionFindQuality(t, ctx, f, store, materials, credential, other, out, problemreference.ReviewIntent{
 					RequestKey: "live-unionfind-review", DraftID: draft.ID, ImportRevision: revision, ReferenceRequestID: request.ID,
 				})
 			}

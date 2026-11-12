@@ -127,14 +127,23 @@ func TestReviewUnionFindCoverageRequiresCurrentCompletePlan(t *testing.T) {
 		if result.InputValidator == nil || result.InputValidator.Inputs != 20 || result.InputValidator.Controls != 4 ||
 			result.IndependentCorrectness == nil || result.IndependentCorrectness.Cases != 10 ||
 			result.IndependentCorrectness.ReportSHA256 != result.InputValidator.ReportSHA256 ||
-			result.StatementRendering != nil || result.WrongSolution != nil || result.Eligible {
-			t.Fatalf("expected only the revised quality evidence: %+v", result)
+			result.StatementRendering == nil || result.StatementRendering.HistoricalMatch == nil ||
+			result.StatementRendering.Examples != 1 || result.StatementRendering.Formulas != 10 || result.StatementRendering.FormatBlocks != 0 ||
+			result.WrongSolution != nil || result.Eligible {
+			t.Fatalf("expected the bound revised quality and rendering evidence: %+v", result)
 		}
 	}
 	got := assessReviewEligibility(s)
 	quality(t, got)
-	if got.TestCoverage == nil || got.TestCoverage.LocalCPUProbe == nil || !slices.Equal(got.Blockers, want) {
+	if got.TestCoverage == nil || got.TestCoverage.LocalCPUProbe == nil || got.StatementSemanticsConfirmed || !slices.Equal(got.Blockers, want) {
 		t.Fatalf("coverage should clear only its own prerequisite: %+v", got)
+	}
+	confirmed := s
+	confirmed.StatementConfirmed = true
+	ready := assessReviewEligibility(confirmed)
+	quality(t, ready)
+	if !ready.StatementSemanticsConfirmed || ready.TestCoverage == nil || !slices.Equal(ready.Blockers, want[1:]) {
+		t.Fatalf("current confirmation must clear only the statement blocker: %+v", ready)
 	}
 	fields := requireCoverageJSONFields(t, got.TestCoverage, "local_cpu_probe")
 	var probe map[string]json.RawMessage
@@ -162,11 +171,12 @@ func TestReviewUnionFindCoverageRequiresCurrentCompletePlan(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			changed := s
 			changed.Returned, changed.Evidence.FormalVerdict = tc.returned, tc.verdict
+			changed.StatementConfirmed = tc.returned
 			result := assessReviewEligibility(changed)
 			quality(t, result)
 			expected := append(slices.Clone(tc.blockers), "statement_quality_missing", "test_coverage_missing",
 				"checker_admission_missing", "target_runtime_missing", "solution_confirmation_missing")
-			if result.TestCoverage != nil || !slices.Equal(result.Blockers, expected) {
+			if result.TestCoverage != nil || result.StatementSemanticsConfirmed || !slices.Equal(result.Blockers, expected) {
 				t.Fatalf("historical evidence weakened current blockers: %+v, want %v", result, expected)
 			}
 		})
@@ -189,6 +199,7 @@ func TestReviewUnionFindCoverageRequiresCurrentCompletePlan(t *testing.T) {
 			tc.change(&changed.Evidence)
 			result := assessReviewEligibility(changed)
 			if result.InputValidator != nil || result.IndependentCorrectness != nil || result.Eligible || result.TestCoverage != nil ||
+				result.StatementRendering != nil || !slices.Contains(result.Blockers, "statement_quality_missing") ||
 				!slices.Contains(result.Blockers, "test_coverage_missing") ||
 				!slices.Contains(result.Blockers, "input_validator_missing") ||
 				!slices.Contains(result.Blockers, "independent_correctness_missing") {
@@ -202,6 +213,7 @@ func TestReviewUnionFindCoverageRequiresCurrentCompletePlan(t *testing.T) {
 	legacy.Evidence.FormalPlanSHA256 = "d64b9c33fd865c0433ba7b932ccfd6c9184793512a271c9a618b510a05b1d37d"
 	old := assessReviewEligibility(legacy)
 	if old.InputValidator == nil || old.InputValidator.Inputs != 18 || old.IndependentCorrectness == nil || old.TestCoverage != nil ||
+		old.StatementRendering == nil || old.StatementRendering.HistoricalMatch != nil ||
 		old.IndependentCorrectness.Cases != 10 || old.InputValidator.ReportSHA256 == got.InputValidator.ReportSHA256 ||
 		old.InputValidator.ReportSHA256 != old.IndependentCorrectness.ReportSHA256 {
 		t.Fatalf("legacy plan no longer reads its own quality evidence: %+v", old)
