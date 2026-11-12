@@ -99,8 +99,11 @@ func TestCaptureLogicalBackupMatchesExportedSnapshot(t *testing.T) {
 			t.Fatal("backup copied a file outside the snapshot inventory")
 		}
 	}
-	target := newSubmissionRestoreTarget(t, f.ctx, "public", filepath.Join(output, "postgres.dump"))
-	checked, err := restorecheck.VerifyMaterials(f.ctx, target, target.Config().ConnConfig.Database, filepath.Join(output, "judge"), filepath.Join(output, "private"))
+	received := t.TempDir()
+	must(t, os.CopyFS(received, os.DirFS(output)))
+	verifyReceivedBackup(t, f.ctx, received, materialHash(receipt.Bytes()), sealed)
+	target := newSubmissionRestoreTarget(t, f.ctx, "public", filepath.Join(received, "postgres.dump"))
+	checked, err := restorecheck.VerifyMaterials(f.ctx, target, target.Config().ConnConfig.Database, filepath.Join(received, "judge"), filepath.Join(received, "private"))
 	must(t, err)
 	if checked != sealed.References || checked.JudgeManifests != 1 || checked.Drafts != 1 || checked.ReferencePlans != 1 {
 		t.Fatal("restored archive did not match the sealed material inventory")
@@ -137,6 +140,24 @@ func TestCaptureLogicalBackupMatchesExportedSnapshot(t *testing.T) {
 		if _, err := os.Stat(dir); !os.IsNotExist(err) {
 			t.Fatal("invalid passfile created a backup directory")
 		}
+	}
+}
+
+func verifyReceivedBackup(t *testing.T, ctx context.Context, received, trustedDigest string, manifest backup.Manifest) {
+	t.Helper()
+	migrate, err := filepath.Abs("../../.local/bin/migrate")
+	must(t, err)
+	cmd := exec.CommandContext(ctx, migrate, "verify-backup", "-manifest-sha256", trustedDigest, "-timeout", "5s", received)
+	cmd.Env = []string{"PATH=/no-helper-programs", "OJ_DATABASE_URL=invalid", "OJ_RESTORED_DATABASE_URL=invalid"}
+	raw, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("received backup rejected before database restore: %s (%v)", raw, err)
+	}
+	var got backup.TransferReceipt
+	must(t, json.Unmarshal(raw, &got))
+	if got.ManifestSHA256 != trustedDigest || got.Archive != manifest.Archive ||
+		got.JudgeFiles != manifest.JudgeFiles || got.PrivateFiles != manifest.PrivateFiles {
+		t.Fatal("transfer receipt did not bind the same sealed backup")
 	}
 }
 

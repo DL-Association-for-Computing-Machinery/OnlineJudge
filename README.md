@@ -694,7 +694,15 @@ python3 -B scripts/test-session-protocol.py --toolchain-image oj-session-protoco
   '源库名' '/绝对路径/判题材料' '/绝对路径/私有材料' '/绝对路径/全新备份目录'
 ```
 
-需要密码认证时，显式加 `-passfile '/绝对路径/备份角色凭据文件'`，其为当前用户所有、权限 `0600`、至多 32 KiB 的普通文件，且运行环境须提供 `/proc`。专用文件可用 `*` 匹配 socket 地址，仍应限定数据库、端口和角色。命令不回退到运行 DSN、默认密码文件或环境密码。只将含已封存 `manifest.json` 且重新核验过的目录作为备份。
+需要密码认证时，显式加 `-passfile '/绝对路径/备份角色凭据文件'`，其为当前用户所有、权限 `0600`、至多 32 KiB 的普通文件，且运行环境须提供 `/proc`。专用文件可用 `*` 匹配 socket 地址，仍应限定数据库、端口和角色。命令不回退到运行 DSN、默认密码文件或环境密码。
+
+### 核验收到的逻辑备份
+
+在源端封存后，用 `sha256sum` 计算 `manifest.json` 的 SHA-256，通过独立可信渠道保存或交给接收方。接收方在 `pg_restore` 前，用该原始摘要核验静止的备份目录；不要从收到的目录自行计算预期摘要。详见[接收核验](docs/architecture/storage-design.md#核验收到的逻辑备份)。
+
+```sh
+.local/bin/migrate verify-backup -manifest-sha256 '源端完成清单的原始摘要' -timeout 10m '/绝对路径/收到的备份目录'
+```
 
 ### 浏览器账号专项
 
