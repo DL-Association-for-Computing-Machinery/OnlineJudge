@@ -1,5 +1,9 @@
 # 工程交付记录
 
+## 2026-11-12：本地 Ubuntu 九轮混合负载对照
+
+在同一 4 vCPU／4 GiB 本地 VM 分别运行只登录、只判题和并行各三次，配置与预填数据一致，每轮换序。三次并行各完成 300 次 HTTPS 会话读取、8 次新增登录、48 AC 和 48 WA；96 份判题各一次完成尝试。会话窗口所有 15 个一秒片段均观测到判题运行态。并行读取 p95 为 1.85–1.97 毫秒，96 份判题终态读完 31.51–31.72 秒；九次未观测到 OOM 计数增加。[方法、对照与制品摘要](evidence/ubuntu-mixed-load-20261112.md)。仅记录本地合成验证，未访问试用服务器或验收容量。
+
 ## 2026-11-12：专用 Ubuntu VM 真实 Worker 判题闭环
 
 固定 Ubuntu 24.04 arm64、Linux 6.8.0-106-generic、Docker 29.1.3、go-judge v1.13.3/GCC 15.3.0。真实双提交 API、mTLS 控制器、Ubuntu Worker 和临时 PostgreSQL 14.24 完成固定 AC/WA，各一次完成尝试。Desktop 领取请求连到 Ubuntu 控制器时不产生尝试；给 Ubuntu Worker 设置错误的 Docker host、context、配置及 PATH 后仍只使用客体固定 Unix socket。排空后原槽停止、原客体 PID 消失、隔离标记为空，临时容器已清理。Ubuntu 实测日志 SHA-256 `a856d33a5eddb6be2c65274bc9b7bb4f73fd0b2508411f0082a720560f4260be`，Desktop v3 同一真实链路回归通过，日志 SHA-256 `6c8eb9fc7ea5cccd37e9622cb9e03200fb98b74f3546db5e49ade025bbed834a`。
