@@ -33,6 +33,8 @@ Ubuntu 本地实验新增独立材料版本 `m0-sum-ubuntu-arm64-v1`。原 v1/v2
 
 [本地单机对照](evidence/ubuntu-mixed-load-20261112.md)把真实会话和固定判题放入同一 Ubuntu 客体，分开观测只登录、只判题与并行。数据仅适用于该客体和固定负载；不替代实际部署、真实题目及试用容量验收。
 
+[HTTP 过载恢复](delivery-log.md#2026-11-12真实判题-http-过载恢复)在 Ubuntu VM 和 Desktop 的临时库填满两个提交名额，验证双 API 拒绝新键且不写入、真实 Worker 完成已接收任务、容量释放后原键可以提交。该固定场景补充 P6 过载恢复证据，持续过载、普通训练入口和目标环境仍待验收。
+
 ## M0 固定合成题最小浏览器页（2026-11-03）
 
 显式双重opt-in在实际127.0.0.1监听提供 `/m0`；服务端固定v3材料/GNU++17/AC或WA源码，单独浏览器实验主体/上下文，与Bearer提交隔离。nonce用于CSRF防护，不认证账号或隔离同源脚本；严格Host/Origin/Fetch Metadata、数据GET nonce、CSP/no-store、不使用/设置会话Cookie、不开放CORS及默认关闭边界归[浏览器契约](../api/m0-browser.openapi.yaml)和[README](../README.md#m0-最小浏览器实验页)。没有放宽旧Bearer Origin拒绝、普通账号训练权限、预算、依赖或数据库schema。

@@ -118,7 +118,7 @@ MediumBulk的共享槽/原tier保留、两端256/512MiB累计额度及失败清�
 
 特权判题实验不进入普通 PR CI。本机使用 `python3 scripts/test-worker.py all`（也可选择 sandbox/report/dual-worker/worker-fault/slot-recovery/network-fault/compile-lease/resource-bounds/http-loop），运行合成材料的隔离、回报、双 Worker 接管、异常槽解封、网络故障、编译在途失权、资源预算及 HTTP 真实判题闭环验证；不得在普通 runner 执行生产不可信提交。原专用 VM 与当前 Docker Desktop 的边界、失败诊断和历史结果见 [M0 实验记录](m0-experiment.md)及交付日志，不以普通 CI 代替专项验收。
 
-`http_address_test.go` 的有界启动日志解析是普通 root race 用例，不启动进程或调用 Docker。真实双提交 API、mTLS 控制端、Worker 命令及 HTTP queued→终态由 sandbox 标签的 `http-loop` 专项执行；普通 CI 只编译/静态分析这些源码。准入及证据边界见 [README](../README.md#http-到真实判题终态专项)，不将其视为浏览器或正式训练授权验收。
+`http_address_test.go` 的有界启动日志解析是普通 root race 用例，不启动进程或调用 Docker。双提交 API、mTLS 控制端及真实 Worker 的 HTTP 判题和过载恢复由 Desktop 和 Ubuntu 的手动 sandbox 专项验证。普通 CI 只编译/静态分析这些源码。准入及证据边界见 [README](../README.md#http-到真实判题终态专项)。
 
 `internal/m0browser` 的配置/HTTP边界race随backend执行，固定预设、独立归属、拒绝零Store调用及nonce轮换不执行选手程序。`browser-loop` 是独立显式专项，需要已安装的宿主Node/Playwright/Chromium，普通CI和 `all` 均不运行；命令归[README](../README.md#m0-最小浏览器实验页)。它验证实际提交API、PG、mTLS控制端及Worker与桌面/390px浏览器，真实丢接收响应及原键恢复与注入查询503分别报告。现有前端预览和账号浏览器专项保持原入口，不因本页通过而扩写M1训练或账号权限验收。
 

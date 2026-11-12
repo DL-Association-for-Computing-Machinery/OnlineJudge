@@ -703,9 +703,9 @@ Worker 启动完成后，向该 Worker 进程发送 `SIGUSR1`（`kill -USR1 PID`
 
 ### HTTP 到真实判题终态专项
 
-受信维护流程须先使用 Docker 构建的 `.local/bin/migrate up` 升级 schema，再按材料版本执行 `.local/bin/migrate fixture`，最后显式执行 `.local/bin/migrate backlog <全局上限> <主体上限>`；命令共用私有 `OJ_DATABASE_URL`。不执行最后一步会拒绝新提交，API 不自动设值。专项驱动在独占临时数据库配置的 `10000 10000` 仅为合成夹具，不是生产建议。升级已有服务必须先停止全部旧版写入 API，详见[升级与回退](docs/submission-backlog.md#升级与回退)。
+受信维护流程须先使用 Docker 构建的 `.local/bin/migrate up` 升级 schema，再按材料版本执行 `.local/bin/migrate fixture`，最后显式执行 `.local/bin/migrate backlog <全局上限> <主体上限>`；命令共用私有 `OJ_DATABASE_URL`。不执行最后一步会拒绝新提交，API 不自动设值。HTTP 判题专项在独占临时库将两项上限设为 2 以触发过载，其他夹具可用较高上限。升级已有服务必须先停止全部旧版写入 API，详见[升级与回退](docs/submission-backlog.md#升级与回退)。
 
-`python3 scripts/test-worker.py http-loop` 显式设置 `OJ_SANDBOX_HTTP=1`，`all` 同样包含此项。驱动建立空的临时 PostgreSQL，实际运行迁移/固定材料初始化、两个提交 API 进程、mTLS 控制端及 Worker 命令；只提交仓库内固定 AC/WA 合成源码。先由 HTTP 确认 queued，再启动 Worker，通过 HTTP 观察 finished/AC 或 WA；数据库仅旁证原始源码、固定归属及每题唯一完成 attempt。
+`python3 scripts/test-worker.py http-loop` 显式设置 `OJ_SANDBOX_HTTP=1`，`all` 同样包含此项。驱动使用临时 PostgreSQL、两个提交 API 进程、mTLS 控制端和真实 Worker。先以固定 AC/WA 源码填满队列；两个 API 都对第三个新键返回 `429 BACKLOG_LIMIT`，跨实例查询该键均为 404，已接收的原键仍可回读，数据库无新增提交、任务或尝试。Worker 将原两份判到终态后，测试显式按原键、原正文再提交，验证新增提交取得 AC。三份已接收提交各有一次完成尝试。
 
 专项检查跨 API 原键重试/回执、异源冲突、缺失/错误凭据、Origin 拒绝无写入、闭合回执字段及无 Cookie/CORS、Worker 正常排空和槽停止。提交 API 用 `127.0.0.1:0`，仅从自身私有有界 JSON 日志取得回环地址，客户端禁代理/重定向；控制端沿用既有临时端口流程。私有 Bearer 留在服务端测试进程中。该入口不支持浏览器，不授予普通账号训练权限；独立opt-in最小页面及其失败路径见下节。无 API、迁移或预算变化，可单独回退专项及驱动选择器。
 
@@ -724,7 +724,7 @@ docker --context desktop-linux build --target host-artifacts \
 sudo -n env OJ_SANDBOX_EXPERIMENT=1 python3 -B test-ubuntu-worker.py /path/to/layout
 ```
 
-[专项脚本](scripts/test-ubuntu-worker.py)只使用预先校验并导入的固定 Linux arm64 镜像，不拉取镜像。它启动独占沙箱和回环临时 PostgreSQL，用两份固定合成代码验证 AC、WA、各一次完成尝试及停止。失败时保留已停止的自有沙箱供诊断；不要删除隔离标记或用旧版/Desktop 恢复命令处理 Ubuntu 槽。试用服务器和整机容量不在本专项验收范围。
+[专项脚本](scripts/test-ubuntu-worker.py)只使用预先校验并导入的固定 Linux arm64 镜像，不拉取镜像。它启动独占沙箱和回环临时 PostgreSQL，执行上述同一 HTTP 判题和过载恢复断言，并验证原槽已停止、原客体 PID 消失。失败时保留已停止的自有沙箱供诊断；不要删除隔离标记或用旧版/Desktop 恢复命令处理 Ubuntu 槽。试用服务器和整机容量不在本专项验收范围。
 
 ### M0 最小浏览器实验页
 
