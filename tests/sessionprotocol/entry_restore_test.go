@@ -27,6 +27,7 @@ func testEntryDatabaseRestore(t *testing.T, f *fixture, binary string) {
 	defer cancel()
 	config := runtimeConfig(t, f, namespace(t), true)
 	owner, candidate := f.subject(t, false), f.subject(t, false)
+	configureReferenceRestore(t, f, &config, owner.ID, candidate.ID)
 	ca := testpki.New(t)
 	start := func(c sessionruntime.Config) *entryProcess {
 		return entryStart(t, binary, entryConfig(t, c, ca, 3*time.Second), "127.0.0.1:0")
@@ -46,6 +47,9 @@ func testEntryDatabaseRestore(t *testing.T, f *fixture, binary string) {
 	source := start(config)
 	before := entryClient(t, source, ca)
 	old := entryCredential(t, before, owner, "synthetic protocol password")
+	other := entryCredential(t, before, candidate, "synthetic protocol password")
+	ownerRequest := queueReferenceForRestore(t, before, owner.ID, old)
+	disabledRequest := queueReferenceForRestore(t, before, candidate.ID, other)
 	pending := beginLogin(t, before, candidate)
 	read(before, old, 200)
 	saved, err := f.identities[0].RecoveryState(ctx)
@@ -55,6 +59,10 @@ func testEntryDatabaseRestore(t *testing.T, f *fixture, binary string) {
 	}
 	archive := filepath.Join(t.TempDir(), "postgres.dump")
 	dumpEntryDatabase(t, ctx, config.Database, archive)
+	// Drain the source fixture by its ordinary API. The isolated target must
+	// still have the queued requests from the archive, not these cancellations.
+	ownerRequest.cancel(t, before, old)
+	disabledRequest.cancel(t, before, other)
 
 	// Advance the live source after the backup. The archive must restore the
 	// earlier epoch, not silently read the source database after the rotation.
@@ -104,9 +112,9 @@ func testEntryDatabaseRestore(t *testing.T, f *fixture, binary string) {
 	must(t, authority.FinishRecovery(ctx, fresh))
 
 	a := start(config)
-	other := config
-	other.Database.ApplicationName += "_b"
-	b := start(other)
+	replica := config
+	replica.Database.ApplicationName += "_b"
+	b := start(replica)
 	x, y := entryClient(t, a, ca), entryClient(t, b, ca)
 	ttl, err := f.control.PTTL(ctx, tokenKey(config.Namespace, old)).Result()
 	must(t, err)
@@ -127,7 +135,9 @@ func testEntryDatabaseRestore(t *testing.T, f *fixture, binary string) {
 	stop(b)
 	t.Log("archive restored an old live cookie at storage boundary; closed target refused startup, both reopened APIs rejected it and accepted fresh login")
 	t.Run("operator recovery on empty replacement Redis", func(t *testing.T) {
-		testRecoveryCommand(t, f, binary, command, config, ca, pool, owner, candidate, current, pendingBeforeMaintenance)
+		testRecoveryCommand(t, f, binary, command, config, ca, pool, owner, candidate, current, pendingBeforeMaintenance, func(x, y *loginEndpoint, fresh protocol.Credential, epoch string) {
+			testRecoveredReferenceQueue(t, pool, x, y, current, fresh, saved.Generation, epoch, ownerRequest, disabledRequest)
+		})
 	})
 }
 

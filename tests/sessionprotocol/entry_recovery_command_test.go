@@ -22,7 +22,8 @@ import (
 )
 
 func testRecoveryCommand(t *testing.T, f *fixture, api, command string, c sessionruntime.Config, ca *testpki.Authority,
-	pool *pgxpool.Pool, owner, disabled identity.Personal, old protocol.Credential, pending *http.Cookie) {
+	pool *pgxpool.Pool, owner, disabled identity.Personal, old protocol.Credential, pending *http.Cookie,
+	checkReferenceQueue func(x, y *loginEndpoint, fresh protocol.Credential, epoch string)) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 35*time.Second)
 	defer cancel()
@@ -136,6 +137,7 @@ func testRecoveryCommand(t *testing.T, f *fixture, api, command string, c sessio
 	}
 	fresh := entryCredential(t, endpoints[0], owner, "synthetic protocol password")
 	loginStatus(t, loginCall(endpoints[1], "/api/v1/session", "", credentialCookies(fresh), get), 200)
+	checkReferenceQueue(endpoints[0], endpoints[1], fresh, opened.Generation)
 	for _, child := range children {
 		child.signal(t)
 		child.wait(t, true)
