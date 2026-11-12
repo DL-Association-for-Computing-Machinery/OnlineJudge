@@ -275,6 +275,11 @@ func TestLiveReferenceReports(t *testing.T) {
 					RequestKey: "live-unionfind-review", DraftID: draft.ID, ImportRevision: revision, ReferenceRequestID: request.ID,
 				})
 			}
+			if source.id == "zalgorithm" && source.cases == 32 {
+				verifyLiveZAlgorithmQuality(t, ctx, f, store, credential, other, out, problemreference.ReviewIntent{
+					RequestKey: "live-zalgorithm-review", DraftID: draft.ID, ImportRevision: revision, ReferenceRequestID: request.ID,
+				})
+			}
 			writeLiveReferenceJSON(t, out, "accepted-"+source.id, map[string]any{
 				"source_id": sourceID, "content_version": version, "import_revision": revision,
 				"formal_plan_sha256": plan.SHA256, "profile_sha256": evidence.ProfileSHA256, "evidence_sha256": report.evidenceSHA,
