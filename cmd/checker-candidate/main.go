@@ -27,6 +27,9 @@ func main() {
 }
 
 func run(parent context.Context, args []string, out, diagnostics io.Writer) error {
+	if len(args) > 0 && args[0] == "verify-trial" {
+		return verifyTrial(parent, args[1:], out, diagnostics)
+	}
 	f := flag.NewFlagSet("checker-candidate", flag.ContinueOnError)
 	f.SetOutput(diagnostics)
 	bundle := f.String("bundle", "", "absolute path to a prepared private bundle")
