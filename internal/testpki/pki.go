@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/pem"
 	"math/big"
 	"net"
@@ -30,7 +31,7 @@ func New(t *testing.T) *Authority {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	check(t, err)
-	cert := &x509.Certificate{SerialNumber: serial(t), IsCA: true, BasicConstraintsValid: true,
+	cert := &x509.Certificate{SerialNumber: serial(t), Subject: pkix.Name{CommonName: "OnlineJudge test CA"}, IsCA: true, BasicConstraintsValid: true,
 		KeyUsage: x509.KeyUsageCertSign, NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour)}
 	der, err := x509.CreateCertificate(rand.Reader, cert, cert, &key.PublicKey, key)
 	check(t, err)
@@ -48,7 +49,7 @@ func (a *Authority) Issue(t *testing.T, identity string, usage x509.ExtKeyUsage,
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	check(t, err)
-	cert := &x509.Certificate{SerialNumber: serial(t), NotBefore: time.Now().Add(-2 * time.Hour), NotAfter: until,
+	cert := &x509.Certificate{SerialNumber: serial(t), Subject: pkix.Name{CommonName: "OnlineJudge test endpoint"}, NotBefore: time.Now().Add(-2 * time.Hour), NotAfter: until,
 		KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{usage}, IPAddresses: []net.IP{net.ParseIP("127.0.0.1")}}
 	if identity != "" {
 		u, err := url.Parse(identity)
