@@ -65,6 +65,11 @@ func AdmittedRevisedStatementRendering(id problem.ImportIdentity, planSHA256, pr
 			ObservedContentVersion: "fd871a02594fcd663790cd0530153df2ad18bf95110559ce552a121c34705bed",
 			ReportSHA256:           "3dd77d0fa9bc501ae23a3c352e0c83486b71d6b8d619de4451b27534db86d453",
 		}
+	case matchesReviewedZAlgorithmPlan(id, planSHA256, profileSHA256):
+		match = StatementRenderingMatch{
+			ObservedContentVersion: "151da5a28d0bd733fe4837547ec909137a36b0e532409c93dfd7bf3c2a7e6b41",
+			ReportSHA256:           "b2319f18ba9b65eec5aa720d2867795acdde450a14d0a101d6d4291bda499d3e",
+		}
 	default:
 		return StatementRenderingEvidence{}, false
 	}

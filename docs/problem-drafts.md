@@ -129,7 +129,7 @@ schema 16 新增两张只追加的历史表。主体／项和修订的复合主�
 
 ### 批准准入状态
 
-`GET /api/v1/problem-review/{review_id}/eligibility` 沿用审核开关、普通会话和预期主体头。仅当前被分配的非作者可读；同一短事务核验完整导入修订、冻结计划及已接纳报告，查询同材料是否已退回及同绑定的作者确认。响应包含固定证据摘要、策略版本 `oj.review-approval.v13`、`eligible: false` 及阻断码。读取不写决定，不能作为批准凭证。
+`GET /api/v1/problem-review/{review_id}/eligibility` 沿用审核开关、普通会话和预期主体头。仅当前被分配的非作者可读；同一短事务核验完整导入修订、冻结计划及已接纳报告，查询同材料是否已退回及同绑定的作者确认。响应包含固定证据摘要、策略版本 `oj.review-approval.v14`、`eligible: false` 及阻断码。读取不写决定，不能作为批准凭证。
 
 | 阻断码 | 需要处理的事项 |
 | --- | --- |
@@ -153,7 +153,7 @@ schema 16 新增两张只追加的历史表。主体／项和修订的复合主�
 
 十题 v6 以同样的精确绑定返回 `statement_rendering_evidence`，包含历史浏览器报告摘要及本题样例、渲染公式和输入输出格式块的数量。[桌面与窄屏验证](delivery-log.md#2026-11-11六题输入输出格式逐行排版)使用的是旧导入修订，但十题的内容版本、Markdown 和有序样例字节与 v6 一致。
 
-A+B 17 点和并查集 20 点修订在来源、锁、内容版本、完整导入修订、计划和档位精确匹配时，也返回上述历史观察。此时额外返回 `historical_match`，包含当时实际观测的内容版本和预览等价报告摘要（[A+B](../internal/problemvalidation/testdata/aplusb-render-equivalence-20261112.json)、[并查集](../internal/problemvalidation/testdata/unionfind-render-equivalence-20261112.json)）。当前授权预览与历史包的渲染输入相同，前端文件树也一致；本次没有重新运行浏览器。
+A+B 17 点、并查集 20 点和 Z 算法 32 点修订在来源、锁、内容版本、完整导入修订、计划和档位精确匹配时，也返回上述历史观察。此时额外返回 `historical_match`，包含当时实际观测的内容版本和预览等价报告摘要（[A+B](../internal/problemvalidation/testdata/aplusb-render-equivalence-20261112.json)、[并查集](../internal/problemvalidation/testdata/unionfind-render-equivalence-20261112.json)、[Z 算法](../internal/problemvalidation/testdata/zalgorithm-render-equivalence-20261112.json)）。当前授权预览与历史包的渲染输入相同。前两题复核时前端文件树一致；Z 算法复核时的差异仅涉及写请求来源策略和服务测试，渲染代码不变。该证据沿用历史浏览器观测。
 
 `statement_quality_missing` 只有在同时具有[当前非作者题面确认](#审核人确认题面语义)和可信渲染证据时才解除。撤回分配再重新分配须重新确认；材料退回恢复题面缺项，历史观测仍可读。
 

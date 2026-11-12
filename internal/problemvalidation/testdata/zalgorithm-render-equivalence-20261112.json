@@ -1,0 +1,30 @@
+{
+  "accepted_summary_sha256": "62965f6808ea0dcf7ecc6a02ea76f4140cae485e79a4f4747adb52a1eaa0a2bf",
+  "browser_fixture_sha256": "30010d98fff486c727b6b5f67eda0d059e5ecd39f227456b9fd4b7ed0093f0b4",
+  "browser_report_sha256": "8054f52499d7f987eedd78c64a16877b0391555909b74bb735409a51355f42f3",
+  "examples": 4,
+  "format_blocks": 0,
+  "formulas": 8,
+  "historical_bundle_index_sha256": "3d52da88342d08c1fce6d2fa0bbeaa4784444a1f36b5dcbac15adf657b0ca537",
+  "historical_content_version": "151da5a28d0bd733fe4837547ec909137a36b0e532409c93dfd7bf3c2a7e6b41",
+  "historical_web_tree": "17522266ee3b4a9c5e37e7df029b0bde0f0bd697",
+  "local_bundle_index_sha256": "6d06b64ce0ea87eb1d903b7c9b69e47bcef2a263e9ce24ed9335f594f67e0fca",
+  "local_content_version": "924bfcbc027160298dbe976d44f4d6308268510577c4031e24871150cb044cb1",
+  "local_formal_plan_sha256": "3128a2b2ce05ef99d9d66904460ba8e578d66e85edf83f4f40e264832331628c",
+  "local_import_revision": "ecc674ef30399bb274514a269bad4c8dae2fbf9dec989a6c8263523cfb133047",
+  "local_web_tree": "37b104f2e77e314820e2ad9e541dd98c08bc521f",
+  "normalized_payload_sha256": "d5f6202ba5df73e0eb1b7b9e377340db6b63ffe47f047f1efb98496ec003cb11",
+  "profile_sha256": "32aa64eb913108ccc089a0548a98cb777f019f37cd4bc349ab87ff0ddd1a515d",
+  "projection_log_sha256": "9b5318f9ac4ee51aed825b74572711fe2182446063842c12a9c720198705e0c6",
+  "scope": "historical browser rendering and equal current preview payload; web changes limited to write request referrer policy and service tests; no new browser run",
+  "source_id": "library-checker:zalgorithm",
+  "source_lock_sha256": "fe2722edade748228c9add9c54704c09861fa6be649b5cdf59e1f214b5ee9617",
+  "web_delta_paths": [
+    "web/src/services/draftManagement.test.ts",
+    "web/src/services/draftManagement.ts",
+    "web/src/services/referenceRequests.test.ts",
+    "web/src/services/referenceRequests.ts",
+    "web/src/services/session.test.ts",
+    "web/src/services/session.ts"
+  ]
+}
