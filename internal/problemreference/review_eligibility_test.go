@@ -110,6 +110,76 @@ func TestReviewApprovalWithTrustedIndependentCorrectnessKeepsOtherBlockers(t *te
 	}
 }
 
+func TestReviewUnionFindQualityKeepsRemainingBlockers(t *testing.T) {
+	s := ReviewEligibilitySnapshot{Evidence: ReviewEvidence{
+		SourceID:         "library-checker:unionfind",
+		SourceLockSHA256: problemvalidation.SourceLockSHA256,
+		ContentVersion:   "42e62825925bf727c394f3435c2b50f850758576c392d082fb628f7219e4f07d",
+		ImportRevision:   "98e2b6c08018d8b7228e8d4f5075a16e3238132e250ac8de6134c0308881a2a4",
+		FormalPlanSHA256: "a82fb61254727a07b40134b0ed30ad94f952f993cd6a742e4803c737bc2a19ae",
+		ProfileSHA256:    "a3f3b1fcea5d65e79003497ee98d713e4323131fb5446e08ea6482d9486c74c2",
+		FormalVerdict:    "AC",
+	}}
+	want := []string{"statement_quality_missing", "test_coverage_missing", "checker_admission_missing",
+		"target_runtime_missing", "solution_confirmation_missing"}
+	quality := func(t *testing.T, result ReviewEligibility) {
+		t.Helper()
+		if result.InputValidator == nil || result.InputValidator.Inputs != 20 || result.InputValidator.Controls != 4 ||
+			result.IndependentCorrectness == nil || result.IndependentCorrectness.Cases != 10 ||
+			result.IndependentCorrectness.ReportSHA256 != result.InputValidator.ReportSHA256 ||
+			result.StatementRendering != nil || result.TestCoverage != nil || result.WrongSolution != nil || result.Eligible {
+			t.Fatalf("expected only the revised quality evidence: %+v", result)
+		}
+	}
+	got := assessReviewEligibility(s)
+	quality(t, got)
+	if !slices.Equal(got.Blockers, want) {
+		t.Fatalf("unexpected blockers: %v, want %v", got.Blockers, want)
+	}
+	returned := s
+	returned.Returned = true
+	returned.Evidence.FormalVerdict = "WA"
+	got = assessReviewEligibility(returned)
+	quality(t, got)
+	if expected := append([]string{"materials_returned", "formal_failed"}, want...); !slices.Equal(got.Blockers, expected) {
+		t.Fatalf("historical evidence weakened current blockers: %v, want %v", got.Blockers, expected)
+	}
+	for _, tc := range []struct {
+		name   string
+		change func(*ReviewEvidence)
+	}{
+		{"source", func(e *ReviewEvidence) { e.SourceID = "library-checker:aplusb" }},
+		{"lock", func(e *ReviewEvidence) { e.SourceLockSHA256 = strings.Repeat("1", 64) }},
+		{"version", func(e *ReviewEvidence) { e.ContentVersion = strings.Repeat("2", 64) }},
+		{"import revision", func(e *ReviewEvidence) { e.ImportRevision = strings.Repeat("3", 64) }},
+		{"formal plan", func(e *ReviewEvidence) { e.FormalPlanSHA256 = strings.Repeat("4", 64) }},
+		{"profile", func(e *ReviewEvidence) { e.ProfileSHA256 = strings.Repeat("5", 64) }},
+		{"comparison plan", func(e *ReviewEvidence) { e.ComparisonPlan = strings.Repeat("6", 64) }},
+		{"comparison outcome", func(e *ReviewEvidence) { e.ComparisonOutcome = "passed" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			changed := s
+			tc.change(&changed.Evidence)
+			result := assessReviewEligibility(changed)
+			if result.InputValidator != nil || result.IndependentCorrectness != nil || result.Eligible ||
+				!slices.Contains(result.Blockers, "input_validator_missing") ||
+				!slices.Contains(result.Blockers, "independent_correctness_missing") {
+				t.Fatalf("unexpected quality evidence for a different binding: %+v", result)
+			}
+		})
+	}
+	legacy := s
+	legacy.Evidence.ContentVersion = "fd871a02594fcd663790cd0530153df2ad18bf95110559ce552a121c34705bed"
+	legacy.Evidence.ImportRevision = "14b95a5dcfe72e5be314ed8b7739e1330057a2bfbf85cdc3bfac30904fb557c7"
+	legacy.Evidence.FormalPlanSHA256 = "d64b9c33fd865c0433ba7b932ccfd6c9184793512a271c9a618b510a05b1d37d"
+	old := assessReviewEligibility(legacy)
+	if old.InputValidator == nil || old.InputValidator.Inputs != 18 || old.IndependentCorrectness == nil ||
+		old.IndependentCorrectness.Cases != 10 || old.InputValidator.ReportSHA256 == got.InputValidator.ReportSHA256 ||
+		old.InputValidator.ReportSHA256 != old.IndependentCorrectness.ReportSHA256 {
+		t.Fatalf("legacy plan no longer reads its own quality evidence: %+v", old)
+	}
+}
+
 func TestReviewCoverageRequiresCurrentCompleteApPlusBPlan(t *testing.T) {
 	e := ReviewEvidence{
 		SourceID:         "library-checker:aplusb",
