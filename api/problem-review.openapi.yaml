@@ -280,7 +280,7 @@ components:
       required: [evidence, policy_version, eligible, blockers]
       properties:
         evidence: { $ref: '#/components/schemas/ReviewEvidence' }
-        policy_version: { const: 'oj.review-approval.v11' }
+        policy_version: { const: 'oj.review-approval.v12' }
         eligible: { const: false }
         statement_semantics_confirmed:
           const: true

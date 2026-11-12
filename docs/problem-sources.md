@@ -63,7 +63,7 @@ v5 新增十题 [`lc-small-oracles.v1`](../scripts/library_checker_oracles.py) �
 
 [静态补充工具](../scripts/supplement-zalgorithm-alternating.py)从同一固定 v6 包生成独立 32 点私有修订。前 31 点、题面、样例和来源对象保持不变；新增非样例 `case-0032` 是长度 500,000 的严格 `ab` 交替串，偶数偏移的 Z 值为剩余长度，奇数偏移为 0。版本 `924bfcbc027160298dbe976d44f4d6308268510577c4031e24871150cb044cb1` 单独锁定；原目录仍只描述 29 个上游点。
 
-32 点修订不继承 29 点或 31 点的审核证据。目标环境、批准及发布仍需分别验收。生成和复验见 [README](../README.md#转换为统一私有草稿)。
+32 点修订不继承 29 点或 31 点的审核证据。[独立复验](../internal/problemvalidation/testdata/zalgorithm-quality-20261112.json)只为完整绑定提供 32 个冻结输入、4 个校验对照和 62 个朴素小用例。目标环境、覆盖、批准及发布仍需分别验收。生成和复验见 [README](../README.md#转换为统一私有草稿)。
 
 ### A+B 值域边界修订
 
