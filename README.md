@@ -671,6 +671,14 @@ python3 -B scripts/test-session-protocol.py --toolchain-image oj-session-protoco
 .local/bin/migrate session-recovery open '恢复库名' 'close 返回的代次' --accounts-reviewed
 ```
 
+无法由作者本人处理的旧参考申请，可在恢复代次仍关闭时逐笔处理。确认 `OJ_RESTORED_DATABASE_URL` 指向同一个已隔离副本；命令不使用普通运行 DSN。见[恢复参考验证积压](docs/architecture/operations-design.md#恢复参考验证积压)。
+
+```sh
+.local/bin/migrate restored-reference list '恢复库名' '关闭代次'
+.local/bin/migrate restored-reference status '恢复库名' '关闭代次' '申请ID'
+.local/bin/migrate restored-reference cancel '恢复库名' '关闭代次' '申请ID' --confirm-cancel
+```
+
 ### 浏览器账号专项
 
 账号页面与 API 必须由同一 HTTPS Origin 提供；当前默认 Compose/Vite HTTP 入口会阻止账号请求。不要通过关闭 Secure Cookie/来源检查或启用跨源代理来让密码表单工作。实际流程及限制见[浏览器账号](docs/account-browser.md)。
