@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materials"
 )
 
@@ -44,7 +45,12 @@ type LeasedRunner struct {
 // monotonic budget starts BEFORE the request, with five seconds of safety margin
 // against the controller's fixed 30-second lease. It never retries unknown renewals.
 func NewLeased(s Sandbox, renew RenewLease, stop StopSandbox) *LeasedRunner {
-	return &LeasedRunner{runner: New(s), renew: renew, stop: stop,
+	return NewLeasedForFixture(s, renew, stop, experiment.WorkerFixture{})
+}
+
+// NewLeasedForFixture binds lease execution to one built-in fixture.
+func NewLeasedForFixture(s Sandbox, renew RenewLease, stop StopSandbox, fixture experiment.WorkerFixture) *LeasedRunner {
+	return &LeasedRunner{runner: &Runner{sandbox: s, fixture: fixture}, renew: renew, stop: stop,
 		budget: 25 * time.Second, interval: 5 * time.Second,
 		requestTimeout: 3 * time.Second, stopTimeout: 10 * time.Second}
 }

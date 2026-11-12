@@ -288,11 +288,16 @@ paths:
   /api/v1/worker/claim:
     post:
       operationId: claimWorkerLease
+      description: Ubuntu 专用控制器要求请求声明固定材料版本；其他控制器要求省略该字段。声明不符时在领取前拒绝。
       requestBody:
         required: true
         content:
           application/json:
-            schema: {type: object, additionalProperties: false}
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                fixture_version: {type: string, const: m0-sum-ubuntu-arm64-v1}
       responses:
         '200':
           description: 原子认领一个任务；不含源码、答案或运行环境承诺
@@ -317,6 +322,7 @@ paths:
         '400': {$ref: '#/components/responses/Invalid'}
         '401': {$ref: '#/components/responses/Unauthenticated'}
         '403': {$ref: '#/components/responses/Forbidden'}
+        '412': {description: 节点与控制器材料版本不一致，未领取任务}
         '413': {$ref: '#/components/responses/TooLarge'}
         '415': {$ref: '#/components/responses/MediaType'}
         '503': {$ref: '#/components/responses/Unavailable'}

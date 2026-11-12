@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
 )
 
@@ -24,17 +25,25 @@ var ErrClaimUnknown = errors.New("claim acceptance unknown")
 
 // Acquirer claims one task and fetches its materials from one controller.
 // Its connection budget is separate from renewal and reporting.
-type Acquirer struct{ transport *Renewer }
+type Acquirer struct {
+	transport *Renewer
+	fixture   experiment.WorkerFixture
+}
 
 // NewAcquirer requires explicit HTTPS trust and node credentials, with the same
 // bounded transport and redirect refusal as NewRenewer.
 func NewAcquirer(endpoint string, roots *x509.CertPool, cert tls.Certificate) (*Acquirer, error) {
+	return NewAcquirerForFixture(endpoint, roots, cert, experiment.WorkerFixture{})
+}
+
+// NewAcquirerForFixture binds claim and material reads to a built-in fixture.
+func NewAcquirerForFixture(endpoint string, roots *x509.CertPool, cert tls.Certificate, fixture experiment.WorkerFixture) (*Acquirer, error) {
 	r, err := NewRenewer(endpoint, roots, cert)
 	if err != nil {
 		return nil, err
 	}
 	r.endpoint = strings.TrimSuffix(r.endpoint, "/renew")
-	return &Acquirer{transport: r}, nil
+	return &Acquirer{transport: r, fixture: fixture}, nil
 }
 
 var submissionIDPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
@@ -48,7 +57,13 @@ func validLease(l submission.Lease) bool {
 // informational: execution must obtain a fresh renewal using LeasedRunner's
 // monotonic budget, rather than trusting clocks shared across hosts.
 func (a *Acquirer) Claim(ctx context.Context) (submission.Lease, error) {
-	resp, err := a.post(ctx, "claim", struct{}{})
+	var req struct {
+		Version string `json:"fixture_version,omitempty"`
+	}
+	if a.fixture.Version() != experiment.PinnedVersion {
+		req.Version = a.fixture.Version()
+	}
+	resp, err := a.post(ctx, "claim", req)
 	if err != nil {
 		return submission.Lease{}, ErrClaimUnknown
 	}
@@ -59,6 +74,8 @@ func (a *Acquirer) Claim(ctx context.Context) (submission.Lease, error) {
 		return submission.Lease{}, submission.ErrNoTask
 	case http.StatusUnauthorized, http.StatusForbidden:
 		return submission.Lease{}, submission.ErrNode
+	case http.StatusPreconditionFailed:
+		return submission.Lease{}, ErrMaterials
 	case http.StatusOK:
 	default:
 		return submission.Lease{}, ErrClaimUnknown

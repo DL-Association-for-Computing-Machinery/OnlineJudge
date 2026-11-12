@@ -7,12 +7,15 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"runtime"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/workerhost"
 )
 
 type config struct {
 	slot     workerhost.M0Slot
+	fixture  experiment.WorkerFixture
 	endpoint string
 	roots    *x509.CertPool
 	cert     tls.Certificate
@@ -26,6 +29,10 @@ func loadConfig(getenv func(string) string) (config, error) {
 	}
 	var err error
 	c.slot, err = workerhost.ParseM0Slot(getenv("OJ_WORKER_M0_SLOT"))
+	if err != nil {
+		return c, err
+	}
+	c.fixture, err = m0Fixture(getenv, c.slot)
 	if err != nil {
 		return c, err
 	}
@@ -57,4 +64,15 @@ func loadConfig(getenv func(string) string) (config, error) {
 		return c, errors.New("invalid controller CA")
 	}
 	return c, nil
+}
+
+func m0Fixture(getenv func(string) string, slot workerhost.M0Slot) (experiment.WorkerFixture, error) {
+	f, err := experiment.ParseWorkerFixture(getenv("OJ_EXPERIMENT_MATERIAL_VERSION"))
+	if err == nil && f.Version() == experiment.UbuntuVersion {
+		if runtime.GOOS != "linux" || runtime.GOARCH != "arm64" || os.Geteuid() != 0 ||
+			slot != (workerhost.M0Slot{}) || getenv(dualModeEnv) != "" {
+			return f, errors.New("the Ubuntu M0 fixture requires the dedicated Linux arm64 VM owner and single primary slot")
+		}
+	}
+	return f, err
 }

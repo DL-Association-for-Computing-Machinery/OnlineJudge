@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/workerhost"
 )
@@ -15,6 +16,9 @@ import (
 func dispatch(ctx context.Context, args []string, logger *slog.Logger, drain <-chan struct{}) error {
 	if len(args) == 0 {
 		return run(ctx, logger, drain)
+	}
+	if os.Getenv("OJ_EXPERIMENT_MATERIAL_VERSION") == experiment.UbuntuVersion && args[0] != "recover" {
+		return errors.New("the Ubuntu M0 fixture supports only the training Worker and its recovery")
 	}
 	if args[0] == "validate-reference" {
 		return validateReference(ctx, args[1:], logger)
@@ -55,6 +59,7 @@ func dispatch(ctx context.Context, args []string, logger *slog.Logger, drain <-c
 		return err
 	}
 	var lock *slotLock
+	ubuntu := false
 	var referenceSlot workerhost.ReferenceTierSlot
 	if reference {
 		_, tier, resolveErr := problemvalidation.ResolveSource(sourceID)
@@ -67,7 +72,12 @@ func dispatch(ctx context.Context, args []string, logger *slog.Logger, drain <-c
 		}
 		lock, err = lockSlotMode(referenceSlot.LockName(), true)
 	} else {
-		lock, err = lockM0Execution(slot, true, os.Getenv(dualModeEnv))
+		fixture, fixtureErr := m0Fixture(os.Getenv, slot)
+		if fixtureErr != nil {
+			return fixtureErr
+		}
+		ubuntu = fixture.Version() == experiment.UbuntuVersion
+		lock, err = lockM0Runtime(slot, true, os.Getenv(dualModeEnv), ubuntu)
 	}
 	if err != nil {
 		return err
@@ -76,6 +86,9 @@ func dispatch(ctx context.Context, args []string, logger *slog.Logger, drain <-c
 	if err := recoverLocked(ctx, lock, func(ctx context.Context) error {
 		if reference {
 			return workerhost.RecoverReferenceSlot(ctx, referenceSlot, id)
+		}
+		if ubuntu {
+			return workerhost.RecoverUbuntuM0(ctx, id)
 		}
 		return workerhost.RecoverM0Slot(ctx, slot, id)
 	}); err != nil {

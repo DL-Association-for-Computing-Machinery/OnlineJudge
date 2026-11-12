@@ -1,5 +1,11 @@
 # 工程交付记录
 
+## 2026-11-12：专用 Ubuntu VM 真实 Worker 判题闭环
+
+固定 Ubuntu 24.04 arm64、Linux 6.8.0-106-generic、Docker 29.1.3、go-judge v1.13.3/GCC 15.3.0。真实双提交 API、mTLS 控制器、Ubuntu Worker 和临时 PostgreSQL 14.24 完成固定 AC/WA，各一次完成尝试。Desktop 领取请求连到 Ubuntu 控制器时不产生尝试；给 Ubuntu Worker 设置错误的 Docker host、context、配置及 PATH 后仍只使用客体固定 Unix socket。排空后原槽停止、原客体 PID 消失、隔离标记为空，临时容器已清理。Ubuntu 实测日志 SHA-256 `a856d33a5eddb6be2c65274bc9b7bb4f73fd0b2508411f0082a720560f4260be`，Desktop v3 同一真实链路回归通过，日志 SHA-256 `6c8eb9fc7ea5cccd37e9622cb9e03200fb98b74f3546db5e49ade025bbed834a`。
+
+新增固定材料版本与领取前版本校验，隔离锁和停止证明继续生效。无 schema、历史材料或默认 Compose 改动。回退先排空该 VM 的 Ubuntu 专用队列并确认停止，旧 Worker 不接管新材料。没有连接试用服务器；不包含 Redis/登录重叠、非合成材料或整机容量。
+
 ## 2026-11-12：审核采信 Z 算法 32 点质量复验
 
 本地断网非特权 GCC 15.3.0 重新核对锁定校验器、标程、检查器和冻结计划。32 个正式输入与答案逐项复验，4 个输入对照结果符合预期；长度 1 至 5 的全部 62 个二字符小用例用逐字符朴素比较独立求解，标程与检查器结果一致。[复验摘要清单](../internal/problemvalidation/testdata/zalgorithm-quality-20261112.json) SHA-256 为 `19e3ca6ab1c5a22337993ce1ff8c324fb39b060978555b5020ea27f9b8f05176`。

@@ -709,6 +709,23 @@ Worker 启动完成后，向该 Worker 进程发送 `SIGUSR1`（`kill -USR1 PID`
 
 专项检查跨 API 原键重试/回执、异源冲突、缺失/错误凭据、Origin 拒绝无写入、闭合回执字段及无 Cookie/CORS、Worker 正常排空和槽停止。提交 API 用 `127.0.0.1:0`，仅从自身私有有界 JSON 日志取得回环地址，客户端禁代理/重定向；控制端沿用既有临时端口流程。私有 Bearer 留在服务端测试进程中。该入口不支持浏览器，不授予普通账号训练权限；独立opt-in最小页面及其失败路径见下节。无 API、迁移或预算变化，可单独回退专项及驱动选择器。
 
+### 专用 Ubuntu VM 判题实验
+
+仅供无宿主共享目录的本地 Ubuntu 24.04 arm64 实验 VM。固定 Linux `6.8.0-106-generic`、Apple 虚拟化、go-judge/GCC 镜像及原生 Docker Unix socket。提交 API、控制器和 Worker 同时显式设置 `OJ_EXPERIMENT_MATERIAL_VERSION=m0-sum-ubuntu-arm64-v1`；运行和恢复只用 VM 内同一专用 root 账号的主槽。错误版本在领取前返回 412，不消耗尝试。禁止双槽、参考执行及浏览器模式；Desktop 默认仍用 `m0-sum-v3`。
+
+在 Docker Desktop 工具链中构建独立 Linux 产物，再将 `layout`、脚本和 SHA-256 清单通过 VM 通道复制到 VM 内的专用临时目录，读回校验后运行：
+
+```sh
+mkdir -p /tmp/oj-ubuntu-layout/.local/bin /tmp/oj-ubuntu-layout/tests/sandbox
+docker --context desktop-linux build --target host-artifacts \
+  --build-arg HOSTOS=linux --build-arg HOSTARCH=arm64 \
+  --output type=local,dest=/tmp/oj-ubuntu-layout/.local/bin .
+# 以下只在已核验隔离的 Ubuntu VM 内运行；layout 为复制后的目录
+sudo -n env OJ_SANDBOX_EXPERIMENT=1 python3 -B test-ubuntu-worker.py /path/to/layout
+```
+
+[专项脚本](scripts/test-ubuntu-worker.py)只使用预先校验并导入的固定 Linux arm64 镜像，不拉取镜像。它启动独占沙箱和回环临时 PostgreSQL，用两份固定合成代码验证 AC、WA、各一次完成尝试及停止。失败时保留已停止的自有沙箱供诊断；不要删除隔离标记或用旧版/Desktop 恢复命令处理 Ubuntu 槽。试用服务器和整机容量不在本专项验收范围。
+
 ### M0 最小浏览器实验页
 
 API 额外设置 `OJ_EXPERIMENT_BROWSER=1` 才提供 `/m0` 页面及[浏览器实验契约](api/m0-browser.openapi.yaml)。必须同时显式设置 `OJ_API_ADDR=127.0.0.1:<端口>`（可用0）、私有 `OJ_EXPERIMENT_TOKEN_FILE`、实验数据库及 `OJ_EXPERIMENT_MATERIAL_VERSION=m0-sum-v3`；不能混用 `OJ_SESSION_CONFIG_FILE`。其他开关值、主机名/通配监听或材料版本拒绝启动。仅供可信本机和独占合成数据库；从实际API启动日志取得回环地址访问 `/m0`，默认 Compose、账号网关和做题预览不开放此页。

@@ -84,6 +84,11 @@ func (p *dualProcess) alive(t *testing.T) {
 
 func dualController(t *testing.T, ca *testpki.Authority, clientCert tls.Certificate, root string) string {
 	t.Helper()
+	return controllerForFixture(t, ca, clientCert, root, experiment.PinnedVersion)
+}
+
+func controllerForFixture(t *testing.T, ca *testpki.Authority, clientCert tls.Certificate, root, version string) string {
+	t.Helper()
 	_, cert, key := ca.Issue(t, "", x509.ExtKeyUsageServerAuth, time.Now().Add(time.Hour))
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -95,7 +100,7 @@ func dualController(t *testing.T, ca *testpki.Authority, clientCert tls.Certific
 		"OJ_WORKER_API_ADDR=" + addr, "OJ_WORKER_CA_FILE=" + ca.CAFile,
 		"OJ_WORKER_CERT_FILE=" + cert, "OJ_WORKER_KEY_FILE=" + key,
 		"OJ_DATABASE_URL=" + os.Getenv("OJ_TEST_DATABASE_URL"), "OJ_MATERIAL_ROOT=" + root,
-		"OJ_EXPERIMENT_MATERIAL_VERSION=" + experiment.PinnedVersion,
+		"OJ_EXPERIMENT_MATERIAL_VERSION=" + version,
 	})
 	transport := &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13, RootCAs: ca.Roots, Certificates: []tls.Certificate{clientCert}}}
 	defer transport.CloseIdleConnections()

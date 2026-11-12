@@ -38,6 +38,25 @@ func TestVersionedEnvironment(t *testing.T) {
 	if version != "m0-sum-v3" || bytes.Equal(v2, current) {
 		t.Fatal("Desktop migration requires distinct v3 material")
 	}
+	// Compare against the pre-Ubuntu serialization, not a second call to the
+	// selector which could accidentally return the new fixture twice.
+	if !bytes.Equal(current, manifest("m0-sum-v3", PinnedEnvironment())) {
+		t.Fatal("Desktop manifest bytes changed")
+	}
+	ubuntu, err := ParseWorkerFixture(UbuntuVersion)
+	ubuntuVersion, ubuntuBytes, selectErr := SelectFixture(UbuntuVersion)
+	if err != nil || selectErr != nil || ubuntuVersion != UbuntuVersion ||
+		!bytes.Equal(ubuntu.Manifest(), ubuntuBytes) || bytes.Equal(ubuntuBytes, current) {
+		t.Fatal("Ubuntu requires its own canonical material")
+	}
+	var native map[string]any
+	if err := json.Unmarshal(ubuntuBytes, &native); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(old["tests"], native["tests"]) || native["checker"] != old["checker"] ||
+		ubuntu.Profile().KernelRelease != "6.8.0-106-generic" || ubuntu.Profile().ID == PinnedEnvironment().ID {
+		t.Fatal("Ubuntu changed the problem or failed to bind the environment")
+	}
 	if err := json.Unmarshal(current, &pinned); err != nil {
 		t.Fatal(err)
 	}

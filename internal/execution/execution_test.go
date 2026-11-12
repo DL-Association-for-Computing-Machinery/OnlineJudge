@@ -94,6 +94,32 @@ func TestOrderedAttempt(t *testing.T) {
 	}
 }
 
+func TestUbuntuRunnerRequiresExactUbuntuMaterialBeforeSandbox(t *testing.T) {
+	f, err := experiment.ParseWorkerFixture(experiment.UbuntuVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, changed := range []string{"Desktop version", "Desktop manifest", "changed Ubuntu manifest"} {
+		t.Run(changed, func(t *testing.T) {
+			d, blobs := fixture()
+			switch changed {
+			case "Desktop manifest":
+				d.Version = f.Version()
+			case "changed Ubuntu manifest":
+				d.Version = f.Version()
+				d.Manifest = append(f.Manifest(), ' ')
+				d.ManifestSHA256 = digest(d.Manifest)
+			}
+			s := goodSandbox()
+			r := &Runner{sandbox: s, fixture: f}
+			got, err := r.Judge(t.Context(), d, blobs)
+			if err == nil || got.Verdict != "SE" || len(s.calls) != 0 {
+				t.Fatal("incorrect Ubuntu fixture reached the sandbox")
+			}
+		})
+	}
+}
+
 func TestRejectMaterialBeforeSandbox(t *testing.T) {
 	for _, name := range []string{"legacy", "source hash", "manifest hash", "unknown profile", "missing blob", "corrupt later answer", "oversized source", "empty source", "wrong language"} {
 		t.Run(name, func(t *testing.T) {

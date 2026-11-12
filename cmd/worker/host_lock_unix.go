@@ -14,12 +14,28 @@ import (
 )
 
 const (
+	ubuntuMarker = "ubuntu-active\n"
+	activeMarker = "active\n"
 	hostLockName = "host-execution.lock"
 	dualModeEnv  = "OJ_WORKER_M0_DUAL_EXPERIMENT"
 	dualMarker   = "active-dual-m0\n"
 )
 
 func lockM0Execution(slot workerhost.M0Slot, recovery bool, dualMode string) (*slotLock, error) {
+	return lockM0Runtime(slot, recovery, dualMode, false)
+}
+
+func lockM0Runtime(slot workerhost.M0Slot, recovery bool, dualMode string, ubuntu bool) (*slotLock, error) {
+	if ubuntu {
+		if slot != (workerhost.M0Slot{}) || dualMode != "" {
+			return nil, errors.New("the Ubuntu M0 fixture requires the single primary slot")
+		}
+		dir, err := ownershipDirectory()
+		if err != nil {
+			return nil, err
+		}
+		return lockHostSlotForRuntimeAt(dir, slot.LockName(), recovery, false, true)
+	}
 	switch dualMode {
 	case "", "1":
 		return lockHostSlot(slot.LockName(), recovery, dualMode == "1")
@@ -42,8 +58,13 @@ func isM0Lock(name string) bool {
 }
 
 func lockHostSlotAt(dir, name string, recovery, dual bool) (_ *slotLock, err error) {
+	return lockHostSlotForRuntimeAt(dir, name, recovery, dual, false)
+}
+
+func lockHostSlotForRuntimeAt(dir, name string, recovery, dual, ubuntu bool) (_ *slotLock, err error) {
 	names := workerhost.ExecutionLockNames()
-	if !slices.Contains(names[:], name) || (dual && !isM0Lock(name)) {
+	if !slices.Contains(names[:], name) || (dual && !isM0Lock(name)) ||
+		(ubuntu && (dual || name != (workerhost.M0Slot{}).LockName())) {
 		return nil, errors.New("invalid canonical execution slot")
 	}
 	host, err := openOwnershipLock(filepath.Join(dir, hostLockName), true)
@@ -75,11 +96,26 @@ func lockHostSlotAt(dir, name string, recovery, dual bool) (_ *slotLock, err err
 	if err != nil {
 		return nil, err
 	}
-	if dual && recovery && !allowsDualMarker(slot, true) {
-		_ = slot.Close()
-		return nil, errors.New("dual experiment cannot recover a single-slot marker")
+	marker := activeMarker
+	if ubuntu {
+		marker = ubuntuMarker
+	} else if dual {
+		marker = dualMarker
 	}
-	return &slotLock{file: slot, host: host, dual: dual}, nil
+	if recovery {
+		var raw [max(len(activeMarker), len(dualMarker), len(ubuntuMarker)) + 1]byte
+		n, readErr := slot.ReadAt(raw[:], 0)
+		saved := string(raw[:n])
+		// Single-slot Desktop recovery can still recover a Desktop dual marker.
+		if !dual && !ubuntu && saved == dualMarker {
+			marker = dualMarker
+		}
+		if readErr != io.EOF || (saved != "" && saved != marker) {
+			_ = slot.Close()
+			return nil, errors.New("quarantine marker does not match the selected sandbox runtime")
+		}
+	}
+	return &slotLock{file: slot, host: host, dual: dual, marker: marker}, nil
 }
 
 func inspectPeerLock(path string, parallelM0, allowDirty bool) error {
