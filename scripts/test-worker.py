@@ -66,9 +66,23 @@ def ready(name):
     raise RuntimeError("Sandbox readiness timeout")
 
 
+def start_database(owned):
+    name = "oj-worker-db-" + uuid.uuid4().hex[:12]
+    docker("run", "-d", "--name", name, "--label", "owner=" + OWNER,
+           "-p", "127.0.0.1::5432", "-e", "POSTGRES_USER=oj_test", "-e", "POSTGRES_HOST_AUTH_METHOD=trust",
+           "--tmpfs", "/var/lib/postgresql/data", "postgres:14-alpine")
+    owned.append(name)
+    for _ in range(100):
+        if subprocess.run(DOCKER + ["exec", name, "pg_isready", "-U", "oj_test"],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+            return name, docker("port", name, "5432", capture=True).strip().split(":")[-1]
+        time.sleep(.2)
+    raise RuntimeError("PostgreSQL readiness timeout")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("suite", choices=["all", "sandbox", "report", "dual-worker", "worker-fault", "slot-recovery", "network-fault", "compile-lease", "resource-bounds", "http-loop", "browser-loop"])
+    parser.add_argument("suite", choices=["all", "sandbox", "report", "dual-worker", "worker-fault", "slot-recovery", "network-fault", "compile-lease", "resource-bounds", "http-loop", "browser-loop", "restore-loop"])
     parser.add_argument("--playwright-module", type=Path)
     parser.add_argument("--chromium-executable", type=Path)
     parser.add_argument("--output-dir", type=Path)
@@ -80,8 +94,7 @@ def main():
     docker("build", "--provenance=false", "-t", "oj-m0-sandbox:local", "-f",
            "deploy/experiments/go-judge.Dockerfile", "deploy/experiments")
     owned = []
-    db = "oj-worker-db-" + uuid.uuid4().hex[:12]
-    db_created = False
+    databases = []
     try:
         for slot in SLOTS:
             exists = subprocess.run(DOCKER + ["inspect", slot], stdout=subprocess.DEVNULL,
@@ -97,19 +110,8 @@ def main():
                        "/tmp:rw,nosuid,size=128m", "--shm-size=128m", "--memory=1g",
                        "--cpus=1", "--pids-limit=128", "oj-m0-sandbox:local")
             owned.append(slot)
-        docker("run", "-d", "--name", db, "-p", "127.0.0.1::5432",
-               "-e", "POSTGRES_USER=oj_test", "-e", "POSTGRES_HOST_AUTH_METHOD=trust",
-               "--tmpfs", "/var/lib/postgresql/data", "postgres:14-alpine")
-        db_created = True
-        for _ in range(100):
-            if subprocess.run(DOCKER + ["exec", db, "pg_isready", "-U", "oj_test"],
-                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
-                break
-            time.sleep(.2)
-        else:
-            raise RuntimeError("PostgreSQL readiness timeout")
-        port = docker("port", db, "5432", capture=True).strip().split(":")[-1]
-        suites = ["sandbox", "report", "dual-worker", "worker-fault", "slot-recovery", "network-fault", "compile-lease", "resource-bounds", "http-loop"] if args.suite == "all" else [args.suite]
+        db, port = start_database(databases)
+        suites = ["sandbox", "report", "dual-worker", "worker-fault", "slot-recovery", "network-fault", "compile-lease", "resource-bounds", "http-loop", "restore-loop"] if args.suite == "all" else [args.suite]
         for i, suite in enumerate(suites):
             for slot in owned:
                 ready(slot)
@@ -119,6 +121,10 @@ def main():
             env.update(OJ_SANDBOX_EXPERIMENT="1",
                        OJ_TEST_DATABASE_URL=f"host=127.0.0.1 port={port} user=oj_test dbname={database} sslmode=disable")
             env.update(browser_env)
+            if suite == "restore-loop":
+                target, _ = start_database(databases)
+                docker("exec", target, "createdb", "-U", "oj_test", database)
+                env.update(OJ_RESTORE_SOURCE_CONTAINER=db, OJ_RESTORE_TARGET_CONTAINER=target, OJ_RESTORE_DATABASE=database)
             selection = {"report": ("OJ_SANDBOX_REPORT", "TestExecutionReport"),
                          "dual-worker": ("OJ_SANDBOX_DUAL", "TestDualWorkerRecovery"),
                          "worker-fault": ("OJ_SANDBOX_FAULT", "TestWorkerFaults"),
@@ -127,6 +133,7 @@ def main():
                          "compile-lease": ("OJ_SANDBOX_COMPILE_LEASE", "TestCompileLeaseFaults"),
                          "resource-bounds": ("OJ_SANDBOX_RESOURCES", "TestSandboxResourceBounds"),
                          "http-loop": ("OJ_SANDBOX_HTTP", "TestHTTPJudgeLoop"),
+                         "restore-loop": ("OJ_SANDBOX_RESTORE", "TestRestoreJudgeLoop"),
                          "browser-loop": ("OJ_SANDBOX_BROWSER", "TestBrowserJudgeLoop")}
             command = [str(ROOT / ".local/bin/sandbox.test"), "-test.v", "-test.count=1", "-test.timeout=10m"]
             if suite in selection:
@@ -137,7 +144,7 @@ def main():
     finally:
         for slot in owned:
             subprocess.run(DOCKER + ["stop", slot], check=False)
-        if db_created:
+        for db in reversed(databases):
             subprocess.run(DOCKER + ["rm", "-f", db], check=False)
 
 
