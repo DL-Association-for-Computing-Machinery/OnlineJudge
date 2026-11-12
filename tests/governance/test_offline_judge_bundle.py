@@ -9,7 +9,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 
@@ -84,6 +84,28 @@ class OfflineBundleTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "file content mismatch"):
                 RUNNER.load_bundle(self.bundle, self.trusted)
             docker.assert_not_called()
+
+    def test_cold_reception_does_not_import_into_existing_store(self):
+        with patch.object(RUNNER, "docker", return_value=RUNNER.IMAGES[0]) as docker:
+            with self.assertRaisesRegex(ValueError, "requires an empty Docker image store"):
+                RUNNER.load_bundle(self.bundle, self.trusted, require_empty=True)
+        docker.assert_called_once_with("image", "ls", "--all", "--no-trunc", "--format", "{{.ID}}")
+
+    def test_cold_reception_accepts_only_the_two_imported_images(self):
+        listing = call("image", "ls", "--all", "--no-trunc", "--format", "{{.ID}}")
+        for images in (RUNNER.IMAGES[:1], (*RUNNER.IMAGES, "sha256:" + "f" * 64), RUNNER.IMAGES):
+            with self.subTest(images=images), patch.object(RUNNER, "docker", side_effect=[
+                "", "", "\n".join(images), *(image + " linux/arm64" for image in RUNNER.IMAGES),
+            ]) as docker:
+                if images == RUNNER.IMAGES:
+                    RUNNER.load_bundle(self.bundle, self.trusted, require_empty=True)
+                    self.assertEqual(docker.call_count, 5)
+                else:
+                    with self.assertRaisesRegex(ValueError, "inventory differs"):
+                        RUNNER.load_bundle(self.bundle, self.trusted, require_empty=True)
+                    self.assertEqual(docker.call_count, 3)
+                self.assertEqual(docker.call_args_list[:3], [listing,
+                    call("image", "load", "--input", str(self.bundle / BUNDLE.ARCHIVE), timeout=180), listing])
 
     def test_source_digest_is_required_and_links_or_extra_files_refused(self):
         with self.assertRaisesRegex(ValueError, "manifest digest mismatch"):
