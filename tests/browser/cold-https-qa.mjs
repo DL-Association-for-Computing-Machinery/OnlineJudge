@@ -3,6 +3,7 @@ import fs from 'node:fs/promises'
 import net from 'node:net'
 import path from 'node:path'
 import { createRequire } from 'node:module'
+import { setTimeout as delay } from 'node:timers/promises'
 
 const require = createRequire(import.meta.url)
 const { firefox } = require(process.env.OJ_PLAYWRIGHT_MODULE)
@@ -20,13 +21,20 @@ async function verifyAuthorWrites(page) {
   const base = '/api/v1/problem-draft-management'
   const imports = `${base}/imports`
   const references = `${base}/reference-requests`
-  const exchange = async (route, method, action) => {
+  const referenceWrites = []
+  page.on('request', request => {
+    const url = new URL(request.url())
+    if (url.origin === info.origin && url.pathname.startsWith(references) && request.method() === 'POST') {
+      referenceWrites.push(url.pathname)
+    }
+  })
+  const exchange = async (route, method, action, expected = 200) => {
     const [response] = await Promise.all([
       page.waitForResponse(r => r.url() === info.origin + route && r.request().method() === method, { timeout: 8000 }),
       action(),
     ])
     authorStatuses.push(response.status())
-    assert.equal(response.status(), 200)
+    assert.equal(response.status(), expected)
     return response.json()
   }
 
@@ -51,14 +59,47 @@ async function verifyAuthorWrites(page) {
   const read = () => exchange(original, 'GET', () => controls.getByRole('button', { name: '查看申请回执', exact: true }).click())
   assert.deepEqual(await read(), request)
 
+  phase = 'Firefox reference preparation'
+  const readPlan = () => exchange(`${original}/plan`, 'GET', () => controls.getByRole('button', { name: '查看材料状态', exact: true }).click())
+  const prepare = `${original}/prepare`
+  assert.deepEqual(await readPlan(), { ready: false })
+  assert.deepEqual(await exchange(prepare, 'POST', () => controls.getByRole('button', { name: '准备参考材料', exact: true }).click(), 202), { ready: false })
+  await controls.getByText('已受理准备请求，请稍后查看材料状态。 状态：待完成。', { exact: true }).waitFor({ timeout: 8000 })
+
+  phase = 'Firefox reference plan becomes ready'
+  const ready = controls.getByText('材料计划已准备。 状态：待完成。', { exact: true })
+  const deadline = performance.now() + 8000
+  let plan = await readPlan()
+  while (plan?.ready === false && performance.now() < deadline) {
+    assert.deepEqual(plan, { ready: false })
+    await delay(150)
+    plan = await readPlan()
+  }
+  assert.deepEqual(plan, { ready: true })
+  await ready.waitFor({ timeout: 8000 })
+
+  phase = 'Firefox reference plan survives reload'
+  await page.reload()
+  await page.getByRole('button', { name: '检查会话并打开草稿', exact: true }).click()
+  await page.getByRole('heading', { name: 'Browser statement', exact: true }).waitFor({ timeout: 8000 })
+  assert.deepEqual(await read(), request)
+  assert.deepEqual(await readPlan(), { ready: true })
+  await ready.waitFor({ timeout: 8000 })
+  assert.deepEqual(referenceWrites, [references, prepare])
+  const preparedScreenshot = 'firefox-reference-prepared.png'
+  await controls.screenshot({ path: path.join(output, preparedScreenshot) })
+  report.screenshots.push(preparedScreenshot)
+
   phase = 'Firefox reference cancellation'
-  const cancelled = await exchange(`${original}/cancel`, 'POST', () => controls.getByRole('button', { name: '取消本次申请', exact: true }).click())
+  const cancel = `${original}/cancel`
+  const cancelled = await exchange(cancel, 'POST', () => controls.getByRole('button', { name: '取消本次申请', exact: true }).click())
   assert.equal(cancelled.id, request.id)
   assert.equal(cancelled.draft_id, draft.draft_id)
   assert.equal(cancelled.request_key, request.request_key)
   assert.equal(cancelled.state, 'cancelled')
   assert.deepEqual(await read(), cancelled)
   await controls.getByRole('status').filter({ hasText: '状态：已取消。' }).waitFor({ timeout: 8000 })
+  assert.deepEqual(referenceWrites, [references, prepare, cancel])
   const screenshot = 'firefox-reference-cancelled.png'
   await controls.screenshot({ path: path.join(output, screenshot) })
   report.screenshots.push(screenshot)
@@ -144,6 +185,7 @@ try {
       assert((await context.cookies(info.origin)).some(cookie => cookie.name === '__Host-oj_session' && cookie.secure && cookie.httpOnly))
       passed('strict HTTPS login survives reload with a real secure session')
       await verifyAuthorWrites(page)
+      passed('strict Firefox prepares reference materials and reads readiness after reload without another write')
       passed('strict Firefox imports a private draft and creates reads and cancels its reference request')
     }
     assert.deepEqual(foreign, [])
