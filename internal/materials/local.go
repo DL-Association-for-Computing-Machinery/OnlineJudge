@@ -53,17 +53,23 @@ func (s *Local) Close() error { return s.root.Close() }
 
 // Verify reads the named file and checks its digest without creating a snapshot.
 func (s *Local) Verify(ctx context.Context, hash string) error {
+	_, err := s.CopyVerified(ctx, hash, io.Discard)
+	return err
+}
+
+// CopyVerified streams a digest-named file to a staging writer. The caller
+// must discard the staged bytes on error; only success verifies the digest.
+func (s *Local) CopyVerified(ctx context.Context, hash string, destination io.Writer) (int64, error) {
 	if err := s.acquire(ctx); err != nil {
-		return err
+		return 0, err
 	}
 	defer func() { <-s.slots }()
 	source, err := s.source(hash)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer func() { _ = source.Close() }()
-	_, err = verify(ctx, source, io.Discard, hash)
-	return err
+	return verify(ctx, source, destination, hash)
 }
 
 // Open verifies bytes before releasing any response and never serves a mutable

@@ -242,7 +242,7 @@ M0 先做存储与并发实验；M1 交付冻结范围所需的完整普通账�
 - 核心记录保留期未定前不自动销毁；缓存/临时文件清理有容量及占用保护，不能误删历史、在途或备份引用。
 - 训练试用可按实测使用单 API，跨实例协议实验仍须完成；部署、备份和故障说明中写明实际拓扑及限制。
 
-[数据库与材料恢复回归](architecture/storage-design.md#7-备份与验收)覆盖固定合成夹具的历史源码、终态、排队任务和材料读回；本地离线专项核对同一提交恢复后由真实 Worker 重判。[恢复材料核验](architecture/storage-design.md#恢复材料核验)检查判题、草稿和冻结计划引用及哈希。[恢复提交租约](architecture/operations-design.md#恢复提交租约)验证真实归档恢复后旧在途租约失效及原任务重新领取；[恢复普通会话](architecture/operations-design.md#恢复普通会话)以维护命令重建 Redis 限流空间，并用真实双 API 验证拒旧、保留补回的封禁及新登录。[参考验证恢复回归](architecture/operations-design.md#回档后的旧参考验证授权)验证旧预留失效、原作者新会话取消并重新申请；[积压维护](architecture/operations-design.md#恢复参考验证积压)验证关闭代次中逐笔取消无法由本人处理的旧申请并保留证据。独立故障域、生产重判入口、试用环境恢复演练和邮件令牌仍待验收。
+[捕获逻辑备份](architecture/storage-design.md#捕获逻辑备份)用同一快照封存数据库归档和材料，实测排除快照后的写入。[数据库与材料恢复回归](architecture/storage-design.md#7-备份与验收)覆盖固定合成夹具的历史源码、终态、排队任务和材料读回；本地离线专项核对同一提交恢复后由真实 Worker 重判。[恢复材料核验](architecture/storage-design.md#恢复材料核验)检查判题、草稿和冻结计划引用及哈希。[恢复提交租约](architecture/operations-design.md#恢复提交租约)验证真实归档恢复后旧在途租约失效及原任务重新领取；[恢复普通会话](architecture/operations-design.md#恢复普通会话)以维护命令重建 Redis 限流空间，并用真实双 API 验证拒旧、保留补回的封禁及新登录。[参考验证恢复回归](architecture/operations-design.md#回档后的旧参考验证授权)验证旧预留失效、原作者新会话取消并重新申请；[积压维护](architecture/operations-design.md#恢复参考验证积压)验证关闭代次中逐笔取消无法由本人处理的旧申请并保留证据。独立故障域、生产重判入口、试用环境恢复演练和邮件令牌仍待验收。
 
 ### P7 完整训练补齐
 

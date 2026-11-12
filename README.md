@@ -685,6 +685,17 @@ python3 -B scripts/test-session-protocol.py --toolchain-image oj-session-protoco
 .local/bin/migrate verify-restored-materials -timeout 10m '恢复库名' '/绝对路径/判题材料' '/绝对路径/私有材料'
 ```
 
+### 捕获逻辑备份
+
+在受信 Linux 维护环境使用与服务器兼容的本地 `pg_dump`，显式指定源库 Unix socket、端口及备份角色；输出必须是不存在的绝对路径，父目录已存在且不在材料根内。保留源文件，暂停会删除或原地改写材料的操作。见[一致性备份](docs/architecture/storage-design.md#捕获逻辑备份)。
+
+```sh
+.local/bin/migrate capture-backup -socket '/绝对路径/套接字目录' -port 5432 -user '备份角色' -timeout 10m \
+  '源库名' '/绝对路径/判题材料' '/绝对路径/私有材料' '/绝对路径/全新备份目录'
+```
+
+需要密码认证时，显式加 `-passfile '/绝对路径/备份角色凭据文件'`，其为当前用户所有、权限 `0600`、至多 32 KiB 的普通文件，且运行环境须提供 `/proc`。专用文件可用 `*` 匹配 socket 地址，仍应限定数据库、端口和角色。命令不回退到运行 DSN、默认密码文件或环境密码。只将含已封存 `manifest.json` 且重新核验过的目录作为备份。
+
 ### 浏览器账号专项
 
 账号页面与 API 必须由同一 HTTPS Origin 提供；当前默认 Compose/Vite HTTP 入口会阻止账号请求。不要通过关闭 Secure Cookie/来源检查或启用跨源代理来让密码表单工作。实际流程及限制见[浏览器账号](docs/account-browser.md)。

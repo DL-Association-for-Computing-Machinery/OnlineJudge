@@ -65,15 +65,8 @@ func VerifyMaterials(ctx context.Context, pool *pgxpool.Pool, database, judgeRoo
 		return zero, errors.New("restored private material root unavailable")
 	}
 	defer func() { _ = private.Close() }()
-	var summary MaterialSummary
-	if err := verifyJudgeMaterials(ctx, tx, judge, &summary); err != nil {
-		return zero, err
-	}
-	objects := privateVerifier{store: private, recent: make(map[materialstore.Object]struct{})}
-	if err := verifyDrafts(ctx, tx, &objects, &summary); err != nil {
-		return zero, err
-	}
-	if err := verifyPlans(ctx, tx, &objects, &summary); err != nil {
+	summary, err := CheckMaterialReferences(ctx, tx, judge.Verify, private.Verify)
+	if err != nil {
 		return zero, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -82,9 +75,28 @@ func VerifyMaterials(ctx context.Context, pool *pgxpool.Pool, database, judgeRoo
 	return summary, nil
 }
 
+// CheckMaterialReferences validates the database inventory in the caller's
+// repeatable-read snapshot. Each visitor verifies or stages exact file bytes;
+// a nil error must mean the referenced file was verified.
+func CheckMaterialReferences(ctx context.Context, tx pgx.Tx, judge func(context.Context, string) error,
+	private func(context.Context, materialstore.Object) error) (MaterialSummary, error) {
+	var summary, zero MaterialSummary
+	if err := verifyJudgeMaterials(ctx, tx, judge, &summary); err != nil {
+		return zero, err
+	}
+	objects := privateVerifier{verify: private, recent: make(map[materialstore.Object]struct{})}
+	if err := verifyDrafts(ctx, tx, &objects, &summary); err != nil {
+		return zero, err
+	}
+	if err := verifyPlans(ctx, tx, &objects, &summary); err != nil {
+		return zero, err
+	}
+	return summary, nil
+}
+
 func absoluteClean(path string) bool { return filepath.IsAbs(path) && path == filepath.Clean(path) }
 
-func verifyJudgeMaterials(ctx context.Context, tx pgx.Tx, local *materials.Local, summary *MaterialSummary) error {
+func verifyJudgeMaterials(ctx context.Context, tx pgx.Tx, verify func(context.Context, string) error, summary *MaterialSummary) error {
 	rows, err := tx.Query(ctx, `SELECT version_id, manifest_sha256,
 		CASE WHEN octet_length(manifest::text)<=32768 THEN manifest END FROM submission_materials`)
 	if err != nil {
@@ -108,7 +120,7 @@ func verifyJudgeMaterials(ctx context.Context, tx pgx.Tx, local *materials.Local
 		}
 		for _, file := range files {
 			if _, ok := recent[file]; !ok {
-				if err := local.Verify(ctx, file); err != nil {
+				if err := verify(ctx, file); err != nil {
 					return fmt.Errorf("restored judge file %s failed verification", file)
 				}
 				remember(recent, file)
@@ -124,7 +136,7 @@ func verifyJudgeMaterials(ctx context.Context, tx pgx.Tx, local *materials.Local
 }
 
 type privateVerifier struct {
-	store  *materialstore.Local
+	verify func(context.Context, materialstore.Object) error
 	recent map[materialstore.Object]struct{}
 }
 
@@ -133,7 +145,7 @@ func (v *privateVerifier) check(ctx context.Context, object materialstore.Object
 		return errors.New("restored private object identity invalid")
 	}
 	if _, ok := v.recent[object]; !ok {
-		if err := v.store.Verify(ctx, object); err != nil {
+		if err := v.verify(ctx, object); err != nil {
 			return fmt.Errorf("restored private object %s failed verification", object.SHA256)
 		}
 		remember(v.recent, object)

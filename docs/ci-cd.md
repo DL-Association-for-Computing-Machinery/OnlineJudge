@@ -134,6 +134,8 @@ MediumBulk的共享槽/原tier保留、两端256/512MiB累计额度及失败清�
 
 同一套件运行[恢复材料核验](architecture/storage-design.md#恢复材料核验)，检查合成判题材料、私有草稿和历史正式／对拍计划，注入缺文件、符号链接、损坏清单和对象及跨草稿错绑。记录小型归档的查询计划，不执行题源程序。
 
+[捕获逻辑备份](architecture/storage-design.md#捕获逻辑备份)回归在真实 `pg_dump` 导入快照前提交一笔新材料版本，然后真实还原归档并核验两套材料。检查已封存文件的哈希、排除快照后的引用及缺文件不封存；使用临时 SCRAM 账号测试显式凭据文件和错误路径拒绝。
+
 `internal/m0browser` 的配置/HTTP边界race随backend执行，固定预设、独立归属、拒绝零Store调用及nonce轮换不执行选手程序。`browser-loop` 是独立显式专项，需要已安装的宿主Node/Playwright/Chromium，普通CI和 `all` 均不运行；命令归[README](../README.md#m0-最小浏览器实验页)。它验证实际提交API、PG、mTLS控制端及Worker与桌面/390px浏览器，真实丢接收响应及原键恢复与注入查询503分别报告。现有前端预览和账号浏览器专项保持原入口，不因本页通过而扩写M1训练或账号权限验收。
 
 `tests/sandbox/network_relay*_test.go` 没有 sandbox 标签，只测试标准库回环 TCP 的字节透传、双向/下行阻断、关闭旧流后恢复及并发关闭，已纳入普通 root `go test -race ./...`，不使用 Docker 或执行选手程序。`network_fault_test.go` 的真实 Worker/控制端/数据库及特权沙箱仍要求 sandbox 标签和 `OJ_SANDBOX_NETWORK=1`，由专用驱动提供；两类证据分开记录。
