@@ -18,16 +18,24 @@ func TestReviewZAlgorithmQualityBindsFullPlan(t *testing.T) {
 		FormalVerdict:    "AC",
 	}}
 	want := []string{"statement_quality_missing", "checker_admission_missing", "target_runtime_missing", "solution_confirmation_missing"}
-	check := func(t *testing.T, got ReviewEligibility, blockers []string, covered bool) {
+	check := func(t *testing.T, got ReviewEligibility, blockers []string, covered, confirmed bool) {
 		t.Helper()
+		rendering := got.StatementRendering
+		if rendering == nil || rendering.Examples != 4 || rendering.Formulas != 8 || rendering.FormatBlocks != 0 ||
+			rendering.HistoricalMatch == nil || rendering.HistoricalMatch.ObservedContentVersion != "151da5a28d0bd733fe4837547ec909137a36b0e532409c93dfd7bf3c2a7e6b41" {
+			t.Fatalf("missing bound historical rendering: %+v", rendering)
+		}
 		if got.Eligible || got.InputValidator == nil || got.InputValidator.Inputs != 32 || got.InputValidator.Controls != 4 ||
 			got.IndependentCorrectness == nil || got.IndependentCorrectness.Cases != 62 || got.IndependentCorrectness.Suite != "lc-small-oracles.v1" ||
 			got.IndependentCorrectness.ReportSHA256 != got.InputValidator.ReportSHA256 || (got.TestCoverage != nil) != covered ||
-			got.StatementRendering != nil || got.WrongSolution != nil || !slices.Equal(got.Blockers, blockers) {
+			got.StatementSemanticsConfirmed != confirmed || got.WrongSolution != nil || !slices.Equal(got.Blockers, blockers) {
 			t.Fatalf("unexpected Z algorithm approval prerequisites: %+v", got)
 		}
 	}
-	check(t, assessReviewEligibility(s), want, true)
+	check(t, assessReviewEligibility(s), want, true, false)
+	confirmed := s
+	confirmed.StatementConfirmed = true
+	check(t, assessReviewEligibility(confirmed), want[1:], true, true)
 	for _, tc := range []struct {
 		name, verdict string
 		returned      bool
@@ -39,7 +47,8 @@ func TestReviewZAlgorithmQualityBindsFullPlan(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			changed := s
 			changed.Returned, changed.Evidence.FormalVerdict = tc.returned, tc.verdict
-			check(t, assessReviewEligibility(changed), []string{tc.blocker, want[0], "test_coverage_missing", want[1], want[2], want[3]}, false)
+			changed.StatementConfirmed = tc.returned
+			check(t, assessReviewEligibility(changed), []string{tc.blocker, want[0], "test_coverage_missing", want[1], want[2], want[3]}, false, false)
 		})
 	}
 	bad := strings.Repeat("f", 64)
@@ -62,7 +71,8 @@ func TestReviewZAlgorithmQualityBindsFullPlan(t *testing.T) {
 			changed := s
 			tc.mutate(&changed.Evidence)
 			got := assessReviewEligibility(changed)
-			if got.Eligible || got.InputValidator != nil || got.IndependentCorrectness != nil || got.TestCoverage != nil ||
+			if got.Eligible || got.InputValidator != nil || got.IndependentCorrectness != nil || got.TestCoverage != nil || got.StatementRendering != nil ||
+				!slices.Contains(got.Blockers, "statement_quality_missing") ||
 				!slices.Contains(got.Blockers, "test_coverage_missing") ||
 				!slices.Contains(got.Blockers, "input_validator_missing") || !slices.Contains(got.Blockers, "independent_correctness_missing") {
 				t.Fatalf("unexpected admission on mismatched evidence: %+v", got)

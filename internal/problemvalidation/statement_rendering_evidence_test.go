@@ -72,6 +72,7 @@ func TestRevisedRenderingEvidenceMatchesReviewedEquivalence(t *testing.T) {
 	}{
 		{"aplusb", 2, 6, 2},
 		{"unionfind", 1, 10, 0},
+		{"zalgorithm", 4, 8, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			raw, err := os.ReadFile("testdata/" + tc.name + "-render-equivalence-20261112.json")

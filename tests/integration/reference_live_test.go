@@ -276,7 +276,7 @@ func TestLiveReferenceReports(t *testing.T) {
 				})
 			}
 			if source.id == "zalgorithm" && source.cases == 32 {
-				verifyLiveZAlgorithmQuality(t, ctx, f, store, credential, other, out, problemreference.ReviewIntent{
+				verifyLiveZAlgorithmQuality(t, ctx, f, store, materials, credential, other, out, problemreference.ReviewIntent{
 					RequestKey: "live-zalgorithm-review", DraftID: draft.ID, ImportRevision: revision, ReferenceRequestID: request.ID,
 				})
 			}
