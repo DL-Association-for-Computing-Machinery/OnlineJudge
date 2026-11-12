@@ -33,14 +33,32 @@ func verifyLiveUnionFindQuality(t *testing.T, ctx context.Context, f draftFixtur
 	must(t, err)
 	got, err := read.EligibilityForSubject(ctx, credential, reviewer.SubjectID, item.ID)
 	must(t, err)
-	want := []string{"statement_quality_missing", "test_coverage_missing", "checker_admission_missing",
-		"target_runtime_missing", "solution_confirmation_missing"}
+	want := []string{"statement_quality_missing", "checker_admission_missing", "target_runtime_missing", "solution_confirmation_missing"}
 	const report = "f6937f8e62284bd3514ae593126c63a8a0f57b139bdafc63437819287e6bf9db"
 	input, independent := got.InputValidator, got.IndependentCorrectness
-	if got.Eligible || !slices.Equal(got.Blockers, want) || got.StatementRendering != nil || got.TestCoverage != nil || got.WrongSolution != nil ||
+	if got.Eligible || !slices.Equal(got.Blockers, want) || got.StatementRendering != nil || got.WrongSolution != nil ||
 		input == nil || input.Inputs != 20 || input.Controls != 4 || input.ReportSHA256 != report ||
 		independent == nil || independent.Cases != 10 || independent.ReportSHA256 != report {
 		t.Fatalf("unexpected evidence from the reviewed 20-point plan: %+v", got)
 	}
-	writeLiveReferenceJSON(t, out, "quality-unionfind", got)
+	coverage := got.TestCoverage
+	if coverage == nil || coverage.ReportSHA256 != "c7b67173c8fe054d44ea3e4b9267aa5618ec5c109e6c3cd6b006c35e12d7f9df" ||
+		coverage.LocalCPUProbe == nil || coverage.LocalCPUProbe.CandidateOutcome != "cpu_limit_exceeded" {
+		t.Fatalf("reviewer did not receive the bound coverage report: %+v", coverage)
+	}
+	_, err = reviews.ReturnReview(ctx, reviewer, item.ID, problemreference.ReturnIntent{
+		RequestKey: "live-unionfind-return", AssignmentRevision: got.Evidence.AssignmentRevision,
+		ImportRevision: intent.ImportRevision, EvidenceSHA256: got.Evidence.EvidenceSHA256, Reason: "fixture return",
+	})
+	must(t, err)
+	returned, err := read.EligibilityForSubject(ctx, credential, reviewer.SubjectID, item.ID)
+	must(t, err)
+	wantReturned := []string{"materials_returned", "statement_quality_missing", "test_coverage_missing", "checker_admission_missing",
+		"target_runtime_missing", "solution_confirmation_missing"}
+	if returned.Eligible || returned.TestCoverage != nil || !slices.Equal(returned.Blockers, wantReturned) ||
+		returned.InputValidator == nil || *returned.InputValidator != *input ||
+		returned.IndependentCorrectness == nil || *returned.IndependentCorrectness != *independent {
+		t.Fatalf("material return did not restore only the coverage prerequisite: %+v", returned)
+	}
+	writeLiveReferenceJSON(t, out, "quality-unionfind", map[string]any{"current": got, "returned": returned})
 }

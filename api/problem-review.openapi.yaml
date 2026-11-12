@@ -280,7 +280,7 @@ components:
       required: [evidence, policy_version, eligible, blockers]
       properties:
         evidence: { $ref: '#/components/schemas/ReviewEvidence' }
-        policy_version: { const: 'oj.review-approval.v9' }
+        policy_version: { const: 'oj.review-approval.v10' }
         eligible: { const: false }
         statement_semantics_confirmed:
           const: true
@@ -337,29 +337,10 @@ components:
                 observed_content_version: { $ref: '#/components/schemas/SHA256' }
                 report_sha256: { $ref: '#/components/schemas/SHA256' }
         test_coverage_evidence:
-          type: object
-          additionalProperties: false
-          description: 仅已接纳正式 AC、材料未退回且精确命中受信 A+B 修订、计划及档位时返回。
-          required: [report_sha256, points, sample_points, non_sample_criteria, sample_only_criteria,
-            maximum_sum_sample_position, wrong_solutions]
-          properties:
-            report_sha256: { $ref: '#/components/schemas/SHA256' }
-            points: { const: 17 }
-            sample_points: { const: 2 }
-            non_sample_criteria: { const: 7 }
-            sample_only_criteria: { const: 1 }
-            maximum_sum_sample_position: { const: 2 }
-            wrong_solutions:
-              type: array
-              minItems: 4
-              maxItems: 4
-              items:
-                type: object
-                additionalProperties: false
-                required: [candidate, rejected_points]
-                properties:
-                  candidate: { type: string, enum: [constant_zero, left_only, right_only, upstream_round_down_even] }
-                  rejected_points: { type: integer, minimum: 1, maximum: 15 }
+          description: 仅已接纳正式 AC、材料未退回且精确命中已审查修订、计划及档位时返回。
+          oneOf:
+            - $ref: '#/components/schemas/ApPlusBCoverage'
+            - $ref: '#/components/schemas/UnionFindCoverage'
         blockers:
           type: array
           minItems: 1
@@ -369,6 +350,62 @@ components:
             enum: [materials_returned, formal_failed, policy_unavailable, comparison_mismatch, comparison_missing,
               independent_correctness_missing, statement_quality_missing, test_coverage_missing, input_validator_missing,
               checker_admission_missing, target_runtime_missing, solution_confirmation_missing]
+    ApPlusBCoverage:
+      type: object
+      additionalProperties: false
+      required: [report_sha256, points, sample_points, non_sample_criteria, sample_only_criteria,
+        maximum_sum_sample_position, wrong_solutions]
+      properties:
+        report_sha256: { $ref: '#/components/schemas/SHA256' }
+        points: { const: 17 }
+        sample_points: { const: 2 }
+        non_sample_criteria: { const: 7 }
+        sample_only_criteria: { const: 1 }
+        maximum_sum_sample_position: { const: 2 }
+        wrong_solutions:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items:
+            type: object
+            additionalProperties: false
+            required: [candidate, rejected_points]
+            properties:
+              candidate: { type: string, enum: [constant_zero, left_only, right_only, upstream_round_down_even] }
+              rejected_points: { type: integer, minimum: 1, maximum: 15 }
+    UnionFindCoverage:
+      type: object
+      additionalProperties: false
+      required: [report_sha256, points, sample_points, non_sample_criteria, sample_only_criteria, wrong_solutions, local_cpu_probe]
+      properties:
+        report_sha256: { $ref: '#/components/schemas/SHA256' }
+        points: { const: 20 }
+        sample_points: { const: 1 }
+        non_sample_criteria: { const: 10 }
+        sample_only_criteria: { const: 0 }
+        wrong_solutions:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items:
+            type: object
+            additionalProperties: false
+            required: [candidate, rejected_points]
+            properties:
+              candidate: { type: string, enum: [direct-edges-only, final-components-only, ignore-unions, self-query-false] }
+              rejected_points: { type: integer, minimum: 1, maximum: 19 }
+        local_cpu_probe:
+          type: object
+          additionalProperties: false
+          description: 固定本地隔离对照的摘要，不是生产 TLE 或目标节点验收，不提供隐藏点号或对象摘要。
+          required: [candidate, small_controls_accepted, non_sample_points, cpu_soft_limit_ms, candidate_outcome, reference_outcome]
+          properties:
+            candidate: { const: relabel-components }
+            small_controls_accepted: { const: 3 }
+            non_sample_points: { const: 1 }
+            cpu_soft_limit_ms: { const: 5000 }
+            candidate_outcome: { const: cpu_limit_exceeded }
+            reference_outcome: { const: accepted }
     ReviewMaterials:
       type: object
       additionalProperties: false
