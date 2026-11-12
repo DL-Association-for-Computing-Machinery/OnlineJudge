@@ -176,7 +176,8 @@ func (s *Store) Report(ctx context.Context, node submission.NodeIdentity, token 
 }
 
 // Recover returns at most 64 expired/revoked attempts to the queue. After three
-// attempts the task becomes visibly failed, retaining all history and source.
+// attempts in the current generation pair the task becomes visibly failed,
+// retaining all history and source.
 func (s *Store) Recover(ctx context.Context) (int, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()

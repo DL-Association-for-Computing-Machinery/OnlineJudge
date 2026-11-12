@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -16,10 +17,21 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
 )
 
+var errRestoredDatabaseURL = errors.New("OJ_RESTORED_DATABASE_URL is required")
+
 func main() {
 	if err := run(); err != nil {
 		// Driver errors may contain connection credentials. Keep CLI output safe.
-		fmt.Fprintln(os.Stderr, "migration failed; check database access, lock contention and schema compatibility")
+		switch {
+		case errors.Is(err, postgres.ErrRestoreDatabase):
+			fmt.Fprintln(os.Stderr, "restore fencing refused: database name did not match confirmation")
+		case errors.Is(err, errRestoredDatabaseURL):
+			fmt.Fprintln(os.Stderr, "restore fencing refused: OJ_RESTORED_DATABASE_URL is required")
+		case errors.Is(err, postgres.ErrRestoreState):
+			fmt.Fprintln(os.Stderr, "restore fencing refused: a running task has no matching lease")
+		default:
+			fmt.Fprintln(os.Stderr, "migration failed; check database access, lock contention and schema compatibility")
+		}
 		os.Exit(1)
 	}
 }
@@ -27,6 +39,7 @@ func main() {
 func run() error {
 	var limits postgres.BacklogLimits
 	var referenceLimits problemreference.Limits
+	fence := len(os.Args) == 3 && os.Args[1] == "fence-restored-leases"
 	if len(os.Args) == 4 && (os.Args[1] == "backlog" || os.Args[1] == "reference-backlog") {
 		global, globalErr := strconv.ParseInt(os.Args[2], 10, 64)
 		subject, subjectErr := strconv.ParseInt(os.Args[3], 10, 64)
@@ -37,16 +50,21 @@ func run() error {
 			(os.Args[1] == "reference-backlog" && !referenceLimits.Valid()) {
 			return fmt.Errorf("explicit positive global and subject limits required")
 		}
-	} else if len(os.Args) != 2 || (os.Args[1] != "up" && os.Args[1] != "down" && os.Args[1] != "fixture") {
-		return fmt.Errorf("usage: migrate up|down|fixture or migrate backlog|reference-backlog <global> <subject>")
+	} else if !fence && (len(os.Args) != 2 || (os.Args[1] != "up" && os.Args[1] != "down" && os.Args[1] != "fixture")) {
+		return fmt.Errorf("usage: migrate up|down|fixture, migrate backlog|reference-backlog <global> <subject>, or migrate fence-restored-leases <restored-database-name>")
 	}
-	dsn := os.Getenv("OJ_DATABASE_URL")
-	if dsn == "" {
+	var dsn string
+	if fence {
+		dsn = os.Getenv("OJ_RESTORED_DATABASE_URL")
+		if dsn == "" {
+			return errRestoredDatabaseURL
+		}
+	} else if dsn = os.Getenv("OJ_DATABASE_URL"); dsn == "" {
 		return fmt.Errorf("OJ_DATABASE_URL is required")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if os.Args[1] == "fixture" || os.Args[1] == "backlog" || os.Args[1] == "reference-backlog" {
+	if fence || os.Args[1] == "fixture" || os.Args[1] == "backlog" || os.Args[1] == "reference-backlog" {
 		pool, err := postgres.Open(ctx, dsn)
 		if err != nil {
 			return err
@@ -54,6 +72,14 @@ func run() error {
 		defer pool.Close()
 		if err := db.CheckSchema(ctx, pool); err != nil {
 			return err
+		}
+		if fence {
+			changes, err := postgres.FenceRestoredLeases(ctx, pool, os.Args[2])
+			if err != nil {
+				return err
+			}
+			fmt.Printf("restored leases expired=%d tasks requeued=%d\n", changes.Expired, changes.Requeued)
+			return nil
 		}
 		if os.Args[1] == "backlog" {
 			if err := postgres.ConfigureBacklog(ctx, pool, limits); err != nil {

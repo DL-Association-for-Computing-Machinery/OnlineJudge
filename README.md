@@ -711,6 +711,8 @@ Worker 启动完成后，向该 Worker 进程发送 `SIGUSR1`（`kill -USR1 PID`
 
 `python3 scripts/test-worker.py restore-loop` 验证[恢复后的真实判题](docs/architecture/storage-design.md#7-备份与验收)，`all` 也包含此项。它只在固定离线 Desktop 沙箱执行合成代码，使用两个临时 PostgreSQL 容器；不连接现有数据库。
 
+仅在核验并隔离恢复库后，使用 `OJ_RESTORED_DATABASE_URL` 指向该副本，再执行 `.local/bin/migrate fence-restored-leases <恢复库名>`。命令拒绝使用常规 `OJ_DATABASE_URL`；隔离、结果读回和重新开放前的条件见[恢复提交租约](docs/architecture/operations-design.md#恢复提交租约)。
+
 专项检查跨 API 原键重试/回执、异源冲突、缺失/错误凭据、Origin 拒绝无写入、闭合回执字段及无 Cookie/CORS、Worker 正常排空和槽停止。提交 API 用 `127.0.0.1:0`，仅从自身私有有界 JSON 日志取得回环地址，客户端禁代理/重定向；控制端沿用既有临时端口流程。私有 Bearer 留在服务端测试进程中。该入口不支持浏览器，不授予普通账号训练权限；独立opt-in最小页面及其失败路径见下节。无 API、迁移或预算变化，可单独回退专项及驱动选择器。
 
 ### 专用 Ubuntu VM 判题实验

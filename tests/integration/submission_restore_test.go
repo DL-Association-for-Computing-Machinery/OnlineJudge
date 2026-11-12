@@ -58,12 +58,7 @@ func TestRestoreSubmissionAndMaterials(t *testing.T) {
 	// The fixture is quiescent between the database dump and the blob copy.
 	sourceRoot, backupRoot, restoreRoot := t.TempDir(), t.TempDir(), t.TempDir()
 	must(t, experiment.WriteMaterials(sourceRoot))
-	archive := filepath.Join(backupRoot, "schema.dump")
-	var schema string
-	must(t, f.a.QueryRow(f.ctx, `SELECT current_schema()`).Scan(&schema))
-	source := f.a.Config().ConnConfig
-	must(t, restoreCommand(f.ctx, "pg_dump", "--host", source.Host, "--port", strconv.Itoa(int(source.Port)), "--username", source.User,
-		"--dbname", source.Database, "--no-password", "--format=custom", "--strict-names", "--schema", schema, "--file", archive))
+	archive, schema := dumpSubmissionFixture(t, f, backupRoot)
 	entries, err := os.ReadDir(sourceRoot)
 	must(t, err)
 	for _, entry := range entries {
@@ -131,6 +126,16 @@ func TestRestoreSubmissionAndMaterials(t *testing.T) {
 		}
 	}
 	t.Log("restored historical AC/source, original receipt, queued submission, and all four manifest blobs; rejected missing and corrupt input")
+}
+
+func dumpSubmissionFixture(t *testing.T, f backlogFixture, root string) (archive, schema string) {
+	t.Helper()
+	archive = filepath.Join(root, "schema.dump")
+	must(t, f.a.QueryRow(f.ctx, `SELECT current_schema()`).Scan(&schema))
+	source := f.a.Config().ConnConfig
+	must(t, restoreCommand(f.ctx, "pg_dump", "--host", source.Host, "--port", strconv.Itoa(int(source.Port)), "--username", source.User,
+		"--dbname", source.Database, "--no-password", "--format=custom", "--strict-names", "--schema", schema, "--file", archive))
+	return archive, schema
 }
 
 func copyRestoreFixtureFile(t *testing.T, from, to, name string) {
