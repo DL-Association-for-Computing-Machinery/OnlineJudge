@@ -20,6 +20,13 @@ RUN set -eu; mkdir /out; for app in api worker worker-api migrate; do \
 FROM scratch AS host-artifacts
 COPY --from=host-build /out/ /
 
+FROM backend-source AS restore-build
+ARG HOSTARCH=arm64
+RUN mkdir /out && GOOS=linux GOARCH=$HOSTARCH CGO_ENABLED=0 go build -trimpath -o /out/migrate-linux ./cmd/migrate
+
+FROM scratch AS restore-artifacts
+COPY --from=restore-build /out/ /
+
 FROM backend-deps AS sqlc-build
 # Clean CI builds hit HTTP/2 stream errors at the checksum endpoint.
 # Limit HTTPS/1.1 to these pinned tool installs; keep TLS and checksum checks.

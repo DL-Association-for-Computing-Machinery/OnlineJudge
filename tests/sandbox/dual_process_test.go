@@ -172,6 +172,11 @@ func dualDocker(t *testing.T, args ...string) string {
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "docker", append([]string{"--context", "desktop-linux"}, args...)...).Output()
 	if err != nil {
+		// Restore commands only use synthetic databases. Their stderr identifies
+		// which maintenance step failed without logging arguments or receipts.
+		if exit, ok := err.(*exec.ExitError); ok && len(exit.Stderr) > 0 && os.Getenv("OJ_SANDBOX_RESTORE") == "1" {
+			t.Fatalf("sandbox control failed: %v: %s", err, strings.TrimSpace(string(exit.Stderr)))
+		}
 		t.Fatal("sandbox control failed: ", err)
 	}
 	return strings.TrimSpace(string(out))

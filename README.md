@@ -753,7 +753,7 @@ Worker 启动完成后，向该 Worker 进程发送 `SIGUSR1`（`kill -USR1 PID`
 
 `python3 scripts/test-worker.py http-loop` 显式设置 `OJ_SANDBOX_HTTP=1`，`all` 同样包含此项。驱动使用临时 PostgreSQL、两个提交 API 进程、mTLS 控制端和真实 Worker。先以固定 AC/WA 源码填满队列；两个 API 都对第三个新键返回 `429 BACKLOG_LIMIT`，跨实例查询该键均为 404，已接收的原键仍可回读，数据库无新增提交、任务或尝试。Worker 将原两份判到终态后，测试显式按原键、原正文再提交，验证新增提交取得 AC。三份已接收提交各有一次完成尝试。
 
-`python3 scripts/test-worker.py restore-loop` 验证[恢复后的真实判题](docs/architecture/storage-design.md#7-备份与验收)，`all` 也包含此项。它只在固定离线 Desktop 沙箱执行合成代码，使用两个临时 PostgreSQL 容器；不连接现有数据库。
+`python3 scripts/test-worker.py restore-loop` 验证[恢复后的真实判题](docs/architecture/storage-design.md#7-备份与验收)，`all` 也包含此项。它使用两个临时 PostgreSQL 容器，实际捕获和核验备份；停止源库后，在固定离线 Desktop 沙箱重判同一合成提交。不连接现有数据库。
 
 仅在核验并隔离恢复库后，使用 `OJ_RESTORED_DATABASE_URL` 指向该副本，再执行 `.local/bin/migrate fence-restored-leases <恢复库名>`。命令拒绝使用常规 `OJ_DATABASE_URL`；隔离、结果读回和重新开放前的条件见[恢复提交租约](docs/architecture/operations-design.md#恢复提交租约)。
 
