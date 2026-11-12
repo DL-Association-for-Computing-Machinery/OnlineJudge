@@ -50,7 +50,7 @@ func testHTTPJudgeLoop(t *testing.T, version string) {
 		t.Fatal("HTTP loop database must be empty")
 	}
 	root := t.TempDir()
-	migrateHTTPFixture(t, ctx, dsn, root, version)
+	migrateHTTPFixture(t, ctx, dsn, root, version, "2")
 	if _, err := conn.ExecContext(ctx, `INSERT INTO worker_nodes(id,credential_version) VALUES($1,1)`, "http-loop-node"); err != nil {
 		t.Fatal("cannot provision synthetic node")
 	}
@@ -84,11 +84,12 @@ func testHTTPJudgeLoop(t *testing.T, version string) {
 			t.Fatalf("unexpected fixture side effects: submissions=%d tasks=%d attempts=%d", a, b, c)
 		}
 	}
-	cases := []struct {
+	type judgeCase struct {
 		key, verdict, source string
 		body                 []byte
 		queued               submission.Receipt
-	}{
+	}
+	cases := []judgeCase{
 		{key: "http-loop-ac-key-0001", verdict: "AC", source: "#include <cstdio>\nint main(){int a,b;scanf(\"%d%d\",&a,&b);printf(\"%d\",a+b);}"},
 		{key: "http-loop-wa-key-0002", verdict: "WA", source: "#include <cstdio>\nint main(){puts(\"wrong\");}"},
 	}
@@ -125,13 +126,17 @@ func testHTTPJudgeLoop(t *testing.T, version string) {
 			t.Fatal("HTTP receipt identity or pinned metadata changed")
 		}
 	}
-	for i := range cases {
-		tc := &cases[i]
+	accept := func(i int, tc *judgeCase) {
+		t.Helper()
 		created := request(i, "POST", "/api/v1/experiments/submissions", tc.key, tc.body, 202)
 		tc.queued = loopFixtureReceipt(t, created, version)
 		if tc.queued.State != "queued" || tc.queued.Verdict != nil || created.location != "/api/v1/experiments/submissions/"+tc.queued.ID {
 			t.Fatal("HTTP acceptance did not return queued without verdict")
 		}
+	}
+	for i := range cases {
+		tc := &cases[i]
+		accept(i, tc)
 		for _, response := range []loopResponse{
 			request(1-i, "POST", "/api/v1/experiments/submissions", tc.key, tc.body, 200),
 			request(1-i, "GET", "/api/v1/experiments/submission-receipt", tc.key, nil, 200),
@@ -146,6 +151,21 @@ func testHTTPJudgeLoop(t *testing.T, version string) {
 	}
 	loopProblem(t, request(1, "POST", "/api/v1/experiments/submissions", cases[0].key, cases[1].body, 409), 409, "IDEMPOTENCY_CONFLICT")
 	counts(2, 2, 0)
+	// With no Worker running, both processes must see a full queue throughout
+	// the refusal and original-key checks.
+	recovery := cases[0]
+	recovery.key = "http-loop-overload-key-0003"
+	for i := range apis {
+		loopProblem(t, request(i, "POST", "/api/v1/experiments/submissions", recovery.key, recovery.body, 429), 429, "BACKLOG_LIMIT")
+		loopProblem(t, request(1-i, "GET", "/api/v1/experiments/submission-receipt", recovery.key, nil, 404), 404, "NOT_FOUND")
+		got := loopFixtureReceipt(t, request(i, "POST", "/api/v1/experiments/submissions", cases[1-i].key, cases[1-i].body, 200), version)
+		stable(got, cases[1-i].queued)
+		if got.State != "queued" || got.Verdict != nil {
+			t.Fatal("accepted receipt unavailable while queue is full")
+		}
+		counts(2, 2, 0)
+	}
+	t.Log("both APIs refused the new key with 429; no receipt, task or attempt was created; accepted keys replayed")
 	for _, call := range []loopRequest{
 		{method: "GET", path: "/api/v1/experiments/submissions/" + cases[0].queued.ID, key: cases[0].key, status: 401},
 		{method: "GET", path: "/api/v1/experiments/submission-receipt", key: cases[0].key, auth: "Bearer " + token, origin: "https://example.invalid", status: 403},
@@ -178,8 +198,10 @@ func testHTTPJudgeLoop(t *testing.T, version string) {
 		workerEnv = append(workerEnv, "DOCKER_HOST=unix:///nonexistent-oj-docker.sock", "DOCKER_CONTEXT=nonexistent-oj-context",
 			"DOCKER_CONFIG=/nonexistent-oj-config", "PATH=/nonexistent-oj-path")
 	}
+	start := time.Now()
 	w := startDualProcess(t, "worker", workerEnv)
-	for _, tc := range cases {
+	awaitTerminal := func(tc judgeCase) {
+		t.Helper()
 		finished := false
 		for ctx.Err() == nil {
 			w.alive(t)
@@ -223,10 +245,21 @@ func testHTTPJudgeLoop(t *testing.T, version string) {
 		hash := sha256.Sum256([]byte(source))
 		t.Logf("HTTP queued→%s/finished; immutable source SHA256=%x; one authenticated Worker attempt", tc.verdict, hash)
 	}
+	for _, tc := range cases {
+		awaitTerminal(tc)
+	}
 	counts(2, 2, 2)
+	loopProblem(t, request(0, "GET", "/api/v1/experiments/submission-receipt", recovery.key, nil, 404), 404, "NOT_FOUND")
+	accept(1, &recovery)
+	if recovery.queued.ID == cases[0].queued.ID || recovery.queued.ID == cases[1].queued.ID {
+		t.Fatal("retry after capacity recovery did not create a distinct submission")
+	}
+	t.Logf("same refused key/body accepted after both original submissions finished; worker start to acceptance=%s", time.Since(start).Round(time.Millisecond))
+	awaitTerminal(recovery)
+	counts(3, 3, 3)
 	lifetime(t, w)
 	for _, api := range apis {
 		api.process.stop(t)
 	}
-	t.Log("two real API processes → mTLS controller → real Worker → HTTP AC/WA; queued/receipt/conflict/auth/privacy and normal process drain passed; no browser entry enabled")
+	t.Log("two real API processes → mTLS controller → real Worker → HTTP AC/WA/AC; backlog recovery and normal process drain passed; no browser entry enabled")
 }

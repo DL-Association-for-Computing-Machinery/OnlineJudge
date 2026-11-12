@@ -49,16 +49,16 @@ func httpLoopEnvironment(extra ...string) []string {
 
 func migrateHTTPLoop(t *testing.T, ctx context.Context, dsn, root string) {
 	t.Helper()
-	migrateHTTPFixture(t, ctx, dsn, root, experiment.PinnedVersion)
+	migrateHTTPFixture(t, ctx, dsn, root, experiment.PinnedVersion, "10000")
 }
 
-func migrateHTTPFixture(t *testing.T, ctx context.Context, dsn, root, version string) {
+func migrateHTTPFixture(t *testing.T, ctx context.Context, dsn, root, version, backlogLimit string) {
 	t.Helper()
 	binary, err := filepath.Abs("../../.local/bin/migrate")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, step := range [][]string{{"up"}, {"fixture"}, {"backlog", "10000", "10000"}} {
+	for _, step := range [][]string{{"up"}, {"fixture"}, {"backlog", backlogLimit, backlogLimit}} {
 		log, err := os.CreateTemp(t.TempDir(), "migration-log-")
 		if err != nil {
 			t.Fatal(err)
