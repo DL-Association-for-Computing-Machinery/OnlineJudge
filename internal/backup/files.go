@@ -91,6 +91,9 @@ func (m *materialFiles) copy(store, digest string, expectedSize int64, transfer 
 		return errors.New("backup material file could not be created")
 	}
 	defer func() { _ = file.Close() }()
+	if m.judge+m.private >= maxPackageFiles {
+		return errors.New("backup exceeds the material file limit")
+	}
 	size, err := transfer(file)
 	if err != nil {
 		return err

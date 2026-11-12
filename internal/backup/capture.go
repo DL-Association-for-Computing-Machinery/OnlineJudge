@@ -17,11 +17,13 @@ import (
 )
 
 const (
-	archiveName   = "postgres.dump"
-	inventoryName = "materials.jsonl"
-	manifestName  = "manifest.json"
-	judgeDir      = "judge"
-	privateDir    = "private"
+	backupFormat    = "oj.logical-backup.v1"
+	maxPackageFiles = 1_000_000
+	archiveName     = "postgres.dump"
+	inventoryName   = "materials.jsonl"
+	manifestName    = "manifest.json"
+	judgeDir        = "judge"
+	privateDir      = "private"
 )
 
 // CaptureConfig selects a single trusted Unix socket endpoint and a new private
@@ -84,7 +86,7 @@ func Capture(ctx context.Context, cfg CaptureConfig) (Manifest, error) {
 		defer cancel()
 		_ = tx.Rollback(cleanup)
 	}()
-	m := Manifest{Format: "oj.logical-backup.v1", Database: cfg.Database}
+	m := Manifest{Format: backupFormat, Database: cfg.Database}
 	var snapshot, actual string
 	if err := tx.QueryRow(ctx, `SELECT current_database(), pg_export_snapshot(), statement_timestamp(), current_setting('server_version')`).
 		Scan(&actual, &snapshot, &m.CapturedAt, &m.Server); err != nil || actual != cfg.Database {
