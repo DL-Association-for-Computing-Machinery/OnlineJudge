@@ -646,6 +646,8 @@ python3 scripts/test-compose.py
 
 测试专用会话 Store 成本采样使用 `python3 scripts/test-session-cost.py --module-cache <已校验缓存目录> --output <新JSON路径>`，只用已有本地镜像，独立私有 TCP 容器中比较启用相同授权守卫的路径；不是 API 跑分或容量准入。配置、采样窗口和持久化差异见[会话实验](tests/sessionexperiment/README.md#同等普通会话合同的-store-成本采样)，正确性仍执行原行为/race专项。
 
+`toolchain db` 也运行[数据库与材料恢复回归](docs/architecture/storage-design.md#7-备份与验收)，使用两个容器内临时 PostgreSQL 集群和合成文件，无需访问现有数据库或运行选手程序。
+
 训练队列的数据库负载基线另行手动运行：`docker --context desktop-linux compose run --build --rm toolchain training-load`。它在独立临时 PostgreSQL 上跑三轮合成负载，报告限额拒绝、领取顺序和延迟样本。使用已构建镜像时可用 `docker run --rm --network none --cpus=4 --memory=4g --memory-swap=4g <toolchain镜像> training-load` 固定容器预算；默认 Compose 命令不设置这些限额。该命令不启动业务服务或执行选手程序，见[采样口径](docs/submission-backlog.md#训练准入负载采样)。
 
 普通 Redis 协议专项（只执行合成账号数据）：
