@@ -15,6 +15,7 @@ case "${1:-}" in
         go test -race -count=1 ./...
         build ;;
     db) build; sh scripts/test-postgres.sh ;;
+    training-load) sh scripts/test-postgres.sh training-load ;;
     sqlc)
         cp -r internal/submission/postgres/submissiondb /tmp/submissiondb-before
         cp -r internal/identity/postgres/identitydb /tmp/identitydb-before
@@ -25,5 +26,5 @@ case "${1:-}" in
         diff -ru /tmp/identitydb-before internal/identity/postgres/identitydb
         diff -ru /tmp/problemdb-before internal/problem/postgres/problemdb
         diff -ru /tmp/referencedb-before internal/problemreference/postgres/referencedb ;;
-    *) echo 'Expected backend, db or sqlc' >&2; exit 2 ;;
+    *) echo 'Expected backend, db, training-load or sqlc' >&2; exit 2 ;;
 esac

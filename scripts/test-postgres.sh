@@ -1,6 +1,10 @@
 #!/bin/sh
 # Disposable, owner-private local cluster. Never connects to an existing database.
 set -eu
+case "$#:${1:-}" in
+    0:|1:training-load) ;;
+    *) echo 'Expected no arguments or training-load' >&2; exit 2 ;;
+esac
 for tool in initdb pg_ctl createdb go python3; do
     command -v "$tool" >/dev/null || { echo "Missing required tool: $tool" >&2; exit 1; }
 done
@@ -17,6 +21,19 @@ trap 'exit 143' TERM
 initdb -D "$oj_test_dir/data" --username=oj_test --auth-local=trust --auth-host=reject --no-locale --encoding=UTF8 >"$oj_test_dir/init.log"
 pg_ctl -D "$oj_test_dir/data" -l "$oj_test_dir/server.log" -o "-k $oj_test_dir -c listen_addresses='' -c max_connections=30" -w start >/dev/null
 export OJ_TEST_DATABASE_URL="host=$oj_test_dir user=oj_test dbname=postgres sslmode=disable"
+if [ "${1:-}" = training-load ]; then
+    postgres --version
+    go version
+    for limit in cpu.max memory.max memory.swap.max; do
+        if [ -r "/sys/fs/cgroup/$limit" ]; then
+            printf '%s=' "$limit"
+            cat "/sys/fs/cgroup/$limit"
+        fi
+    done
+    OJ_TRAINING_LOAD=1 go test -count=3 -timeout=2m -tags=integration ./tests/integration -run '^TestTrainingAdmissionLoad$' -v
+    exit
+fi
+unset OJ_TRAINING_LOAD
 go test -race -count=1 -tags=integration ./tests/integration -v
 createdb -h "$oj_test_dir" -U oj_test oj_process_test
 export OJ_TEST_DATABASE_URL="host=$oj_test_dir user=oj_test dbname=oj_process_test sslmode=disable"
