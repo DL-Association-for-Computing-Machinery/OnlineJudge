@@ -266,7 +266,7 @@ func TestLiveReferenceReports(t *testing.T) {
 				t.Fatal("report changed draft state or left the reservation active")
 			}
 			if source.id == "aplusb" {
-				verifyLiveCoverageReview(t, ctx, f, store, credential, other, out, versionPin != "", problemreference.ReviewIntent{
+				verifyLiveCoverageReview(t, ctx, f, store, materials, credential, other, out, versionPin != "", problemreference.ReviewIntent{
 					RequestKey: "live-coverage-review", DraftID: draft.ID, ImportRevision: revision, ReferenceRequestID: request.ID,
 				})
 			}
