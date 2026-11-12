@@ -11,7 +11,27 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/postgres/identitydb"
 )
+
+// LockClosedRecovery guards offline maintenance in the caller's transaction.
+// Reopening and rotating the authority must wait until this transaction ends.
+func LockClosedRecovery(ctx context.Context, tx pgx.Tx, expected string) error {
+	if ctx == nil || tx == nil || !identity.ValidRecoveryID(expected) {
+		return identity.ErrInvalid
+	}
+	row, err := identitydb.New(tx).RecoveryStateForShare(ctx)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return identity.ErrRecovering
+	}
+	if err != nil {
+		return storageError{err}
+	}
+	if row.Enabled || row.Generation != expected {
+		return identity.ErrConflict
+	}
+	return nil
+}
 
 // RecoveryState reads maintenance metadata without opening or repairing it.
 // A missing singleton fails closed; the initial placeholder is empty/disabled.
