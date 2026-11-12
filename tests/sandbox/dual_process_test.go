@@ -30,7 +30,12 @@ type dualProcess struct {
 
 func startDualProcess(t *testing.T, name string, env []string) *dualProcess {
 	t.Helper()
-	binary, err := filepath.Abs("../../.local/bin/" + name)
+	return startDualProcessFrom(t, "../../.local/bin", name, env)
+}
+
+func startDualProcessFrom(t *testing.T, directory, name string, env []string) *dualProcess {
+	t.Helper()
+	binary, err := filepath.Abs(filepath.Join(directory, name))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,6 +100,11 @@ func controllerForFixture(t *testing.T, ca *testpki.Authority, clientCert tls.Ce
 
 func controllerForDatabase(t *testing.T, ca *testpki.Authority, clientCert tls.Certificate, root, version, dsn string) (string, *dualProcess) {
 	t.Helper()
+	return controllerFrom(t, "../../.local/bin", ca, clientCert, root, version, dsn)
+}
+
+func controllerFrom(t *testing.T, directory string, ca *testpki.Authority, clientCert tls.Certificate, root, version, dsn string) (string, *dualProcess) {
+	t.Helper()
 	_, cert, key := ca.Issue(t, "", x509.ExtKeyUsageServerAuth, time.Now().Add(time.Hour))
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -102,7 +112,7 @@ func controllerForDatabase(t *testing.T, ca *testpki.Authority, clientCert tls.C
 	}
 	addr := l.Addr().String()
 	_ = l.Close() // Cleanup; the operation outcome is checked separately.
-	p := startDualProcess(t, "worker-api", []string{
+	p := startDualProcessFrom(t, directory, "worker-api", []string{
 		"OJ_WORKER_API_ADDR=" + addr, "OJ_WORKER_CA_FILE=" + ca.CAFile,
 		"OJ_WORKER_CERT_FILE=" + cert, "OJ_WORKER_KEY_FILE=" + key,
 		"OJ_DATABASE_URL=" + dsn, "OJ_MATERIAL_ROOT=" + root,

@@ -135,33 +135,37 @@ type restoreLoopDatabase struct {
 func restoreLoopDatabases(t *testing.T, ctx context.Context) (restoreLoopDatabase, restoreLoopDatabase) {
 	t.Helper()
 	name, from, to := os.Getenv("OJ_RESTORE_DATABASE"), os.Getenv("OJ_RESTORE_SOURCE_CONTAINER"), os.Getenv("OJ_RESTORE_TARGET_CONTAINER")
+	if from == to {
+		t.Fatal("two distinct disposable database containers are required")
+	}
+	return openDesktopTestDatabase(t, ctx, from, name), openDesktopTestDatabase(t, ctx, to, name)
+}
+
+func openDesktopTestDatabase(t *testing.T, ctx context.Context, container, name string) restoreLoopDatabase {
+	t.Helper()
 	containerName := regexp.MustCompile(`^oj-worker-db-[a-f0-9]{12}$`)
-	if from == to || !containerName.MatchString(from) || !containerName.MatchString(to) || !regexp.MustCompile(`^test_[0-9]+$`).MatchString(name) {
-		t.Fatal("two owned, disposable database containers are required")
+	if !containerName.MatchString(container) || !regexp.MustCompile(`^test_[0-9]+$`).MatchString(name) {
+		t.Fatal("an owned disposable database container is required")
 	}
 	endpoint := regexp.MustCompile(`^127\.0\.0\.1:([0-9]+)$`)
-	open := func(container string) restoreLoopDatabase {
-		t.Helper()
-		if dualDocker(t, "inspect", "--format", `{{index .Config.Labels "owner"}}`, container) != "onlinejudge.desktop-test" {
-			t.Fatal("refusing to use an unowned database container")
-		}
-		address := endpoint.FindStringSubmatch(dualDocker(t, "port", container, "5432"))
-		if len(address) != 2 {
-			t.Fatal("disposable database is not loopback only")
-		}
-		dsn := "host=127.0.0.1 port=" + address[1] + " user=oj_test dbname=" + name + " sslmode=disable"
-		pool, err := postgres.Open(ctx, dsn)
-		if err != nil {
-			t.Fatal("cannot connect to a private database")
-		}
-		t.Cleanup(pool.Close)
-		var tables int
-		if err := pool.QueryRow(ctx, `SELECT count(*) FROM information_schema.tables WHERE table_schema='public'`).Scan(&tables); err != nil || tables != 0 {
-			t.Fatal("restore loop databases must start empty")
-		}
-		return restoreLoopDatabase{container: container, name: name, dsn: dsn, pool: pool}
+	if dualDocker(t, "inspect", "--format", `{{index .Config.Labels "owner"}}`, container) != "onlinejudge.desktop-test" {
+		t.Fatal("refusing to use an unowned database container")
 	}
-	return open(from), open(to)
+	address := endpoint.FindStringSubmatch(dualDocker(t, "port", container, "5432"))
+	if len(address) != 2 {
+		t.Fatal("disposable database is not loopback only")
+	}
+	dsn := "host=127.0.0.1 port=" + address[1] + " user=oj_test dbname=" + name + " sslmode=disable"
+	pool, err := postgres.Open(ctx, dsn)
+	if err != nil {
+		t.Fatal("cannot connect to a private database")
+	}
+	t.Cleanup(pool.Close)
+	var tables int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM information_schema.tables WHERE table_schema='public'`).Scan(&tables); err != nil || tables != 0 {
+		t.Fatal("disposable database must start empty")
+	}
+	return restoreLoopDatabase{container: container, name: name, dsn: dsn, pool: pool}
 }
 
 type restoredAttempt struct{ fingerprint, payload string }
