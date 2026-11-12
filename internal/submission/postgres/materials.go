@@ -41,7 +41,7 @@ func (s *Store) Materials(ctx context.Context, node submission.NodeIdentity, tok
 	if err != nil {
 		return submission.TaskMaterials{}, err
 	}
-	manifest, hash, err := canonicalManifest(row.Manifest)
+	manifest, hash, err := CanonicalManifest(row.Manifest)
 	if err != nil || row.MaterialVersion != s.version || hash != row.ManifestSha256 || hash != s.manifestHash {
 		return submission.TaskMaterials{}, submission.ErrMaterial
 	}

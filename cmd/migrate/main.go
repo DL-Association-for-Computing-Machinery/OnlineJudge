@@ -34,6 +34,13 @@ func main() {
 		}
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "verify-restored-materials" {
+		if err := runVerifyRestoredMaterials(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(); err != nil {
 		// Driver errors may contain connection credentials. Keep CLI output safe.
 		switch {

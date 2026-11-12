@@ -40,14 +40,35 @@ type DraftIdentity struct {
 // selected by the trusted catalog when the request was accepted. It checks
 // metadata only; callers still need current authority and verified object bytes.
 func (d Draft) BindReferenceContent(id, owner string, expected ImportIdentity) (Content, error) {
+	doc, err := parseDocument(d.Document, d.SourceID)
+	if err != nil {
+		return Content{}, ErrInvalid
+	}
+	return d.bindReferenceContent(id, owner, expected, doc)
+}
+
+// MaterialInventoryIdentity verifies a restored draft's document and complete
+// reference inventory, and returns its historical import identity. It grants no access.
+func (d Draft) MaterialInventoryIdentity() (ImportIdentity, error) {
+	doc, err := parseDocument(d.Document, d.SourceID)
+	if err != nil {
+		return ImportIdentity{}, err
+	}
+	i := ImportIdentity{SourceID: d.SourceID, Version: d.Version, ImportRevision: d.ImportRevision, SourceLockSHA256: doc.Provenance.SourceLockSHA256}
+	if _, err := d.bindReferenceContent(d.ID, d.Owner, i, doc); err != nil {
+		return ImportIdentity{}, err
+	}
+	return i, nil
+}
+
+func (d Draft) bindReferenceContent(id, owner string, expected ImportIdentity, doc document) (Content, error) {
 	if !identity.ValidID(id) || !identity.ValidID(owner) || d.ID != id || d.Owner != owner ||
 		d.State != "private-draft" || d.ValidationState != "not-run" ||
 		d.SourceID != expected.SourceID || d.Version != expected.Version || d.ImportRevision != expected.ImportRevision ||
 		len(d.References) == 0 || len(d.References) > 8192 {
 		return Content{}, ErrInvalid
 	}
-	doc, err := parseDocument(d.Document, d.SourceID)
-	if err != nil || doc.Version != expected.Version || doc.Provenance.SourceLockSHA256 != expected.SourceLockSHA256 {
+	if doc.Version != expected.Version || doc.Provenance.SourceLockSHA256 != expected.SourceLockSHA256 {
 		return Content{}, ErrInvalid
 	}
 	// PostgreSQL ordering can depend on collation; the original import used

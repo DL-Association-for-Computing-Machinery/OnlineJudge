@@ -679,6 +679,12 @@ python3 -B scripts/test-session-protocol.py --toolchain-image oj-session-protoco
 .local/bin/migrate restored-reference cancel '恢复库名' '关闭代次' '申请ID' --confirm-cancel
 ```
 
+还原数据库和材料后、允许服务写入前，用同一个恢复 DSN 执行只读材料核验。两个根目录分别是按摘要命名的判题文件目录和私有对象目录；默认时限 10 分钟，可显式调整至最多 2 小时。范围与失败处理见[恢复材料核验](docs/architecture/storage-design.md#恢复材料核验)。
+
+```sh
+.local/bin/migrate verify-restored-materials -timeout 10m '恢复库名' '/绝对路径/判题材料' '/绝对路径/私有材料'
+```
+
 ### 浏览器账号专项
 
 账号页面与 API 必须由同一 HTTPS Origin 提供；当前默认 Compose/Vite HTTP 入口会阻止账号请求。不要通过关闭 Secure Cookie/来源检查或启用跨源代理来让密码表单工作。实际流程及限制见[浏览器账号](docs/account-browser.md)。

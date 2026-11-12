@@ -55,6 +55,12 @@ func (p ReferencePlan) MaterialObjects() ([]materialstore.Object, error) {
 	if err := p.ValidateMaterials(); err != nil {
 		return nil, err
 	}
+	return p.ReferencedObjects(), nil
+}
+
+// ReferencedObjects projects stored identities without applying the current
+// execution admission rules. Callers must validate the historical plan first.
+func (p ReferencePlan) ReferencedObjects() []materialstore.Object {
 	objects := []materialstore.Object{p.Definition, p.Hashes, p.Source}
 	for _, d := range p.Dependencies {
 		objects = append(objects, d.Object)
@@ -62,7 +68,7 @@ func (p ReferencePlan) MaterialObjects() ([]materialstore.Object, error) {
 	for _, c := range p.Cases {
 		objects = append(objects, c.Input, c.Answer)
 	}
-	return objects, nil
+	return objects
 }
 
 // FreezeMaterials independently validates all bytes and the complete catalogue
