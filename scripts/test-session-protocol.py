@@ -66,6 +66,24 @@ def check_state(docker, ident, running):
         raise RuntimeError(f"unexpected container state for {ident}: {state}")
 
 
+def start_redis(docker, prefix, network, image, alias, instances):
+    ident = docker.create("--name", prefix + "-" + alias, "--network", network, "--network-alias", alias,
+                          "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+                          "--memory", "128m", "--tmpfs", "/data:rw,size=16m", "--entrypoint", "redis-server",
+                          image, "--bind", "0.0.0.0", "--protected-mode", "no", "--save", "",
+                          "--appendonly", "no", "--maxmemory", "32mb", "--maxmemory-policy", "noeviction")
+    instances.append(ident)
+    docker.run("start", ident)
+    for _ in range(30):
+        try:
+            if docker.run("exec", ident, "redis-cli", "ping", timeout=5) == "PONG":
+                return
+        except subprocess.SubprocessError:
+            pass
+        time.sleep(0.2)
+    raise RuntimeError(f"Redis fixture {alias} did not become ready")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--context", default="desktop-linux", help="Docker context (default: desktop-linux); empty string uses the CLI default")
@@ -79,7 +97,7 @@ def main():
     owner = uuid.uuid4().hex
     prefix = "oj-protocol-" + owner
     docker = Docker(args.context, owner)
-    redis = None
+    redis = []
     success = False
     try:
         toolchain, tool_arch = image_info(docker, args.toolchain_image)
@@ -91,21 +109,8 @@ def main():
         if args.build_cache_volume:
             docker.run("volume", "inspect", args.build_cache_volume)
         network = docker.network(prefix)
-        redis = docker.create("--name", prefix + "-redis", "--network", network, "--network-alias", "redis",
-                              "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
-                              "--memory", "128m", "--tmpfs", "/data:rw,size=16m", "--entrypoint", "redis-server",
-                              redis_image, "--bind", "0.0.0.0", "--protected-mode", "no", "--save", "",
-                              "--appendonly", "no", "--maxmemory", "32mb", "--maxmemory-policy", "noeviction")
-        docker.run("start", redis)
-        for _ in range(30):
-            try:
-                if docker.run("exec", redis, "redis-cli", "ping", timeout=5) == "PONG":
-                    break
-            except subprocess.SubprocessError:
-                pass
-            time.sleep(0.2)
-        else:
-            raise RuntimeError("Redis did not become ready")
+        for alias in ("redis", "redis-recovery", "redis-recovery-interrupted"):
+            start_redis(docker, prefix, network, redis_image, alias, redis)
         options = ["--name", prefix + "-test", "--network", network, "--cpus", "2", "--memory", "2g",
                    "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
                    "--mount", f"type=bind,src={ROOT},dst=/workspace,readonly",
@@ -120,18 +125,20 @@ def main():
         test = docker.create(*options, "--entrypoint", "sh", toolchain, "/workspace/scripts/test-session-protocol.sh")
         docker.run("start", "-a", test, timeout=300, capture=False)
         check_state(docker, test, False)
-        check_state(docker, redis, True)
-        docker.run("stop", "--time", "5", redis, timeout=15)
-        check_state(docker, redis, False)
+        for ident in redis:
+            check_state(docker, ident, True)
+            docker.run("stop", "--time", "5", ident, timeout=15)
+            check_state(docker, ident, False)
         success = True
     except (OSError, subprocess.SubprocessError, ValueError, RuntimeError) as exc:
         print(f"session protocol test failed: {type(exc).__name__}: {exc}", file=sys.stderr)
     finally:
-        if redis and not success:
-            try:
-                docker.run("logs", redis, timeout=10, capture=False)
-            except (OSError, subprocess.SubprocessError):
-                print("Unable to retrieve Redis logs", file=sys.stderr)
+        if not success:
+            for ident in redis:
+                try:
+                    docker.run("logs", ident, timeout=10, capture=False)
+                except (OSError, subprocess.SubprocessError):
+                    print("Unable to retrieve Redis logs", file=sys.stderr)
         errors = docker.cleanup()
         for error in errors:
             print("cleanup failed: " + error, file=sys.stderr)

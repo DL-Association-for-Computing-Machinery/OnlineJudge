@@ -45,12 +45,17 @@ type entryProcess struct {
 
 func entryBinary(t *testing.T) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "api")
+	return entryProgram(t, "api")
+}
+
+func entryProgram(t *testing.T, name string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), name)
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "go", "build", "-race", "-mod=readonly", "-o", path, "../../cmd/api")
+	cmd := exec.CommandContext(ctx, "go", "build", "-race", "-mod=readonly", "-o", path, "../../cmd/"+name)
 	if _, err := cmd.CombinedOutput(); err != nil {
-		t.Fatal("race API binary build failed")
+		t.Fatal("race fixture binary build failed")
 	}
 	return path
 }

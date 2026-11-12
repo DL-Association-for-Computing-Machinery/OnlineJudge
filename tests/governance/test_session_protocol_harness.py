@@ -51,7 +51,7 @@ class HarnessTests(unittest.TestCase):
         self.assertEqual(copy_lines, [
             'cp /workspace/go.mod /workspace/go.sum "$oj_protocol_dir/workspace/"',
             'cp -R /workspace/db /workspace/internal /workspace/tests "$oj_protocol_dir/workspace/"',
-            'cp -R /workspace/cmd/api "$oj_protocol_dir/workspace/cmd/"',
+            'cp -R /workspace/cmd/api /workspace/cmd/migrate "$oj_protocol_dir/workspace/cmd/"',
         ])
         self.assertNotIn("cat ", script)
         self.assertIn("golangci-lint run --config /workspace/.golangci.yml --build-tags=integration", script)

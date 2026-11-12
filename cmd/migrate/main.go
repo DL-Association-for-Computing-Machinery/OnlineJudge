@@ -20,6 +20,13 @@ import (
 var errRestoredDatabaseURL = errors.New("OJ_RESTORED_DATABASE_URL is required")
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "session-recovery" {
+		if err := runSessionRecovery(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(); err != nil {
 		// Driver errors may contain connection credentials. Keep CLI output safe.
 		switch {

@@ -23,12 +23,14 @@ pg_ctl -D "$oj_protocol_dir/data" -l "$oj_protocol_dir/server.log" -o "-k $oj_pr
 oj_pg_started=1
 export OJ_PROTOCOL_DATABASE_URL="host=$oj_protocol_dir user=oj_protocol dbname=postgres sslmode=disable"
 export OJ_PROTOCOL_REDIS_ADDR=redis:6379
+export OJ_PROTOCOL_REPLACEMENT_REDIS_ADDR=redis-recovery:6379
+export OJ_PROTOCOL_INTERRUPTED_REDIS_ADDR=redis-recovery-interrupted:6379
 export OJ_PROTOCOL_FIXTURE=1
 mkdir "$oj_protocol_dir/workspace"
 cp /workspace/go.mod /workspace/go.sum "$oj_protocol_dir/workspace/"
 cp -R /workspace/db /workspace/internal /workspace/tests "$oj_protocol_dir/workspace/"
 mkdir "$oj_protocol_dir/workspace/cmd"
-cp -R /workspace/cmd/api "$oj_protocol_dir/workspace/cmd/"
+cp -R /workspace/cmd/api /workspace/cmd/migrate "$oj_protocol_dir/workspace/cmd/"
 cd "$oj_protocol_dir/workspace"
 if [ -d /verified-module-cache ]; then
     # Never replace image-cached source; verify the merged temporary cache below.

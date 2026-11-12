@@ -28,6 +28,22 @@ func loadConfig(ctx context.Context, path string, lookup Lookup) (apiconfig.Conf
 	if lookup == nil {
 		return apiconfig.Config{}, ErrConfiguration
 	}
+	c, err := readConfig(ctx, path)
+	if err != nil {
+		return apiconfig.Config{}, err
+	}
+	c.Runtime.Database.Password, err = password(c.DatabaseAuth, "OJ_SESSION_DATABASE_PASSWORD", lookup)
+	if err != nil {
+		return apiconfig.Config{}, err
+	}
+	c.Runtime.Redis.Password, err = password(c.RedisAuth, "OJ_SESSION_REDIS_PASSWORD", lookup)
+	if err != nil {
+		return apiconfig.Config{}, err
+	}
+	return c, nil
+}
+
+func readConfig(ctx context.Context, path string) (apiconfig.Config, error) {
 	body, err := checkedfile.ReadPublic(path, 64*1024)
 	if err != nil {
 		return apiconfig.Config{}, ErrConfiguration
@@ -38,14 +54,6 @@ func loadConfig(ctx context.Context, path string, lookup Lookup) (apiconfig.Conf
 		return apiconfig.Config{}, ErrConfiguration
 	}
 	if err := ctx.Err(); err != nil {
-		return apiconfig.Config{}, err
-	}
-	c.Runtime.Database.Password, err = password(c.DatabaseAuth, "OJ_SESSION_DATABASE_PASSWORD", lookup)
-	if err != nil {
-		return apiconfig.Config{}, err
-	}
-	c.Runtime.Redis.Password, err = password(c.RedisAuth, "OJ_SESSION_REDIS_PASSWORD", lookup)
-	if err != nil {
 		return apiconfig.Config{}, err
 	}
 	return c, nil
