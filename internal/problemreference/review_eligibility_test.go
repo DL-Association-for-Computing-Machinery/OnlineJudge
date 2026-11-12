@@ -1,6 +1,7 @@
 package problemreference
 
 import (
+	"encoding/json"
 	"slices"
 	"strings"
 	"testing"
@@ -110,7 +111,7 @@ func TestReviewApprovalWithTrustedIndependentCorrectnessKeepsOtherBlockers(t *te
 	}
 }
 
-func TestReviewUnionFindQualityKeepsRemainingBlockers(t *testing.T) {
+func TestReviewUnionFindCoverageRequiresCurrentCompletePlan(t *testing.T) {
 	s := ReviewEligibilitySnapshot{Evidence: ReviewEvidence{
 		SourceID:         "library-checker:unionfind",
 		SourceLockSHA256: problemvalidation.SourceLockSHA256,
@@ -120,29 +121,55 @@ func TestReviewUnionFindQualityKeepsRemainingBlockers(t *testing.T) {
 		ProfileSHA256:    "a3f3b1fcea5d65e79003497ee98d713e4323131fb5446e08ea6482d9486c74c2",
 		FormalVerdict:    "AC",
 	}}
-	want := []string{"statement_quality_missing", "test_coverage_missing", "checker_admission_missing",
-		"target_runtime_missing", "solution_confirmation_missing"}
+	want := []string{"statement_quality_missing", "checker_admission_missing", "target_runtime_missing", "solution_confirmation_missing"}
 	quality := func(t *testing.T, result ReviewEligibility) {
 		t.Helper()
 		if result.InputValidator == nil || result.InputValidator.Inputs != 20 || result.InputValidator.Controls != 4 ||
 			result.IndependentCorrectness == nil || result.IndependentCorrectness.Cases != 10 ||
 			result.IndependentCorrectness.ReportSHA256 != result.InputValidator.ReportSHA256 ||
-			result.StatementRendering != nil || result.TestCoverage != nil || result.WrongSolution != nil || result.Eligible {
+			result.StatementRendering != nil || result.WrongSolution != nil || result.Eligible {
 			t.Fatalf("expected only the revised quality evidence: %+v", result)
 		}
 	}
 	got := assessReviewEligibility(s)
 	quality(t, got)
-	if !slices.Equal(got.Blockers, want) {
-		t.Fatalf("unexpected blockers: %v, want %v", got.Blockers, want)
+	if got.TestCoverage == nil || got.TestCoverage.LocalCPUProbe == nil || !slices.Equal(got.Blockers, want) {
+		t.Fatalf("coverage should clear only its own prerequisite: %+v", got)
 	}
-	returned := s
-	returned.Returned = true
-	returned.Evidence.FormalVerdict = "WA"
-	got = assessReviewEligibility(returned)
-	quality(t, got)
-	if expected := append([]string{"materials_returned", "formal_failed"}, want...); !slices.Equal(got.Blockers, expected) {
-		t.Fatalf("historical evidence weakened current blockers: %v, want %v", got.Blockers, expected)
+	fields := requireCoverageJSONFields(t, got.TestCoverage, "local_cpu_probe")
+	var probe map[string]json.RawMessage
+	if err := json.Unmarshal(fields["local_cpu_probe"], &probe); err != nil {
+		t.Fatal(err)
+	}
+	keys := []string{"candidate", "small_controls_accepted", "non_sample_points", "cpu_soft_limit_ms", "candidate_outcome", "reference_outcome"}
+	if len(probe) != len(keys) {
+		t.Fatalf("unexpected fields in CPU summary: %v", probe)
+	}
+	for _, key := range keys {
+		if _, ok := probe[key]; !ok {
+			t.Fatalf("CPU summary omitted %s", key)
+		}
+	}
+	for _, tc := range []struct {
+		name, verdict string
+		returned      bool
+		blockers      []string
+	}{
+		{"returned", "AC", true, []string{"materials_returned"}},
+		{"failed", "WA", false, []string{"formal_failed"}},
+		{"returned and failed", "WA", true, []string{"materials_returned", "formal_failed"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			changed := s
+			changed.Returned, changed.Evidence.FormalVerdict = tc.returned, tc.verdict
+			result := assessReviewEligibility(changed)
+			quality(t, result)
+			expected := append(slices.Clone(tc.blockers), "statement_quality_missing", "test_coverage_missing",
+				"checker_admission_missing", "target_runtime_missing", "solution_confirmation_missing")
+			if result.TestCoverage != nil || !slices.Equal(result.Blockers, expected) {
+				t.Fatalf("historical evidence weakened current blockers: %+v, want %v", result, expected)
+			}
+		})
 	}
 	for _, tc := range []struct {
 		name   string
@@ -161,7 +188,8 @@ func TestReviewUnionFindQualityKeepsRemainingBlockers(t *testing.T) {
 			changed := s
 			tc.change(&changed.Evidence)
 			result := assessReviewEligibility(changed)
-			if result.InputValidator != nil || result.IndependentCorrectness != nil || result.Eligible ||
+			if result.InputValidator != nil || result.IndependentCorrectness != nil || result.Eligible || result.TestCoverage != nil ||
+				!slices.Contains(result.Blockers, "test_coverage_missing") ||
 				!slices.Contains(result.Blockers, "input_validator_missing") ||
 				!slices.Contains(result.Blockers, "independent_correctness_missing") {
 				t.Fatalf("unexpected quality evidence for a different binding: %+v", result)
@@ -173,7 +201,7 @@ func TestReviewUnionFindQualityKeepsRemainingBlockers(t *testing.T) {
 	legacy.Evidence.ImportRevision = "14b95a5dcfe72e5be314ed8b7739e1330057a2bfbf85cdc3bfac30904fb557c7"
 	legacy.Evidence.FormalPlanSHA256 = "d64b9c33fd865c0433ba7b932ccfd6c9184793512a271c9a618b510a05b1d37d"
 	old := assessReviewEligibility(legacy)
-	if old.InputValidator == nil || old.InputValidator.Inputs != 18 || old.IndependentCorrectness == nil ||
+	if old.InputValidator == nil || old.InputValidator.Inputs != 18 || old.IndependentCorrectness == nil || old.TestCoverage != nil ||
 		old.IndependentCorrectness.Cases != 10 || old.InputValidator.ReportSHA256 == got.InputValidator.ReportSHA256 ||
 		old.InputValidator.ReportSHA256 != old.IndependentCorrectness.ReportSHA256 {
 		t.Fatalf("legacy plan no longer reads its own quality evidence: %+v", old)
@@ -215,6 +243,7 @@ func TestReviewCoverageRequiresCurrentCompleteApPlusBPlan(t *testing.T) {
 		coverage.WrongSolutions[0].RejectedPoints != 14 || coverage.WrongSolutions[3].RejectedPoints != 10 {
 		t.Fatalf("coverage projection drifted from the reviewed report: %+v", coverage)
 	}
+	requireCoverageJSONFields(t, coverage, "maximum_sum_sample_position")
 	for _, tc := range []struct {
 		name              string
 		change            func(*ReviewEligibilitySnapshot)
@@ -251,4 +280,26 @@ func TestReviewCoverageRequiresCurrentCompleteApPlusBPlan(t *testing.T) {
 			}
 		})
 	}
+}
+
+func requireCoverageJSONFields(t *testing.T, coverage *problemvalidation.TestCoverageEvidence, sourceSpecific string) map[string]json.RawMessage {
+	t.Helper()
+	raw, err := json.Marshal(coverage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		t.Fatal(err)
+	}
+	keys := []string{"report_sha256", "points", "sample_points", "non_sample_criteria", "sample_only_criteria", "wrong_solutions", sourceSpecific}
+	if len(fields) != len(keys) {
+		t.Fatalf("unexpected coverage response fields: %s", raw)
+	}
+	for _, key := range keys {
+		if _, ok := fields[key]; !ok {
+			t.Fatalf("coverage response omitted %s", key)
+		}
+	}
+	return fields
 }
