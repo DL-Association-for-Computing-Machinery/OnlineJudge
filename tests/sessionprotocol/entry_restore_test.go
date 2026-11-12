@@ -22,6 +22,7 @@ import (
 )
 
 func testEntryDatabaseRestore(t *testing.T, f *fixture, binary string) {
+	command := entryProgram(t, "migrate")
 	ctx, cancel := context.WithTimeout(t.Context(), 35*time.Second)
 	defer cancel()
 	config := runtimeConfig(t, f, namespace(t), true)
@@ -64,6 +65,9 @@ func testEntryDatabaseRestore(t *testing.T, f *fixture, binary string) {
 	read(before, old, 401)
 	stop(source)
 	noRuntimeConnections(t, f, config.Database.ApplicationName)
+	// This post-backup fact is known to the operator but missing from the archive.
+	_, err = f.identities[0].DisableCAS(ctx, candidate.ID, candidate.Revision)
+	must(t, err)
 
 	config.Database = restoreEntryDatabase(t, ctx, config.Database, archive)
 	target := config.Database
@@ -118,9 +122,13 @@ func testEntryDatabaseRestore(t *testing.T, f *fixture, binary string) {
 	current := entryCredential(t, x, owner, "synthetic protocol password")
 	read(y, current, 200)
 	read(x, old, 401)
+	pendingBeforeMaintenance := beginLogin(t, y, owner)
 	stop(a)
 	stop(b)
 	t.Log("archive restored an old live cookie at storage boundary; closed target refused startup, both reopened APIs rejected it and accepted fresh login")
+	t.Run("operator recovery on empty replacement Redis", func(t *testing.T) {
+		testRecoveryCommand(t, f, binary, command, config, ca, pool, owner, candidate, current, pendingBeforeMaintenance)
+	})
 }
 
 func dumpEntryDatabase(t *testing.T, ctx context.Context, source sessionruntime.DatabaseConfig, archive string) {

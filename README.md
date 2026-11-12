@@ -658,7 +658,18 @@ docker --context desktop-linux pull redis:7.2.17@sha256:0312984fbfeb2ff1d4382ece
 python3 -B scripts/test-session-protocol.py --toolchain-image oj-session-protocol-toolchain --build-cache-volume ''
 ```
 
-脚本只使用已有本地镜像，检查 Linux/架构，创建带唯一 owner 标签的私有 internal 网络、Redis 和工具链容器；无宿主发布端口或 Docker socket。临时 PostgreSQL 只开放容器内 Unix socket，复制源码白名单并运行真实存储/race 专项。结束检查退出码/OOM 并仅清理自有容器和网络，保留缓存卷。可用 `--redis-image` 指定已核验本地镜像、`--module-cache` 挂载既有只读模块缓存；合并缓存后执行 `go mod verify`，测试使用 `-mod=readonly`。Linux CI 使用 `--context default`；此专项不是完整 AC23、容量或部署验收。
+脚本只使用已有本地镜像，检查 Linux/架构，创建带唯一 owner 标签的私有 internal 网络、旧/替换/中断恢复 Redis 和工具链容器；无宿主发布端口或 Docker socket。临时 PostgreSQL 只开放容器内 Unix socket，复制源码白名单并运行真实存储/race 专项。结束检查退出码/OOM 并仅清理自有容器和网络，保留缓存卷。可用 `--redis-image` 指定已核验本地镜像、`--module-cache` 挂载既有只读模块缓存；合并缓存后执行 `go mod verify`，测试使用 `-mod=readonly`。Linux CI 使用 `--context default`；此专项不是完整 AC23、容量或部署验收。
+
+### 会话恢复维护
+
+会话恢复维护命令只用于已经隔离的恢复副本。先设置 `OJ_RESTORED_SESSION_CONFIG_FILE` 指向该副本专用的 API 配置，再按[恢复普通会话](docs/architecture/operations-design.md#恢复普通会话)执行；不要在在线库使用。
+
+```sh
+.local/bin/migrate session-recovery status '恢复库名'
+.local/bin/migrate session-recovery close '恢复库名'
+# 核对并补回备份后的账号事实，将配置指向新的专用空 Redis 后再执行：
+.local/bin/migrate session-recovery open '恢复库名' 'close 返回的代次' --accounts-reviewed
+```
 
 ### 浏览器账号专项
 
