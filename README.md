@@ -556,6 +556,17 @@ Docker 工具链使用 Go 1.26.11、pnpm 11.25.0、Node 24.19.0，与 `go.mod`�
 
 构建工具链由 Dockerfile 固定，应用依赖以 go.sum 和 pnpm-lock.yaml 为准。Docker Desktop 迁移的验证结果见交付日志；历史 Colima 证据不能替代本次验证。
 
+### 试用服务器只读盘点
+
+在实际 Linux 试用服务器上，用普通维护账号和 Python 3.9+ 执行：
+
+```sh
+python3 -B scripts/target-inventory.py \
+  --materials-dir "$MATERIALS_DIR" --scratch-dir "$SCRATCH_DIR" --database-dir "$DATABASE_DIR"
+```
+
+三个参数是已有的材料、临时文件和数据库目录的绝对路径。脚本不创建目录或启动容器，也不输出路径或环境变量。报告分别记录当前进程 CPU 亲和性、系统内存读数、可见 cgroup v2 限额和各卷空间；缺失不等于无限。读数用于准备[单机验收](docs/architecture/operations-design.md#当前单机试用资源约束)，不证明 Worker 已拥有这些资源或目标环境已经通过。
+
 ## 本地 HTTPS 账号环境（一键）
 
 需要在页面上实际登录时，在仓库根目录运行：
