@@ -33,10 +33,11 @@ func verifyLiveZAlgorithmQuality(t *testing.T, ctx context.Context, f draftFixtu
 	must(t, err)
 	got, err := read.EligibilityForSubject(ctx, credential, reviewer.SubjectID, item.ID)
 	must(t, err)
-	want := []string{"statement_quality_missing", "test_coverage_missing", "checker_admission_missing", "target_runtime_missing", "solution_confirmation_missing"}
+	want := []string{"statement_quality_missing", "checker_admission_missing", "target_runtime_missing", "solution_confirmation_missing"}
 	const report = "19e3ca6ab1c5a22337993ce1ff8c324fb39b060978555b5020ea27f9b8f05176"
-	input, independent := got.InputValidator, got.IndependentCorrectness
-	if got.Eligible || !slices.Equal(got.Blockers, want) || got.TestCoverage != nil || got.StatementRendering != nil || got.WrongSolution != nil ||
+	input, independent, coverage := got.InputValidator, got.IndependentCorrectness, got.TestCoverage
+	if got.Eligible || !slices.Equal(got.Blockers, want) || got.StatementRendering != nil || got.WrongSolution != nil ||
+		coverage == nil || coverage.Points != 32 || coverage.SamplePoints != 4 || coverage.NonSampleCriteria != 6 || coverage.LocalCPUProbe == nil ||
 		input == nil || input.Inputs != 32 || input.Controls != 4 || input.ReportSHA256 != report ||
 		independent == nil || independent.Cases != 62 || independent.ReportSHA256 != report {
 		t.Fatalf("unexpected evidence from the reviewed 32-point plan: %+v", got)
@@ -48,7 +49,8 @@ func verifyLiveZAlgorithmQuality(t *testing.T, ctx context.Context, f draftFixtu
 	must(t, err)
 	returned, err := read.EligibilityForSubject(ctx, credential, reviewer.SubjectID, item.ID)
 	must(t, err)
-	if returned.Eligible || !slices.Equal(returned.Blockers, append([]string{"materials_returned"}, want...)) ||
+	if returned.Eligible || returned.TestCoverage != nil ||
+		!slices.Equal(returned.Blockers, []string{"materials_returned", want[0], "test_coverage_missing", want[1], want[2], want[3]}) ||
 		returned.InputValidator == nil || *returned.InputValidator != *input ||
 		returned.IndependentCorrectness == nil || *returned.IndependentCorrectness != *independent {
 		t.Fatalf("return did not preserve historical evidence and its blocker: %+v", returned)

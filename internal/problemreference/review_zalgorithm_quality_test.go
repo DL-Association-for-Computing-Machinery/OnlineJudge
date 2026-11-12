@@ -17,20 +17,31 @@ func TestReviewZAlgorithmQualityBindsFullPlan(t *testing.T) {
 		ProfileSHA256:    "32aa64eb913108ccc089a0548a98cb777f019f37cd4bc349ab87ff0ddd1a515d",
 		FormalVerdict:    "AC",
 	}}
-	want := []string{"statement_quality_missing", "test_coverage_missing", "checker_admission_missing", "target_runtime_missing", "solution_confirmation_missing"}
-	check := func(t *testing.T, got ReviewEligibility, blockers []string) {
+	want := []string{"statement_quality_missing", "checker_admission_missing", "target_runtime_missing", "solution_confirmation_missing"}
+	check := func(t *testing.T, got ReviewEligibility, blockers []string, covered bool) {
 		t.Helper()
 		if got.Eligible || got.InputValidator == nil || got.InputValidator.Inputs != 32 || got.InputValidator.Controls != 4 ||
 			got.IndependentCorrectness == nil || got.IndependentCorrectness.Cases != 62 || got.IndependentCorrectness.Suite != "lc-small-oracles.v1" ||
-			got.IndependentCorrectness.ReportSHA256 != got.InputValidator.ReportSHA256 || got.TestCoverage != nil ||
+			got.IndependentCorrectness.ReportSHA256 != got.InputValidator.ReportSHA256 || (got.TestCoverage != nil) != covered ||
 			got.StatementRendering != nil || got.WrongSolution != nil || !slices.Equal(got.Blockers, blockers) {
-			t.Fatalf("expected only two prerequisites to clear: %+v", got)
+			t.Fatalf("unexpected Z algorithm approval prerequisites: %+v", got)
 		}
 	}
-	check(t, assessReviewEligibility(s), want)
-	returned := s
-	returned.Returned, returned.Evidence.FormalVerdict = true, "WA"
-	check(t, assessReviewEligibility(returned), append([]string{"materials_returned", "formal_failed"}, want...))
+	check(t, assessReviewEligibility(s), want, true)
+	for _, tc := range []struct {
+		name, verdict string
+		returned      bool
+		blocker       string
+	}{
+		{"returned AC", "AC", true, "materials_returned"},
+		{"formal failure", "WA", false, "formal_failed"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			changed := s
+			changed.Returned, changed.Evidence.FormalVerdict = tc.returned, tc.verdict
+			check(t, assessReviewEligibility(changed), []string{tc.blocker, want[0], "test_coverage_missing", want[1], want[2], want[3]}, false)
+		})
+	}
 	bad := strings.Repeat("f", 64)
 	for _, tc := range []struct {
 		name   string
@@ -51,7 +62,8 @@ func TestReviewZAlgorithmQualityBindsFullPlan(t *testing.T) {
 			changed := s
 			tc.mutate(&changed.Evidence)
 			got := assessReviewEligibility(changed)
-			if got.Eligible || got.InputValidator != nil || got.IndependentCorrectness != nil ||
+			if got.Eligible || got.InputValidator != nil || got.IndependentCorrectness != nil || got.TestCoverage != nil ||
+				!slices.Contains(got.Blockers, "test_coverage_missing") ||
 				!slices.Contains(got.Blockers, "input_validator_missing") || !slices.Contains(got.Blockers, "independent_correctness_missing") {
 				t.Fatalf("unexpected admission on mismatched evidence: %+v", got)
 			}

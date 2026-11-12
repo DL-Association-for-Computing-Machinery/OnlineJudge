@@ -280,7 +280,7 @@ components:
       required: [evidence, policy_version, eligible, blockers]
       properties:
         evidence: { $ref: '#/components/schemas/ReviewEvidence' }
-        policy_version: { const: 'oj.review-approval.v12' }
+        policy_version: { const: 'oj.review-approval.v13' }
         eligible: { const: false }
         statement_semantics_confirmed:
           const: true
@@ -341,6 +341,7 @@ components:
           oneOf:
             - $ref: '#/components/schemas/ApPlusBCoverage'
             - $ref: '#/components/schemas/UnionFindCoverage'
+            - $ref: '#/components/schemas/ZAlgorithmCoverage'
         blockers:
           type: array
           minItems: 1
@@ -402,6 +403,39 @@ components:
           properties:
             candidate: { const: relabel-components }
             small_controls_accepted: { const: 3 }
+            non_sample_points: { const: 1 }
+            cpu_soft_limit_ms: { const: 5000 }
+            candidate_outcome: { const: cpu_limit_exceeded }
+            reference_outcome: { const: accepted }
+    ZAlgorithmCoverage:
+      type: object
+      additionalProperties: false
+      required: [report_sha256, points, sample_points, non_sample_criteria, sample_only_criteria, wrong_solutions, local_cpu_probe]
+      properties:
+        report_sha256: { $ref: '#/components/schemas/SHA256' }
+        points: { const: 32 }
+        sample_points: { const: 4 }
+        non_sample_criteria: { const: 6 }
+        sample_only_criteria: { const: 0 }
+        wrong_solutions:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items:
+            type: object
+            additionalProperties: false
+            required: [candidate, rejected_points]
+            properties:
+              candidate: { type: string, enum: [zero-at-origin, only-first-character, ignore-overlap, suffix-must-reach-end] }
+              rejected_points: { type: integer, minimum: 1, maximum: 28 }
+        local_cpu_probe:
+          type: object
+          additionalProperties: false
+          description: 固定本地隔离对照的摘要，不是生产 TLE 或目标节点验收，不提供隐藏点号或对象摘要。
+          required: [candidate, small_controls_accepted, non_sample_points, cpu_soft_limit_ms, candidate_outcome, reference_outcome]
+          properties:
+            candidate: { const: quadratic-prefix-scan }
+            small_controls_accepted: { const: 62 }
             non_sample_points: { const: 1 }
             cpu_soft_limit_ms: { const: 5000 }
             candidate_outcome: { const: cpu_limit_exceeded }
