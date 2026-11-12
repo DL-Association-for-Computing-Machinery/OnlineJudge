@@ -280,7 +280,7 @@ components:
       required: [evidence, policy_version, eligible, blockers]
       properties:
         evidence: { $ref: '#/components/schemas/ReviewEvidence' }
-        policy_version: { const: 'oj.review-approval.v8' }
+        policy_version: { const: 'oj.review-approval.v9' }
         eligible: { const: false }
         statement_semantics_confirmed:
           const: true
@@ -288,7 +288,7 @@ components:
         input_validator_evidence:
           type: object
           additionalProperties: false
-          description: 仅现行档位和冻结绑定精确匹配受信 v6 或 A+B 17 点复验报告时返回；不替代正式运行或生产准入。
+          description: 仅现行档位和冻结绑定精确匹配受信 v6、A+B 17 点或并查集 20 点复验报告时返回；不替代正式运行或生产准入。
           required: [report_sha256, inputs, controls]
           properties:
             report_sha256: { $ref: '#/components/schemas/SHA256' }
@@ -297,7 +297,7 @@ components:
         independent_correctness_evidence:
           type: object
           additionalProperties: false
-          description: 仅现行档位和冻结绑定精确匹配受信的非卷积 v6 或 A+B 17 点复验报告时返回。不替代正式运行或卷积本站对拍。
+          description: 仅现行档位和冻结绑定精确匹配受信的非卷积 v6、A+B 17 点或并查集 20 点复验报告时返回。不替代正式运行或卷积本站对拍。
           required: [report_sha256, suite, cases]
           properties:
             report_sha256: { $ref: '#/components/schemas/SHA256' }

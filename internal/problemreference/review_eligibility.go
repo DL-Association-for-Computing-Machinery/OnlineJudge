@@ -9,7 +9,7 @@ import (
 )
 
 // ReviewPolicyVersion identifies the current requirements for ordinary approval.
-const ReviewPolicyVersion = "oj.review-approval.v8"
+const ReviewPolicyVersion = "oj.review-approval.v9"
 
 // ReviewEligibilitySnapshot is the trusted read of an assigned item's verified
 // historical evidence and whether the same material has already been returned.
@@ -56,6 +56,8 @@ func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
 	var independent *problemvalidation.IndependentCorrectnessEvidence
 	if policyCurrent && formalOnly {
 		if input, small, ok := problemvalidation.AdmittedApPlusBQuality(id, e.FormalPlanSHA256, e.ProfileSHA256); ok {
+			validator, independent = &input, &small
+		} else if input, small, ok := problemvalidation.AdmittedUnionFindQuality(id, e.FormalPlanSHA256, e.ProfileSHA256); ok {
 			validator, independent = &input, &small
 		}
 	}

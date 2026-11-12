@@ -270,6 +270,11 @@ func TestLiveReferenceReports(t *testing.T) {
 					RequestKey: "live-coverage-review", DraftID: draft.ID, ImportRevision: revision, ReferenceRequestID: request.ID,
 				})
 			}
+			if source.id == "unionfind" && versionPin != "" {
+				verifyLiveUnionFindQuality(t, ctx, f, store, credential, other, out, problemreference.ReviewIntent{
+					RequestKey: "live-unionfind-review", DraftID: draft.ID, ImportRevision: revision, ReferenceRequestID: request.ID,
+				})
+			}
 			writeLiveReferenceJSON(t, out, "accepted-"+source.id, map[string]any{
 				"source_id": sourceID, "content_version": version, "import_revision": revision,
 				"formal_plan_sha256": plan.SHA256, "profile_sha256": evidence.ProfileSHA256, "evidence_sha256": report.evidenceSHA,

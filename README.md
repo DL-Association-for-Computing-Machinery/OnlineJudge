@@ -455,6 +455,8 @@ OJ_SANDBOX_EXPERIMENT=1 python3 -B tests/integration/live_reference.py \
 
 关联数组的同一专项使用 `--associative-array-local-data`（22 点），额外核对两个边界点的固定答案。
 
+并查集 20 点专项还回读指定非作者的审核摘要：输入校验与独立小用例引用同一报告，覆盖、题面、生产检查器和目标环境仍保留缺项。
+
 后缀数组使用 `--suffixarray-local-data`（52 点），额外核对两个新增点的完整后缀排序。
 
 静态区间最小值使用 `--static-rmq-local-data`（28 点），额外核对只查询一次时的上界答案。
