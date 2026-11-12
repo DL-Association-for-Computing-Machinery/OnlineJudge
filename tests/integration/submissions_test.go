@@ -284,22 +284,11 @@ func TestAcceptance(t *testing.T) {
 		}
 	})
 	t.Run("rollback refuses accepted data atomically", func(t *testing.T) {
-		// Target the owning backlog migration, rather than assuming the newest
-		// additive migration must reject unrelated accepted submission data.
-		_, err := provider.DownTo(ctx, 6)
-		must(t, err)
-		if _, err := provider.Down(ctx); err == nil {
-			t.Fatal("destructive rollback allowed")
+		if _, err := provider.Down(ctx); err == nil || !strings.Contains(err.Error(), "cannot discard active training queue order") {
+			t.Fatalf("unexpected active queue rollback result: %v", err)
 		}
-		var version int
-		must(t, pool.QueryRow(ctx, `SELECT version_id FROM goose_db_version ORDER BY id DESC LIMIT 1`).Scan(&version))
-		if version != 6 {
-			t.Fatal("owning migration changed after refused rollback")
-		}
-		_, err = provider.Up(ctx)
-		must(t, err)
 		must(t, db.CheckSchema(ctx, pool))
-		_, err = store.Get(ctx, "m0-operator", "m0-training", accepted.ID)
+		_, err := store.Get(ctx, "m0-operator", "m0-training", accepted.ID)
 		must(t, err)
 	})
 	t.Run("corrupt manifest blocks new acceptance", func(t *testing.T) {

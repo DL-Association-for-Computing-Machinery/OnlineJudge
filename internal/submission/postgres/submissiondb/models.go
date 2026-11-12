@@ -15,6 +15,9 @@ type JudgeTask struct {
 	RecoveryGeneration int64
 	AttemptNumber      int32
 	Verdict            pgtype.Text
+	QueueVersion       pgtype.Text
+	VirtualFinish      pgtype.Int8
+	EnqueueOrder       pgtype.Int8
 }
 
 type WorkerNode struct {

@@ -78,11 +78,28 @@ func (q *Queries) CreateSubmission(ctx context.Context, arg CreateSubmissionPara
 }
 
 const createTask = `-- name: CreateTask :exec
-INSERT INTO judge_tasks (submission_id) VALUES ($1)
+INSERT INTO judge_tasks (submission_id, queue_version, virtual_finish, enqueue_order)
+VALUES ($1, $2::text, $3::bigint,
+    nextval('training_enqueue_order'))
 `
 
-func (q *Queries) CreateTask(ctx context.Context, submissionID string) error {
-	_, err := q.db.Exec(ctx, createTask, submissionID)
+type CreateTaskParams struct {
+	SubmissionID  string
+	QueueVersion  string
+	VirtualFinish int64
+}
+
+func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) error {
+	_, err := q.db.Exec(ctx, createTask, arg.SubmissionID, arg.QueueVersion, arg.VirtualFinish)
+	return err
+}
+
+const ensureTrainingClock = `-- name: EnsureTrainingClock :exec
+INSERT INTO training_queue_clock (version_id) VALUES ($1) ON CONFLICT (version_id) DO NOTHING
+`
+
+func (q *Queries) EnsureTrainingClock(ctx context.Context, versionID string) error {
+	_, err := q.db.Exec(ctx, ensureTrainingClock, versionID)
 	return err
 }
 
@@ -193,6 +210,35 @@ func (q *Queries) LockBacklogPolicy(ctx context.Context) (LockBacklogPolicyRow, 
 	var i LockBacklogPolicyRow
 	err := row.Scan(&i.GlobalLimit, &i.SubjectLimit)
 	return i, err
+}
+
+const lockTrainingClock = `-- name: LockTrainingClock :one
+SELECT floor FROM training_queue_clock WHERE version_id = $1 FOR NO KEY UPDATE
+`
+
+func (q *Queries) LockTrainingClock(ctx context.Context, versionID string) (int64, error) {
+	row := q.db.QueryRow(ctx, lockTrainingClock, versionID)
+	var floor int64
+	err := row.Scan(&floor)
+	return floor, err
+}
+
+const maxQueuedTrainingRank = `-- name: MaxQueuedTrainingRank :one
+SELECT COALESCE(max(t.virtual_finish), 0)::bigint FROM judge_tasks t JOIN submissions s ON s.id = t.submission_id
+WHERE t.state = 'queued' AND t.queue_version = $1::text
+    AND s.material_version = $1::text AND s.subject_id = $2
+`
+
+type MaxQueuedTrainingRankParams struct {
+	VersionID string
+	SubjectID string
+}
+
+func (q *Queries) MaxQueuedTrainingRank(ctx context.Context, arg MaxQueuedTrainingRankParams) (int64, error) {
+	row := q.db.QueryRow(ctx, maxQueuedTrainingRank, arg.VersionID, arg.SubjectID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const registerMaterial = `-- name: RegisterMaterial :exec

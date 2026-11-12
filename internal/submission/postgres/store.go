@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -53,13 +54,24 @@ func canonicalManifest(data []byte) ([]byte, string, error) {
 // RegisterFixture is an explicit setup operation, never called by API startup.
 // An existing version cannot be overwritten with different material.
 func (s *Store) RegisterFixture(ctx context.Context) error {
-	q := submissiondb.New(s.pool)
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer rollback(tx)
+	q := submissiondb.New(tx)
 	if err := q.RegisterMaterial(ctx, submissiondb.RegisterMaterialParams{
 		VersionID: s.version, ManifestSha256: s.manifestHash, Manifest: s.manifest,
 	}); err != nil {
 		return err
 	}
-	return s.checkMaterial(ctx, q)
+	if err := s.checkMaterial(ctx, q); err != nil {
+		return err
+	}
+	if err := q.EnsureTrainingClock(ctx, s.version); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (s *Store) checkMaterial(ctx context.Context, q *submissiondb.Queries) error {
@@ -119,6 +131,19 @@ func (s *Store) Accept(ctx context.Context, subject, scope, key string, req subm
 	if err := checkBacklog(ctx, q, limits, subject); err != nil {
 		return submission.Receipt{}, false, err
 	}
+	floor, err := q.LockTrainingClock(ctx, s.version)
+	if err != nil {
+		return submission.Receipt{}, false, err
+	}
+	// Read the queue after the clock lock so a preceding claim is visible.
+	pending, err := q.MaxQueuedTrainingRank(ctx, submissiondb.MaxQueuedTrainingRankParams{VersionID: s.version, SubjectID: subject})
+	if err != nil {
+		return submission.Receipt{}, false, err
+	}
+	base := max(floor, pending)
+	if base == math.MaxInt64 {
+		return submission.Receipt{}, false, errors.New("training queue virtual time exhausted")
+	}
 	idBytes := make([]byte, 16)
 	if _, err := rand.Read(idBytes); err != nil {
 		return submission.Receipt{}, false, err
@@ -133,7 +158,7 @@ func (s *Store) Accept(ctx context.Context, subject, scope, key string, req subm
 		return submission.Receipt{}, false, err
 	}
 	if created {
-		if err := q.CreateTask(ctx, id); err != nil {
+		if err := q.CreateTask(ctx, submissiondb.CreateTaskParams{SubmissionID: id, QueueVersion: s.version, VirtualFinish: base + 1}); err != nil {
 			return submission.Receipt{}, false, err
 		}
 	}

@@ -108,7 +108,12 @@ func TestBacklogMigrationGuard(t *testing.T) {
 		if global != 2 || subject != 1 {
 			t.Fatal("failed rollback changed policy")
 		}
-		_, _, err = f.first.Accept(f.ctx, "user", "training", "backlog-down-retained", f.request)
+		// Seed schema-six rows directly; the current Store requires queue metadata.
+		_, err = f.a.Exec(f.ctx, `INSERT INTO submissions
+			(id,subject_id,context_id,idempotency_key,request_sha256,material_version,manifest_sha256,language,source_code)
+			SELECT 'backlog-down-source','user','training','backlog-down-retained',repeat('b',64),version_id,manifest_sha256,'gnu++17','// synthetic'
+			FROM submission_materials;
+			INSERT INTO judge_tasks (submission_id) VALUES ('backlog-down-source')`)
 		must(t, err)
 		_, err = f.a.Exec(f.ctx, `DELETE FROM submission_backlog_policy`)
 		must(t, err)

@@ -191,7 +191,7 @@ PG事务同一次提交owner、稳定ID、不可变文档/版本、全部引用�
 
 角色/审计及草稿/材料关联表始于schema7，不为历史账号授予权限；schema8新增`problem_drafts_owner_created_id_idx(owner_subject_id,created_at DESC,id COLLATE "C" DESC)`，使首屏和深页owner+seek查询不扫描/排序全部历史。每次新草稿多维护一个B-tree条目及相应WAL/磁盘，实际占用依数据分布而变；12000行合成查询计划及索引大小见交付记录，不将该样本当生产容量估算。原owner/key唯一索引支持幂等定位，主键支持本人ID读取，材料复合主键支持按草稿读取；不为列表附带大document或冗余覆盖字段。schema9 另增[参考申请账本与默认空policy](reference-requests.md)，schema 10 增加预期计划表，schema 11 增加参考领取预留，schema 12 增加参考报告和申请终态，schema 13 增加参考调度，schema 14 增加卷积对拍预期计划，schema 15 增加作者送审账本，schema 16 增加审核资格和分配，schema 17 增加退回账本，schema 18 增加作者确认账本，schema 19 增加审核人题面确认账本；均不修改既有草稿、角色或材料引用。
 
-升级在维护窗口排空并停止旧版 API/Worker 及维护写入，独立 `migrate up` 至当前 schema 19 后启动匹配二进制。API 不自动迁移，新二进制拒绝其他 schema。迁移不会停止旧进程，不混跑；本次没有迁移已有持久化 localdev 或服务器。回退先停新版，[Down19](#审核人确认题面语义) 只允许空题面确认账本；[Down18](#作者确认标程) 只允许空标程确认账本；[Down17](#审核退回与重送) 只允许空退回账本；[Down16](#审核人分配与证据摘要) 只允许空访问历史；Down15 见[作者送审回执](#作者送审回执)；历史 Down14/Down13/Down12/Down11/Down10/Down9 的锁序与条件见[参考申请迁移](reference-requests.md#迁移与回退)。
+升级在维护窗口排空并停止旧版 API/Worker 及维护写入，独立 `migrate up` 至[当前 schema](submission-backlog.md#升级与回退)后启动匹配二进制。API 不自动迁移，新二进制拒绝其他 schema。迁移不会停止旧进程，不混跑；本次没有迁移已有持久化 localdev 或服务器。回退先停新版；[Down20](submission-backlog.md#升级与回退) 只允许空活动队列；[Down19](#审核人确认题面语义) 只允许空题面确认账本；[Down18](#作者确认标程) 只允许空标程确认账本；[Down17](#审核退回与重送) 只允许空退回账本；[Down16](#审核人分配与证据摘要) 只允许空访问历史；Down15 见[作者送审回执](#作者送审回执)；历史 Down14/Down13/Down12/Down11/Down10/Down9 的锁序与条件见[参考申请迁移](reference-requests.md#迁移与回退)。
 
 历史schema8的普通CREATE INDEX在事务中建索引，需要协调写入，不使用CONCURRENTLY。Down8仅删列表索引并保留全部草稿/权限，重Up8保留资料；回到8后须匹配要求8的二进制，继续Down8至7后才可启动要求7的旧版。继续Down7至6仍仅允许角色、审计、草稿均空，存在数据则向前修复；Down6也保留原积压保护，不清表绕过。
 
