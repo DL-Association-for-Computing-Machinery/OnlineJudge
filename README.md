@@ -789,6 +789,8 @@ sudo -n env OJ_SANDBOX_EXPERIMENT=1 python3 -B /path/to/trusted/test-ubuntu-work
 
 [专项脚本](scripts/test-ubuntu-worker.py)先校验清单、每份文件和固定镜像，再导入归档并以 `--pull=never` 启动独占沙箱和回环临时 PostgreSQL。它执行真实 HTTP 判题与过载恢复，并确认原槽已停止、原客体 PID 消失。失败时保留已停止的自有沙箱供诊断；不要删除隔离标记或用旧版/Desktop 恢复命令处理 Ubuntu 槽。该包只用于实验判题，不覆盖完整试用离线发布。
 
+复验空库时，在上述命令加 `--require-empty-image-store`。使用专用接收环境，并在运行前确认 Docker 和 containerd 均使用全新的独立数据目录；只换 Docker 数据目录仍可能共用原 containerd。脚本拒绝任何已有镜像，导入后要求镜像 ID 集合恰好等于包中两份固定镜像。无需清理或修改现有镜像库。
+
 ### M0 最小浏览器实验页
 
 API 额外设置 `OJ_EXPERIMENT_BROWSER=1` 才提供 `/m0` 页面及[浏览器实验契约](api/m0-browser.openapi.yaml)。必须同时显式设置 `OJ_API_ADDR=127.0.0.1:<端口>`（可用0）、私有 `OJ_EXPERIMENT_TOKEN_FILE`、实验数据库及 `OJ_EXPERIMENT_MATERIAL_VERSION=m0-sum-v3`；不能混用 `OJ_SESSION_CONFIG_FILE`。其他开关值、主机名/通配监听或材料版本拒绝启动。仅供可信本机和独占合成数据库；从实际API启动日志取得回环地址访问 `/m0`，默认 Compose、账号网关和做题预览不开放此页。
