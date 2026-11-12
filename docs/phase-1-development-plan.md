@@ -246,7 +246,7 @@ M0 先做存储与并发实验；M1 交付冻结范围所需的完整普通账�
 
 [兼容回退专项](architecture/operations-design.md#兼容回退专项)在同一个临时库切回旧版本后保留新版本完成的判题结果，并由旧 Worker 处理新版已接收的排队提交。该版本对的迁移无变更；离线发布包、含迁移的版本切换和现场验收仍待验证。
 
-[实验判题离线包](architecture/operations-design.md#实验判题离线包)在专用 Ubuntu VM 通过独立清单摘要核验，并在全新 Docker 与 containerd 存储中导入两份固定镜像、禁拉取判题。完整试用离线包、从空白系统安装运行时及冷浏览器／现场依赖仍待验证。
+[实验判题离线包](architecture/operations-design.md#实验判题离线包)在专用 Ubuntu VM 通过独立清单摘要核验，并在全新 Docker 与 containerd 存储中导入两份固定镜像、禁拉取判题。[本地冷 HTTPS 浏览器](../README.md#浏览器账号专项)已验证证书负对照、同源资源和真实账号登录。完整试用离线包、从空白系统安装运行时、校内 DNS／HTTPS／时间及现场断网流程仍待验证。
 
 ### P7 完整训练补齐
 

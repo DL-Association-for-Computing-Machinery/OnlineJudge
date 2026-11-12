@@ -71,6 +71,7 @@ def arguments():
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--statement-corpus", type=Path, help="optional prepared bundle statements directory, renderer-only checks")
     mode.add_argument("--authorized-draft-bundle", type=Path, help="run real authorized previews for the pinned ten-problem private bundle")
+    mode.add_argument("--cold-firefox", type=Path, help="existing Playwright Firefox executable for strict cold HTTPS")
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
     output = args.output_dir.resolve()
@@ -107,6 +108,10 @@ def arguments():
         args.module_cache = local_path(args.module_cache, directory=True)
     if args.chromium_executable:
         args.chromium_executable = local_path(args.chromium_executable, executable=True)
+    if args.cold_firefox:
+        if args.chromium_executable:
+            raise ValueError("cold HTTPS requires Firefox only")
+        args.cold_firefox = local_path(args.cold_firefox, executable=True)
     node = shutil.which("node")
     if not node:
         raise ValueError("existing host Node required")
@@ -178,12 +183,13 @@ def wait_ready(process, log, origin):
     raise RuntimeError("fixture readiness timed out")
 
 
-def stop_fixture(origin):
+def stop_fixture(origin, ca=None):
     if origin:
         try:
             request = urllib.request.Request(origin + "/__fixture/stop", method="POST")
             # Ephemeral loopback test certificates are the only exception here.
-            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPSHandler(context=ssl._create_unverified_context()))
+            context = ssl.create_default_context(cafile=str(ca)) if ca else ssl._create_unverified_context()
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPSHandler(context=context))
             with opener.open(request, timeout=3):
                 pass
         except (OSError, ValueError):
@@ -206,6 +212,7 @@ def main():
     docker = LoggedDocker(args.context, uuid.uuid4().hex, log)
     prefix = "oj-browser-" + docker.owner
     phase, failure, origin, process = "PREFLIGHT", None, None, None
+    ca = None
     containers, handles = {}, []
     result = {"success": False, "browser_ok": False, "fixture_ok": False, "container_ok": False, "redis_ok": False}
     try:
@@ -225,6 +232,8 @@ def main():
             if not (ROOT / "web" / name).exists():
                 raise ValueError("frontend source incomplete")
         script_name, check_count = ("authorized-draft-qa.mjs", 4) if args.authorized_drafts else ("account-qa.mjs", 15)
+        if args.cold_firefox:
+            script_name, check_count = "cold-https-qa.mjs", 3
         qa_script = ROOT / "tests/browser" / script_name
         expected_checks = re.findall(r"^\s+passed\('([^'\n]+)'\)", qa_script.read_text(), re.M)
         if len(expected_checks) != check_count or len(set(expected_checks)) != check_count:
@@ -286,8 +295,15 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
         http_origin = published_origin(docker, containers["test"], 9444, "http")
         fixture_log = out / "fixture.log"
         handles.append(fixture_log.open("w"))
-        process = subprocess.Popen([*docker.command, "exec", "-e", "OJ_BROWSER_ORIGIN=" + origin, "-e", "OJ_BROWSER_UI_DIR=/browser-assets", containers["test"], "sh", "/browser-fixture.sh"], stdout=handles[-1], stderr=subprocess.STDOUT)
+        cold = ["-e", "OJ_BROWSER_COLD_TLS=1"] if args.cold_firefox else []
+        process = subprocess.Popen([*docker.command, "exec", "-e", "OJ_BROWSER_ORIGIN=" + origin, "-e", "OJ_BROWSER_UI_DIR=/browser-assets", *cold, containers["test"], "sh", "/browser-fixture.sh"], stdout=handles[-1], stderr=subprocess.STDOUT)
         ready = wait_ready(process, fixture_log, origin)
+        if args.cold_firefox:
+            public_ca = ready["ca_pem"]
+            if not isinstance(public_ca, str) or not re.fullmatch(r"-----BEGIN CERTIFICATE-----\n[A-Za-z0-9+/=\n]{1,4096}-----END CERTIFICATE-----\n", public_ca):
+                raise ValueError("missing public test CA")
+            ca = out / "fixture-ca.pem"
+            ca.write_text(public_ca)
         info = out / "fixture.json"
         info.write_text(json.dumps({"origin": origin, "http_origin": http_origin, "log": str(fixture_log), "email": ready["email"],
                                     "subject_id": ready["subject_id"], "statements": args.statements,
@@ -298,6 +314,8 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
         env.update(OJ_BROWSER_QA_INFO=str(info), OJ_BROWSER_QA_OUTPUT=str(out), OJ_PLAYWRIGHT_MODULE=str(args.playwright_module), PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD="1")
         if args.chromium_executable:
             env["OJ_CHROMIUM_EXECUTABLE"] = str(args.chromium_executable)
+        if args.cold_firefox:
+            env.update(OJ_FIREFOX_EXECUTABLE=str(args.cold_firefox), OJ_BROWSER_CA_FILE=str(ca))
         with (out / "node.log").open("w") as node_log:
             qa = subprocess.run([str(args.node), str(qa_script)], env=env, stdout=node_log, stderr=subprocess.STDOUT,
                                 timeout=420 if args.authorized_drafts else 120)
@@ -309,7 +327,8 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
         failure = "INTERRUPTED" if isinstance(error, KeyboardInterrupt) else phase
         log.write(type(error).__name__ + "\n" + str(getattr(error, "stdout", "") or "") + str(getattr(error, "stderr", "") or ""))
     finally:
-        stop_fixture(origin)
+        if not args.cold_firefox or ca:
+            stop_fixture(origin, ca)
         if process:
             try:
                 result["fixture_exit"] = process.wait(timeout=15)

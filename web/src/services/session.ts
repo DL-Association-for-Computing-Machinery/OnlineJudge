@@ -129,7 +129,9 @@ export async function accountRequest(operation: AccountOperation, signal: AbortS
       credentials: 'same-origin',
       cache: 'no-store',
       redirect: 'error',
-      referrerPolicy: 'no-referrer',
+      // Firefox serializes the Origin as null for POST with no-referrer.
+      // Keep the origin needed by the server without sending a page path.
+      referrerPolicy: endpoint.method === 'POST' ? 'origin' : 'no-referrer',
       signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
       headers: input ? { 'Content-Type': 'application/json', Accept: 'application/json, application/problem+json' } : { Accept: 'application/json, application/problem+json' },
       ...(input ? { body: JSON.stringify(input) } : {}),

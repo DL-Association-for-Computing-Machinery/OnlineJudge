@@ -25,7 +25,9 @@ describe('same-origin account transport', () => {
     vi.stubGlobal('fetch', fetch)
     const input = { email: 'Name+tag@example.test', password: ' 原 始密碼 e\u0301 ' }
     await accountRequest('begin', signal(), input)
-    expect(fetch).toHaveBeenCalledExactlyOnceWith('/api/v1/session/login/begin', expect.objectContaining({ method: 'POST', body: JSON.stringify(input), redirect: 'error' }))
+    expect(fetch).toHaveBeenCalledExactlyOnceWith('/api/v1/session/login/begin', expect.objectContaining({
+      method: 'POST', body: JSON.stringify(input), mode: 'same-origin', redirect: 'error', referrerPolicy: 'origin',
+    }))
     expect(fetch.mock.calls[0][1]?.headers).not.toHaveProperty('Origin')
   })
 

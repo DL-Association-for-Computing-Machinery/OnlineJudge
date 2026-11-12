@@ -1,5 +1,11 @@
 # 工程交付记录
 
+## 2026-11-12：Firefox 冷 HTTPS 入口与同源账号登录
+
+全新 Firefox 拒绝未知测试 CA；另一个浏览器进程在启动策略中只导入该测试 CA，正常证书校验下，桌面和 390px 窄屏加载真实构建的同源 JS/CSS，打开题库与登录页，未观测到外部页面资源请求。桌面通过真实 API、PostgreSQL 和 Redis 登录，安全 HttpOnly Cookie 保持刷新后的同一账号身份。原 Firefox 登录 POST 返回 403；独立回环探针确认 `no-referrer` 产生 `Origin: null`，改为账号 POST 仅发送站点来源后通过。服务端同源校验未变，GET 仍不发送 Referer。
+
+Playwright 1.58.0 本机缓存，前端 lint／类型／111 项测试、原 Chromium 15 组账号专项及隔离夹具清理通过。Firefox 断言报告 SHA-256 `2e3b303b61133a06faa70237e0fcaca8cee024fc0bfb73a79de655fa89b36f23`。见[浏览器账号专项](../README.md#浏览器账号专项)。未修改系统证书库，未验证其他 Firefox 写入口、整机断网、校园 DNS 或现场部署。
+
 ## 2026-11-12：实验判题离线包在空镜像库复验
 
 复用上一阶段从 `40ecc45` 编译的包与原清单摘要。专用 Ubuntu VM 内新起 Docker 29.1.3 和 containerd，分别使用全新数据目录；挂载和网络空间独立，试验空间无 IPv4／IPv6 默认路由。原库已含镜像，冷接收拒绝导入。首次探查也确认只换 Docker 数据目录会误连默认 containerd；最终改用独立 containerd，导入前无镜像内容且 Docker 列表为零，导入后只有两份固定镜像。禁拉取启动后真实 AC／WA／AC、过载恢复、停止和清理通过，判题测试 2.94 秒，不含核验与导入。

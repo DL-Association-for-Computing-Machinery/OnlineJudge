@@ -126,7 +126,13 @@ func TestBrowserFixture(t *testing.T) {
 	edge.StartTLS()
 	plain := browserServer(t, "0.0.0.0:9444", static)
 	plain.Start()
-	ready, err := json.Marshal(map[string]string{"url": origin.String(), "email": subject.Email.Original(), "subject_id": subject.ID, "other_email": otherAuthor.Email.Original(), "other_subject_id": otherAuthor.ID})
+	info := map[string]string{"url": origin.String(), "email": subject.Email.Original(), "subject_id": subject.ID, "other_email": otherAuthor.Email.Original(), "other_subject_id": otherAuthor.ID}
+	if os.Getenv("OJ_BROWSER_COLD_TLS") == "1" {
+		publicCA, err := os.ReadFile(ca.CAFile)
+		must(t, err)
+		info["ca_pem"] = string(publicCA)
+	}
+	ready, err := json.Marshal(info)
 	must(t, err)
 	_, err = fmt.Printf("BROWSER_READY %s\n", ready)
 	must(t, err)

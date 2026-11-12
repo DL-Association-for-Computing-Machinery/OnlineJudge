@@ -720,6 +720,8 @@ python3 scripts/test-browser-account.py \
 
 可选 `--chromium-executable /absolute/path/to/existing/chromium` 指定已有浏览器；`--statement-corpus /absolute/path/to/prepared-bundle/statements` 增加至多10份只读Markdown的浏览器渲染耗时/节点测量（响应替换，不冒充十题真实HTTP授权验收）；`--toolchain-image`、`--module-cache`、`--build-cache-volume` 和 `--context` 的约束沿用现有专项。驱动只发布随机回环 HTTPS/HTTP 对照端口，建立隔离的合成账号/存储；真实 race API 使用固定 pin 的 mTLS，外层临时证书只在新测试 context 忽略。控制端点仅供本夹具，不能对外开放或接入真实数据。
 
+要验证保留正常证书检查的冷启动，添加 `--cold-firefox /absolute/path/to/existing/playwright/firefox`，使用匹配的已有 Playwright Firefox；不同时使用 Chromium、语料或私有草稿模式。先用不信任夹具 CA 的全新浏览器确认连接被拒绝，再在另一个临时浏览器配置导入公开测试 CA，不修改系统信任库。验证桌面和 390px 窄屏从同源加载题库与登录页面，桌面完成合成账号的真实登录与刷新。测试限制浏览器访问回环夹具，并记录页面资源来源；不代表整机断网、校园 DNS 或现场入口验收。
+
 要验证真实十题预览，改用 `--authorized-draft-bundle /absolute/path/to/verified/bundle`，不能与 `--statement-corpus` 同用。它只接受当前锁内十题的完整私有草稿包，先复验完整性，再只读挂载；用合成账号经真实会话导入到临时 PostgreSQL 和材料根，通过本人列表与预览核对内容版本、题面、18 对样例与复制字节，并逐题检查匿名和另一作者的拒绝。该模式不执行题源程序，截图及报告留在私有输出目录。
 
 产物包含日志、浏览器断言 JSON 与桌面/390px 截图；当前15组保留账号/预览与导入恢复覆盖，另验新浏览器档案/IndexedDB禁用时真实服务器分页发现及本人预览、迟到页隔离、列表不改变pending日志；实际Cookie换账号覆盖四条管理路由。独立journal测试入口仅由此驱动构建到临时assets，生产构建不引用它。驱动分别检查浏览器和夹具结果，结束只清理本轮带 owner 标签的资源。`integration && browser` 夹具只运行 `TestBrowserFixture`，普通 PR CI 不自动执行此手动浏览器专项。生产证书、浏览器兼容矩阵及完整业务验收仍须另做。
