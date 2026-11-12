@@ -57,6 +57,7 @@ type Result struct {
 // Runner owns one execution slot. Use one instance per sandbox of capacity one.
 type Runner struct {
 	sandbox   Sandbox
+	fixture   experiment.WorkerFixture
 	busy      atomic.Bool
 	unhealthy atomic.Bool
 }
@@ -76,7 +77,7 @@ func (r *Runner) Judge(ctx context.Context, d materials.Descriptor, blobs map[st
 	if r.unhealthy.Load() {
 		return result, errors.New("sandbox requires recovery")
 	}
-	p, err := prepare(d, blobs)
+	p, err := prepare(d, blobs, r.fixture)
 	if err != nil {
 		return result, err
 	}

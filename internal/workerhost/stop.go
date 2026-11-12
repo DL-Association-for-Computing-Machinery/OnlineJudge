@@ -96,8 +96,9 @@ func (h *Host) Stop(ctx context.Context) (result error) {
 	}
 	trace.record("inspect_after", stepStart, "ok")
 	stepStart = time.Now()
+	probeImage := h.fixture.Profile().ImageID
 	for i, pid := range pids {
-		_, err := h.run(ctx, nil, "docker", PIDProbeArgs(strconv.Itoa(pid))...)
+		_, err := h.docker(ctx, nil, pidProbeArgs(probeImage, strconv.Itoa(pid))...)
 		if err != nil {
 			code := failureCode(err)
 			var command *commandFailure

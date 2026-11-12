@@ -37,18 +37,27 @@ func contextCause(err error) error {
 // Output and runtime are bounded before buffering. Never propagate stderr or
 // command arguments: requests may contain private source and test input.
 func runCommand(ctx context.Context, input io.Reader, name string, args ...string) ([]byte, error) {
+	return runCommandWithEnv(ctx, input, nil, name, args...)
+}
+
+func runCommandWithEnv(ctx context.Context, input io.Reader, env []string, name string, args ...string) ([]byte, error) {
 	var out limitedBuffer
-	if err := runCommandTo(ctx, input, &out, 128*1024+1, name, args...); err != nil {
+	if err := runCommandToWithEnv(ctx, input, &out, 128*1024+1, env, name, args...); err != nil {
 		return nil, err
 	}
 	return out.Bytes(), nil
 }
 
 func runCommandTo(ctx context.Context, input io.Reader, output io.Writer, maximum int64, name string, args ...string) error {
+	return runCommandToWithEnv(ctx, input, output, maximum, nil, name, args...)
+}
+
+func runCommandToWithEnv(ctx context.Context, input io.Reader, output io.Writer, maximum int64, env []string, name string, args ...string) error {
 	ctx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = "/tmp" // Control commands do not depend on the repository working directory.
+	cmd.Env = env
 	cmd.Stdin = input
 	out := &commandSink{target: output, maximum: maximum}
 	cmd.Stdout = out

@@ -20,9 +20,10 @@ type markerFile interface {
 }
 
 type slotLock struct {
-	file markerFile
-	host *os.File
-	dual bool
+	file   markerFile
+	host   *os.File
+	dual   bool
+	marker string
 }
 
 // Resolve the account home, not HOME/TMPDIR or a caller-selected path: different
@@ -113,9 +114,12 @@ func flockOwnership(f *os.File, how int, allowDirty bool) error {
 }
 
 func (l *slotLock) dirty() error {
-	marker := "active\n"
-	if l.dual {
-		marker = dualMarker
+	marker := l.marker
+	if marker == "" {
+		marker = activeMarker
+		if l.dual {
+			marker = dualMarker
+		}
 	}
 	if n, err := l.file.WriteAt([]byte(marker), 0); err != nil || n != len(marker) {
 		return errors.New("cannot persist M0 quarantine marker")

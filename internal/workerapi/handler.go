@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materials"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
 )
@@ -22,7 +23,17 @@ func NewHandler(store submission.LeaseStore, roots *x509.CertPool, materialServi
 	return newHandler(store, roots, time.Now, materialService...)
 }
 
+// NewUbuntuFixtureHandler requires the Ubuntu fixture assertion before a claim.
+// Its store must be configured for the same fixture.
+func NewUbuntuFixtureHandler(store submission.LeaseStore, roots *x509.CertPool, materialService *materials.Service) http.Handler {
+	return newFixtureHandler(store, roots, time.Now, experiment.UbuntuVersion, materialService)
+}
+
 func newHandler(store submission.LeaseStore, roots *x509.CertPool, now func() time.Time, materialService ...*materials.Service) http.Handler {
+	return newFixtureHandler(store, roots, now, "", materialService...)
+}
+
+func newFixtureHandler(store submission.LeaseStore, roots *x509.CertPool, now func() time.Time, claimFixture string, materialService ...*materials.Service) http.Handler {
 	var service *materials.Service
 	if len(materialService) > 0 {
 		service = materialService[0]
@@ -55,8 +66,16 @@ func newHandler(store submission.LeaseStore, roots *x509.CertPool, now func() ti
 		case "/api/v1/worker/assignment", "/api/v1/worker/material":
 			serveMaterials(w, r, service, node, roots, now)
 		case "/api/v1/worker/claim":
-			var req struct{}
+			var req struct {
+				Version json.RawMessage `json:"fixture_version"`
+			}
 			if !decode(w, r, &req) {
+				return
+			}
+			var version string
+			if (claimFixture == "" && len(req.Version) != 0) ||
+				(claimFixture != "" && (json.Unmarshal(req.Version, &version) != nil || version != claimFixture)) {
+				problem(w, 412, "FIXTURE_MISMATCH", "节点与控制器的判题材料版本不一致")
 				return
 			}
 			lease, err := store.Claim(r.Context(), node)

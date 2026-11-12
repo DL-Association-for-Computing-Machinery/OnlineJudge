@@ -27,16 +27,22 @@ func run(ctx context.Context, logger *slog.Logger, drain <-chan struct{}) error 
 	if err != nil {
 		return err
 	}
-	lock, err := lockM0Execution(c.slot, false, os.Getenv(dualModeEnv))
+	ubuntu := c.fixture.Version() == experiment.UbuntuVersion
+	lock, err := lockM0Runtime(c.slot, false, os.Getenv(dualModeEnv), ubuntu)
 	if err != nil {
 		return err
 	}
 	defer lock.Close()
-	return runSlot(ctx, c, logger, lock, func(ctx context.Context) (sandboxHost, error) { return workerhost.OpenM0Slot(ctx, c.slot) }, drain)
+	return runSlot(ctx, c, logger, lock, func(ctx context.Context) (sandboxHost, error) {
+		if ubuntu {
+			return workerhost.OpenUbuntuM0(ctx)
+		}
+		return workerhost.OpenM0Slot(ctx, c.slot)
+	}, drain)
 }
 
 func runSlot(ctx context.Context, c config, logger *slog.Logger, lock *slotLock, open func(context.Context) (sandboxHost, error), drain <-chan struct{}) (result error) {
-	acquirer, err := workerclient.NewAcquirer(c.endpoint, c.roots, c.cert)
+	acquirer, err := workerclient.NewAcquirerForFixture(c.endpoint, c.roots, c.cert, c.fixture)
 	if err != nil {
 		return err
 	}
@@ -80,11 +86,11 @@ func runSlot(ctx context.Context, c config, logger *slog.Logger, lock *slotLock,
 		return err
 	}
 	sandbox := execution.NewGoJudge(host, host.Verify)
-	if err := sandbox.Verify(startup, experiment.PinnedEnvironment()); err != nil {
+	if err := sandbox.Verify(startup, c.fixture.Profile()); err != nil {
 		return errors.New("M0 sandbox protocol preflight failed; no task claimed")
 	}
 	cancel()
-	w, err := worker.New(acquirer, acquirer, execution.NewLeased(sandbox, renewer.Renew, stop), reporter)
+	w, err := worker.New(acquirer, acquirer, execution.NewLeasedForFixture(sandbox, renewer.Renew, stop, c.fixture), reporter)
 	if err != nil {
 		return err
 	}

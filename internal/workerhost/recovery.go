@@ -41,12 +41,28 @@ func RecoverReferenceSlot(ctx context.Context, slot ReferenceTierSlot, expectedI
 }
 
 func recoverConfiguredSlot(ctx context.Context, run command, name, expectedID string, tier experiment.ReferenceTier) error {
+	return recoverConfiguredHost(ctx, &Host{run: run, tier: tier}, name, expectedID)
+}
+
+// RecoverUbuntuM0 proves stop only through the pinned Ubuntu Engine. The same
+// ownership and external dispatch fence requirements as RecoverM0Slot apply.
+func RecoverUbuntuM0(ctx context.Context, expectedID string) error {
+	h, err := ubuntuHost(ctx)
+	if err != nil {
+		return err
+	}
+	return recoverConfiguredHost(ctx, h, container, expectedID)
+}
+
+func recoverConfiguredHost(ctx context.Context, h *Host, name, expectedID string) error {
 	if !containerID.MatchString(expectedID) {
 		return errors.New("original full M0 container ID required")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	h := &Host{run: run, tier: tier, id: expectedID, active: make(map[uint64]context.CancelFunc), drained: make(chan struct{})}
+	h.id = expectedID
+	h.active = make(map[uint64]context.CancelFunc)
+	h.drained = make(chan struct{})
 	p, _, err := h.configuration()
 	if err != nil {
 		return err
@@ -58,7 +74,7 @@ func recoverConfiguredSlot(ctx context.Context, run command, name, expectedID st
 	if s.ID != expectedID || s.Started == "" || s.Restarting || s.Paused {
 		return errors.New("recovery sandbox identity or lifetime unavailable")
 	}
-	if err := validateIsolation(s, p); err != nil {
+	if err := h.validateIsolation(s, p); err != nil {
 		return err
 	}
 	h.started = s.Started
@@ -76,7 +92,7 @@ func recoverConfiguredSlot(ctx context.Context, run command, name, expectedID st
 	if err != nil || s.ID != expectedID || s.Started != h.started || s.Running || s.PID != 0 || s.Restarting || s.Paused {
 		return errors.New("recovery sandbox stopped state unconfirmed")
 	}
-	if err := validateIsolation(s, p); err != nil {
+	if err := h.validateIsolation(s, p); err != nil {
 		return err
 	}
 	return ctx.Err()

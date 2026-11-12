@@ -49,6 +49,11 @@ func httpLoopEnvironment(extra ...string) []string {
 
 func migrateHTTPLoop(t *testing.T, ctx context.Context, dsn, root string) {
 	t.Helper()
+	migrateHTTPFixture(t, ctx, dsn, root, experiment.PinnedVersion)
+}
+
+func migrateHTTPFixture(t *testing.T, ctx context.Context, dsn, root, version string) {
+	t.Helper()
 	binary, err := filepath.Abs("../../.local/bin/migrate")
 	if err != nil {
 		t.Fatal(err)
@@ -60,7 +65,7 @@ func migrateHTTPLoop(t *testing.T, ctx context.Context, dsn, root string) {
 		}
 		cmd := exec.CommandContext(ctx, binary, step...)
 		cmd.Env = httpLoopEnvironment("OJ_DATABASE_URL="+dsn, "OJ_MATERIAL_ROOT="+root,
-			"OJ_EXPERIMENT_MATERIAL_VERSION="+experiment.PinnedVersion)
+			"OJ_EXPERIMENT_MATERIAL_VERSION="+version)
 		cmd.Stdout, cmd.Stderr = log, log
 		runErr := cmd.Run()
 		closeErr := log.Close()
@@ -158,6 +163,11 @@ func sendLoopHTTP(t *testing.T, ctx context.Context, client *http.Client, api lo
 
 func loopReceipt(t *testing.T, response loopResponse) submission.Receipt {
 	t.Helper()
+	return loopFixtureReceipt(t, response, experiment.PinnedVersion)
+}
+
+func loopFixtureReceipt(t *testing.T, response loopResponse, version string) submission.Receipt {
+	t.Helper()
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(response.body, &fields); err != nil || len(fields) != 6 {
 		t.Fatal("receipt does not match closed public schema")
@@ -172,7 +182,7 @@ func loopReceipt(t *testing.T, response loopResponse) submission.Receipt {
 		t.Fatal("invalid public receipt")
 	}
 	id, err := hex.DecodeString(receipt.ID)
-	if err != nil || len(id) != 16 || hex.EncodeToString(id) != receipt.ID || receipt.MaterialVersion != experiment.PinnedVersion || receipt.Language != "gnu++17" || receipt.CreatedAt.IsZero() {
+	if err != nil || len(id) != 16 || hex.EncodeToString(id) != receipt.ID || receipt.MaterialVersion != version || receipt.Language != "gnu++17" || receipt.CreatedAt.IsZero() {
 		t.Fatal("receipt identity or pinned metadata invalid")
 	}
 	if response.location != "" && response.location != "/api/v1/experiments/submissions/"+receipt.ID {
@@ -194,6 +204,12 @@ func loopProblem(t *testing.T, response loopResponse, status int, code string) {
 
 func drainHTTPLoopWorker(t *testing.T, w *dualProcess, id string) {
 	t.Helper()
+	drainHTTPWorker(t, w)
+	dualStopped(t, id, "")
+}
+
+func drainHTTPWorker(t *testing.T, w *dualProcess) {
+	t.Helper()
 	w.alive(t)
 	if err := w.cmd.Process.Signal(syscall.SIGUSR1); err != nil {
 		t.Fatal("cannot request Worker drain")
@@ -214,5 +230,4 @@ func drainHTTPLoopWorker(t *testing.T, w *dualProcess, id string) {
 			t.Fatal("Worker exit remains unconfirmed after kill")
 		}
 	}
-	dualStopped(t, id, "")
 }

@@ -121,6 +121,42 @@ func TestHostSlotDualExperimentIsLimitedToM0(t *testing.T) {
 	takeHostSlot(t, dir, names[2], false, false).Close()
 }
 
+func TestHostSlotCannotRecoverDifferentRuntimeMarker(t *testing.T) {
+	name := (workerhost.M0Slot{}).LockName()
+	for _, ubuntu := range []bool{false, true} {
+		dir := t.TempDir()
+		l, err := lockHostSlotForRuntimeAt(dir, name, false, false, ubuntu)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := l.dirty(); err != nil {
+			t.Fatal(err)
+		}
+		l.Close()
+		before, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if wrong, err := lockHostSlotForRuntimeAt(dir, name, true, false, !ubuntu); err == nil {
+			wrong.Close()
+			t.Fatal("a different runtime acquired the dirty slot")
+		}
+		after, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil || string(after) != string(before) {
+			t.Fatal("rejected recovery changed the quarantine")
+		}
+		l, err = lockHostSlotForRuntimeAt(dir, name, true, false, ubuntu)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := recoverLocked(t.Context(), l, func(context.Context) error { return nil }); err != nil {
+			t.Fatal(err)
+		}
+		l.Close()
+		takeHostSlot(t, dir, name, false, false).Close()
+	}
+}
+
 func TestHostSlotChecksAllLegacyMarkersAndOnlyClearsSelected(t *testing.T) {
 	names := workerhost.ExecutionLockNames()
 	dir := t.TempDir()

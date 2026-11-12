@@ -1,4 +1,4 @@
-// Package workerhost adapts pinned offline Docker Desktop sandbox slots. The caller
+// Package workerhost adapts pinned offline experiment sandbox slots. The caller
 // must exclusively own this container and its trusted Docker control plane.
 // It is not a generic Docker host controller or a production node provisioner.
 package workerhost
@@ -28,6 +28,7 @@ type Host struct {
 	filePayload int64                    // guarded by mu; charges are not refunded after ambiguity
 	fileOps     int                      // guarded by mu; bounds even empty transfers
 	tier        experiment.ReferenceTier // zero is the separate M0 configuration
+	fixture     experiment.WorkerFixture
 	id, started string
 	mu          sync.Mutex
 	closed      bool
@@ -56,7 +57,12 @@ func openSlot(ctx context.Context, run command, slot M0Slot) (*Host, error) {
 }
 
 func openConfiguredSlot(ctx context.Context, run command, name string, tier experiment.ReferenceTier) (*Host, error) {
-	h := &Host{run: run, tier: tier, active: make(map[uint64]context.CancelFunc), drained: make(chan struct{})}
+	return openConfiguredHost(ctx, &Host{run: run, tier: tier}, name)
+}
+
+func openConfiguredHost(ctx context.Context, h *Host, name string) (*Host, error) {
+	h.active = make(map[uint64]context.CancelFunc)
+	h.drained = make(chan struct{})
 	p, _, err := h.configuration()
 	if err != nil {
 		return nil, err
@@ -77,7 +83,7 @@ func openConfiguredSlot(ctx context.Context, run command, name string, tier expe
 
 func (h *Host) configuration() (experiment.ExecutionProfile, experiment.ReferenceFilesProfile, error) {
 	if h.tier == 0 {
-		return experiment.PinnedEnvironment(), experiment.PinnedReferenceFiles(), nil
+		return h.fixture.Profile(), experiment.PinnedReferenceFiles(), nil
 	}
 	c, err := experiment.ResolveReferenceTier(h.tier)
 	return c.Runtime, c.Files, err
@@ -86,6 +92,9 @@ func (h *Host) configuration() (experiment.ExecutionProfile, experiment.Referenc
 var containerID = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 func (h *Host) docker(ctx context.Context, input io.Reader, args ...string) ([]byte, error) {
+	if h.fixture.Version() == experiment.UbuntuVersion {
+		return h.run(ctx, input, "/usr/bin/docker", append([]string{"--host=unix:///var/run/docker.sock"}, args...)...)
+	}
 	return h.run(ctx, input, "docker", append([]string{"--context", "desktop-linux"}, args...)...)
 }
 
@@ -148,6 +157,11 @@ func (h *Host) Verify(ctx context.Context, p experiment.ExecutionProfile) error 
 			return errors.New("host execution environment mismatch")
 		}
 	}
+	if h.fixture.Version() == experiment.UbuntuVersion {
+		if err := h.verifyUbuntuLimits(ctx); err != nil {
+			return err
+		}
+	}
 	return ctx.Err()
 }
 
@@ -161,11 +175,19 @@ type state struct {
 	Memory, CPUs, Shm                                      int64
 	Entrypoint, Cmd                                        []string
 	Tmpfs                                                  map[string]string
+	Cgroupns                                               string
+	Swap                                                   int64
+	PortBindings                                           int
+	PublishAllPorts                                        bool
 }
 
 func (h *Host) inspect(ctx context.Context, id string) (state, error) {
 	var s state
-	out, err := h.docker(ctx, nil, "inspect", "--format", inspection, id)
+	format := inspection
+	if h.fixture.Version() == experiment.UbuntuVersion {
+		format = strings.TrimSuffix(format, "}") + `,"Cgroupns":{{json .HostConfig.CgroupnsMode}},"Swap":{{.HostConfig.MemorySwap}},"PortBindings":{{len .HostConfig.PortBindings}},"PublishAllPorts":{{.HostConfig.PublishAllPorts}}}`
+	}
+	out, err := h.docker(ctx, nil, "inspect", "--format", format, id)
 	if err != nil {
 		return s, err
 	}
@@ -178,6 +200,14 @@ func (h *Host) inspect(ctx context.Context, id string) (state, error) {
 func (h *Host) validate(s state, p experiment.ExecutionProfile) error {
 	if s.ID != h.id || s.Started != h.started || !s.Running || s.PID <= 1 || s.Restarting || s.Paused {
 		return errors.New("sandbox identity, lifetime or isolation mismatch")
+	}
+	return h.validateIsolation(s, p)
+}
+
+func (h *Host) validateIsolation(s state, p experiment.ExecutionProfile) error {
+	if h.fixture.Version() == experiment.UbuntuVersion &&
+		(s.Cgroupns != "private" || s.Swap != 1<<30 || s.PortBindings != 0 || s.PublishAllPorts) {
+		return errors.New("sandbox isolation mismatch for Ubuntu")
 	}
 	return validateIsolation(s, p)
 }

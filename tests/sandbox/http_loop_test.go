@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -19,6 +20,7 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/testpki"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/workerclient"
 )
 
 func TestHTTPJudgeLoop(t *testing.T) {
@@ -26,6 +28,11 @@ func TestHTTPJudgeLoop(t *testing.T) {
 		t.Skip("run python3 scripts/test-worker.py http-loop")
 	}
 	verifyEnvironment(t)
+	testHTTPJudgeLoop(t, experiment.PinnedVersion)
+}
+
+func testHTTPJudgeLoop(t *testing.T, version string) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	dsn := os.Getenv("OJ_TEST_DATABASE_URL")
@@ -43,7 +50,7 @@ func TestHTTPJudgeLoop(t *testing.T) {
 		t.Fatal("HTTP loop database must be empty")
 	}
 	root := t.TempDir()
-	migrateHTTPLoop(t, ctx, dsn, root)
+	migrateHTTPFixture(t, ctx, dsn, root, version)
 	if _, err := conn.ExecContext(ctx, `INSERT INTO worker_nodes(id,credential_version) VALUES($1,1)`, "http-loop-node"); err != nil {
 		t.Fatal("cannot provision synthetic node")
 	}
@@ -60,7 +67,8 @@ func TestHTTPJudgeLoop(t *testing.T) {
 	t.Cleanup(transport.CloseIdleConnections)
 	client := &http.Client{Transport: transport, Timeout: 2 * time.Second,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	apis := []loopAPI{startHTTPLoopAPI(t, ctx, client, dsn, tokenFile), startHTTPLoopAPI(t, ctx, client, dsn, tokenFile)}
+	option := "OJ_EXPERIMENT_MATERIAL_VERSION=" + version
+	apis := []loopAPI{startHTTPLoopAPI(t, ctx, client, dsn, tokenFile, option), startHTTPLoopAPI(t, ctx, client, dsn, tokenFile, option)}
 	if apis[0].endpoint == apis[1].endpoint {
 		t.Fatal("submission APIs must be separate processes/listeners")
 	}
@@ -88,7 +96,7 @@ func TestHTTPJudgeLoop(t *testing.T) {
 		if !submission.ValidKey(cases[i].key) {
 			t.Fatal("controlled idempotency key invalid")
 		}
-		body, err := json.Marshal(submission.Request{MaterialVersion: experiment.PinnedVersion, Language: "gnu++17", Source: cases[i].source})
+		body, err := json.Marshal(submission.Request{MaterialVersion: version, Language: "gnu++17", Source: cases[i].source})
 		if err != nil {
 			t.Fatal("cannot encode controlled source")
 		}
@@ -120,7 +128,7 @@ func TestHTTPJudgeLoop(t *testing.T) {
 	for i := range cases {
 		tc := &cases[i]
 		created := request(i, "POST", "/api/v1/experiments/submissions", tc.key, tc.body, 202)
-		tc.queued = loopReceipt(t, created)
+		tc.queued = loopFixtureReceipt(t, created, version)
 		if tc.queued.State != "queued" || tc.queued.Verdict != nil || created.location != "/api/v1/experiments/submissions/"+tc.queued.ID {
 			t.Fatal("HTTP acceptance did not return queued without verdict")
 		}
@@ -129,7 +137,7 @@ func TestHTTPJudgeLoop(t *testing.T) {
 			request(1-i, "GET", "/api/v1/experiments/submission-receipt", tc.key, nil, 200),
 			request(i, "GET", "/api/v1/experiments/submissions/"+tc.queued.ID, tc.key, nil, 200),
 		} {
-			got := loopReceipt(t, response)
+			got := loopFixtureReceipt(t, response, version)
 			stable(got, tc.queued)
 			if got.State != "queued" || got.Verdict != nil {
 				t.Fatal("HTTP receipt fabricated execution before Worker start")
@@ -150,15 +158,32 @@ func TestHTTPJudgeLoop(t *testing.T) {
 	}
 	ca := testpki.New(t)
 	cert, certFile, keyFile := ca.Issue(t, "spiffe://onlinejudge/worker/http-loop-node/1", x509.ExtKeyUsageClientAuth, time.Now().Add(time.Hour))
-	controller := dualController(t, ca, cert, root)
-	id := dualDocker(t, "inspect", "--format", "{{.Id}}", container)
-	w := startDualProcess(t, "worker", httpLoopEnvironment("OJ_SANDBOX_EXPERIMENT=1", "OJ_WORKER_M0_SLOT=primary",
-		"OJ_WORKER_CONTROLLER_URL="+controller, "OJ_WORKER_CA_FILE="+ca.CAFile, "OJ_WORKER_CERT_FILE="+certFile, "OJ_WORKER_KEY_FILE="+keyFile))
+	controller := controllerForFixture(t, ca, cert, root, version)
+	if version == experiment.UbuntuVersion {
+		desktop, err := workerclient.NewAcquirer(controller, ca.Roots, cert)
+		if err != nil {
+			t.Fatal("cannot prepare controlled mismatched Worker")
+		}
+		_, claimErr := desktop.Claim(ctx)
+		desktop.Close()
+		if !errors.Is(claimErr, workerclient.ErrMaterials) {
+			t.Fatal("Ubuntu controller did not refuse a Desktop claim")
+		}
+		counts(2, 2, 0)
+	}
+	lifetime := httpLoopLifetime(t, version)
+	workerEnv := httpLoopEnvironment("OJ_SANDBOX_EXPERIMENT=1", "OJ_WORKER_M0_SLOT=primary",
+		"OJ_WORKER_CONTROLLER_URL="+controller, "OJ_WORKER_CA_FILE="+ca.CAFile, "OJ_WORKER_CERT_FILE="+certFile, "OJ_WORKER_KEY_FILE="+keyFile, option)
+	if version == experiment.UbuntuVersion {
+		workerEnv = append(workerEnv, "DOCKER_HOST=unix:///nonexistent-oj-docker.sock", "DOCKER_CONTEXT=nonexistent-oj-context",
+			"DOCKER_CONFIG=/nonexistent-oj-config", "PATH=/nonexistent-oj-path")
+	}
+	w := startDualProcess(t, "worker", workerEnv)
 	for _, tc := range cases {
 		finished := false
 		for ctx.Err() == nil {
 			w.alive(t)
-			got := loopReceipt(t, request(1, "GET", "/api/v1/experiments/submissions/"+tc.queued.ID, tc.key, nil, 200))
+			got := loopFixtureReceipt(t, request(1, "GET", "/api/v1/experiments/submissions/"+tc.queued.ID, tc.key, nil, 200), version)
 			stable(got, tc.queued)
 			if got.State == "finished" {
 				if got.Verdict == nil || *got.Verdict != tc.verdict {
@@ -179,23 +204,27 @@ func TestHTTPJudgeLoop(t *testing.T) {
 			request(0, "GET", "/api/v1/experiments/submission-receipt", tc.key, nil, 200),
 			request(0, "POST", "/api/v1/experiments/submissions", tc.key, tc.body, 200),
 		} {
-			got := loopReceipt(t, response)
+			got := loopFixtureReceipt(t, response, version)
 			stable(got, tc.queued)
 			if got.State != "finished" || got.Verdict == nil || *got.Verdict != tc.verdict {
 				t.Fatal("original-key terminal receipt changed")
 			}
 		}
-		loopProblem(t, request(0, "POST", "/api/v1/experiments/submissions", tc.key, []byte(`{"material_version":"m0-sum-v3","language":"gnu++17","source":"changed"}`), 409), 409, "IDEMPOTENCY_CONFLICT")
-		var source, version, digest, node, state string
+		changed, err := json.Marshal(submission.Request{MaterialVersion: version, Language: "gnu++17", Source: "changed"})
+		if err != nil {
+			t.Fatal("cannot encode controlled conflict")
+		}
+		loopProblem(t, request(0, "POST", "/api/v1/experiments/submissions", tc.key, changed, 409), 409, "IDEMPOTENCY_CONFLICT")
+		var source, storedVersion, digest, node, state string
 		var attempt, judge, recovery int
-		if err := conn.QueryRowContext(ctx, `SELECT s.source_code,s.material_version,s.request_sha256,a.node_id,a.state,a.attempt_number,a.judge_generation,a.recovery_generation FROM submissions s JOIN judge_attempts a ON a.submission_id=s.id WHERE s.id=$1 AND s.subject_id=$2 AND s.context_id=$3`, tc.queued.ID, "m0-operator", "m0-training").Scan(&source, &version, &digest, &node, &state, &attempt, &judge, &recovery); err != nil || source != tc.source || version != experiment.PinnedVersion || digest != submission.Digest(submission.Request{MaterialVersion: version, Language: "gnu++17", Source: tc.source}) || node != "http-loop-node" || state != "completed" || attempt != 1 || judge != 1 || recovery != 1 {
+		if err := conn.QueryRowContext(ctx, `SELECT s.source_code,s.material_version,s.request_sha256,a.node_id,a.state,a.attempt_number,a.judge_generation,a.recovery_generation FROM submissions s JOIN judge_attempts a ON a.submission_id=s.id WHERE s.id=$1 AND s.subject_id=$2 AND s.context_id=$3`, tc.queued.ID, "m0-operator", "m0-training").Scan(&source, &storedVersion, &digest, &node, &state, &attempt, &judge, &recovery); err != nil || source != tc.source || storedVersion != version || digest != submission.Digest(submission.Request{MaterialVersion: version, Language: "gnu++17", Source: tc.source}) || node != "http-loop-node" || state != "completed" || attempt != 1 || judge != 1 || recovery != 1 {
 			t.Fatal("HTTP source, fixture attribution or single real attempt not preserved")
 		}
 		hash := sha256.Sum256([]byte(source))
 		t.Logf("HTTP queued→%s/finished; immutable source SHA256=%x; one authenticated Worker attempt", tc.verdict, hash)
 	}
 	counts(2, 2, 2)
-	drainHTTPLoopWorker(t, w, id)
+	lifetime(t, w)
 	for _, api := range apis {
 		api.process.stop(t)
 	}

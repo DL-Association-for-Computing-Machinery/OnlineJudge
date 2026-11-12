@@ -25,6 +25,12 @@
 
 后续 schema 6 共享积压和 schema 20 训练虚拟时间的行为及回归归[训练队列合同](submission-backlog.md)和[交付日志](delivery-log.md)。M0验收页及JSON索引固定 #93 审计时的源码/证据；其中“owning路径无变化”是该快照比较结果，不作为后续 Store/SQL 版本仍未改变的声明。
 
+## 专用 Ubuntu VM 判题档位
+
+Ubuntu 本地实验新增独立材料版本 `m0-sum-ubuntu-arm64-v1`。原 v1/v2 和 Desktop v3 材料不变。Ubuntu 请求向 mTLS 控制器声明版本，Desktop 维持空请求；控制器先比对自身配置再领取任务。材料下载和执行各自校验冻结清单。无 SQL、schema 或账号准入变更。
+
+固定 VM 平台、内核和沙箱镜像，不继承 Docker 连接变量。Ubuntu 执行和恢复使用同一主槽锁、专用账号和原生 Unix socket；停止时检查原容器生命周期及客体 PID 消失。跨档位恢复拒绝清除异常停机标记。运行见 [Ubuntu 专项](../README.md#专用-ubuntu-vm-判题实验)，结果见[交付记录](delivery-log.md#2026-11-12专用-ubuntu-vm-真实-worker-判题闭环)。不表示试用环境、普通账号训练、浏览器或整机容量通过。
+
 ## M0 固定合成题最小浏览器页（2026-11-03）
 
 显式双重opt-in在实际127.0.0.1监听提供 `/m0`；服务端固定v3材料/GNU++17/AC或WA源码，单独浏览器实验主体/上下文，与Bearer提交隔离。nonce用于CSRF防护，不认证账号或隔离同源脚本；严格Host/Origin/Fetch Metadata、数据GET nonce、CSP/no-store、不使用/设置会话Cookie、不开放CORS及默认关闭边界归[浏览器契约](../api/m0-browser.openapi.yaml)和[README](../README.md#m0-最小浏览器实验页)。没有放宽旧Bearer Origin拒绝、普通账号训练权限、预算、依赖或数据库schema。

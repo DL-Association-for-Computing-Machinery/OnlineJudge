@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/testpki"
 )
@@ -23,6 +24,45 @@ import (
 type spyStore struct {
 	calls atomic.Int32
 	err   error
+}
+
+func TestClaimFixtureMismatchDoesNotReachStore(t *testing.T) {
+	ca := testpki.New(t)
+	_, certFile, keyFile := ca.Issue(t, "", x509.ExtKeyUsageServerAuth, time.Now().Add(time.Hour))
+	cfg, err := LoadTLS(ca.CAFile, certFile, keyFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid, _, _ := ca.Issue(t, "spiffe://onlinejudge/worker/node-a/1", x509.ExtKeyUsageClientAuth, time.Now().Add(time.Minute))
+	const ubuntu = `{"fixture_version":"` + experiment.UbuntuVersion + `"}`
+	for _, native := range []bool{false, true} {
+		store := &spyStore{err: submission.ErrNoTask}
+		handler := NewHandler(store, cfg.ClientCAs)
+		match, mismatch := "{}", ubuntu
+		if native {
+			handler = NewUbuntuFixtureHandler(store, cfg.ClientCAs, nil)
+			match, mismatch = ubuntu, "{}"
+		}
+		server := httptest.NewUnstartedServer(handler)
+		server.TLS = cfg.Clone()
+		server.StartTLS()
+		client := testClient(t, ca.Roots, valid)
+		for _, tc := range []struct {
+			body   string
+			status int
+			calls  int32
+		}{{mismatch, 412, 0}, {`{"fixture_version":null}`, 412, 0}, {`{"fixture_version":"m0-sum-v2"}`, 412, 0}, {match, 204, 1}} {
+			resp, err := client.Post(server.URL+"/api/v1/worker/claim", "application/json", strings.NewReader(tc.body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			_ = resp.Body.Close()
+			if resp.StatusCode != tc.status || store.calls.Load() != tc.calls {
+				t.Fatalf("native=%v status=%d calls=%d, want %d/%d", native, resp.StatusCode, store.calls.Load(), tc.status, tc.calls)
+			}
+		}
+		server.Close()
+	}
 }
 
 func (s *spyStore) Claim(_ context.Context, n submission.NodeIdentity) (submission.Lease, error) {

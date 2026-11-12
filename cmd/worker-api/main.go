@@ -95,7 +95,11 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		defer func() { _ = objects.Close() }()
 		referenceObjects = objects
 	}
-	handler, err := configureReferenceClaims(workerapi.NewHandler(store, tlsConfig.ClientCAs, materialService),
+	base := workerapi.NewHandler(store, tlsConfig.ClientCAs, materialService)
+	if version == experiment.UbuntuVersion {
+		base = workerapi.NewUbuntuFixtureHandler(store, tlsConfig.ClientCAs, materialService)
+	}
+	handler, err := configureReferenceClaims(base,
 		pool, tlsConfig.ClientCAs, referenceNodeID, referenceObjects, referenceExecution, dispatchSetting == "1")
 	if err != nil {
 		return err

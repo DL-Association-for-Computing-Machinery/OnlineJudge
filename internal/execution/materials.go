@@ -34,19 +34,18 @@ type test struct {
 
 var testID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 
-func prepare(d materials.Descriptor, blobs map[string][]byte) (manifest, error) {
+func prepare(d materials.Descriptor, blobs map[string][]byte, fixture experiment.WorkerFixture) (manifest, error) {
 	var m manifest
 	bad := errors.New("unsupported or corrupt execution material")
-	_, fixed, _ := experiment.SelectFixture(experiment.PinnedVersion)
 	if len(d.Manifest) > 16384 || len(d.Source) == 0 || len(d.Source) > submission.MaxSourceBytes || !utf8.ValidString(d.Source) ||
-		d.Version != experiment.PinnedVersion || d.Language != "gnu++17" || !bytes.Equal(d.Manifest, fixed) || digest(d.Manifest) != d.ManifestSHA256 || digest([]byte(d.Source)) != d.SourceSHA256 {
+		d.Version != fixture.Version() || d.Language != "gnu++17" || !bytes.Equal(d.Manifest, fixture.Manifest()) || digest(d.Manifest) != d.ManifestSHA256 || digest([]byte(d.Source)) != d.SourceSHA256 {
 		return m, bad
 	}
 	decoder := json.NewDecoder(bytes.NewReader(d.Manifest))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&m) != nil || decoder.Decode(new(any)) != io.EOF || m.Version != d.Version || m.Language != d.Language ||
 		m.Origin != "synthetic-project-fixture" || m.Checker != "ascii-tokens-v1" || len(m.Tests) == 0 || len(m.Tests) > 64 ||
-		!reflect.DeepEqual(m.Environment, experiment.PinnedEnvironment()) {
+		!reflect.DeepEqual(m.Environment, fixture.Profile()) {
 		return m, bad
 	}
 	seen := map[string]bool{}
