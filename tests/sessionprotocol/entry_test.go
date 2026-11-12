@@ -114,4 +114,5 @@ func testEntry(t *testing.T, f *fixture) {
 	t.Run("active request signal shares bounded drain", func(t *testing.T) { testEntryDrain(t, f, binary) })
 	t.Run("real mTLS proxy entry authenticates certificate and forwarding", func(t *testing.T) { testEntryProxy(t, f, binary) })
 	t.Run("authenticated password change HTTP", func(t *testing.T) { testEntryPasswordChange(t, f, binary) })
+	t.Run("database archive restore fences old cookies", func(t *testing.T) { testEntryDatabaseRestore(t, f, binary) })
 }
