@@ -14,6 +14,7 @@ import './account/account.css'
 const ProblemPage = lazy(() => import('./preview/ProblemPage'))
 const DraftPreviewPage = lazy(() => import('./drafts/DraftPreviewPage'))
 const DraftManagementPage = lazy(() => import('./drafts/DraftManagementPage'))
+const ReviewMaterialsPage = lazy(() => import('./reviews/ReviewMaterialsPage'))
 
 export function App() {
   return (
@@ -31,6 +32,7 @@ export function App() {
           <Route path="/author/drafts" element={<Suspense fallback={<p className="page-width loading-state" role="status">正在加载导入管理…</p>}><DraftManagementPage /></Suspense>} />
           <Route path="/author/drafts/open" element={<Suspense fallback={<p className="page-width loading-state" role="status">正在加载草稿预览…</p>}><DraftPreviewPage /></Suspense>} />
           <Route path="/author/drafts/:id" element={<Suspense fallback={<p className="page-width loading-state" role="status">正在加载草稿预览…</p>}><DraftPreviewPage /></Suspense>} />
+          <Route path="/review/materials/:id?" element={<Suspense fallback={<p className="page-width loading-state" role="status">正在加载审核材料页…</p>}><ReviewMaterialsPage /></Suspense>} />
           <Route path="/preview/problems/:id" element={<Suspense fallback={<p className="page-width loading-state" role="status">正在加载编辑器…</p>}><ProblemPage /></Suspense>} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

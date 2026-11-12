@@ -50,6 +50,14 @@ func TestBrowserFixture(t *testing.T) {
 	rules := enableEntryPasswordChange(t, f, &c, protocol.PasswordChangeLimits{Global: bucket, Source: bucket, Subject: bucket}, true)
 	subject := f.subject(t, false)
 	browserDrafts(t, f, &c, subject.ID)
+	reviewMode := os.Getenv("OJ_BROWSER_REVIEW_MATERIALS") == "1"
+	if reviewMode {
+		if !c.PrivateDrafts.ReferenceRequests {
+			t.Fatal("browser review requires the synthetic reference fixture")
+		}
+		c.PrivateDrafts.ReviewIntake = true
+		c.PrivateDrafts.ReviewAccess = true
+	}
 	otherAuthor := f.subject(t, false)
 	access, err := identitypg.NewProblemAccess(f.pools[0])
 	must(t, err)
@@ -127,6 +135,9 @@ func TestBrowserFixture(t *testing.T) {
 	plain := browserServer(t, "0.0.0.0:9444", static)
 	plain.Start()
 	info := map[string]string{"url": origin.String(), "email": subject.Email.Original(), "subject_id": subject.ID, "other_email": otherAuthor.Email.Original(), "other_subject_id": otherAuthor.ID}
+	if reviewMode {
+		info["review_id"] = seedBrowserReview(t, f, origin, ca.Roots, subject, otherAuthor, access)
+	}
 	if os.Getenv("OJ_BROWSER_COLD_TLS") == "1" {
 		publicCA, err := os.ReadFile(ca.CAFile)
 		must(t, err)
@@ -259,7 +270,8 @@ func browserStatic(directory string) http.Handler {
 			return
 		}
 		// Mirror the production SPA fallback for the explicit UI routes only.
-		if r.URL.Path == "/login" || r.URL.Path == "/account" || r.URL.Path == "/submissions" || r.URL.Path == "/author/drafts" || strings.HasPrefix(r.URL.Path, "/author/drafts/") || strings.HasPrefix(r.URL.Path, "/preview/problems/") {
+		if r.URL.Path == "/login" || r.URL.Path == "/account" || r.URL.Path == "/submissions" || r.URL.Path == "/author/drafts" || strings.HasPrefix(r.URL.Path, "/author/drafts/") || strings.HasPrefix(r.URL.Path, "/preview/problems/") ||
+			r.URL.Path == "/review/materials" || strings.HasPrefix(r.URL.Path, "/review/materials/") {
 			r = r.Clone(r.Context())
 			r.URL.Path = "/"
 			r.URL.RawPath = ""
