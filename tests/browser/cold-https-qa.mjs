@@ -130,9 +130,9 @@ try {
   browser = await launch(false)
   const control = await browser.newContext({ ignoreHTTPSErrors: false })
   const negative = await control.newPage()
-  await assert.rejects(negative.goto(info.origin))
-  const code = await negative.locator('#errorCode').textContent({ timeout: 5000 })
-  assert.match(code ?? '', /^(SEC_ERROR_UNKNOWN_ISSUER|MOZILLA_PKIX_ERROR_SELF_SIGNED_CERT)$/)
+  // Firefox can reject navigation without exposing its internal error page.
+  // The fixture uses a CA-signed leaf. Require unknown issuer specifically.
+  await assert.rejects(negative.goto(info.origin), { message: /^page\.goto: SEC_ERROR_UNKNOWN_ISSUER(?:\r?\n|$)/ })
   await browser.close()
   browser = undefined
   passed('fresh browser rejects the untrusted issuer')
