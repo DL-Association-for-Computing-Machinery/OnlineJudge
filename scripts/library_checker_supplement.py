@@ -33,6 +33,10 @@ SUPPLEMENTS = {
                              "151da5a28d0bd733fe4837547ec909137a36b0e532409c93dfd7bf3c2a7e6b41",
                              "965239246cbdbd63f1641cfcf551d9c8f3a65cd558e194668ad845cac1e39711",
                              "4a02a1c07dbddf2a4bb532f8a6d850c2a979c07ced6cd4533219788317fa8191"),
+    "zalgorithm-alternating": Supplement("oj-local:zalgorithm-scale-alternating-v2",
+                                         "151da5a28d0bd733fe4837547ec909137a36b0e532409c93dfd7bf3c2a7e6b41",
+                                         "924bfcbc027160298dbe976d44f4d6308268510577c4031e24871150cb044cb1",
+                                         "6d06b64ce0ea87eb1d903b7c9b69e47bcef2a263e9ce24ed9335f594f67e0fca"),
     "suffixarray": Supplement("oj-local:suffixarray-structures-v1",
                               "b7622607e0db239445f7b75b14bc9edc10b7992f1c6b6254fd4f784aa5cb0d97",
                               "7ddd631ac3f2f76e4cf56f85b23ee71fbdc0d5f54c40bdc968d27e933297b777",
@@ -73,9 +77,16 @@ def boundary_cases(problem):
         maximum = 10**18
         yield f"1\n1 {maximum}\n".encode("ascii"), b"0\n"
         yield f"2\n0 {maximum} {maximum}\n1 {maximum}\n".encode("ascii"), f"{maximum}\n".encode("ascii")
-    elif problem == "zalgorithm":
+    elif problem in ("zalgorithm", "zalgorithm-alternating"):
         for n in (1, 500000):
             yield b"a" * n + b"\n", (" ".join(map(str, range(n, 0, -1))) + "\n").encode("ascii")
+        if problem == "zalgorithm-alternating":
+            # The first character matches only at even offsets; every
+            # matching suffix then continues to the end of the input.
+            n = 500000
+            yield b"ab" * (n // 2) + b"\n", (
+                " ".join(str(n - i) if i % 2 == 0 else "0" for i in range(n)) + "\n"
+            ).encode("ascii")
     elif problem == "suffixarray":
         yield b"abacabae" * 2 + b"\n", b"8 0 12 4 10 2 14 6 9 1 13 5 11 3 15 7\n"
         yield b"ab" * 9 + b"\n", b"16 14 12 10 8 6 4 2 0 17 15 13 11 9 7 5 3 1\n"
@@ -127,7 +138,8 @@ def prepare(problem, base, output):
             raise ValueError("input changed during copy: " + name)
         return raw
 
-    entry, = (row for row in index["problems"] if row["source_id"] == f"library-checker:{problem}")
+    source = "zalgorithm" if problem == "zalgorithm-alternating" else problem
+    entry, = (row for row in index["problems"] if row["source_id"] == f"library-checker:{source}")
     raw = original(entry["draft"])
     draft = json.loads(raw)
     original_version = draft.pop("version")

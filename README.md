@@ -350,6 +350,9 @@ python3 -B scripts/supplement-zalgorithm.py \
   --output /private/tmp/oj-zalgorithm-scale
 python3 -B scripts/import-library-checker.py \
   --verify-bundle /private/tmp/oj-zalgorithm-scale/bundle
+python3 -B scripts/supplement-zalgorithm-alternating.py \
+  --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
+  --output /private/tmp/oj-zalgorithm-alternating
 python3 -B scripts/supplement-associative-array.py \
   --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
   --output /private/tmp/oj-associative-array-boundaries
@@ -377,6 +380,16 @@ python3 -B scripts/supplement-point-add-range-sum.py \
 python3 -B scripts/supplement-static-range-sum.py \
   --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
   --output /private/tmp/oj-static-range-sum-singleton
+```
+
+交替串命令生成[独立 32 点修订](docs/problem-sources.md#z-算法交替串修订)，不替换 29 点原包或 31 点规模修订。真实验收驱动 `tests/integration/live_reference.py` 使用 `--zalgorithm-alternating-data` 指定新修订，沿用已配置并停止的隔离槽和一次性 PostgreSQL 夹具；`--zalgorithm-local-data` 仍只接受 31 点。
+
+```sh
+OJ_SANDBOX_EXPERIMENT=1 python3 -B tests/integration/live_reference.py \
+  --bundle /private/tmp/oj-zalgorithm-alternating/bundle \
+  --toolchain-image "$REFERENCE_TOOLCHAIN_IMAGE" \
+  --output /private/tmp/oj-zalgorithm-alternating-report \
+  --start-stopped-slots --zalgorithm-alternating-data
 ```
 
 离线盘点输入覆盖时，对各题包分别生成报告。只读取已核验题包，不执行题源程序；用私有输出路径保留报告：
