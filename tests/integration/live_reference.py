@@ -140,7 +140,8 @@ def run(bundle, toolchain, out, supplement):
                                    stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
         try:
             result = []
-            for source in ((supplement,) if supplement else SOURCES):
+            selected_source = "zalgorithm" if supplement == "zalgorithm-alternating" else supplement
+            for source in ((selected_source,) if selected_source else SOURCES):
                 ready = await_file(reports / f"ready-{source}.json", fixture)
                 port = docker("port", name, "18443/tcp")
                 require(re.fullmatch(r"127\.0\.0\.1:[0-9]+", port), "fixture must publish only to loopback")
@@ -170,6 +171,7 @@ def run(bundle, toolchain, out, supplement):
             formal, comparison = {
                 "suffixarray": (52, 0),
                 "convolution_mod": (55, 24),
+                "zalgorithm-alternating": (32, 0),
                 "primality_test": (15, 0),
                 "associative_array": (22, 0), "zalgorithm": (31, 0), "aplusb": (17, 0), "unionfind": (20, 0),
                 "static_range_sum": (13, 0), "point_add_range_sum": (23, 0), "staticrmq": (28, 0), "": (254, 24),
@@ -204,6 +206,8 @@ def main():
                        help="run only the pinned 22-point local associative-array revision")
     local.add_argument("--zalgorithm-local-data", dest="supplement", action="store_const", const="zalgorithm",
                        help="run only the pinned 31-point local Z-algorithm revision")
+    local.add_argument("--zalgorithm-alternating-data", dest="supplement", action="store_const",
+                       const="zalgorithm-alternating", help="run only the pinned 32-point local Z-algorithm revision")
     local.add_argument("--aplusb-local-data", dest="supplement", action="store_const", const="aplusb",
                        help="run only the pinned 17-point local A+B revision")
     local.add_argument("--unionfind-local-data", dest="supplement", action="store_const", const="unionfind",

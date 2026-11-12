@@ -350,6 +350,9 @@ python3 -B scripts/supplement-zalgorithm.py \
   --output /private/tmp/oj-zalgorithm-scale
 python3 -B scripts/import-library-checker.py \
   --verify-bundle /private/tmp/oj-zalgorithm-scale/bundle
+python3 -B scripts/supplement-zalgorithm-alternating.py \
+  --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
+  --output /private/tmp/oj-zalgorithm-alternating
 python3 -B scripts/supplement-associative-array.py \
   --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
   --output /private/tmp/oj-associative-array-boundaries
@@ -377,6 +380,16 @@ python3 -B scripts/supplement-point-add-range-sum.py \
 python3 -B scripts/supplement-static-range-sum.py \
   --base-bundle /private/tmp/oj-library-checker-drafts/bundle \
   --output /private/tmp/oj-static-range-sum-singleton
+```
+
+交替串命令生成[独立 32 点修订](docs/problem-sources.md#z-算法交替串修订)，不替换 29 点原包或 31 点规模修订。真实验收驱动 `tests/integration/live_reference.py` 使用 `--zalgorithm-alternating-data` 指定新修订，沿用已配置并停止的隔离槽和一次性 PostgreSQL 夹具；`--zalgorithm-local-data` 仍只接受 31 点。
+
+```sh
+OJ_SANDBOX_EXPERIMENT=1 python3 -B tests/integration/live_reference.py \
+  --bundle /private/tmp/oj-zalgorithm-alternating/bundle \
+  --toolchain-image "$REFERENCE_TOOLCHAIN_IMAGE" \
+  --output /private/tmp/oj-zalgorithm-alternating-report \
+  --start-stopped-slots --zalgorithm-alternating-data
 ```
 
 离线盘点输入覆盖时，对各题包分别生成报告。只读取已核验题包，不执行题源程序；用私有输出路径保留报告：
@@ -438,9 +451,11 @@ OJ_SANDBOX_EXPERIMENT=1 python3 -B tests/integration/live_reference.py \
 
 题包父目录须归当前用户所有、权限为 0700，且只含题包；挂载整个父目录可保留 Linux 读到的题包所有者。工具链须已缓存依赖并提供 PostgreSQL 工具，以非 root 用户运行。输出须是已有父目录下的新目录，位于仓库与题包父目录之外。五个预配槽须已停止且无隔离标记；命令不创建、替换或恢复槽。临时控制端只向宿主回环发布，数据库使用容器内 Unix socket。执行仍在原断网槽，首个失败即停止批次，原始日志保留；成功才写 `summary.json`。见[报告接纳专项](docs/reference-requests.md#十题实物报告接纳专项)。
 
-验证单题修订时，在同一命令追加 `--zalgorithm-local-data`（31 点）、`--aplusb-local-data`（17 点）、`--unionfind-local-data`（20 点）或 `--static-range-sum-local-data`（13 点），将 `--bundle` 指向对应的单题包，并为 `--output` 另选新目录。专项要求冻结和接纳同一份计划；并查集还核对仅合并用例的零字节答案，静态区间和核对两个整段查询的固定答案。A+B 还核对指定非作者读取覆盖、输入校验和独立小用例摘要，作者和未分配者被拒，退回后覆盖缺项恢复。原 v6 的 A+B 保留原质量摘要且无覆盖摘要。
+验证单题修订时，在同一命令追加 `--zalgorithm-local-data`（31 点）、`--aplusb-local-data`（17 点）、`--unionfind-local-data`（20 点）或 `--static-range-sum-local-data`（13 点），将 `--bundle` 指向对应的单题包，并为 `--output` 另选新目录。专项要求冻结和接纳同一份计划；并查集还核对仅合并用例的零字节答案，静态区间和核对两个整段查询的固定答案。A+B 还核对指定非作者读取覆盖、输入校验、独立小用例与历史渲染摘要，作者和未分配者被拒。夹具确认只解除题面缺项，撤回分配后重分配及退回会恢复该缺项；退回还恢复覆盖缺项。原 v6 的 A+B 保留原质量摘要且无覆盖摘要。
 
 关联数组的同一专项使用 `--associative-array-local-data`（22 点），额外核对两个边界点的固定答案。
+
+并查集 20 点专项还回读指定非作者的审核摘要：输入校验与独立小用例引用同一报告，覆盖、题面、生产检查器和目标环境仍保留缺项。
 
 后缀数组使用 `--suffixarray-local-data`（52 点），额外核对两个新增点的完整后缀排序。
 
