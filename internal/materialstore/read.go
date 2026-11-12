@@ -32,6 +32,12 @@ func (s *Snapshot) Close() error {
 
 // Verify checks a private object's size and digest without writing a snapshot.
 func (s *Local) Verify(ctx context.Context, object Object) error {
+	return s.CopyVerified(ctx, object, io.Discard)
+}
+
+// CopyVerified streams a private object to a staging writer. The caller must
+// discard the staged bytes on error; only success verifies size and digest.
+func (s *Local) CopyVerified(ctx context.Context, object Object, destination io.Writer) error {
 	if !s.valid(object) {
 		return ErrInvalid
 	}
@@ -44,7 +50,7 @@ func (s *Local) Verify(ctx context.Context, object Object) error {
 		return err
 	}
 	defer func() { _ = source.Close() }()
-	return verifyObject(ctx, object, source, io.Discard)
+	return verifyObject(ctx, object, source, destination)
 }
 
 // Open copies and verifies the entire object before returning any bytes. It
