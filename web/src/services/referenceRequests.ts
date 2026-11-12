@@ -94,7 +94,8 @@ async function requestReference(path: string, owner: string, method: 'GET' | 'PO
   if (!validDraftID(owner) || globalThis.location.protocol !== 'https:') throw new ReferenceRequestError()
   const response = await fetch(path, {
     method, credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error',
-    referrerPolicy: 'no-referrer', signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
+    // Bodyless prepare/cancel are writes too and need the native Origin.
+    referrerPolicy: method === 'POST' ? 'origin' : 'no-referrer', signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
     headers: { Accept: 'application/json', 'X-OJ-Expected-Subject': owner, ...(body ? { 'Content-Type': 'application/json' } : {}) },
     ...(body ? { body: JSON.stringify(body) } : {}),
   })

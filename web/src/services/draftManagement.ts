@@ -57,8 +57,11 @@ const base = '/api/v1/problem-draft-management'
 // silently ignoring the subject precondition on an older import endpoint.
 async function request(owner: string, path: string, signal: AbortSignal, body?: object): Promise<unknown> {
   if (!validDraftID(owner) || location.protocol !== 'https:') throw new ImportError()
+  const method = body ? 'POST' : 'GET'
   const response = await fetch(base + path, {
-    method: body ? 'POST' : 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer',
+    method, credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error',
+    // Preserve the browser-generated Origin for writes without sending a page path.
+    referrerPolicy: method === 'POST' ? 'origin' : 'no-referrer',
     headers: { Accept: 'application/json', 'X-OJ-Expected-Subject': owner, ...(body ? { 'Content-Type': 'application/json' } : {}) },
     ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
   })

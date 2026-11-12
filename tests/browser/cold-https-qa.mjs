@@ -13,7 +13,56 @@ assert(origin.protocol === 'https:' && origin.hostname === '127.0.0.1' && origin
 assert(/^[a-zA-Z0-9._+-]+@example\.invalid$/.test(info.email))
 const report = { success: false, checks: [], screenshots: [] }
 const loginStatuses = []
+const authorStatuses = []
 function passed(name) { report.checks.push(name); console.log('PASS ' + name) }
+
+async function verifyAuthorWrites(page) {
+  const base = '/api/v1/problem-draft-management'
+  const imports = `${base}/imports`
+  const references = `${base}/reference-requests`
+  const exchange = async (route, method, action) => {
+    const [response] = await Promise.all([
+      page.waitForResponse(r => r.url() === info.origin + route && r.request().method() === method, { timeout: 8000 }),
+      action(),
+    ])
+    authorStatuses.push(response.status())
+    assert.equal(response.status(), 200)
+    return response.json()
+  }
+
+  phase = 'Firefox draft import'
+  await page.goto(info.origin + '/author/drafts')
+  await page.getByRole('button', { name: '检查会话并加载来源与记录', exact: true }).click()
+  const draft = await exchange(imports, 'POST', () => page.getByRole('button', { name: '导入此修订', exact: true }).click())
+  assert.equal(draft.state, 'private-draft')
+  assert.equal(draft.validation_state, 'not-run')
+  assert.match(draft.draft_id, /^[a-f0-9]{32}$/)
+  await page.getByRole('link', { name: '打开草稿预览', exact: true }).click()
+  await page.getByRole('button', { name: '检查会话并打开草稿', exact: true }).click()
+  await page.getByRole('heading', { name: 'Browser statement', exact: true }).waitFor({ timeout: 8000 })
+
+  phase = 'Firefox reference request'
+  const controls = page.getByRole('region', { name: '参考验证申请', exact: true })
+  const request = await exchange(references, 'POST', () => controls.getByRole('button', { name: '提交或重试同一申请', exact: true }).click())
+  assert.equal(request.draft_id, draft.draft_id)
+  assert.equal(request.state, 'queued')
+  assert.match(request.request_key, /^[A-Za-z0-9_-]{16,128}$/)
+  const original = `${references}/${request.request_key}`
+  const read = () => exchange(original, 'GET', () => controls.getByRole('button', { name: '查看申请回执', exact: true }).click())
+  assert.deepEqual(await read(), request)
+
+  phase = 'Firefox reference cancellation'
+  const cancelled = await exchange(`${original}/cancel`, 'POST', () => controls.getByRole('button', { name: '取消本次申请', exact: true }).click())
+  assert.equal(cancelled.id, request.id)
+  assert.equal(cancelled.draft_id, draft.draft_id)
+  assert.equal(cancelled.request_key, request.request_key)
+  assert.equal(cancelled.state, 'cancelled')
+  assert.deepEqual(await read(), cancelled)
+  await controls.getByRole('status').filter({ hasText: '状态：已取消。' }).waitFor({ timeout: 8000 })
+  const screenshot = 'firefox-reference-cancelled.png'
+  await controls.screenshot({ path: path.join(output, screenshot) })
+  report.screenshots.push(screenshot)
+}
 
 // The fixture is the sole direct origin. This local proxy never forwards any
 // traffic; page events detect foreign resources without intercepting requests
@@ -94,6 +143,8 @@ try {
       await page.getByText(info.subject_id, { exact: true }).waitFor({ timeout: 8000 })
       assert((await context.cookies(info.origin)).some(cookie => cookie.name === '__Host-oj_session' && cookie.secure && cookie.httpOnly))
       passed('strict HTTPS login survives reload with a real secure session')
+      await verifyAuthorWrites(page)
+      passed('strict Firefox imports a private draft and creates reads and cancels its reference request')
     }
     assert.deepEqual(foreign, [])
     assert.deepEqual(errors, [])
@@ -102,7 +153,7 @@ try {
   passed('cold desktop and mobile render local assets with no foreign page-resource requests')
   report.success = true
 } catch {
-  console.error(`FAIL ${phase}; session HTTP statuses: ${loginStatuses.join(',')}`)
+  console.error(`FAIL ${phase}; session HTTP statuses: ${loginStatuses.join(',')}; author HTTP statuses: ${authorStatuses.join(',')}`)
   process.exitCode = 1
 } finally {
   if (browser) await browser.close()

@@ -233,7 +233,7 @@ def main():
                 raise ValueError("frontend source incomplete")
         script_name, check_count = ("authorized-draft-qa.mjs", 4) if args.authorized_drafts else ("account-qa.mjs", 15)
         if args.cold_firefox:
-            script_name, check_count = "cold-https-qa.mjs", 3
+            script_name, check_count = "cold-https-qa.mjs", 4
         qa_script = ROOT / "tests/browser" / script_name
         expected_checks = re.findall(r"^\s+passed\('([^'\n]+)'\)", qa_script.read_text(), re.M)
         if len(expected_checks) != check_count or len(set(expected_checks)) != check_count:
