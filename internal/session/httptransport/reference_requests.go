@@ -41,7 +41,7 @@ func WithReferenceRequests(base http.Handler, requests ReferenceRequests, prepar
 		return nil, redisstore.ErrInvalid
 	}
 	return &handler{store: h.store, config: h.config, host: h.host, login: h.login, proxy: h.proxy,
-		passwordChange: h.passwordChange, emailConfirmation: h.emailConfirmation, drafts: h.drafts, draftTimeout: h.draftTimeout, references: requests, preparation: preparation}, nil
+		passwordChange: h.passwordChange, emailConfirmation: h.emailConfirmation, emailRequest: h.emailRequest, drafts: h.drafts, draftTimeout: h.draftTimeout, references: requests, preparation: preparation}, nil
 }
 
 // IsReferenceRequestPath recognizes route shapes without granting the capability.
