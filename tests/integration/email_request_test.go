@@ -8,11 +8,13 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/emailtoken"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/password"
 	identitypg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/postgres"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/mailbudget"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/mailqueue"
 )
 
@@ -32,13 +34,34 @@ func TestBackgroundEmailRequest(t *testing.T) {
 	must(t, err)
 	epoch, err := s.BeginRecovery(f.ctx)
 	must(t, err)
-	seals := 0
-	reserve := func(context.Context, string) error { seals++; return nil }
+	var dbName string
+	must(t, f.a.QueryRow(f.ctx, "SELECT current_schema()").Scan(&dbName))
+	name := pgx.Identifier{dbName}.Sanitize()
+	_, err = f.a.Exec(f.ctx, "CREATE DATABASE "+name)
+	must(t, err)
+	t.Cleanup(func() { _, err := f.a.Exec(f.ctx, "DROP DATABASE "+name); must(t, err) })
+	cfg := f.a.Config()
+	cfg.ConnConfig.Database = dbName
+	delete(cfg.ConnConfig.RuntimeParams, "search_path")
+	pool, err := pgxpool.NewWithConfig(f.ctx, cfg)
+	must(t, err)
+	t.Cleanup(pool.Close)
+	must(t, mailbudget.Initialize(f.ctx, pool))
+	must(t, mailbudget.Provision(f.ctx, pool, keys, 4))
+	budget, err := mailbudget.New(pool, keys)
+	must(t, err)
+	used := func() int {
+		t.Helper()
+		var seals int
+		must(t, pool.QueryRow(f.ctx, "SELECT used FROM public.oj_mail_seal_budget").Scan(&seals))
+		return seals
+	}
 	run := func(p emailtoken.Purpose, generation string, want int) {
 		t.Helper()
-		must(t, s.ProcessEmailRequest(f.ctx, email, p, generation, work, keys, reserve, queue.Enqueue))
+		must(t, s.ProcessEmailRequest(f.ctx, email, p, generation, work, keys, budget.Reserve, queue.Enqueue))
 		var jobs int
 		must(t, f.b.QueryRow(f.ctx, "SELECT count(*) FROM river_job").Scan(&jobs))
+		seals := used()
 		if jobs != want || seals != want {
 			t.Fatalf("mail effects: got %d jobs and %d seals, want %d", jobs, seals, want)
 		}
@@ -84,7 +107,7 @@ func TestBackgroundEmailRequest(t *testing.T) {
 	// failure, not a known denial. The processor must preserve that boundary.
 	other, err := identity.ParseEmail("intake-failure@example.invalid")
 	must(t, err)
-	err = s.ProcessEmailRequest(f.ctx, other, emailtoken.Activation, epoch, work, keys, reserve,
+	err = s.ProcessEmailRequest(f.ctx, other, emailtoken.Activation, epoch, work, keys, budget.Reserve,
 		func(context.Context, pgx.Tx, string) error { return identity.ErrConflict })
 	if !errors.Is(err, identity.ErrStore) {
 		t.Fatal("storage failure was masked as a definitive business denial")
@@ -96,5 +119,8 @@ func TestBackgroundEmailRequest(t *testing.T) {
 	must(t, f.b.QueryRow(f.ctx, "SELECT count(*) FROM river_job").Scan(&jobs))
 	if jobs != 3 {
 		t.Fatalf("failed enqueue changed the job count: got %d, want 3", jobs)
+	}
+	if seals := used(); seals != 4 {
+		t.Fatalf("failed enqueue did not retain the independent seal charge: got %d, want 4", seals)
 	}
 }

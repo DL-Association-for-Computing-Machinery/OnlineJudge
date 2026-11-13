@@ -35,7 +35,7 @@ func TestArchivedEmailAuthorityFencedAfterRestore(t *testing.T) {
 	must(t, mailqueue.ConfigureSendRate(f.ctx, f.a, 100))
 	queue, err := mailqueue.NewEnqueuer(f.ctx, f.a)
 	must(t, err)
-	reserve := func(context.Context, string) error { return nil }
+	reserve := func(context.Context, *emailtoken.Protector) error { return nil }
 	type fixture struct {
 		subject, id string
 		purpose     emailtoken.Purpose

@@ -20,11 +20,11 @@ import (
 // external I/O, retain the transaction or return success without inserting.
 type EmailTokenEnqueue func(context.Context, pgx.Tx, string) error
 
-// EmailTokenSealBudget reserves one seal under the active key. The reservation
+// EmailTokenSealBudget reserves one seal under the protector's active key. The reservation
 // must be globally bounded, durable independently of this issuance transaction
 // and unrecoverable by reusing a key ID or restoring an older budget. Do not use
 // this store's connection pool or acquire account locks in the adapter.
-type EmailTokenSealBudget func(context.Context, string) error
+type EmailTokenSealBudget func(context.Context, *emailtoken.Protector) error
 
 // IssueEmailToken stores one token digest and its encrypted mail payload for an
 // existing personal account. It does not expose the token or change the account.
@@ -86,7 +86,7 @@ func enqueueEmailToken(ctx context.Context, tx pgx.Tx, q *identitydb.Queries, su
 	email identity.Email, purpose emailtoken.Purpose, now pgtype.Timestamptz, protector *emailtoken.Protector,
 	reserve EmailTokenSealBudget, enqueue EmailTokenEnqueue,
 ) (string, error) {
-	if err := reserve(ctx, protector.CurrentKeyID()); err != nil {
+	if err := reserve(ctx, protector); err != nil {
 		return "", storageError{err}
 	}
 	if err := ctx.Err(); err != nil {
