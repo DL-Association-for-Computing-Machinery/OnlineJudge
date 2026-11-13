@@ -52,6 +52,18 @@ Z 算法 32 点修订也已通过 medium 槽试跑和[离线复核](delivery-log
 
 独立 `oj.aplusb-isolated-judge-report.v1` 报告绑定清单、提交、候选、计划和运行档位，不含源码、答案或程序输出。仅在判定明确、制品清理、停止确认及锁清理都通过时完成。旧的标程试跑报告与离线复核保持原协议，不能将隔离判题报告用作标程验证。回退移除两个维护入口即可，无数据库或运行配置迁移。复现见 [README](../README.md#ab-固定材料隔离判题)，联验见[交付证据](delivery-evidence/aplusb-isolated-judging.md)。
 
+### A+B 归档报告复核
+
+`checker-candidate verify-aplusb-archive` 专用于已归档的 A+B 17 点本机 AC、WA、OLE 三份报告。用独立固定的来源锁、正式计划、候选及上限，从私有题包重建判题清单。按角色核对固定报告字节和提交摘要、实际档位、点序、用量、首错停止及清理记录。错误归档、互换、改写或有未完成标记均拒绝。复核只读取证据，不启动容器，也不能证明现场节点运行过。
+
+```sh
+.local/bin/checker-candidate verify-aplusb-archive \
+  --bundle "$PRIVATE_BUNDLE" --source-lock "$TRUSTED_SOURCE_LOCK" \
+  --ac "$AC_ARCHIVE" --wa "$WA_ARCHIVE" --ole "$OLE_ARCHIVE"
+```
+
+路径使用绝对路径；输出仅有固定摘要、点数和本机范围。审核人可从现有授权的[批准准入](problem-drafts.md#批准准入状态)读取同一份摘要。生产检查器与目标节点门禁仍须各自的受信证据。
+
 ## A+B 租约链路联验
 
 现有的 A+B 17 点清单可以导出为独立隔离配置。运输清单绑定原判题清单摘要、检查器语义、单 token 限额、执行环境及缓存预算摘要，并按正式顺序声明输入和答案对象。维护命令在新私有目录写入内容寻址对象，最后写清单；只含判题输入和答案，不导出标程。登记前复核所有对象，成功后才向 PostgreSQL 写入版本和队列时钟；相同配置可重复登记，同版本不同清单拒绝覆盖。
