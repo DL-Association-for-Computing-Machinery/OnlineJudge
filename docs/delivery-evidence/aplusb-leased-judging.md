@@ -27,3 +27,9 @@
 同一个受管 Worker 回报 AC、WA、OLE，均为第一次完成尝试且绑定同一版本和运输摘要；`TestAPlusBLeasedLoop` 用时 5.40 秒。Worker 排空后，原容器确认 `exited`、PID 0、`none` 网络，隔离锁为空；本轮自有沙箱和临时数据库均已移除。复现见 [README](../../README.md#ab-租约链路联验)。本次未在真实租约丢失下中断 Ubuntu 编译，没有执行 Ubuntu 历史重判或接触试用服务、公开 API 和发布流程。
 
 同一实现另在 Docker Desktop 用原运输摘要回归 `TestAPlusBLeasedLoop`，10.22 秒通过；三组结果仍各一次完成，原槽停止、PID 为 0、锁为空，临时数据库已移除。
+
+## 普通训练存储入口联验
+
+2026-11-14，Docker Desktop arm64 的专用断网槽以原 17 点运输摘要和一次性 PostgreSQL 运行 `TestAPlusBLeasedLoop`，用时 17.37 秒。AC 源码通过已验证账号的训练存储入口入队，原键返回同一记录，真实回环 mTLS Worker 判为 AC，本人状态和原源码可回读。WA、OLE 仍由固定实验入口接收；三个结果各由第一次尝试完成，错误材料版本没有创建尝试。原槽退出，PID 为零、网络为 `none`，锁为空，临时数据库已删除。
+
+本轮的 Worker 联验使用服务端生成的账号观察；独立的普通会话专项用真实 Redis 登录、同一存储入口、受控回报和生产 HTTPS 读路由验证本人访问及权限撤销。两次验证没有覆盖一次浏览器 POST 到真实 Worker 的全链路，没有启用公开提交，也未在 Ubuntu 或试用节点重跑本轮变更。
