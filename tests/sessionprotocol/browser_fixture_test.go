@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/password"
 	identitypg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/postgres"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
 	referencepg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference/postgres"
@@ -42,6 +43,12 @@ func TestBrowserFixture(t *testing.T) {
 	f := setup(t)
 	c := runtimeConfig(t, f, namespace(t), false)
 	c.HTTP.Origin = origin.String()
+	loginLoad := os.Getenv("OJ_BROWSER_LOGIN_LOAD") == "1"
+	if loginLoad {
+		c.PasswordPolicy.Current.MemoryKiB = 19 * 1024
+		c.PasswordPolicy.Current.Parallelism = 1
+		c.PasswordLimits.MaxMemoryKiB = 19 * 1024
+	}
 	bucket := protocol.LoginBucket{Count: 200, Window: time.Hour}
 	c.LoginLimits = protocol.LoginLimits{BeginGlobal: bucket, BeginSource: bucket, BeginEmail: bucket, RecoveryGlobal: bucket, RecoverySource: bucket}
 	secrets, err := protocol.LoadLoginSecrets(c.SecretsFile)
@@ -136,6 +143,25 @@ func TestBrowserFixture(t *testing.T) {
 	plain := browserServer(t, "0.0.0.0:9444", static)
 	plain.Start()
 	info := map[string]string{"url": origin.String(), "email": subject.Email.Original(), "subject_id": subject.ID, "other_email": otherAuthor.Email.Original(), "other_subject_id": otherAuthor.ID}
+	if loginLoad {
+		hasher, err := password.New(c.PasswordPolicy, c.PasswordLimits)
+		must(t, err)
+		writer, err := identitypg.New(f.pools[0], hasher)
+		must(t, err)
+		accounts := make([][2]string, 100)
+		for i := range accounts {
+			email, err := identity.ParseEmail(fmt.Sprintf("load-%d@example.invalid", i+1))
+			must(t, err)
+			record, err := hasher.Create([]byte("synthetic protocol password"))
+			must(t, err)
+			account, err := writer.InitializePersonal(f.ctx, fmt.Sprintf("%032x", 1000+i), email, true, record)
+			must(t, err)
+			accounts[i] = [2]string{account.Email.Original(), account.ID}
+		}
+		raw, err := json.Marshal(accounts)
+		must(t, err)
+		info["login_accounts"] = string(raw)
+	}
 	if reviewMode {
 		info["review_id"], info["review_draft_id"] = seedBrowserReview(t, f, origin, ca.Roots, subject, otherAuthor, access)
 		info["review_reference_key"] = entryTerminalReferenceKey

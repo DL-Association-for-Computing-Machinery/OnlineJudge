@@ -73,6 +73,7 @@ def arguments():
     mode.add_argument("--authorized-draft-bundle", type=Path, help="run real authorized previews for the pinned ten-problem private bundle")
     mode.add_argument("--cold-firefox", type=Path, help="existing Playwright Firefox executable for strict cold HTTPS")
     mode.add_argument("--review-materials", action="store_true", help="verify assigned reviewer material reads with the synthetic fixture")
+    mode.add_argument("--m1-login-load", action="store_true", help="measure 100 complete browser logins over 60 seconds on the isolated fixture")
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
     output = args.output_dir.resolve()
@@ -237,6 +238,8 @@ def main():
             script_name, check_count = "cold-https-qa.mjs", 5
         if args.review_materials:
             script_name, check_count = "review-materials-qa.mjs", 5
+        if args.m1_login_load:
+            script_name, check_count = "m1-login-load.mjs", 2
         qa_script = ROOT / "tests/browser" / script_name
         expected_checks = re.findall(r"^\s+passed\('([^'\n]+)'\)", qa_script.read_text(), re.M)
         if len(expected_checks) != check_count or len(set(expected_checks)) != check_count:
@@ -301,6 +304,8 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
         cold = ["-e", "OJ_BROWSER_COLD_TLS=1"] if args.cold_firefox else []
         if args.review_materials:
             cold += ["-e", "OJ_BROWSER_REVIEW_MATERIALS=1"]
+        if args.m1_login_load:
+            cold += ["-e", "OJ_BROWSER_LOGIN_LOAD=1"]
         process = subprocess.Popen([*docker.command, "exec", "-e", "OJ_BROWSER_ORIGIN=" + origin, "-e", "OJ_BROWSER_UI_DIR=/browser-assets", *cold, containers["test"], "sh", "/browser-fixture.sh"], stdout=handles[-1], stderr=subprocess.STDOUT)
         ready = wait_ready(process, fixture_log, origin)
         if args.cold_firefox:
@@ -312,7 +317,8 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
         info = out / "fixture.json"
         info.write_text(json.dumps({"origin": origin, "http_origin": http_origin, "log": str(fixture_log), "email": ready["email"],
                                     "subject_id": ready["subject_id"], "statements": args.statements,
-                                    "authorized_drafts": args.authorized_drafts}, indent=2) + "\n")
+                                    "authorized_drafts": args.authorized_drafts,
+                                    **({"login_accounts": json.loads(ready["login_accounts"])} if args.m1_login_load else {})}, indent=2) + "\n")
         phase = "BROWSER_QA"
         print("Running real browser account checks", flush=True)
         env = {key: os.environ[key] for key in ("PATH", "HOME", "USER", "TMPDIR", "TMP", "TEMP", "LANG", "LC_ALL") if key in os.environ}
