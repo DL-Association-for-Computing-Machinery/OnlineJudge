@@ -17,7 +17,7 @@ const row = (number: number) => ({
 const first = () => Response.json({ submissions: Array.from({ length: 20 }, (_, n) => row(22 - n)), next_cursor: cursor })
 const last = () => Response.json({ submissions: [row(2), row(1)], next_cursor: '' })
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 async function setup() {
   vi.stubGlobal('location', { protocol: 'https:' })
@@ -112,5 +112,78 @@ it('rejects a detail response for a different submission', async () => {
     f.fetch.mockResolvedValueOnce(Response.json({ ...row(1), source: 'unexpected source' }))
     await f.history.openDetail(row(2).id)
     expect(f.history.getSnapshot().detail).toMatchObject({ id: row(2).id, value: null, busy: false })
+  } finally { f.stop() }
+})
+
+it('refreshes only status, preserves the source and stops after the verdict', async () => {
+  const f = await setup()
+  vi.useFakeTimers()
+  vi.spyOn(Math, 'random').mockReturnValue(0)
+  try {
+    const queued = { ...row(2), state: 'queued', verdict: null }
+    f.fetch.mockResolvedValueOnce(Response.json({ submissions: [queued], next_cursor: '' }))
+    await f.history.first()
+    f.fetch.mockResolvedValueOnce(Response.json({ ...queued, source: 'initial source' }))
+    await f.history.openDetail(queued.id)
+    f.fetch.mockResolvedValueOnce(Response.json({ ...queued, state: 'running' }))
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(f.fetch.mock.calls.at(-1)?.[0]).toBe('/api/v1/training/submissions/' + queued.id + '?view=status')
+    expect(f.history.getSnapshot().detail?.value).toMatchObject({ state: 'running', source: 'initial source' })
+    f.fetch.mockResolvedValueOnce(Response.json(row(2)))
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(f.history.getSnapshot().page?.submissions).toEqual([row(2)])
+    const requests = f.fetch.mock.calls.length
+    await vi.advanceTimersByTimeAsync(30000)
+    expect(f.fetch).toHaveBeenCalledTimes(requests)
+  } finally { f.stop() }
+})
+
+it('backs off transient failures and drops an in-flight refresh when the view is cleared', async () => {
+  const f = await setup()
+  vi.useFakeTimers()
+  vi.spyOn(Math, 'random').mockReturnValue(0)
+  try {
+    const queued = { ...row(2), state: 'queued', verdict: null }
+    f.fetch.mockResolvedValueOnce(Response.json({ submissions: [queued], next_cursor: '' }))
+    await f.history.first()
+    f.fetch.mockResolvedValueOnce(Response.json({ ...queued, source: 'initial source' }))
+    await f.history.openDetail(queued.id)
+    f.fetch.mockResolvedValueOnce(new Response(null, { status: 503 }))
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(f.history.getSnapshot().detail?.notice).toContain('等待重试')
+    const count = f.fetch.mock.calls.length
+    await vi.advanceTimersByTimeAsync(9999)
+    expect(f.fetch).toHaveBeenCalledTimes(count)
+    let release!: (response: Response) => void
+    f.fetch.mockImplementationOnce(() => new Promise(resolve => { release = resolve }))
+    await vi.advanceTimersByTimeAsync(1)
+    const signal = f.fetch.mock.calls.at(-1)?.[1]?.signal
+    f.history.clear()
+    expect(signal?.aborted).toBe(true)
+    release(Response.json(row(2)))
+    await vi.advanceTimersByTimeAsync(30000)
+    expect(f.history.getSnapshot().detail).toBeNull()
+    expect(f.fetch).toHaveBeenCalledTimes(count + 1)
+  } finally { f.stop() }
+})
+
+it('stops after three consecutive transient status failures', async () => {
+  const f = await setup()
+  vi.useFakeTimers()
+  vi.spyOn(Math, 'random').mockReturnValue(0)
+  try {
+    const queued = { ...row(2), state: 'queued', verdict: null }
+    f.fetch.mockResolvedValueOnce(Response.json({ submissions: [queued], next_cursor: '' }))
+    await f.history.first()
+    f.fetch.mockResolvedValueOnce(Response.json({ ...queued, source: 'initial source' }))
+    await f.history.openDetail(queued.id)
+    const count = f.fetch.mock.calls.length
+    for (const delay of [5000, 10000, 20000]) {
+      f.fetch.mockResolvedValueOnce(new Response(null, { status: 503 }))
+      await vi.advanceTimersByTimeAsync(delay)
+    }
+    expect(f.history.getSnapshot().detail?.notice).toContain('自动刷新已停止')
+    await vi.advanceTimersByTimeAsync(20000)
+    expect(f.fetch).toHaveBeenCalledTimes(count + 3)
   } finally { f.stop() }
 })

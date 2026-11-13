@@ -1,10 +1,13 @@
 import type { AccountController } from '../account/controller'
-import { fetchTrainingDetail, fetchTrainingHistory, HistoryError, type HistoryPage, type SubmissionDetail } from '../services/trainingHistory'
+import { fetchTrainingDetail, fetchTrainingHistory, fetchTrainingStatus, HistoryError, type HistoryPage, type SubmissionDetail } from '../services/trainingHistory'
 
 interface DetailState { id: string; busy: boolean; notice: string; value: SubmissionDetail | null }
 interface HistoryState { page: HistoryPage | null; number: number; busy: boolean; notice: string; detail: DetailState | null }
 const initial: HistoryState = { page: null, number: 0, busy: false, notice: '检查会话后可读取本人的训练提交。', detail: null }
 const pageHidden = () => document.visibilityState === 'hidden'
+const pending = (value: SubmissionDetail) => value.state === 'queued' || value.state === 'running'
+const refreshInterval = 5000
+const maxRefreshFailures = 3
 
 export class HistoryController {
   private state = initial
@@ -12,6 +15,7 @@ export class HistoryController {
   private unsubscribe: (() => void) | null = null
   private request: AbortController | null = null
   private detailRequest: AbortController | null = null
+  private refreshTimer: ReturnType<typeof setTimeout> | undefined
   private expiry: ReturnType<typeof setTimeout> | undefined
   private subject: string | null = null
 
@@ -37,6 +41,7 @@ export class HistoryController {
   }
 
   private cancelDetail() {
+    clearTimeout(this.refreshTimer)
     this.detailRequest?.abort()
     this.detailRequest = null
   }
@@ -61,7 +66,8 @@ export class HistoryController {
       const value = await fetchTrainingDetail(session.subject_id, id, request.signal)
       if (request.signal.aborted) return
       if (pageHidden() || Date.now() >= deadline) { this.clear(); return }
-      this.publish({ ...this.state, detail: { id, busy: false, notice: '', value } })
+      this.publishDetail(value)
+      if (pending(value)) this.scheduleRefresh(value, session.subject_id, deadline, 0)
     } catch (error) {
       if (request.signal.aborted) return
       const status = error instanceof HistoryError ? error.status : 0
@@ -77,6 +83,64 @@ export class HistoryController {
       }
       const notice = status === 404 ? '该提交详情不可用。' : '暂时无法读取提交详情，请重试。'
       this.publish({ ...this.state, detail: { id, busy: false, notice, value: null } })
+    } finally {
+      if (this.detailRequest === request) this.detailRequest = null
+    }
+  }
+
+  private publishDetail(value: SubmissionDetail) {
+    const page = this.state.page
+    const { id, state, verdict } = value
+    this.publish({
+      ...this.state,
+      page: page && { ...page, submissions: page.submissions.map(row => row.id === id ? { ...row, state, verdict } : row) },
+      detail: { id, value, busy: false, notice: pending(value) ? '正在自动更新判题状态。' : '已读取提交详情。' },
+    })
+  }
+
+  private scheduleRefresh(value: SubmissionDetail, subject: string, deadline: number, failures: number) {
+    const delay = refreshInterval * 2 ** failures + Math.floor(Math.random() * 1000)
+    if (Date.now() + delay >= deadline) return
+    this.refreshTimer = setTimeout(() => void this.refreshStatus(value, subject, deadline, failures), delay)
+  }
+
+  private async refreshStatus(value: SubmissionDetail, subject: string, deadline: number, failures: number) {
+    const account = this.account.getSnapshot()
+    if (!this.unsubscribe || pageHidden() || Date.now() >= deadline ||
+      account.status !== 'authenticated' || account.busy || account.session?.subject_id !== subject ||
+      this.subject !== subject || this.detailRequest || this.state.detail?.value !== value) return
+    const request = new AbortController()
+    this.detailRequest = request
+    try {
+      const status = await fetchTrainingStatus(subject, value.id, request.signal)
+      if (request.signal.aborted) return
+      if (pageHidden() || Date.now() >= deadline) { this.clear(); return }
+      if (status.material_version !== value.material_version || status.created_at !== value.created_at) throw new HistoryError(400)
+      const next = { ...value, state: status.state, verdict: status.verdict }
+      this.publishDetail(next)
+      if (pending(next)) this.scheduleRefresh(next, subject, deadline, 0)
+    } catch (error) {
+      if (request.signal.aborted) return
+      if (pageHidden() || Date.now() >= deadline) { this.clear(); return }
+      const status = error instanceof HistoryError ? error.status : 0
+      if (status === 401 || status === 409) {
+        this.clear()
+        await this.account.run('check')
+        return
+      }
+      if (status === 403) {
+        this.clear()
+        this.publish({ ...initial, notice: '只有已验证邮箱的个人账号可以查看训练提交。' })
+        return
+      }
+      const retry = (status === 0 || status === 429 || status >= 500) && failures + 1 < maxRefreshFailures
+      const keep = status === 404 ? null : value
+      this.publish({
+        ...this.state,
+        detail: { id: value.id, value: keep, busy: false, notice: retry ?
+          '暂时无法更新判题状态，正在等待重试。' : '自动刷新已停止，可手动重新读取详情。' },
+      })
+      if (retry) this.scheduleRefresh(value, subject, deadline, failures + 1)
     } finally {
       if (this.detailRequest === request) this.detailRequest = null
     }

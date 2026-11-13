@@ -63,7 +63,7 @@ export function SubmissionsPage() {
 
   return <section className="page-width status-page training-history">
     <h1>我的提交</h1>
-    <p>查看本人个人训练的提交摘要。每次翻页都会重新读取当前记录；如需查看最新结果，请刷新第一页。</p>
+    <p>查看本人的训练提交。展开排队中或判题中的提交可自动更新状态；刷新第一页可查看新提交。</p>
     {account.status === 'authenticated' ? <>
       <div className="history-controls">
         <button type="button" className="button button-outline" disabled={state.busy || account.busy} onClick={() => void history.first()}>

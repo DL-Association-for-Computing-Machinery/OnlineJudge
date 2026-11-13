@@ -167,6 +167,8 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 	if c.TrainingSubmissionDetail {
 		handler, err = httptransport.WithTrainingDetail(handler, func(ctx context.Context, actor identity.TrainingActor, id string) (submission.Detail, error) {
 			return submissionpg.ReadTrainingDetail(ctx, pool, actor, id)
+		}, func(ctx context.Context, actor identity.TrainingActor, id string) (submission.Receipt, error) {
+			return submissionpg.ReadTrainingStatus(ctx, pool, actor, id)
 		})
 		if err != nil {
 			return nil, ErrConfig

@@ -41,6 +41,31 @@ func ListTrainingHistory(ctx context.Context, pool *pgxpool.Pool, actor identity
 	})
 }
 
+// ReadTrainingStatus returns the current owner-scoped receipt without loading source.
+func ReadTrainingStatus(ctx context.Context, pool *pgxpool.Pool, actor identity.TrainingActor, id string) (submission.Receipt, error) {
+	if ctx == nil || pool == nil || !actor.Valid() || !validHistoryID(id) {
+		return submission.Receipt{}, submission.ErrInvalid
+	}
+	return readTraining(ctx, pool, actor, func(ctx context.Context, q *submissiondb.Queries) (submission.Receipt, error) {
+		row, err := q.GetSubmission(ctx, submissiondb.GetSubmissionParams{
+			ID: id, SubjectID: actor.SubjectID, ContextID: submission.PersonalTrainingScope,
+		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return submission.Receipt{}, submission.ErrNotFound
+		}
+		if err != nil {
+			return submission.Receipt{}, err
+		}
+		if !row.CreatedAt.Valid || row.CreatedAt.InfinityModifier != pgtype.Finite {
+			return submission.Receipt{}, errors.New("invalid stored submission timestamp")
+		}
+		return receipt(submissiondb.GetReceiptRow{
+			ID: row.ID, MaterialVersion: row.MaterialVersion, Language: row.Language,
+			CreatedAt: row.CreatedAt, State: row.State, Verdict: row.Verdict,
+		}), nil
+	})
+}
+
 // ReadTrainingDetail checks the current training account and reads only the
 // caller's fixed personal training scope within the same transaction.
 func ReadTrainingDetail(ctx context.Context, pool *pgxpool.Pool, actor identity.TrainingActor, id string) (submission.Detail, error) {

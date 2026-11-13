@@ -66,6 +66,11 @@ func TestBrowserFixture(t *testing.T) {
 		setHistoryEmailVerified(t, f, otherAuthor.ID, true)
 		unverified = f.subject(t, false).Email.Original()
 		seedTrainingHistory(t, f, subject.ID, otherAuthor.ID)
+		_, err := f.pools[0].Exec(f.ctx, `INSERT INTO training_queue_clock (version_id) VALUES ('synthetic-history-material');
+			UPDATE judge_tasks SET state='queued', verdict=NULL, queue_version='synthetic-history-material',
+				virtual_finish=1, enqueue_order=nextval('training_enqueue_order')
+			WHERE submission_id=lpad('22', 32, '0')`)
+		must(t, err)
 	} else {
 		browserDrafts(t, f, &c, subject.ID)
 	}
@@ -126,6 +131,19 @@ func TestBrowserFixture(t *testing.T) {
 			return
 		}
 		switch r.URL.Path {
+		case "/__fixture/training-finish":
+			if !historyMode || r.Method != http.MethodPost || r.Header.Get("Origin") != origin.String() {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+			// The test advances one synthetic task; all reads still use the real API.
+			result, err := f.pools[0].Exec(r.Context(), `UPDATE judge_tasks SET state='finished', verdict='AC'
+				WHERE submission_id=lpad('22', 32, '0') AND state='queued'`)
+			if err != nil || result.RowsAffected() != 1 {
+				w.WriteHeader(http.StatusConflict)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
 		case "/__fixture/stats":
 			if r.Method != http.MethodGet {
 				w.WriteHeader(http.StatusMethodNotAllowed)

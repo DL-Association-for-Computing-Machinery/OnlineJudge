@@ -90,6 +90,8 @@ Next.js 作为已比较的备选保留，不引入当前首期技术栈。若公
 
 依据（2026-10-25 只读核对）：[React Router 模式](https://reactrouter.com/start/modes)、[TanStack Query 服务端数据](https://tanstack.com/query/latest/docs/framework/react/overview)、[Query 默认行为](https://tanstack.com/query/latest/docs/framework/react/guides/important-defaults)、[Fetch 请求处理](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch)、[pnpm 依赖存储](https://pnpm.io/motivation)。文档入口随上游更新，不代表本项目已锁定对应版本；精确版本及依赖准入仍待实施前核验。
 
+本人提交详情仅在用户展开后开始刷新一条排队或运行记录。每次完成后等待 5 秒及小于 1 秒的随机抖动，网络、限流或服务端暂时失败时按 10 秒、20 秒退避（另加抖动），连续第三次失败后由用户手动重读。轮询只传当前摘要，源码仅在显式详情读取时传输；终态、收起、翻页、隐藏、重新聚焦、离开或账号变化时取消并按现有规则清理。恢复前台不自动重开详情，自动读取不续期。此为本地验证初值，实际混合负载和间隔仍须现场验收。
+
 #### 3.1.1 已有账号的浏览器面板
 
 账号请求沿用现有 React/fetch/CSS 与状态机；本次多页面替换引入 React Router 和按路由懒加载的 CodeMirror，精确版本、简洁桌面布局及内存预览边界见 [Web 界面](../frontend-design.md)，查询缓存尚未引入。实际同源 HTTPS 登录/恢复、只读检查、显式续期、确认退出和改密归[浏览器账号](../account-browser.md)；示例编辑与导入导出不代表邮箱注册、IndexedDB 草稿、正式训练或资源权限已实现。

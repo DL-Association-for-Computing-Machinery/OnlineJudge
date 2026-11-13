@@ -76,6 +76,13 @@ export async function fetchTrainingDetail(subject: string, id: string, signal: A
   return { ...row, source }
 }
 
+export async function fetchTrainingStatus(subject: string, id: string, signal: AbortSignal): Promise<SubmissionSummary> {
+  if (!idPattern.test(id)) throw new HistoryError()
+  const row = decodeSummary(await readTrainingJSON(path + '/' + id + '?view=status', subject, signal, 4096))
+  if (row.id !== id) throw new HistoryError()
+  return row
+}
+
 async function readTrainingJSON(url: string, subject: string, signal: AbortSignal, limit: number): Promise<unknown> {
   if (location.protocol !== 'https:' || !idPattern.test(subject)) throw new HistoryError()
   const response = await fetch(url, {
