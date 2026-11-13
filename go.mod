@@ -10,6 +10,7 @@ require (
 	github.com/redis/go-redis/v9 v9.23.0
 	github.com/riverqueue/river v0.51.2
 	github.com/riverqueue/river/riverdriver/riverpgxv5 v0.51.2
+	github.com/wneessen/go-mail v0.8.2
 	golang.org/x/crypto v0.58.0
 	golang.org/x/sync v0.24.0
 	golang.org/x/sys v0.49.0
