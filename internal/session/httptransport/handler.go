@@ -36,10 +36,10 @@ type handler struct {
 	store                  Store
 	config                 Config
 	host                   string
-	protection             http.CrossOriginProtection
 	login                  *redisstore.Login
 	proxy                  *proxyTrust
 	passwordChange         *redisstore.PasswordChange
+	emailConfirmation      EmailConfirmation
 	drafts                 Drafts
 	draftTimeout           time.Duration
 	references             ReferenceRequests
@@ -77,6 +77,9 @@ func (config Config) Validate() error {
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	if IsEmailConfirmationPath(r.URL.Path) {
+		w.Header().Set("Referrer-Policy", "no-referrer")
+	}
 	source, trusted := h.requestSource(r)
 	if !trusted {
 		problem(w, http.StatusForbidden, "ORIGIN_REJECTED", "请求来源不允许")
@@ -102,6 +105,12 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		method = http.MethodPost
 	case "/api/v1/account/password":
 		if h.passwordChange == nil {
+			problem(w, 404, "NOT_FOUND", "接口不存在")
+			return
+		}
+		method = http.MethodPost
+	case emailActivationPath, emailResetPath:
+		if h.emailConfirmation == nil {
 			problem(w, 404, "NOT_FOUND", "接口不存在")
 			return
 		}
@@ -214,6 +223,10 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == "/api/v1/account/password" {
 		h.servePasswordChange(w, r, source)
+		return
+	}
+	if IsEmailConfirmationPath(r.URL.Path) {
+		h.serveEmailConfirmation(w, r, source)
 		return
 	}
 	if h.login != nil && (r.URL.Path == "/api/v1/session/login/begin" || r.URL.Path == "/api/v1/session/login/complete" || r.URL.Path == "/api/v1/session/login/abandon") {
