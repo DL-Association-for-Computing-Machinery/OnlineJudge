@@ -139,7 +139,7 @@ env -u OJ_WORKER_M0_SLOT -u OJ_WORKER_M0_DUAL_EXPERIMENT OJ_SANDBOX_EXPERIMENT=1
 
 在上一节清单命令上加 `--expected-manifest "$TRUSTED_JUDGE_MANIFEST_SHA256" --export "$NEW_PRIVATE_DIRECTORY"`，导出 `manifest.json` 及私有对象。核对后固定该运输清单的原始字节 SHA-256。隔离链路的登记、控制端和 Worker 都设置 `OJ_SANDBOX_EXPERIMENT=1`、`OJ_APLUSB_MANIFEST_FILE`（绝对路径）、`OJ_APLUSB_MANIFEST_SHA256`；不同时设置 `OJ_EXPERIMENT_MATERIAL_VERSION`、M0 槽或双槽配置。
 
-登记进程和控制端另设 `OJ_MATERIAL_ROOT` 为该导出目录。在已迁移的临时 PostgreSQL 上执行 `migrate fixture` 和显式的积压策略配置，再按现有私有 mTLS 方式启动 `worker-api`。使用已启动、固定、断网的小型参考槽运行同配置的 Desktop arm64 `worker`。普通 API 不启用此版本。真实联验使用 sandbox 标签的 `TestAPlusBLeasedLoop`，须显式设置 `OJ_SANDBOX_APLUSB=1`、空的临时 `OJ_TEST_DATABASE_URL` 并准备同一 worktree 的 `.local/bin/{migrate,worker,worker-api}` 宿主构建产物；测试自行登记、排入固定合成源码和生成临时 mTLS 身份。不得指向试用库或正在使用的参考槽。见[判题契约](docs/checker-admission.md#ab-租约链路联验)。
+登记进程和控制端另设 `OJ_MATERIAL_ROOT` 为该导出目录。在已迁移的临时 PostgreSQL 上执行 `migrate fixture` 和显式的积压策略配置，再按现有私有 mTLS 方式启动 `worker-api`。Desktop arm64 `worker` 可使用已启动的固定断网小型参考槽，或设置 `OJ_APLUSB_START_STOPPED=1` 让它持槽锁启动已停止的参考槽。普通 API 不启用此版本。真实联验使用 sandbox 标签的 `TestAPlusBLeasedLoop`，须显式设置 `OJ_SANDBOX_APLUSB=1`、空的临时 `OJ_TEST_DATABASE_URL` 并准备同一 worktree 的 `.local/bin/{migrate,worker,worker-api}` 宿主构建产物；测试从停止的参考槽开始，自行登记、排入固定合成源码和生成临时 mTLS 身份。不得指向试用库或正在使用的参考槽。见[判题契约](docs/checker-admission.md#ab-租约链路联验)。
 
 ### 私有草稿参考验证
 
@@ -816,6 +816,16 @@ Worker 启动完成后，向该 Worker 进程发送 `SIGUSR1`（`kill -USR1 PID`
 `python3 scripts/test-worker.py http-loop` 显式设置 `OJ_SANDBOX_HTTP=1`，`all` 同样包含此项。驱动使用临时 PostgreSQL、两个提交 API 进程、mTLS 控制端和真实 Worker。先以固定 AC/WA 源码填满队列；两个 API 都对第三个新键返回 `429 BACKLOG_LIMIT`，跨实例查询该键均为 404，已接收的原键仍可回读，数据库无新增提交、任务或尝试。Worker 将原两份判到终态后，测试显式按原键、原正文再提交，验证新增提交取得 AC。三份已接收提交各有一次完成尝试。
 
 `python3 scripts/test-worker.py restore-loop` 验证[恢复后的真实判题](docs/architecture/storage-design.md#7-备份与验收)，`all` 也包含此项。它使用两个临时 PostgreSQL 容器，实际捕获和核验备份；停止源库后，在固定离线 Desktop 沙箱重判同一合成提交。不连接现有数据库。
+
+已经按 [A+B 租约链路](#ab-租约链路联验)导出私有材料后，可用现有、已停止的固定断网参考槽和本地已有的 `postgres:14-alpine` 镜像验证 A+B 历史重判：
+
+```bash
+python3 scripts/test-worker.py aplusb-restore-loop \
+  --aplusb-materials "$PRIVATE_APLUSB_DIRECTORY" \
+  --aplusb-manifest-sha256 "$TRUSTED_APLUSB_MANIFEST_SHA256"
+```
+
+使用封存前独立保管的运输清单摘要；私有材料目录置于仓库外。此项须显式执行，`all` 不读取 A+B 私有题包。已有当前提交的 `host-artifacts` 和 `restore-artifacts` 产物时，可加 `--prebuilt` 跳过构建。两次判题使用同一清单，第二次仅从核验后的恢复目录读取对象。详见[联验记录](docs/delivery-evidence/aplusb-restored-rejudge.md)。
 
 `python3 scripts/test-worker.py rollback-loop` 单独运行[兼容回退专项](docs/architecture/operations-design.md#兼容回退专项)。需要本地 Git 历史包含 `771ff3f`；构建该版本和当前工作树，使用同一个临时 PostgreSQL，在固定离线 Desktop 沙箱切换真实 Worker。该专项不包含在 `all` 中，不连接试用环境。
 
