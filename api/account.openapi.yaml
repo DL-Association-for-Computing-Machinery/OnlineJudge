@@ -10,6 +10,38 @@ info:
 security:
   - ordinarySession: []
 paths:
+  /api/v1/account/register:
+    post:
+      operationId: requestAccountRegistration
+      description: 申请注册或重发激活邮件；服务统一回应，不确认邮箱状态。
+      security: []
+      requestBody:
+        $ref: '#/components/requestBodies/EmailRequest'
+      responses:
+        '202': {description: 已受理；无响应体或 Cookie。若满足条件会收到邮件。}
+        '400': {description: 邮箱或请求格式不合法。}
+        '403': {description: HTTPS 或来源不可信。}
+        '404': {description: 未启用申请能力。}
+        '405': {description: 只接受 POST。}
+        '413': {description: 请求体超过 2048 字节。}
+        '415': {description: 不支持该媒体类型。}
+        '503': {description: 申请服务暂不可用；不自动重试。}
+  /api/v1/account/request-password-reset:
+    post:
+      operationId: requestAccountPasswordReset
+      description: 申请找回邮件；申请不会改变密码或撤销会话。
+      security: []
+      requestBody:
+        $ref: '#/components/requestBodies/EmailRequest'
+      responses:
+        '202': {description: 已受理；无响应体或 Cookie。若满足条件会收到邮件。}
+        '400': {description: 邮箱或请求格式不合法。}
+        '403': {description: HTTPS 或来源不可信。}
+        '404': {description: 未启用申请能力。}
+        '405': {description: 只接受 POST。}
+        '413': {description: 请求体超过 2048 字节。}
+        '415': {description: 不支持该媒体类型。}
+        '503': {description: 申请服务暂不可用；不自动重试。}
   /api/v1/account/activate:
     post:
       operationId: activateAccountEmail
@@ -171,6 +203,20 @@ paths:
                 $ref: '#/components/schemas/Problem'
 components:
   requestBodies:
+    EmailRequest:
+      required: true
+      description: 仅同源 HTTPS POST，最多 2048 字节；拒绝查询参数、重复或未知字段。不接收密码、令牌或主体 ID。
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [email]
+            properties:
+              email:
+                type: string
+                format: email
+                writeOnly: true
     EmailConfirmation:
       required: true
       description: >-
