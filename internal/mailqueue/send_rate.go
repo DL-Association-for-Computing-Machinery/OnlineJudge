@@ -11,6 +11,26 @@ import (
 // stream. All replicas must use the same authoritative database and schema.
 type SendRate struct{ pool *pgxpool.Pool }
 
+// ConfigureSendRate creates or changes the policy using a maintenance pool.
+// Updates keep the existing deadline and honor a longer interval even if the
+// most recent permit was granted under a shorter interval.
+func ConfigureSendRate(ctx context.Context, pool *pgxpool.Pool, spacingMS int32) error {
+	if ctx == nil || pool == nil || spacingMS < 100 || spacingMS > 60000 {
+		return errQueue
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	_, err := pool.Exec(ctx, `INSERT INTO account_mail_send_rate (spacing_ms) VALUES ($1)
+		ON CONFLICT (singleton) DO UPDATE SET spacing_ms=EXCLUDED.spacing_ms,
+		next_permit_at=account_mail_send_rate.next_permit_at
+			+ GREATEST(EXCLUDED.spacing_ms-account_mail_send_rate.spacing_ms, 0) * interval '1 millisecond'
+		WHERE account_mail_send_rate.spacing_ms <> EXCLUDED.spacing_ms`, spacingMS)
+	if err != nil || ctx.Err() != nil {
+		return errQueue
+	}
+	return nil
+}
+
 // NewSendRate checks that an operator has configured the shared spacing.
 // It does not provision or change the rate.
 func NewSendRate(ctx context.Context, pool *pgxpool.Pool) (*SendRate, error) {
