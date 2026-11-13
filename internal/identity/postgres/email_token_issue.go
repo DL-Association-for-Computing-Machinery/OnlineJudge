@@ -72,6 +72,20 @@ func (s *Store) IssueEmailToken(ctx context.Context, subject string, expected id
 	if err := checkEmailIssueWindow(ctx, q, subject, expected, purpose, now); err != nil {
 		return "", err
 	}
+	id, err := enqueueEmailToken(ctx, tx, q, subject, expected, email, purpose, now, protector, reserve, enqueue)
+	if err != nil {
+		return "", err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return "", storageError{err}
+	}
+	return id, nil
+}
+
+func enqueueEmailToken(ctx context.Context, tx pgx.Tx, q *identitydb.Queries, subject string, expected identity.SessionVersion,
+	email identity.Email, purpose emailtoken.Purpose, now pgtype.Timestamptz, protector *emailtoken.Protector,
+	reserve EmailTokenSealBudget, enqueue EmailTokenEnqueue,
+) (string, error) {
 	if err := reserve(ctx, protector.CurrentKeyID()); err != nil {
 		return "", storageError{err}
 	}
@@ -84,9 +98,6 @@ func (s *Store) IssueEmailToken(ctx context.Context, subject string, expected id
 		return "", err
 	}
 	if err := enqueue(ctx, tx, id); err != nil {
-		return "", storageError{err}
-	}
-	if err := tx.Commit(ctx); err != nil {
 		return "", storageError{err}
 	}
 	return id, nil
