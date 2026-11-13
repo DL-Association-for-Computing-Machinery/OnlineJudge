@@ -32,6 +32,7 @@ type ReviewEligibility struct {
 	WrongSolution               *problemvalidation.WrongSolutionEvidence          `json:"wrong_solution_evidence,omitempty"`
 	TestCoverage                *problemvalidation.TestCoverageEvidence           `json:"test_coverage_evidence,omitempty"`
 	StatementRendering          *problemvalidation.StatementRenderingEvidence     `json:"statement_rendering_evidence,omitempty"`
+	LocalChecker                *problemvalidation.LocalCheckerEvidence           `json:"local_checker_evidence,omitempty"`
 	StatementSemanticsConfirmed bool                                              `json:"statement_semantics_confirmed,omitempty"`
 }
 
@@ -116,12 +117,19 @@ func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
 		blockers = append(blockers, "input_validator_missing")
 	}
 	blockers = append(blockers, "checker_admission_missing", "target_runtime_missing")
+	var localChecker *problemvalidation.LocalCheckerEvidence
+	if policyCurrent && formalOnly && !s.Returned && e.FormalVerdict == "AC" {
+		if local, ok := problemvalidation.APlusBLocalCheckerEvidence(id, e.FormalPlanSHA256, e.ProfileSHA256); ok {
+			localChecker = &local
+		}
+	}
 	if !s.SolutionConfirmed {
 		blockers = append(blockers, "solution_confirmation_missing")
 	}
 	return ReviewEligibility{Evidence: e, PolicyVersion: ReviewPolicyVersion, Eligible: len(blockers) == 0,
 		Blockers: blockers, InputValidator: validator, IndependentCorrectness: independent,
-		WrongSolution: wrongSolution, TestCoverage: coverage, StatementRendering: statementRendering, StatementSemanticsConfirmed: semanticsConfirmed}
+		WrongSolution: wrongSolution, TestCoverage: coverage, StatementRendering: statementRendering, LocalChecker: localChecker,
+		StatementSemanticsConfirmed: semanticsConfirmed}
 }
 
 // EligibilityForSubject returns the current policy's blockers for one assignment.
