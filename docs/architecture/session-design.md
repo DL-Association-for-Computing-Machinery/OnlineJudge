@@ -462,6 +462,8 @@ Store 保留原共享 work；`redisstore.NewPasswordChange` 仅从同一 Login/s
 
 发送与校验按账号、来源和全局预算限流，考虑校园共享出口，不能只按 IP 限制；找回响应及响应耗时避免泄露账号存在性。邮件不包含原密码或新密码。人工重置须核验主体、限定比赛范围、操作人再次认证并审计原因，不仅凭用户名放行；重置后的凭据交付方式及核验材料待操作规程明确。参考：[OWASP 找回密码](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html)。
 
+邮件渲染使用部署方配置的规范 HTTPS 原点，拒绝路径、查询参数、片段和用户信息；链接目的固定为 `/account/activate` 或 `/account/reset-password`。凭据放在 `#token=` 片段中，打开链接时不进入 HTTP 请求目标。待接入的确认页须读取并移除片段，不持久化令牌，设置 `Referrer-Policy: no-referrer`，并仅在用户提交时以 POST 请求体发送令牌。邮件正文和令牌不得记录日志；真实邮件客户端、链接重写行为及确认页另验。
+
 AC25 覆盖上述流程、跨 API 并发单次消费、邮件失败与真正断外网运行。内部签发、激活和找回消费已有真实 PostgreSQL 分项验证；公开流程与投递验收仍待完成。
 
 ## 9. 邮件接口与组件验证路线
