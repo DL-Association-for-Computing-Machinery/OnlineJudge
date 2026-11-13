@@ -12,7 +12,7 @@ import (
 // MinimumNewPasswordCharacters is the initial network password-change floor.
 // It follows the single-factor length recommendation; it does not claim full
 // NIST compliance or prescribe dictionary coverage/KDF production parameters.
-const MinimumNewPasswordCharacters = 15
+const MinimumNewPasswordCharacters = password.MinimumNewPasswordCharacters
 
 // PasswordChange binds session authentication, independent quotas, new-password
 // rules and credential replacement to one Login/store/authority/shared KDF owner.
