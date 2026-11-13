@@ -79,6 +79,10 @@ type Config struct {
 	Proxy                       httptransport.ProxyConfig
 	PasswordChange              *PasswordChangeConfig
 	PrivateDrafts               *PrivateDraftsConfig
+
+	// EmailLimits optionally provisions the email marker during isolated
+	// recovery. This alone does not enable any public account route.
+	EmailLimits *redisstore.EmailLimits
 }
 
 // PasswordChangeConfig explicitly enables authenticated changes. Nil preserves
@@ -120,6 +124,9 @@ func cloneTLS(mode Security, config *tls.Config) (*tls.Config, error) {
 }
 
 func (c Config) validate() (*password.Hasher, *password.BoundedHasher, error) {
+	if c.EmailLimits != nil && c.EmailLimits.Validate() != nil {
+		return nil, nil, ErrConfig
+	}
 	if c.PrivateDrafts != nil && c.PrivateDrafts.Validate() != nil {
 		return nil, nil, ErrConfig
 	}

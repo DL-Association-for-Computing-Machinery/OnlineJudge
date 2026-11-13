@@ -249,6 +249,11 @@ func entryConfigWithWriteTimeout(t *testing.T, c sessionruntime.Config, ca *test
 	} else if len(blocklist) != 0 {
 		t.Fatal("rule file supplied without enabled capability")
 	}
+	if email := c.EmailLimits; email != nil {
+		doc["email_limits"] = map[string]any{"request_global": bucket(email.RequestGlobal), "request_source": bucket(email.RequestSource),
+			"request_mailbox": bucket(email.RequestMailbox), "confirm_global": bucket(email.ConfirmGlobal),
+			"confirm_source": bucket(email.ConfirmSource), "confirm_token": bucket(email.ConfirmToken)}
+	}
 	if d := c.PrivateDrafts; d != nil {
 		doc["private_drafts"] = map[string]any{"material_root": d.MaterialRoot, "bundle_directory": d.BundleDirectory,
 			"source_lock_file": d.SourceLockFile, "source_ids": d.SourceIDs, "timeout": d.Timeout.String(), "max_in_flight": d.MaxInFlight,

@@ -671,6 +671,8 @@ python3 -B scripts/test-session-protocol.py --toolchain-image oj-session-protoco
 .local/bin/migrate session-recovery open '恢复库名' 'close 返回的代次' --accounts-reviewed
 ```
 
+如配置了 [`email_limits`](docs/architecture/session-design.md#8-注册找回与账号发放)，`open` 会先在新的空 Redis 中准备邮箱限流标记，再开放本轮恢复代次。添加配置本身不开放邮箱入口；若中途失败，按恢复说明读回状态，不在原实例上补写标记。
+
 无法由作者本人处理的旧参考申请，可在恢复代次仍关闭时逐笔处理。确认 `OJ_RESTORED_DATABASE_URL` 指向同一个已隔离副本；命令不使用普通运行 DSN。见[恢复参考验证积压](docs/architecture/operations-design.md#恢复参考验证积压)。
 
 ```sh

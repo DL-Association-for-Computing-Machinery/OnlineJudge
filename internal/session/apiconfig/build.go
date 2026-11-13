@@ -56,10 +56,36 @@ func (w document) config() (Config, error) {
 	if w.PasswordChange != nil && w.PasswordChange.apply(&c) != nil {
 		return Config{}, ErrConfig
 	}
+	if w.EmailLimits != nil && w.EmailLimits.apply(r) != nil {
+		return Config{}, ErrConfig
+	}
 	if w.PrivateDrafts != nil && w.PrivateDrafts.apply(&c) != nil {
 		return Config{}, ErrConfig
 	}
 	return c, nil
+}
+
+func (w emailLimitsWire) apply(r *sessionruntime.Config) error {
+	limits := &redisstore.EmailLimits{}
+	items := []struct {
+		wire *bucketWire
+		out  *redisstore.LoginBucket
+	}{
+		{w.RequestGlobal, &limits.RequestGlobal}, {w.RequestSource, &limits.RequestSource},
+		{w.RequestMailbox, &limits.RequestMailbox}, {w.ConfirmGlobal, &limits.ConfirmGlobal},
+		{w.ConfirmSource, &limits.ConfirmSource}, {w.ConfirmToken, &limits.ConfirmToken},
+	}
+	for _, item := range items {
+		if item.wire == nil || !durations([]durationField{{item.wire.Window, &item.out.Window}}) {
+			return ErrConfig
+		}
+		item.out.Count = item.wire.Count
+	}
+	if limits.Validate() != nil {
+		return ErrConfig
+	}
+	r.EmailLimits = limits
+	return nil
 }
 
 func (w privateDraftsWire) apply(c *Config) error {
