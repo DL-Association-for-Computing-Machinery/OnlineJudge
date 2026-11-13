@@ -26,7 +26,7 @@ import (
 const (
 	aplusbNode    = "aplusb-fixture-node"
 	aplusbSubject = "synthetic-aplusb"
-	aplusbScope   = "isolated"
+	aplusbScope   = submission.PersonalTrainingScope
 	aplusbAC      = "#include <iostream>\nint main(){long long a,b;std::cin>>a>>b;std::cout<<a+b<<'\\n';}\n"
 )
 
