@@ -93,11 +93,12 @@ func TestCompatibleRollbackLoop(t *testing.T) {
 	if t.Failed() {
 		t.FailNow()
 	}
-	f.counts(t, ctx, 2, migrationRows+2, 22)
+	f.counts(t, ctx, 2, migrationRows+3, 23)
 
 	start := time.Now()
-	// Down22 drops only the rate gate. Down21 requires an empty email ledger.
-	// Neither step may change accepted judging work.
+	// Down23 drops the history index; Down22 drops only the rate gate.
+	// Down21 requires an empty email ledger. Preserve accepted judging work.
+	runFixtureMigration(t, ctx, rollbackCurrent, f.database.dsn, f.root, rollbackVersion, []string{"down"})
 	runFixtureMigration(t, ctx, rollbackCurrent, f.database.dsn, f.root, rollbackVersion, []string{"down"})
 	runFixtureMigration(t, ctx, rollbackCurrent, f.database.dsn, f.root, rollbackVersion, []string{"down"})
 	restartDrainedSandbox(t, slot)
