@@ -30,7 +30,7 @@ type APlusBJudgeManifest struct {
 // caller must stage them privately and publish metadata only after success.
 func ExportAPlusBMaterials(ctx context.Context, prepared *problem.Prepared, plan, candidate, expected string, limits judging.TextLimits,
 	put func(string, []byte) error) (manifest materials.APlusBManifest, err error) {
-	trial, err := prepareAPlusBJudgeTrial(ctx, prepared, plan, candidate, limits)
+	trial, err := prepareAPlusBJudgeTrial(ctx, prepared, plan, candidate, limits, experiment.ReferenceSmall)
 	if err != nil {
 		return manifest, err
 	}
@@ -77,8 +77,13 @@ func (m APlusBJudgeManifest) Digest() string { return digest(m) }
 // PrepareAPlusBJudgeManifest rederives the fixed material manifest from an
 // independently pinned formal plan and checker candidate.
 func PrepareAPlusBJudgeManifest(ctx context.Context, prepared *problem.Prepared, plan, candidate string, limits judging.TextLimits) (APlusBJudgeManifest, error) {
+	return PrepareAPlusBJudgeManifestForTier(ctx, prepared, plan, candidate, limits, experiment.ReferenceSmall)
+}
+
+// PrepareAPlusBJudgeManifestForTier derives a standalone manifest, not a lease material export.
+func PrepareAPlusBJudgeManifestForTier(ctx context.Context, prepared *problem.Prepared, plan, candidate string, limits judging.TextLimits, tier experiment.ReferenceTier) (APlusBJudgeManifest, error) {
 	var zero APlusBJudgeManifest
-	trial, err := prepareAPlusBJudgeTrial(ctx, prepared, plan, candidate, limits)
+	trial, err := prepareAPlusBJudgeTrial(ctx, prepared, plan, candidate, limits, tier)
 	if err != nil {
 		return zero, err
 	}
@@ -89,7 +94,10 @@ func PrepareAPlusBJudgeManifest(ctx context.Context, prepared *problem.Prepared,
 	return manifest, nil
 }
 
-func prepareAPlusBJudgeTrial(ctx context.Context, prepared *problem.Prepared, plan, candidate string, limits judging.TextLimits) (*CheckerTrial, error) {
+func prepareAPlusBJudgeTrial(ctx context.Context, prepared *problem.Prepared, plan, candidate string, limits judging.TextLimits, tier experiment.ReferenceTier) (*CheckerTrial, error) {
+	if tier != experiment.ReferenceSmall && tier != experiment.ReferenceAPlusBUbuntu {
+		return nil, ErrCheckerCandidateBinding
+	}
 	id, err := prepared.ImportIdentity()
 	if err != nil {
 		return nil, err
@@ -97,7 +105,18 @@ func prepareAPlusBJudgeTrial(ctx context.Context, prepared *problem.Prepared, pl
 	if id.SourceID != aplusbSourceID || id.SourceLockSHA256 != SourceLockSHA256 {
 		return nil, ErrCheckerCandidateBinding
 	}
-	return PrepareCheckerTrial(ctx, prepared, plan, candidate, limits)
+	trial, err := PrepareCheckerTrial(ctx, prepared, plan, candidate, limits)
+	if err != nil || tier == experiment.ReferenceSmall {
+		return trial, err
+	}
+	config, err := experiment.ResolveReferenceTier(tier)
+	if err != nil || limits.Bytes != config.Runtime.OutputBytes {
+		return nil, errors.Join(ErrCheckerCandidateBinding, trial.Close())
+	}
+	trial.profile.ID = "p4-checker-candidate-aplusb-ubuntu-reference-v1"
+	trial.profile.Runtime, trial.profile.Files = config.Runtime, config.Files
+	trial.tier = tier
+	return trial, nil
 }
 
 func (t *CheckerTrial) aplusbManifest() APlusBJudgeManifest {

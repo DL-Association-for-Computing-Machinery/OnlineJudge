@@ -22,31 +22,52 @@ func OpenUbuntuM0(ctx context.Context) (*Host, error) {
 }
 
 func ubuntuHost(ctx context.Context) (*Host, error) {
-	if runtime.GOOS != "linux" || runtime.GOARCH != "arm64" || os.Geteuid() != 0 {
-		return nil, errors.New("the Ubuntu M0 fixture requires the dedicated Linux arm64 VM owner")
-	}
 	fixture, err := experiment.ParseWorkerFixture(experiment.UbuntuVersion)
 	if err != nil {
 		return nil, err
 	}
 	h := &Host{run: ubuntuCommand, fixture: fixture}
+	if err := h.verifyUbuntuGuest(ctx, fixture.Profile()); err != nil {
+		return nil, err
+	}
+	return h, nil
+}
+
+func (h *Host) nativeUbuntu() bool {
+	return h.fixture.Version() == experiment.UbuntuVersion || h.tier == experiment.ReferenceAPlusBUbuntu
+}
+
+// CheckUbuntuAPlusBHost verifies the dedicated guest before the CLI dirties its lock.
+func CheckUbuntuAPlusBHost(ctx context.Context) error {
+	h := &Host{run: ubuntuCommand, tier: experiment.ReferenceAPlusBUbuntu}
+	p, _, err := h.configuration()
+	if err != nil {
+		return err
+	}
+	return h.verifyUbuntuGuest(ctx, p)
+}
+
+func (h *Host) verifyUbuntuGuest(ctx context.Context, p experiment.ExecutionProfile) error {
+	if runtime.GOOS != "linux" || runtime.GOARCH != "arm64" || os.Geteuid() != 0 {
+		return errors.New("the Ubuntu experiments require the dedicated Linux arm64 VM owner")
+	}
 	virt, err := ubuntuCommand(ctx, nil, "/usr/bin/systemd-detect-virt", "--vm")
 	if err != nil || strings.TrimSpace(string(virt)) != "apple" {
-		return nil, errors.New("the Ubuntu M0 fixture requires the pinned local VM hypervisor")
+		return errors.New("the Ubuntu experiments require the pinned local VM hypervisor")
 	}
 	mounts, err := os.ReadFile("/proc/self/mountinfo")
 	if err != nil || !isolatedUbuntuMounts(string(mounts)) {
-		return nil, errors.New("the Ubuntu M0 fixture requires a guest without host shares")
+		return errors.New("the Ubuntu experiments require a guest without host shares")
 	}
 	kernel, err := ubuntuCommand(ctx, nil, "/usr/bin/uname", "-r")
-	if err != nil || strings.TrimSpace(string(kernel)) != fixture.Profile().KernelRelease {
-		return nil, errors.New("the Ubuntu M0 fixture requires the pinned VM kernel")
+	if err != nil || strings.TrimSpace(string(kernel)) != p.KernelRelease {
+		return errors.New("the Ubuntu experiments require the pinned VM kernel")
 	}
 	engine, err := h.docker(ctx, nil, "info", "--format", "{{.OSType}}/{{.Architecture}}/{{.CgroupVersion}}")
 	if err != nil || strings.TrimSpace(string(engine)) != "linux/aarch64/2" {
-		return nil, errors.New("the Ubuntu M0 fixture requires the fixed local cgroup v2 Engine")
+		return errors.New("the Ubuntu experiments require the fixed local cgroup v2 Engine")
 	}
-	return h, nil
+	return ctx.Err()
 }
 
 func isolatedUbuntuMounts(mounts string) bool {
@@ -69,7 +90,15 @@ func isolatedUbuntuMounts(mounts string) bool {
 
 func ubuntuCommand(ctx context.Context, input io.Reader, name string, args ...string) ([]byte, error) {
 	// No inherited Docker context, client configuration, proxy or executable path.
-	return runCommandWithEnv(ctx, input, []string{"HOME=/", "PATH=/usr/bin:/bin", "LANG=C"}, name, args...)
+	return runCommandWithEnv(ctx, input, ubuntuCommandEnv(), name, args...)
+}
+
+func ubuntuCommandTo(ctx context.Context, input io.Reader, output io.Writer, maximum int64, name string, args ...string) error {
+	return runCommandToWithEnv(ctx, input, output, maximum, ubuntuCommandEnv(), name, args...)
+}
+
+func ubuntuCommandEnv() []string {
+	return []string{"HOME=/", "PATH=/usr/bin:/bin", "LANG=C"}
 }
 
 func (h *Host) verifyUbuntuLimits(ctx context.Context) error {

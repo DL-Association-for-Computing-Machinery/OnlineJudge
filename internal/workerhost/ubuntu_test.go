@@ -11,6 +11,55 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 )
 
+func TestUbuntuAPlusBCachedFilesUseNativeEngine(t *testing.T) {
+	p, err := experiment.ResolveReferenceTier(experiment.ReferenceAPlusBUbuntu)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := goodState()
+	s.Entrypoint = p.Runtime.SandboxArgs
+	s.Cgroupns, s.Swap = "private", 1<<30
+	h := &Host{tier: experiment.ReferenceAPlusBUbuntu, id: s.ID, started: s.Started,
+		active: make(map[uint64]context.CancelFunc), drained: make(chan struct{})}
+	check := func(name string, args []string) {
+		t.Helper()
+		if name != "/usr/bin/docker" || args[0] != "--host=unix:///var/run/docker.sock" {
+			t.Fatal("cached file transfer escaped the fixed local Engine")
+		}
+	}
+	h.run = func(_ context.Context, _ io.Reader, name string, args ...string) ([]byte, error) {
+		check(name, args)
+		if args[1] != "inspect" || args[len(args)-1] != s.ID || !strings.Contains(args[3], ".HostConfig.CgroupnsMode") {
+			t.Fatal("cached file transfer omitted the native lifetime checks")
+		}
+		return json.Marshal(s)
+	}
+	h.stream = func(_ context.Context, input io.Reader, output io.Writer, _ int64, name string, args ...string) error {
+		check(name, args)
+		if args[1] != "exec" || args[3] != s.ID {
+			t.Fatal("cached file transfer was not bound to the verified container")
+		}
+		if input != nil {
+			raw, err := io.ReadAll(input)
+			if err != nil || !strings.Contains(string(raw), "control data") {
+				t.Fatal("upload omitted the supplied bytes")
+			}
+			_, err = io.WriteString(output, "\"file-token\"\n200")
+			return err
+		}
+		_, err := io.WriteString(output, "control data\n200")
+		return err
+	}
+	id, err := h.UploadFile(t.Context(), []byte("control data"))
+	if err != nil || id != "file-token" {
+		t.Fatalf("upload: %q %v", id, err)
+	}
+	got, err := h.ReadFile(t.Context(), id, 12)
+	if err != nil || string(got) != "control data" {
+		t.Fatalf("readback: %q %v", got, err)
+	}
+}
+
 func TestUbuntuHostPinsEngineThroughStopAndRecovery(t *testing.T) {
 	f, err := experiment.ParseWorkerFixture(experiment.UbuntuVersion)
 	if err != nil {

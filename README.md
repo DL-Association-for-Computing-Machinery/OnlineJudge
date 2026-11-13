@@ -135,6 +135,8 @@ env -u OJ_WORKER_M0_SLOT -u OJ_WORKER_M0_DUAL_EXPERIMENT OJ_SANDBOX_EXPERIMENT=1
 
 路径使用绝对路径。源码须是权限 0400 或 0600 的私有普通文件，最多 64 KiB，且为不含 NUL 的 UTF-8；摘要固定原字节。只用现有停止的断网小型参考槽，输出目录须新建且在题包外。退出码 0 表示已产生确定判定并完成清理，实际 AC、WA、CE 等查看私有报告。详见[隔离判题契约](docs/checker-admission.md#ab-固定材料隔离判题)。
 
+专用本地 Ubuntu arm64 VM 使用同一组命令，在生成清单和执行判题时都加 `--ubuntu-aplusb`，并固定 Ubuntu 清单自己的摘要。Worker 使用客体内的 Linux arm64 构建，以客体 root 运行，并去掉 `OJ_EXPERIMENT_MATERIAL_VERSION`。准备固定停止槽、核验边界和恢复步骤见 [Ubuntu 实验](docs/checker-admission.md#ubuntu-独立判题实验)。租约链路仍使用下文的 Desktop 清单。
+
 ### A+B 租约链路联验
 
 在上一节清单命令上加 `--expected-manifest "$TRUSTED_JUDGE_MANIFEST_SHA256" --export "$NEW_PRIVATE_DIRECTORY"`，导出 `manifest.json` 及私有对象。核对后固定该运输清单的原始字节 SHA-256。隔离链路的登记、控制端和 Worker 都设置 `OJ_SANDBOX_EXPERIMENT=1`、`OJ_APLUSB_MANIFEST_FILE`（绝对路径）、`OJ_APLUSB_MANIFEST_SHA256`；不同时设置 `OJ_EXPERIMENT_MATERIAL_VERSION`、M0 槽或双槽配置。

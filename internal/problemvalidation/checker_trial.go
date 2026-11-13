@@ -191,6 +191,11 @@ func (r *CheckerTrialReport) Finalize(runErr, stopErr, cleanErr error) error {
 // PrepareAPlusBJudge checks the same fixed materials before the host can start.
 // The compiled bytes come from the pinned submission rather than the reference.
 func PrepareAPlusBJudge(ctx context.Context, prepared *problem.Prepared, plan, candidate, manifest, sourceSHA, source string, limits judging.TextLimits) (*CheckerTrial, error) {
+	return PrepareAPlusBJudgeForTier(ctx, prepared, plan, candidate, manifest, sourceSHA, source, limits, experiment.ReferenceSmall)
+}
+
+// PrepareAPlusBJudgeForTier requires a manifest matching the explicitly selected standalone runtime.
+func PrepareAPlusBJudgeForTier(ctx context.Context, prepared *problem.Prepared, plan, candidate, manifest, sourceSHA, source string, limits judging.TextLimits, tier experiment.ReferenceTier) (*CheckerTrial, error) {
 	if !problem.ValidImportRevision(manifest) || !problem.ValidImportRevision(sourceSHA) ||
 		len(source) == 0 || len(source) > submission.MaxSourceBytes || !utf8.ValidString(source) || strings.ContainsRune(source, 0) {
 		return nil, ErrCheckerCandidateBinding
@@ -199,7 +204,7 @@ func PrepareAPlusBJudge(ctx context.Context, prepared *problem.Prepared, plan, c
 	if hex.EncodeToString(h[:]) != sourceSHA {
 		return nil, ErrCheckerCandidateBinding
 	}
-	trial, err := prepareAPlusBJudgeTrial(ctx, prepared, plan, candidate, limits)
+	trial, err := prepareAPlusBJudgeTrial(ctx, prepared, plan, candidate, limits, tier)
 	if err != nil {
 		return nil, err
 	}

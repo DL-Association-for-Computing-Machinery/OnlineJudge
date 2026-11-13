@@ -29,6 +29,9 @@ func dispatch(ctx context.Context, args []string, logger *slog.Logger, drain <-c
 	if args[0] == "judge-aplusb-isolated" {
 		return runCheckerCommand(ctx, args[1:], logger, true)
 	}
+	if args[0] == "recover-aplusb-ubuntu" {
+		return recoverAPlusBUbuntu(ctx, args[1:], logger)
+	}
 	if args[0] == "validate-convolution-differential" {
 		return validateConvolutionDifferential(ctx, args[1:], logger)
 	}
@@ -48,7 +51,7 @@ func dispatch(ctx context.Context, args []string, logger *slog.Logger, drain <-c
 	} else if len(args) == 2 && (reference || args[0] == "recover") {
 		id = args[1]
 	}
-	if !regexp.MustCompile(`^[a-f0-9]{64}$`).MatchString(id) {
+	if !originalContainerID.MatchString(id) {
 		return errors.New("usage: worker recover <original-id> | recover-reference [<admitted-source-id>] <original-id>")
 	}
 	if os.Getenv("OJ_SANDBOX_EXPERIMENT") != "1" {
@@ -98,6 +101,37 @@ func dispatch(ctx context.Context, args []string, logger *slog.Logger, drain <-c
 		return err
 	}
 	logger.Info("当前沙箱停止已确认，槽隔离标记已清；仅在旧控制操作已排空时重启并重新核验环境")
+	return nil
+}
+
+var originalContainerID = regexp.MustCompile(`^[a-f0-9]{64}$`)
+
+func recoverAPlusBUbuntu(ctx context.Context, args []string, logger *slog.Logger) error {
+	if len(args) != 1 || !originalContainerID.MatchString(args[0]) ||
+		os.Getenv("OJ_SANDBOX_EXPERIMENT") != "1" || os.Getenv("OJ_WORKER_M0_SLOT") != "" || os.Getenv(dualModeEnv) != "" {
+		return errors.New("recover-aplusb-ubuntu requires experiment opt-in, the original full ID and the single reference slot")
+	}
+	probe, cancel := context.WithTimeout(ctx, 5*time.Second)
+	err := workerhost.CheckUbuntuAPlusBHost(probe)
+	cancel()
+	if err != nil {
+		return err
+	}
+	slot, err := workerhost.ReferenceSlotForTier(experiment.ReferenceAPlusBUbuntu)
+	if err != nil {
+		return err
+	}
+	lock, err := lockReferenceRuntime(slot, true)
+	if err != nil {
+		return err
+	}
+	defer lock.Close()
+	if err := recoverLocked(ctx, lock, func(ctx context.Context) error {
+		return workerhost.RecoverReferenceSlot(ctx, slot, args[0])
+	}); err != nil {
+		return err
+	}
+	logger.Info("Ubuntu A+B 沙箱停止已确认，槽隔离标记已清")
 	return nil
 }
 

@@ -52,6 +52,23 @@ Z 算法 32 点修订也已通过 medium 槽试跑和[离线复核](delivery-log
 
 独立 `oj.aplusb-isolated-judge-report.v1` 报告绑定清单、提交、候选、计划和运行档位，不含源码、答案或程序输出。仅在判定明确、制品清理、停止确认及锁清理都通过时完成。旧的标程试跑报告与离线复核保持原协议，不能将隔离判题报告用作标程验证。回退移除两个维护入口即可，无数据库或运行配置迁移。复现见 [README](../README.md#ab-固定材料隔离判题)，联验见[交付证据](delivery-evidence/aplusb-isolated-judging.md)。
 
+### Ubuntu 独立判题实验
+
+`--ubuntu-aplusb` 显式选择独立的 Ubuntu 运行档位。只用于无宿主共享的本地 Apple 虚拟机、Linux arm64、内核 `6.8.0-106-generic` 和客体的固定 cgroup v2 Engine。清单含不同的档位摘要，不能与 Desktop 互换。判题前核对独立的 `oj-aplusb-ubuntu-sandbox` 名称、所有者、固定镜像、入口及隔离；启动后核对有效 CPU、内存、swap 和进程上限。控制与文件传输均走客体的固定 Unix socket。只在专用客体确认无其他槽运行或隔离后，使用已存在的镜像预置停止槽，不下载镜像：
+
+```sh
+/usr/bin/docker --host=unix:///var/run/docker.sock create --pull=never \
+  --name oj-aplusb-ubuntu-sandbox --label owner=onlinejudge.ubuntu-aplusb-test \
+  --privileged --network none --read-only --ipc private --cgroupns private \
+  --restart no --tmpfs /tmp:rw,nosuid,size=128m --shm-size 128m \
+  --memory 1g --memory-swap 1g --cpus 1 --pids-limit 128 \
+  sha256:cd40ffdb32619806a8d97e59fe03e890fe4066835f57efa6ae13f919ef3262c5
+```
+
+保存返回的原始完整容器 ID。Ubuntu A+B 与小型 Desktop 参考槽共享宿主锁名，Ubuntu 的隔离标记不能用 Desktop 恢复命令清除。仅在确认旧 Worker 及在途控制操作全部排空、仍持有可信原始 ID 的前提下，由原客体 root 执行 `OJ_SANDBOX_EXPERIMENT=1 worker recover-aplusb-ubuntu <原始完整容器ID>`，保持 M0 槽和材料环境变量未设置。恢复不启动槽，不接受替换容器；已停止路径仍需按原 ID 回读。回退可停用专用命令；有未确认停止或隔离标记时先用支持该档位的二进制恢复，旧版本不清除此标记。
+
+此档位不导出租约材料，不改变旧归档复核、目标节点交接或生产门禁。见 [本地实测](delivery-evidence/aplusb-isolated-judging.md#ubuntu-arm64-专用客体)。
+
 ### A+B 归档报告复核
 
 `checker-candidate verify-aplusb-archive` 专用于已归档的 A+B 17 点本机 AC、WA、OLE 三份报告。用独立固定的来源锁、正式计划、候选及上限，从私有题包重建判题清单。按角色核对固定报告字节和提交摘要、实际档位、点序、用量、首错停止及清理记录。错误归档、互换、改写或有未完成标记均拒绝。复核只读取证据，不启动容器，也不能证明现场节点运行过。
