@@ -39,11 +39,11 @@ schema9另有[持久化参考验证申请](reference-requests.md)的独立queued
 ## 升级与回退
 
 1. 停止全部 API、Worker、恢复进程和材料登记等维护写入，确认活动事务退出；启动版本检查不会终止已运行的进程，**不支持滚动混用**。
-2. 独立执行 `migrate up` 到当前 schema 21。训练队列迁移（schema 20）按旧接收时间与 ID 为 queued/running 任务补顺位和入队序号，按运行及已重排任务初始化版本时钟，保留旧接收时间、判定和尝试。维护窗口须考虑批量回填、索引、WAL 及锁等待。需要初始化固定实验材料时，再执行 `migrate fixture`，材料版本与各进程一致。
+2. 独立执行 `migrate up` 到当前 schema 22。训练队列迁移（schema 20）按旧接收时间与 ID 为 queued/running 任务补顺位和入队序号，按运行及已重排任务初始化版本时钟，保留旧接收时间、判定和尝试。维护窗口须考虑批量回填、索引、WAL 及锁等待。需要初始化固定实验材料时，再执行 `migrate fixture`，材料版本与各进程一致。
 3. 显式执行 `migrate backlog <global> <subject>`，检查配置成功后启动同版本 API。无生产默认数值；本地专项的额度仅用于构造合成测试。
 4. 已有积压超过新额度时不迁移或删除任务，等待正常完成后再接受新提交。管理员更新策略也等待在途准入释放同一策略锁。
 
-上述命令使用 Docker 构建的 `.local/bin/migrate` 和私有 `OJ_DATABASE_URL`；维护凭据不下放 Worker 或浏览器。当前二进制只接受 schema 21，启动检查不自动迁移。[Down21](architecture/session-design.md#123-签发持久化与迁移) 仅允许空邮件令牌账本。[Down19](problem-drafts.md#审核人确认题面语义) 仅允许空题面确认账本；[Down18](problem-drafts.md#作者确认标程) 仅允许空确认账本；[Down17](problem-drafts.md#审核退回与重送)仅允许空退回账本；[Down16](problem-drafts.md#审核人分配与证据摘要)仅允许空访问历史；[Down15](problem-drafts.md#作者送审回执)仅允许空送审账本；Down14 仅允许无对拍计划时回退；Down13 仅允许空领取历史回退；Down12 仅允许空报告与终态回退；Down11 仅允许空预留表回退；Down10 仅允许空计划表回退；Down9 仅在参考申请历史及其policy均为空时允许，已配置、queued或cancelled均拒绝，精确合同见[参考申请回退](reference-requests.md#迁移与回退)。schema8仅索引的回退和schema7数据保护条件见[草稿合同](problem-drafts.md#入库版本与迁移)；schema6的 Down 继续在与接收一致的表锁顺序下，仅允许**没有任何提交且没有策略行**的空库回退；已配置或已接受数据须向前修复，不通过清表或删除策略绕过保护。更换schema时须排空/停止旧API、Worker及维护写入，不因仅停止写入API就混跑版本；停用浏览器页面不会取消已接受工作。本次没有迁移现有持久化localdev或部署服务器。
+上述命令使用 Docker 构建的 `.local/bin/migrate` 和私有 `OJ_DATABASE_URL`；维护凭据不下放 Worker 或浏览器。当前二进制只接受 schema 22，启动检查不自动迁移。[Down22](architecture/session-design.md#123-签发持久化与迁移) 仅移除发送限速状态。[Down21](architecture/session-design.md#123-签发持久化与迁移) 仅允许空邮件令牌账本。[Down19](problem-drafts.md#审核人确认题面语义) 仅允许空题面确认账本；[Down18](problem-drafts.md#作者确认标程) 仅允许空确认账本；[Down17](problem-drafts.md#审核退回与重送)仅允许空退回账本；[Down16](problem-drafts.md#审核人分配与证据摘要)仅允许空访问历史；[Down15](problem-drafts.md#作者送审回执)仅允许空送审账本；Down14 仅允许无对拍计划时回退；Down13 仅允许空领取历史回退；Down12 仅允许空报告与终态回退；Down11 仅允许空预留表回退；Down10 仅允许空计划表回退；Down9 仅在参考申请历史及其policy均为空时允许，已配置、queued或cancelled均拒绝，精确合同见[参考申请回退](reference-requests.md#迁移与回退)。schema8仅索引的回退和schema7数据保护条件见[草稿合同](problem-drafts.md#入库版本与迁移)；schema6的 Down 继续在与接收一致的表锁顺序下，仅允许**没有任何提交且没有策略行**的空库回退；已配置或已接受数据须向前修复，不通过清表或删除策略绕过保护。更换schema时须排空/停止旧API、Worker及维护写入，不因仅停止写入API就混跑版本；停用浏览器页面不会取消已接受工作。本次没有迁移现有持久化localdev或部署服务器。
 
 `Down20` 先停匹配进程，且只允许没有 queued/running 的库回退；活动队列须由匹配版本正常排空或采用前滚修复。回退保留终态及尝试，丢弃训练顺位和时钟；重新升级会初始化时钟。
 
