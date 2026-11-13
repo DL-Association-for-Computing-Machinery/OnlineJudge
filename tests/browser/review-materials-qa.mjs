@@ -14,13 +14,14 @@ assert(ready?.url === info.origin && /^[a-f0-9]{32}$/.test(ready.review_id))
 for (const email of [ready.email, ready.other_email]) assert(/^[a-zA-Z0-9._+-]+@example\.invalid$/.test(email))
 for (const id of [ready.subject_id, ready.other_subject_id]) assert(/^[a-f0-9]{32}$/.test(id))
 const endpoint = `/api/v1/problem-review/${ready.review_id}/materials`
+const confirmation = `/api/v1/problem-review/${ready.review_id}/statement-confirmation`
 const pagePath = `/review/materials/${ready.review_id}`
 const report = { success: false, checks: [], screenshots: [] }
 function passed(name) { report.checks.push(name); console.log('PASS ' + name) }
 let step = 'setup'
 let status
 
-async function exercise(browser, viewport, reviewer, select) {
+async function exercise(browser, viewport, reviewer, select, confirm = false) {
   status = undefined
   const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport })
   try {
@@ -73,6 +74,59 @@ async function exercise(browser, viewport, reviewer, select) {
       await page.getByRole('button', { name: '检查会话并读取材料' }).waitFor()
       assert.equal(await page.getByRole('heading', { name: '冻结标程' }).count(), 0)
       assert.equal(reads.length, 1)
+      if (confirm) {
+        step = 'confirm four explicit checks'
+        await page.getByRole('button', { name: '检查会话并读取材料' }).click()
+        const submit = page.getByRole('button', { name: '记录题意确认' })
+        await submit.waitFor()
+        assert(await submit.isDisabled())
+        const checks = await page.getByRole('group', { name: '人工核对清单' }).getByRole('checkbox').all()
+        assert.equal(checks.length, 4)
+        for (const item of checks.slice(0, 3)) await item.check()
+        assert(await submit.isDisabled())
+        await checks[3].check()
+        assert(!await submit.isDisabled())
+        assert.equal(reads.filter(([method]) => method === 'POST').length, 0)
+        step = 'lose the response after the real API commits'
+        let receipt, key
+        await page.route(info.origin + confirmation, async route => {
+          const request = route.request()
+          assert.equal(request.method(), 'POST')
+          assert.equal(request.headers()['origin'], info.origin)
+          const body = request.postDataJSON()
+          assert.equal(body.checklist_version, 'oj.statement-semantics.v1')
+          key = body.request_key
+          const response = await route.fetch({ maxRedirects: 0, maxRetries: 0 })
+          assert.equal(response.status(), 200)
+          receipt = await response.json()
+          await route.abort()
+        })
+        await submit.click()
+        await page.getByText(/尚未核实本次确认/).waitFor()
+        assert.match(key, /^[a-f0-9]{32}$/)
+        assert.equal(receipt.request_key, key)
+        step = 'refresh and recover by GET without resubmission'
+        const before = reads.length
+        await page.reload()
+        await page.getByRole('button', { name: '检查会话并读取材料' }).waitFor()
+        assert.equal(reads.length, before)
+        await page.getByRole('button', { name: '检查会话并读取材料' }).click()
+        const query = page.getByRole('button', { name: '查询原确认回执' })
+        await query.waitFor()
+        assert.equal(await submit.count(), 0)
+        const receiptPath = `${confirmation}/${key}`
+        const [readback] = await Promise.all([
+          page.waitForResponse(r => r.url() === info.origin + receiptPath),
+          query.click(),
+        ])
+        assert.equal(readback.status(), 200)
+        assert.deepEqual(await readback.json(), receipt)
+        await page.getByText('已核实这份冻结题面的确认回执。').waitFor()
+        assert.deepEqual(reads.slice(1), [
+          ['GET', endpoint, ready.other_subject_id], ['POST', confirmation, ready.other_subject_id],
+          ['GET', endpoint, ready.other_subject_id], ['GET', receiptPath, ready.other_subject_id],
+        ])
+      }
     } else {
       step = 'render denial'
       await page.getByText('无法读取材料。请核对送审 ID、当前分配及服务状态，再手动重试。', { exact: true }).waitFor()
@@ -92,8 +146,9 @@ try {
   await exercise(browser, { width: 1280, height: 960 }, true, true)
   passed('assigned reviewer opens frozen statement samples and solution on desktop')
   phase = 'narrow reviewer'
-  await exercise(browser, { width: 390, height: 844 }, true, false)
+  await exercise(browser, { width: 390, height: 844 }, true, false, true)
   passed('narrow deep link is usable and refresh clears materials without refetching')
+  passed('four explicit checks confirm once and reload recovers the lost receipt by original-key GET')
   phase = 'author denied'
   await exercise(browser, { width: 1280, height: 960 }, false, false)
   passed('the author with reviewer role receives no private review materials')

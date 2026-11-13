@@ -6,6 +6,7 @@ import { validDraftID } from '../services/privateDraft'
 import { Sample } from '../statement/Sample'
 import { StatementMarkdown } from '../statement/StatementMarkdown'
 import { ReviewMaterialsController } from './materialsController'
+import { StatementConfirmation } from './StatementConfirmation'
 
 function AssignedMaterials({ id }: { id: string }) {
   const { controller: account, state: accountState } = useCurrentAccount()
@@ -48,6 +49,7 @@ function AssignedMaterials({ id }: { id: string }) {
           <summary>{dep.name}</summary><pre><code>{dep.source}</code></pre>
         </details>)}
       </section>
+      <StatementConfirmation controller={controller} state={state} />
     </>}
   </>
 }

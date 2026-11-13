@@ -1,8 +1,24 @@
 import type { AccountController } from '../account/controller'
+import { validKey } from '../services/draftManagement'
 import { fetchReviewMaterials, type ReviewMaterials } from '../services/reviewMaterials'
+import { requestStatementConfirmation } from '../services/statementConfirmation'
 
-interface MaterialsState { data: ReviewMaterials | null; busy: boolean; notice: string }
-const empty = (notice: string): MaterialsState => ({ data: null, busy: false, notice })
+type Confirmation = 'ready' | 'pending' | 'recorded' | 'unavailable'
+interface MaterialsState { data: ReviewMaterials | null; busy: boolean; notice: string; confirmation: Confirmation }
+const empty = (notice: string): MaterialsState => ({ data: null, busy: false, notice, confirmation: 'unavailable' })
+
+function journalSlot(owner: string, evidence: ReviewMaterials['evidence']) {
+  return ['oj.statement-confirmation.v1', owner, evidence.review_id, evidence.assignment_revision,
+    evidence.import_revision, evidence.evidence_sha256].join(':')
+}
+
+function confirmationStatus(slot: string): Confirmation {
+  try {
+    const key = sessionStorage.getItem(slot)
+    return key === null ? 'ready' : validKey(key) ? 'pending' : 'unavailable'
+  } catch { return 'unavailable' }
+}
+const confirmationExpired = (deadline: number) => Date.now() >= deadline || document.visibilityState === 'hidden'
 
 export class ReviewMaterialsController {
   private state = empty('请检查会话并读取分配给当前账号的审核材料。')
@@ -14,6 +30,7 @@ export class ReviewMaterialsController {
   private abort: AbortController | null = null
   private unsubscribe: (() => void) | null = null
   private expiry: ReturnType<typeof setTimeout> | undefined
+  private authority: { owner: string; deadline: number } | null = null
 
   constructor(private account: AccountController, private id: string) {}
   getSnapshot = () => this.state
@@ -24,6 +41,7 @@ export class ReviewMaterialsController {
   clear = () => { ++this.intent; this.discard() }
   private discard() {
     ++this.generation; this.abort?.abort(); this.abort = null; clearTimeout(this.expiry)
+    this.authority = null
     this.publish(empty('材料已清除，请重新检查会话。'))
   }
 
@@ -46,10 +64,60 @@ export class ReviewMaterialsController {
       this.publish({ ...empty('正在读取审核材料…'), busy: true })
       try {
         const data = await fetchReviewMaterials(this.id, session.subject_id, abort.signal)
-        if (current()) this.publish({ data, busy: false, notice: '已读取当前分配的冻结材料。' })
+        if (current()) {
+          this.authority = { owner: session.subject_id, deadline }
+          this.publish({ data, busy: false, notice: '已读取当前分配的冻结材料。',
+            confirmation: confirmationStatus(journalSlot(session.subject_id, data.evidence)) })
+        }
       } catch {
         if (current()) this.publish(empty('无法读取材料。请核对送审 ID、当前分配及服务状态，再手动重试。'))
       }
     } finally { this.running = false }
+  }
+
+  async confirm(action: 'confirm' | 'read', allChecked = false) {
+    const { data, confirmation, busy } = this.state
+    const authority = this.authority
+    if (!this.connected || this.running || busy || !data || !authority ||
+      (action === 'confirm' ? !allChecked || confirmation !== 'ready' : confirmation !== 'pending')) return
+    const { owner, deadline } = authority
+    if (confirmationExpired(deadline)) { this.clear(); return }
+    const generation = this.generation
+    const slot = journalSlot(owner, data.evidence)
+    let key: string
+    try {
+      const saved = sessionStorage.getItem(slot)
+      if (action === 'confirm' && saved === null) {
+        key = crypto.randomUUID().replaceAll('-', '')
+        // Save before POST so a lost response or refresh only needs a GET.
+        sessionStorage.setItem(slot, key)
+      } else if (validKey(saved)) {
+        if (action === 'confirm') { this.publish({ ...this.state, confirmation: 'pending' }); return }
+        key = saved
+      } else { throw new Error('Original request key unavailable') }
+    } catch {
+      this.publish({ ...this.state, confirmation: 'unavailable' })
+      return
+    }
+    this.running = true
+    const abort = new AbortController()
+    this.abort = abort
+    this.publish({ ...this.state, busy: true, confirmation: 'pending' })
+    let recorded = false
+    try {
+      await requestStatementConfirmation(action, owner, data.evidence, key, abort.signal)
+      recorded = true
+    } catch {
+      // A missing receipt can mean the write is still in flight. Never resend it.
+    } finally {
+      this.running = false
+      if (generation === this.generation) {
+        if (confirmationExpired(deadline)) this.clear()
+        else {
+          this.abort = null
+          this.publish({ ...this.state, busy: false, confirmation: recorded ? 'recorded' : 'pending' })
+        }
+      }
+    }
   }
 }
