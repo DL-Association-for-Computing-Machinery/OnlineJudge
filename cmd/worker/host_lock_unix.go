@@ -14,11 +14,12 @@ import (
 )
 
 const (
-	ubuntuMarker = "ubuntu-active\n"
-	activeMarker = "active\n"
-	hostLockName = "host-execution.lock"
-	dualModeEnv  = "OJ_WORKER_M0_DUAL_EXPERIMENT"
-	dualMarker   = "active-dual-m0\n"
+	ubuntuMarker       = "ubuntu-active\n"
+	ubuntuAPlusBMarker = "ubuntu-aplusb-active\n"
+	activeMarker       = "active\n"
+	hostLockName       = "host-execution.lock"
+	dualModeEnv        = "OJ_WORKER_M0_DUAL_EXPERIMENT"
+	dualMarker         = "active-dual-m0\n"
 )
 
 func lockM0Execution(slot workerhost.M0Slot, recovery bool, dualMode string) (*slotLock, error) {
@@ -62,9 +63,25 @@ func lockHostSlotAt(dir, name string, recovery, dual bool) (_ *slotLock, err err
 }
 
 func lockHostSlotForRuntimeAt(dir, name string, recovery, dual, ubuntu bool) (_ *slotLock, err error) {
+	return lockHostSlotForMarkerAt(dir, name, recovery, dual, ubuntu, false)
+}
+
+func lockReferenceRuntime(slot workerhost.ReferenceTierSlot, recovery bool) (*slotLock, error) {
+	if !slot.IsUbuntuAPlusB() {
+		return lockSlotMode(slot.LockName(), recovery)
+	}
+	dir, err := ownershipDirectory()
+	if err != nil {
+		return nil, err
+	}
+	return lockHostSlotForMarkerAt(dir, slot.LockName(), recovery, false, false, true)
+}
+
+func lockHostSlotForMarkerAt(dir, name string, recovery, dual, ubuntu, ubuntuAPlusB bool) (_ *slotLock, err error) {
 	names := workerhost.ExecutionLockNames()
 	if !slices.Contains(names[:], name) || (dual && !isM0Lock(name)) ||
-		(ubuntu && (dual || name != (workerhost.M0Slot{}).LockName())) {
+		(ubuntu && (dual || ubuntuAPlusB || name != (workerhost.M0Slot{}).LockName())) ||
+		(ubuntuAPlusB && (dual || name != (workerhost.ReferenceSlot{}).LockName())) {
 		return nil, errors.New("invalid canonical execution slot")
 	}
 	host, err := openOwnershipLock(filepath.Join(dir, hostLockName), true)
@@ -97,17 +114,19 @@ func lockHostSlotForRuntimeAt(dir, name string, recovery, dual, ubuntu bool) (_ 
 		return nil, err
 	}
 	marker := activeMarker
-	if ubuntu {
+	if ubuntuAPlusB {
+		marker = ubuntuAPlusBMarker
+	} else if ubuntu {
 		marker = ubuntuMarker
 	} else if dual {
 		marker = dualMarker
 	}
 	if recovery {
-		var raw [max(len(activeMarker), len(dualMarker), len(ubuntuMarker)) + 1]byte
+		var raw [max(len(activeMarker), len(dualMarker), len(ubuntuMarker), len(ubuntuAPlusBMarker)) + 1]byte
 		n, readErr := slot.ReadAt(raw[:], 0)
 		saved := string(raw[:n])
 		// Single-slot Desktop recovery can still recover a Desktop dual marker.
-		if !dual && !ubuntu && saved == dualMarker {
+		if !dual && !ubuntu && !ubuntuAPlusB && saved == dualMarker {
 			marker = dualMarker
 		}
 		if readErr != io.EOF || (saved != "" && saved != marker) {

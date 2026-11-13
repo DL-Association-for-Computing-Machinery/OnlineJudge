@@ -118,9 +118,13 @@ func (h *Host) fileExchange(ctx context.Context, input io.Reader, output io.Writ
 	run := h.stream
 	if run == nil {
 		run = runCommandTo
+		if h.nativeUbuntu() {
+			run = ubuntuCommandTo
+		}
 	}
 	response := &fileResponse{target: &commandSink{target: output, maximum: maximum}}
-	err = run(ctx, input, response, maximum+4, "docker", append([]string{"--context", "desktop-linux"}, args...)...)
+	name, commandArgs := h.dockerCommand(args)
+	err = run(ctx, input, response, maximum+4, name, commandArgs...)
 	if err != nil || ctx.Err() != nil {
 		cause := errors.Join(err, ctx.Err())
 		return errors.Join(fileError("reference file transfer failed", failureCode(cause)), contextCause(cause))

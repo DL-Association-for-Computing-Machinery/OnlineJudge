@@ -34,6 +34,11 @@ func startConfiguredSlot(ctx context.Context, run command, name string, tier exp
 	if err != nil {
 		return nil, err
 	}
+	if h.nativeUbuntu() {
+		if err := h.verifyUbuntuGuest(ctx, p); err != nil {
+			return nil, err
+		}
+	}
 	s, err := h.inspect(ctx, name)
 	if err != nil {
 		return nil, err
@@ -41,13 +46,12 @@ func startConfiguredSlot(ctx context.Context, run command, name string, tier exp
 	if !containerID.MatchString(s.ID) || s.Running || s.PID != 0 || s.Paused || s.Restarting {
 		return nil, errors.New("reference slot is not safely stopped")
 	}
-	if err := validateIsolation(s, p); err != nil {
+	if err := h.validateIsolation(s, p); err != nil {
 		return nil, err
 	}
 	h.id, h.started = s.ID, s.Started
-	owner, err := h.docker(ctx, nil, "inspect", "--format", `{{index .Config.Labels "owner"}}`, h.id)
-	if err != nil || strings.TrimSpace(string(owner)) != "onlinejudge.desktop-test" {
-		return nil, errors.New("reference slot owner mismatch")
+	if err := h.verifySlotOwner(ctx); err != nil {
+		return nil, err
 	}
 	_, startErr := h.docker(ctx, nil, "start", h.id)
 	// Even a lost start acknowledgement needs a bound lifetime for Stop. This
@@ -66,4 +70,16 @@ func startConfiguredSlot(ctx context.Context, run command, name string, tier exp
 		return h, err
 	}
 	return h, nil
+}
+
+func (h *Host) verifySlotOwner(ctx context.Context) error {
+	want := "onlinejudge.desktop-test"
+	if h.tier == experiment.ReferenceAPlusBUbuntu {
+		want = "onlinejudge.ubuntu-aplusb-test"
+	}
+	owner, err := h.docker(ctx, nil, "inspect", "--format", `{{index .Config.Labels "owner"}}`, h.id)
+	if err != nil || strings.TrimSpace(string(owner)) != want {
+		return errors.New("reference slot owner mismatch")
+	}
+	return nil
 }

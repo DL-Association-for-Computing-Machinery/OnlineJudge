@@ -12,6 +12,7 @@ import (
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/checkedfile"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/execution"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/judging"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
@@ -40,7 +41,9 @@ func runCheckerCommand(ctx context.Context, args []string, logger *slog.Logger, 
 	plan := f.String("expected-plan", "", "trusted formal plan SHA-256")
 	candidate := f.String("expected-candidate", "", "trusted candidate SHA-256")
 	var manifest, sourcePath, sourceSHA string
+	var ubuntu bool
 	if isolatedJudge {
+		f.BoolVar(&ubuntu, "ubuntu-aplusb", false, "use the fixed standalone Ubuntu guest runtime")
 		f.StringVar(&manifest, "expected-manifest", "", "independently reviewed judge manifest SHA-256")
 		f.StringVar(&sourcePath, "submission", "", "absolute path to the private UTF-8 GNU++17 submission")
 		f.StringVar(&sourceSHA, "expected-submission", "", "trusted submission byte SHA-256")
@@ -69,7 +72,14 @@ func runCheckerCommand(ctx context.Context, args []string, logger *slog.Logger, 
 		var source []byte
 		source, err = checkedfile.ReadSecret(sourcePath, submission.MaxSourceBytes)
 		if err == nil {
-			trial, err = problemvalidation.PrepareAPlusBJudge(preflightCtx, prepared, *plan, *candidate, manifest, sourceSHA, string(source), caps)
+			tier := experiment.ReferenceSmall
+			if ubuntu {
+				tier = experiment.ReferenceAPlusBUbuntu
+			}
+			trial, err = problemvalidation.PrepareAPlusBJudgeForTier(preflightCtx, prepared, *plan, *candidate, manifest, sourceSHA, string(source), caps, tier)
+		}
+		if err == nil && ubuntu {
+			err = workerhost.CheckUbuntuAPlusBHost(preflightCtx)
 		}
 	} else {
 		trial, err = problemvalidation.PrepareCheckerTrialWithLifetime(preflightCtx, ctx, prepared, *plan, *candidate, caps)
@@ -89,7 +99,7 @@ func runCheckerCommand(ctx context.Context, args []string, logger *slog.Logger, 
 	if err := os.WriteFile(filepath.Join(*output, "INCOMPLETE"), []byte("Checker trial incomplete; no admission.\n"), 0600); err != nil {
 		return err
 	}
-	lock, err := lockSlotMode(slot.LockName(), false)
+	lock, err := lockReferenceRuntime(slot, false)
 	if err != nil {
 		return err
 	}

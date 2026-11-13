@@ -26,6 +26,38 @@ func takeHostSlot(t *testing.T, dir, name string, recovery, dual bool) *slotLock
 	return lock
 }
 
+func TestUbuntuAPlusBQuarantineCannotBeClearedByDesktop(t *testing.T) {
+	dir := t.TempDir()
+	ref := (workerhost.ReferenceSlot{}).LockName()
+	m0 := (workerhost.M0Slot{}).LockName()
+	for _, ubuntuCrash := range []bool{false, true} {
+		active, err := lockHostSlotForMarkerAt(dir, ref, false, false, false, ubuntuCrash)
+		if err != nil {
+			t.Fatal(err)
+		}
+		dirtyErr := active.dirty()
+		active.Close()
+		if dirtyErr != nil {
+			t.Fatal(dirtyErr)
+		}
+		rejectHostSlot(t, dir, m0, false, false)
+		if wrong, err := lockHostSlotForMarkerAt(dir, ref, true, false, false, !ubuntuCrash); err == nil {
+			wrong.Close()
+			t.Fatal("cross-runtime recovery was accepted")
+		}
+		recovered, err := lockHostSlotForMarkerAt(dir, ref, true, false, false, ubuntuCrash)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cleanErr := recovered.clean()
+		recovered.Close()
+		if cleanErr != nil {
+			t.Fatal(cleanErr)
+		}
+	}
+	takeHostSlot(t, dir, m0, false, false).Close()
+}
+
 func rejectHostSlot(t *testing.T, dir, name string, recovery, dual bool) {
 	t.Helper()
 	if lock, err := lockHostSlotAt(dir, name, recovery, dual); err == nil {
