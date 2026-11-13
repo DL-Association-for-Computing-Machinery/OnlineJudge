@@ -751,6 +751,8 @@ docker --context desktop-linux build --target host-artifacts --output type=local
 
 Worker 启动完成后，向该 Worker 进程发送 `SIGUSR1`（`kill -USR1 PID`，将 PID 替换为对应进程号）请求排空式下线：每轮领取前检查排空，已通过检查的至多一个在途领取继续完成下载、执行及回报；确认后不再领取。空队列等待可被唤醒；未知回报仍按原令牌/结果最多发送三次，失败保留原错误。`SIGINT`/`SIGTERM` 仍取消当前操作并等待停止确认。排空返回后同样停止沙箱、确认 PID 消失，成功才清正常占用标记；停止不确定继续隔离，不自动重启或解封。排空耗时受现有任务/网络预算影响，不承诺固定下线 SLA；需要中止时仍可发送取消信号。旧版本回退后不再使用新增信号，无数据库迁移。`python3 scripts/test-worker.py report` 包含执行中排空、保留后续排队任务及显式重启复用的真实验证。
 
+邮件密文维护：使用应用库的 `OJ_DATABASE_URL` 执行 `.local/bin/migrate mail-payload-sweep <1-512> [cursor]`。每次只检查一批，输出 JSON `removed` 和 `next_cursor`；非空游标供下一批使用，空游标表示本轮结束。单个维护任务按部署负载限制调用频率与批次数，每轮不传游标起步，以重访此前锁住或后来到期的行。命令只清理超过发送窗口的密文，不撤销有效链接，也不启动发送。
+
 ### HTTP 到真实判题终态专项
 
 受信维护流程须先使用 Docker 构建的 `.local/bin/migrate up` 升级 schema，再按材料版本执行 `.local/bin/migrate fixture`，最后显式执行 `.local/bin/migrate backlog <全局上限> <主体上限>`；命令共用私有 `OJ_DATABASE_URL`。不执行最后一步会拒绝新提交，API 不自动设值。HTTP 判题专项在独占临时库将两项上限设为 2 以触发过载，其他夹具可用较高上限。升级已有服务必须先停止全部旧版写入 API，详见[升级与回退](docs/submission-backlog.md#升级与回退)。

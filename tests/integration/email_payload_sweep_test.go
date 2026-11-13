@@ -4,10 +4,13 @@ package integration_test
 
 import (
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/emailtoken"
 	identitypg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/postgres"
 )
 
@@ -71,6 +74,61 @@ func TestSweepExpiredEmailPayloads(t *testing.T) {
 	if ledger != 8192 || payloads != 8190 {
 		t.Fatalf("ledger/payload counts = %d/%d", ledger, payloads)
 	}
+	token := checkEmailSweepCommand(t, f)
+	must(t, issuer.ActivateEmail(f.ctx, token, identityRecord(t, h, "synthetic new expiry fixture password")))
+	activated, err := issuer.PersonalByID(f.ctx, subject)
+	must(t, err)
+	if !activated.EmailVerified {
+		t.Fatal("removing expired mail payload revoked a still-valid link")
+	}
+}
+
+func checkEmailSweepCommand(t *testing.T, f backlogFixture) emailtoken.Token {
+	t.Helper()
+	token, err := emailtoken.New()
+	must(t, err)
+	digest, err := token.Digest(emailtoken.Activation)
+	must(t, err)
+	var schema string
+	must(t, f.a.QueryRow(f.ctx, "SELECT current_schema()").Scan(&schema))
+	_, err = f.a.Exec(f.ctx, "UPDATE identity_email_tokens SET digest=$2 WHERE id=$1", identityID(8192), digest[:])
+	must(t, err)
+	_, err = f.a.Exec(f.ctx, `UPDATE identity_email_payloads SET send_until=statement_timestamp()-interval '1 second'
+		WHERE token_id=$1`, identityID(8192))
+	must(t, err)
+	bin, err := filepath.Abs("../../.local/bin/migrate")
+	must(t, err)
+	run := func(args ...string) (string, error) {
+		cmd := exec.CommandContext(f.ctx, bin, append([]string{"mail-payload-sweep"}, args...)...)
+		cmd.Env = []string{"OJ_DATABASE_URL=" + f.a.Config().ConnString() + " search_path=" + schema}
+		output, err := cmd.Output()
+		return strings.TrimSpace(string(output)), err
+	}
+	for _, args := range [][]string{{"513"}, {"0"}, {"2", "bad-cursor"}} {
+		if _, err := run(args...); err == nil {
+			t.Fatal("sweep command accepted invalid arguments")
+		}
+	}
+	output, err := run("2", identityID(8190))
+	must(t, err)
+	if output != `{"next_cursor":"`+identityID(8192)+`","removed":1}` {
+		t.Fatalf("unexpected sweep continuation: %s", output)
+	}
+	output, err = run("2", identityID(8192))
+	must(t, err)
+	if output != `{"next_cursor":"","removed":0}` {
+		t.Fatalf("unexpected sweep completion: %s", output)
+	}
+	var expired, active, retained bool
+	must(t, f.b.QueryRow(f.ctx, `SELECT
+		EXISTS(SELECT 1 FROM identity_email_payloads WHERE token_id=$1),
+		EXISTS(SELECT 1 FROM identity_email_payloads WHERE token_id=$2),
+		EXISTS(SELECT 1 FROM identity_email_tokens WHERE id=$1)`, identityID(8192), identityID(8191)).
+		Scan(&expired, &active, &retained))
+	if expired || !active || !retained {
+		t.Fatal("sweep command failed to preserve active payload or token digest")
+	}
+	return token
 }
 
 func checkEmailSweepPlan(t *testing.T, f backlogFixture) {
