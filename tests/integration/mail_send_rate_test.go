@@ -171,7 +171,7 @@ func TestAccountMailSendRateAcrossPools(t *testing.T) {
 		t.Fatal("reservation waiting for the row lock did not fail closed")
 	}
 	must(t, tx.Rollback(f.ctx))
-	_, err = f.provider.Down(f.ctx)
+	_, err = f.provider.DownTo(f.ctx, 21)
 	must(t, err)
 	var version int64
 	must(t, f.a.QueryRow(f.ctx, "SELECT version_id FROM goose_db_version ORDER BY id DESC LIMIT 1").Scan(&version))

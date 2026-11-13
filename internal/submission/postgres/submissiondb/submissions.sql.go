@@ -195,6 +195,110 @@ func (q *Queries) GetSubmission(ctx context.Context, arg GetSubmissionParams) (G
 	return i, err
 }
 
+const listHistoryAfter = `-- name: ListHistoryAfter :many
+SELECT s.id, s.material_version, s.language, s.created_at, t.state, t.verdict
+FROM submissions s JOIN judge_tasks t ON t.submission_id = s.id
+WHERE s.subject_id = $1 AND s.context_id = $2
+    AND (s.created_at, s.id) < ($3::timestamptz, $4::text)
+ORDER BY s.created_at DESC, s.id DESC LIMIT 21
+`
+
+type ListHistoryAfterParams struct {
+	SubjectID  string
+	ContextID  string
+	CursorTime pgtype.Timestamptz
+	CursorID   string
+}
+
+type ListHistoryAfterRow struct {
+	ID              string
+	MaterialVersion string
+	Language        string
+	CreatedAt       pgtype.Timestamptz
+	State           string
+	Verdict         pgtype.Text
+}
+
+func (q *Queries) ListHistoryAfter(ctx context.Context, arg ListHistoryAfterParams) ([]ListHistoryAfterRow, error) {
+	rows, err := q.db.Query(ctx, listHistoryAfter,
+		arg.SubjectID,
+		arg.ContextID,
+		arg.CursorTime,
+		arg.CursorID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListHistoryAfterRow{}
+	for rows.Next() {
+		var i ListHistoryAfterRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.MaterialVersion,
+			&i.Language,
+			&i.CreatedAt,
+			&i.State,
+			&i.Verdict,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listHistoryFirst = `-- name: ListHistoryFirst :many
+SELECT s.id, s.material_version, s.language, s.created_at, t.state, t.verdict
+FROM submissions s JOIN judge_tasks t ON t.submission_id = s.id
+WHERE s.subject_id = $1 AND s.context_id = $2
+ORDER BY s.created_at DESC, s.id DESC LIMIT 21
+`
+
+type ListHistoryFirstParams struct {
+	SubjectID string
+	ContextID string
+}
+
+type ListHistoryFirstRow struct {
+	ID              string
+	MaterialVersion string
+	Language        string
+	CreatedAt       pgtype.Timestamptz
+	State           string
+	Verdict         pgtype.Text
+}
+
+func (q *Queries) ListHistoryFirst(ctx context.Context, arg ListHistoryFirstParams) ([]ListHistoryFirstRow, error) {
+	rows, err := q.db.Query(ctx, listHistoryFirst, arg.SubjectID, arg.ContextID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListHistoryFirstRow{}
+	for rows.Next() {
+		var i ListHistoryFirstRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.MaterialVersion,
+			&i.Language,
+			&i.CreatedAt,
+			&i.State,
+			&i.Verdict,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockBacklogPolicy = `-- name: LockBacklogPolicy :one
 SELECT global_limit, subject_limit FROM submission_backlog_policy
 WHERE singleton = true FOR UPDATE
