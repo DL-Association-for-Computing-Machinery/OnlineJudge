@@ -15,11 +15,12 @@ import (
 )
 
 type config struct {
-	slot     workerhost.M0Slot
-	fixture  experiment.WorkerFixture
-	endpoint string
-	roots    *x509.CertPool
-	cert     tls.Certificate
+	slot        workerhost.M0Slot
+	fixture     experiment.WorkerFixture
+	endpoint    string
+	roots       *x509.CertPool
+	cert        tls.Certificate
+	startAPlusB bool
 }
 
 // Configuration errors never echo file paths, endpoints or credential contents.
@@ -49,6 +50,16 @@ func loadConfig(getenv func(string) string) (config, error) {
 		if err != nil {
 			return c, err
 		}
+	}
+	switch getenv("OJ_APLUSB_START_STOPPED") {
+	case "":
+	case "1":
+		if !c.fixture.IsAPlusB() {
+			return c, errors.New("managed reference startup requires an explicit A+B fixture")
+		}
+		c.startAPlusB = true
+	default:
+		return c, errors.New("invalid managed A+B startup setting")
 	}
 	c.endpoint = getenv("OJ_WORKER_CONTROLLER_URL")
 	u, err := url.Parse(c.endpoint)

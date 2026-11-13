@@ -35,6 +35,17 @@ func run(ctx context.Context, logger *slog.Logger, drain <-chan struct{}) error 
 		}
 		defer lock.Close()
 		return runSlot(ctx, c, logger, lock, func(ctx context.Context) (sandboxHost, error) {
+			if c.startAPlusB {
+				if err := lock.dirty(); err != nil {
+					return nil, err
+				}
+				host, err := workerhost.StartReference(ctx)
+				if host == nil {
+					// No Docker start was requested; the slot is still unclaimed.
+					return nil, errors.Join(err, lock.clean())
+				}
+				return host, err
+			}
 			return workerhost.OpenReference(ctx)
 		}, drain)
 	}
@@ -70,8 +81,11 @@ func runSlot(ctx context.Context, c config, logger *slog.Logger, lock *slotLock,
 	defer reporter.Close()
 	startup, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	host, err := open(startup)
-	if err != nil {
+	host, openErr := open(startup)
+	if host == nil && c.startAPlusB {
+		return errors.Join(errors.New("A+B slot startup refused; no task claimed"), openErr)
+	}
+	if host == nil || (openErr != nil && !c.startAPlusB) {
 		return errors.New("M0 sandbox preflight failed; no task claimed")
 	}
 	// Both LeasedRunner and final shutdown use the same stop result. A failed
@@ -93,8 +107,14 @@ func runSlot(ctx context.Context, c config, logger *slog.Logger, lock *slotLock,
 			result = err
 		}
 	}()
-	if err := lock.dirty(); err != nil {
-		return err
+	if c.startAPlusB {
+		if openErr != nil {
+			return errors.New("A+B slot startup failed; no task claimed")
+		}
+	} else {
+		if err := lock.dirty(); err != nil {
+			return err
+		}
 	}
 	sandbox := execution.NewGoJudge(host, host.Verify)
 	var runner *execution.LeasedRunner

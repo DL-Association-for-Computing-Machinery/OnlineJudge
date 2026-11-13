@@ -25,6 +25,8 @@ func TestConfig(t *testing.T) {
 		{"secondary-slot", "OJ_WORKER_M0_SLOT", "secondary", true},
 		{"slot-alias", "OJ_WORKER_M0_SLOT", "oj-m0-sandbox", false},
 		{"slot-path", "OJ_WORKER_M0_SLOT", "../secret", false},
+		{"managed-start-without-A+B", "OJ_APLUSB_START_STOPPED", "1", false},
+		{"invalid-managed-start", "OJ_APLUSB_START_STOPPED", "yes", false},
 		{"opt-in", "OJ_SANDBOX_EXPERIMENT", "", false},
 		{"plaintext", "OJ_WORKER_CONTROLLER_URL", "http://127.0.0.1", false},
 		{"external", "OJ_WORKER_CONTROLLER_URL", "https://192.0.2.1", false},
