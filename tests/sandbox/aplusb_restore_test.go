@@ -5,7 +5,9 @@ package sandbox_test
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"os"
+	"os/exec"
 	"regexp"
 	"strings"
 	"testing"
@@ -89,12 +91,7 @@ func TestAPlusBRestoreJudgeLoop(t *testing.T) {
 		t.Fatal("historical A+B attempt changed during restore")
 	}
 
-	// Test-only scheduling in the owned target: there is no product rejudge API.
-	changed, err := target.pool.Exec(ctx, `UPDATE judge_tasks SET state='queued', verdict=NULL, attempt_number=0, judge_generation=2
-		WHERE submission_id=$1 AND state='finished' AND verdict='AC' AND attempt_number=1 AND judge_generation=1 AND recovery_generation=1`, initial.ID)
-	if err != nil || changed.RowsAffected() != 1 {
-		t.Fatal("cannot advance the restored A+B fixture to a new judge generation")
-	}
+	rejudgeRestoredAPlusB(t, ctx, target, objects, initial, pin)
 	judge(target, objects, restored, false)
 	if aplusbRestoredAttempt(t, ctx, target.pool, initial.ID, 1) != first {
 		t.Fatal("rejudge changed the historical A+B result")
@@ -109,6 +106,61 @@ func TestAPlusBRestoreJudgeLoop(t *testing.T) {
 		t.Fatal("rejudge resubmitted or created extra attempts")
 	}
 	t.Logf("one A+B submission, two AC generations, original result preserved; material=%s; source=%x", pin, sha256.Sum256([]byte(text)))
+}
+
+func rejudgeRestoredAPlusB(t *testing.T, ctx context.Context, target restoreLoopDatabase, objects string, initial submission.Receipt, pin string) {
+	t.Helper()
+	for _, ddl := range []string{
+		"CREATE ROLE oj_rejudge_operator NOLOGIN",
+		"CREATE ROLE oj_restore_rejudge LOGIN",
+		"CREATE ROLE oj_indirect_rejudge NOLOGIN",
+		"CREATE ROLE oj_restore_readonly LOGIN",
+		"GRANT oj_rejudge_operator TO oj_restore_rejudge",
+		"GRANT oj_rejudge_operator TO oj_indirect_rejudge",
+		"GRANT oj_indirect_rejudge TO oj_restore_readonly",
+		"GRANT SELECT ON goose_db_version, submission_materials, judge_tasks, submission_backlog_policy, training_queue_clock, submission_rejudges TO oj_rejudge_operator",
+		"GRANT SELECT (id, subject_id, context_id, material_version, manifest_sha256) ON submissions TO oj_rejudge_operator",
+		"GRANT SELECT (submission_id, judge_generation, recovery_generation, attempt_number, state, result_payload) ON judge_attempts TO oj_rejudge_operator",
+		"GRANT UPDATE (singleton) ON submission_backlog_policy TO oj_rejudge_operator",
+		"GRANT UPDATE (floor) ON training_queue_clock TO oj_rejudge_operator",
+		"GRANT UPDATE (state, verdict, attempt_number, judge_generation, queue_version, virtual_finish, enqueue_order) ON judge_tasks TO oj_rejudge_operator",
+		"GRANT INSERT ON submission_rejudges TO oj_rejudge_operator",
+		"GRANT USAGE ON SEQUENCE training_enqueue_order TO oj_rejudge_operator",
+	} {
+		if _, err := target.pool.Exec(ctx, ddl); err != nil {
+			t.Fatal("cannot grant the disposable maintenance role")
+		}
+	}
+	dsn := strings.Replace(target.dsn, "user=oj_test ", "user=oj_restore_rejudge ", 1)
+	indirect := strings.Replace(target.dsn, "user=oj_test ", "user=oj_restore_readonly ", 1)
+	const key = "restored-aplusb-rejudge-01"
+	run := func(dsn, root string, args ...string) ([]byte, error) {
+		t.Helper()
+		cmd := exec.CommandContext(ctx, "../../.local/bin/migrate", append([]string{"rejudge"}, args...)...)
+		cmd.Env = httpLoopEnvironment("OJ_REJUDGE_DATABASE_URL="+dsn, "OJ_MATERIAL_ROOT="+root)
+		return cmd.CombinedOutput()
+	}
+	args := []string{"enqueue", target.name, initial.ID, "1", initial.MaterialVersion, pin, key, "verify restored result", "--confirm-rejudge"}
+	if out, err := run(indirect, objects, args...); err == nil || !strings.Contains(string(out), "rejudge requires an authorized database login") {
+		t.Fatal("maintenance command did not reject indirect role membership")
+	}
+	if out, err := run(dsn, t.TempDir(), args...); err == nil || !strings.Contains(string(out), "material unavailable or inconsistent") {
+		t.Fatal("maintenance command did not reject missing original materials")
+	}
+	out, err := run(dsn, objects, args...)
+	if err != nil {
+		t.Fatalf("rejudge command failed: %s", out)
+	}
+	var receipt postgres.RejudgeReceipt
+	if json.Unmarshal(out, &receipt) != nil || receipt.SubmissionID != initial.ID || receipt.Generation != 2 ||
+		receipt.Operator != "oj_restore_rejudge" || receipt.Key != key || receipt.Manifest != pin {
+		t.Fatal("maintenance audit does not match restored submission")
+	}
+	again, err := run(dsn, "", "status", target.name, key)
+	if err != nil || string(again) != string(out) {
+		t.Fatal("could not recover the original maintenance receipt")
+	}
+	t.Log("authorized maintenance command queued the restored submission; original key returned its immutable audit")
 }
 
 func assertAPlusBReferenceBusy(t *testing.T, ctx context.Context, slotID, endpoint, ca, cert, key string) {

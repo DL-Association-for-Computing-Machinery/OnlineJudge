@@ -93,11 +93,12 @@ func TestCompatibleRollbackLoop(t *testing.T) {
 	if t.Failed() {
 		t.FailNow()
 	}
-	f.counts(t, ctx, 2, migrationRows+3, 23)
+	f.counts(t, ctx, 2, migrationRows+4, 24)
 
 	start := time.Now()
-	// Down23 drops the history index; Down22 drops only the rate gate.
+	// Down24 accepts only an empty rejudge audit. Down23 drops the history index; Down22 drops only the rate gate.
 	// Down21 requires an empty email ledger. Preserve accepted judging work.
+	runFixtureMigration(t, ctx, rollbackCurrent, f.database.dsn, f.root, rollbackVersion, []string{"down"})
 	runFixtureMigration(t, ctx, rollbackCurrent, f.database.dsn, f.root, rollbackVersion, []string{"down"})
 	runFixtureMigration(t, ctx, rollbackCurrent, f.database.dsn, f.root, rollbackVersion, []string{"down"})
 	runFixtureMigration(t, ctx, rollbackCurrent, f.database.dsn, f.root, rollbackVersion, []string{"down"})
