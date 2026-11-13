@@ -1,6 +1,6 @@
 # 浏览器账号与会话
 
-账号界面使用 React、原生 fetch 与 CSS，在 `/login` 提供已有个人账号登录与原尝试恢复，`/account` 提供当前会话检查、主动续期、退出和可选改密。页面由 React Router 导航，共享同一个账号 controller；旧 `/#account-title` 转到账号页。页面不提供注册、邮箱找回、角色或训练授权；未验证邮箱也不会因此获得提交权限。六个会话接口归[会话 OpenAPI](../api/session.openapi.yaml)，改密归[账号 OpenAPI](../api/account.openapi.yaml)。
+账号界面使用 React、原生 fetch 与 CSS，在 `/login` 提供已有个人账号登录与原尝试恢复，`/account` 提供当前会话检查、主动续期、退出和可选改密。站内账号页面由 React Router 导航，共享同一个账号 controller；旧 `/#account-title` 转到账号页。注册和找回邮件申请入口、角色或训练授权仍待接入；未验证邮箱也不会因此获得提交权限。六个会话接口归[会话 OpenAPI](../api/session.openapi.yaml)，改密归[账号 OpenAPI](../api/account.openapi.yaml)。
 
 新密码至少 15 个 Unicode code point、允许空格、不强制字符组合、拒绝常见弱密码及不 trim/归一化/截断的原始字节规则，已于 2026-11-01 由用户确认，见[需求](requirements.md#登录会话)。现有实现无需改变；这不代替生产弱密码字典的来源、许可和覆盖验收。
 
@@ -29,6 +29,14 @@
 请求设置同源模式、同源 Cookie、no-store、有限超时和 `redirect: error`。读取不发送 Referer；写入仅发送站点来源，不携带页面路径。Firefox 对 `no-referrer` 的同源 POST 会生成 `Origin: null`，无法通过服务端原有同源校验；客户端不手写 Origin，服务端继续拒绝空或不匹配的来源值。禁止重定向发生在浏览器发送跳转请求之前，防止 307/308 转发密码；不能用事后的 redirected 检查替代。JSON 响应最多读取 16 KiB，按操作接受固定状态码、公开字段和错误码，页面只显示本地固定文案，不回显服务端 title/HTML 或原始异常。客户端状态不是资源访问授权。
 
 密码不 trim、归一化或截断，不进入 React 状态、URL、日志或 Web Storage；表单提交时立即 reset，确认项仅本地比较，正确设置 autocomplete。浏览器及密码管理器可能自行保留输入，页面不承诺控制其行为。改密未知标记只在当前 controller 实例内保留，手动 Read 不清除它，明确重新登录核验后才解除；完整刷新/新页面不会保留此标记。因此表单始终提示上次改密中断时先重新登录核验，不宣称跨刷新或跨标签阻止重提。
+
+## 邮件确认页面
+
+邮件的 `/account/activate#token=…` 和 `/account/reset-password#token=…` 链接进入独立的确认页面。脚本在挂载页面前用当前历史项的干净路径替换链接，令牌只留在页面内存；刷新后须重新从邮箱打开。仅 HTTPS 接受链接，打开链接不发送确认请求。密码不进入持久存储，只有用户确认后才发同源 POST，不发送 Cookie，不跟随重定向。
+
+确认成功后须用新密码登录。密码不符合规则或请求过于频繁时可手动修改或稍后再试；无法确定提交结果时，页面停止提交并引导用户先尝试登录。此页面不申请或重发邮件；后端未装配时显示暂未开放。
+
+Docker Desktop 离线 lint、130 项前端测试与构建通过。回环 HTTPS 测试夹具在 Chromium 1280px 和 Firefox 390px 验证两种页面：打开及刷新均不提交，输入不一致不发送，匹配后仅一次同源请求，激活显示成功、重置在 503 后停止提交。夹具确认未发送既有 Cookie，Referer 只含来源。该验证使用合成令牌与替身 API，尚未联验真实确认服务和 SMTP。
 
 ## 验证与边界
 
