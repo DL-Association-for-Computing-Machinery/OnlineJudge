@@ -72,6 +72,7 @@ def arguments():
     mode.add_argument("--statement-corpus", type=Path, help="optional prepared bundle statements directory, renderer-only checks")
     mode.add_argument("--authorized-draft-bundle", type=Path, help="run real authorized previews for the pinned ten-problem private bundle")
     mode.add_argument("--cold-firefox", type=Path, help="existing Playwright Firefox executable for strict cold HTTPS")
+    mode.add_argument("--review-materials", action="store_true", help="verify assigned reviewer material reads with the synthetic fixture")
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
     output = args.output_dir.resolve()
@@ -234,6 +235,8 @@ def main():
         script_name, check_count = ("authorized-draft-qa.mjs", 4) if args.authorized_drafts else ("account-qa.mjs", 15)
         if args.cold_firefox:
             script_name, check_count = "cold-https-qa.mjs", 5
+        if args.review_materials:
+            script_name, check_count = "review-materials-qa.mjs", 3
         qa_script = ROOT / "tests/browser" / script_name
         expected_checks = re.findall(r"^\s+passed\('([^'\n]+)'\)", qa_script.read_text(), re.M)
         if len(expected_checks) != check_count or len(set(expected_checks)) != check_count:
@@ -296,6 +299,8 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
         fixture_log = out / "fixture.log"
         handles.append(fixture_log.open("w"))
         cold = ["-e", "OJ_BROWSER_COLD_TLS=1"] if args.cold_firefox else []
+        if args.review_materials:
+            cold += ["-e", "OJ_BROWSER_REVIEW_MATERIALS=1"]
         process = subprocess.Popen([*docker.command, "exec", "-e", "OJ_BROWSER_ORIGIN=" + origin, "-e", "OJ_BROWSER_UI_DIR=/browser-assets", *cold, containers["test"], "sh", "/browser-fixture.sh"], stdout=handles[-1], stderr=subprocess.STDOUT)
         ready = wait_ready(process, fixture_log, origin)
         if args.cold_firefox:
