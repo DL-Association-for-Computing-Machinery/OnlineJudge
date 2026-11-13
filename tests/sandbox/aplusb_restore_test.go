@@ -5,14 +5,17 @@ package sandbox_test
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materials"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
@@ -27,12 +30,17 @@ func TestAPlusBRestoreJudgeLoop(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
-	manifest, raw, enabled, err := materials.ConfiguredAPlusB()
+	manifest, fixture, err := experiment.LoadAPlusBFixture(os.Getenv)
+	raw := fixture.Manifest()
 	root, pin := os.Getenv("OJ_MATERIAL_ROOT"), os.Getenv("OJ_APLUSB_MANIFEST_SHA256")
-	if err != nil || !enabled || root == "" {
+	if err != nil || !fixture.IsAPlusB() || root == "" {
 		t.Fatal("explicit private A+B objects and trusted manifest pin required")
 	}
-	source, target := restoreLoopDatabases(t, ctx)
+	var engine restoreEngine
+	if fixture.APlusBTier() == experiment.ReferenceAPlusBUbuntu {
+		engine = ubuntuRestoreEngine(t, ctx)
+	}
+	source, target := restoreDatabases(t, ctx, engine)
 	for _, args := range [][]string{{"up"}, {"backlog", "2", "2"}, {"fixture"}} {
 		migrateAPlusB(t, ctx, source.dsn, root, args...)
 	}
@@ -49,8 +57,12 @@ func TestAPlusBRestoreJudgeLoop(t *testing.T) {
 	if err != nil || !created || initial.State != "queued" || initial.Verdict != nil {
 		t.Fatal("cannot accept the original A+B fixture")
 	}
-	slot := (workerhost.ReferenceSlot{}).ContainerName()
-	slotID := dualDocker(t, "inspect", "--format", "{{.Id}}", slot)
+	ref, err := workerhost.ReferenceSlotForTier(fixture.APlusBTier())
+	if err != nil {
+		t.Fatal(err)
+	}
+	slot := ref.ContainerName()
+	slotID := engine.docker(t, "inspect", "--format", "{{.Id}}", slot)
 	judge := func(database restoreLoopDatabase, objects string, binding *postgres.Store, checkContention bool) {
 		t.Helper()
 		ca := testpki.New(t)
@@ -59,14 +71,16 @@ func TestAPlusBRestoreJudgeLoop(t *testing.T) {
 		worker := startAPlusBWorker(t, endpoint, ca.CAFile, cert, key)
 		waitAPlusBVerdict(t, ctx, worker, binding, initial, "AC")
 		if checkContention {
-			assertAPlusBReferenceBusy(t, ctx, slotID, endpoint, ca.CAFile, cert, key)
+			assertAPlusBReferenceBusy(t, ctx, engine, slotID, endpoint, ca.CAFile, cert, key)
 		}
 		drainAPlusB(t, ctx, worker)
 		control.stop(t)
-		if dualDocker(t, "inspect", "--format", "{{.Id}}", slot) != slotID {
+		if engine.docker(t, "inspect", "--format", "{{.Id}}", slot) != slotID {
 			t.Fatal("fixed A+B sandbox was replaced")
 		}
-		dualStopped(t, slotID, "")
+		if engine.docker(t, "inspect", "--format", "{{.State.Running}} {{.State.Pid}} {{.State.Restarting}} {{.HostConfig.NetworkMode}}", slotID) != "false 0 false none" {
+			t.Fatal("sandbox stop unconfirmed")
+		}
 	}
 	judge(source, root, store, true)
 	first := aplusbRestoredAttempt(t, ctx, source.pool, initial.ID, 1)
@@ -91,7 +105,7 @@ func TestAPlusBRestoreJudgeLoop(t *testing.T) {
 		t.Fatal("historical A+B attempt changed during restore")
 	}
 
-	rejudgeRestoredAPlusB(t, ctx, target, objects, initial, pin)
+	rejudgeRestoredAPlusB(t, ctx, target, objects, initial, pin, manifest)
 	judge(target, objects, restored, false)
 	if aplusbRestoredAttempt(t, ctx, target.pool, initial.ID, 1) != first {
 		t.Fatal("rejudge changed the historical A+B result")
@@ -108,7 +122,7 @@ func TestAPlusBRestoreJudgeLoop(t *testing.T) {
 	t.Logf("one A+B submission, two AC generations, original result preserved; material=%s; source=%x", pin, sha256.Sum256([]byte(text)))
 }
 
-func rejudgeRestoredAPlusB(t *testing.T, ctx context.Context, target restoreLoopDatabase, objects string, initial submission.Receipt, pin string) {
+func rejudgeRestoredAPlusB(t *testing.T, ctx context.Context, target restoreLoopDatabase, objects string, initial submission.Receipt, pin string, manifest materials.APlusBManifest) {
 	t.Helper()
 	for _, ddl := range []string{
 		"CREATE ROLE oj_rejudge_operator NOLOGIN",
@@ -134,20 +148,49 @@ func rejudgeRestoredAPlusB(t *testing.T, ctx context.Context, target restoreLoop
 	dsn := strings.Replace(target.dsn, "user=oj_test ", "user=oj_restore_rejudge ", 1)
 	indirect := strings.Replace(target.dsn, "user=oj_test ", "user=oj_restore_readonly ", 1)
 	const key = "restored-aplusb-rejudge-01"
-	run := func(dsn, root string, args ...string) ([]byte, error) {
+	env := []string{}
+	if target.engine {
+		env = aplusbEnvironment()
+	}
+	run := func(dsn, root string, fixtureEnv, args []string) ([]byte, error) {
 		t.Helper()
 		cmd := exec.CommandContext(ctx, "../../.local/bin/migrate", append([]string{"rejudge"}, args...)...)
-		cmd.Env = httpLoopEnvironment("OJ_REJUDGE_DATABASE_URL="+dsn, "OJ_MATERIAL_ROOT="+root)
+		cmd.Env = append(httpLoopEnvironment("OJ_REJUDGE_DATABASE_URL="+dsn, "OJ_MATERIAL_ROOT="+root), fixtureEnv...)
 		return cmd.CombinedOutput()
 	}
 	args := []string{"enqueue", target.name, initial.ID, "1", initial.MaterialVersion, pin, key, "verify restored result", "--confirm-rejudge"}
-	if out, err := run(indirect, objects, args...); err == nil || !strings.Contains(string(out), "rejudge requires an authorized database login") {
+	if out, err := run(indirect, objects, env, args); err == nil || !strings.Contains(string(out), "rejudge requires an authorized database login") {
 		t.Fatal("maintenance command did not reject indirect role membership")
 	}
-	if out, err := run(dsn, t.TempDir(), args...); err == nil || !strings.Contains(string(out), "material unavailable or inconsistent") {
+	if out, err := run(dsn, t.TempDir(), env, args); err == nil || !strings.Contains(string(out), "material unavailable or inconsistent") {
 		t.Fatal("maintenance command did not reject missing original materials")
 	}
-	out, err := run(dsn, objects, args...)
+	if target.engine {
+		if out, err := run(dsn, objects, nil, args); err == nil || !strings.Contains(string(out), "material unavailable or inconsistent") {
+			t.Fatal("maintenance command admitted an Ubuntu record without explicit configuration")
+		}
+		manifest.TokenBytes++
+		raw := manifest.Canonical()
+		sum := sha256.Sum256(raw)
+		alternate := filepath.Join(t.TempDir(), "manifest.json")
+		if err := os.WriteFile(alternate, raw, 0600); err != nil {
+			t.Fatal(err)
+		}
+		wrong := []string{"OJ_SANDBOX_EXPERIMENT=1", "OJ_APLUSB_RUNTIME=ubuntu-arm64",
+			"OJ_APLUSB_MANIFEST_FILE=" + alternate, "OJ_APLUSB_MANIFEST_SHA256=" + hex.EncodeToString(sum[:])}
+		if out, err := run(dsn, objects, wrong, args); err == nil || !strings.Contains(string(out), "material unavailable or inconsistent") {
+			t.Fatal("maintenance command admitted a different transport digest for the same version")
+		}
+		var unchanged bool
+		if err := target.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM judge_tasks
+			WHERE submission_id=$1 AND judge_generation=1 AND state='finished')
+			AND (SELECT count(*) FROM judge_attempts)=1 AND NOT EXISTS(SELECT 1 FROM submission_rejudges)`, initial.ID).
+			Scan(&unchanged); err != nil || !unchanged {
+			t.Fatal("refused maintenance command changed the original task or wrote an audit")
+		}
+		t.Log("unconfigured Ubuntu and same-version different transport both refused with no state change")
+	}
+	out, err := run(dsn, objects, env, args)
 	if err != nil {
 		t.Fatalf("rejudge command failed: %s", out)
 	}
@@ -156,17 +199,17 @@ func rejudgeRestoredAPlusB(t *testing.T, ctx context.Context, target restoreLoop
 		receipt.Operator != "oj_restore_rejudge" || receipt.Key != key || receipt.Manifest != pin {
 		t.Fatal("maintenance audit does not match restored submission")
 	}
-	again, err := run(dsn, "", "status", target.name, key)
+	again, err := run(dsn, "", nil, []string{"status", target.name, key})
 	if err != nil || string(again) != string(out) {
 		t.Fatal("could not recover the original maintenance receipt")
 	}
 	t.Log("authorized maintenance command queued the restored submission; original key returned its immutable audit")
 }
 
-func assertAPlusBReferenceBusy(t *testing.T, ctx context.Context, slotID, endpoint, ca, cert, key string) {
+func assertAPlusBReferenceBusy(t *testing.T, ctx context.Context, engine restoreEngine, slotID, endpoint, ca, cert, key string) {
 	t.Helper()
 	const state = "{{.State.Running}} {{.State.Pid}} {{.State.StartedAt}}"
-	owner := dualDocker(t, "inspect", "--format", state, slotID)
+	owner := engine.docker(t, "inspect", "--format", state, slotID)
 	contender := startAPlusBWorker(t, endpoint, ca, cert, key)
 	select {
 	case err := <-contender.done:
@@ -178,7 +221,7 @@ func assertAPlusBReferenceBusy(t *testing.T, ctx context.Context, slotID, endpoi
 	case <-ctx.Done():
 		t.Fatal("second Worker did not refuse the occupied slot")
 	}
-	if !strings.HasPrefix(owner, "true ") || dualDocker(t, "inspect", "--format", state, slotID) != owner {
+	if !strings.HasPrefix(owner, "true ") || engine.docker(t, "inspect", "--format", state, slotID) != owner {
 		t.Fatal("second Worker changed the first Worker's sandbox lifetime")
 	}
 	t.Log("second Worker refused occupied canonical slot; existing sandbox lifetime unchanged")

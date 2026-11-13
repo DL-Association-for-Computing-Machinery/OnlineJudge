@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -32,6 +31,10 @@ const (
 // The target copy must pass the independent manifest check before pg_restore.
 func restoreSealedPackage(t *testing.T, source, target restoreLoopDatabase, sourceRoot string, want restoreMaterialExpectation) string {
 	t.Helper()
+	if source.engine != target.engine {
+		t.Fatal("restore fixtures must use the same local Engine")
+	}
+	engine := source.engine
 	linuxTool, err := filepath.Abs("../../.local/bin/migrate-linux")
 	if err != nil {
 		t.Fatal(err)
@@ -41,17 +44,17 @@ func restoreSealedPackage(t *testing.T, source, target restoreLoopDatabase, sour
 		t.Fatal("the separate Linux restore artifact is required")
 	}
 	for _, container := range []string{source.container, target.container} {
-		dualDocker(t, "exec", "--user", "0", container, "mkdir", "-m", "700", restoreStage)
-		dualDocker(t, "cp", linuxTool, container+":"+restoreTool)
+		engine.docker(t, "exec", "--user", "0", container, "mkdir", "-m", "700", restoreStage)
+		engine.docker(t, "cp", linuxTool, container+":"+restoreTool)
 	}
 	judge := restoreStage + "/judge"
 	private := restoreStage + "/private"
 	sealed := restoreStage + "/sealed"
-	dualDocker(t, "exec", "--user", "0", source.container, "mkdir", "-m", "700", judge, private)
-	dualDocker(t, "cp", sourceRoot+"/.", source.container+":"+judge)
+	engine.docker(t, "exec", "--user", "0", source.container, "mkdir", "-m", "700", judge, private)
+	engine.docker(t, "cp", sourceRoot+"/.", source.container+":"+judge)
 	start := time.Now()
 	var captured backup.Manifest
-	readRestoreReceipt(t, dualDocker(t, "exec", "--user", "0", source.container, restoreTool, "capture-backup",
+	readRestoreReceipt(t, engine.docker(t, "exec", "--user", "0", source.container, restoreTool, "capture-backup",
 		"-socket", restoreSock, "-port", "5432", "-user", "oj_test", "-timeout", "8s", source.name, judge, private, sealed), &captured)
 	captureElapsed := time.Since(start)
 	if captured.Database != source.name || captured.JudgeFiles != want.files || captured.PrivateFiles != 0 ||
@@ -61,22 +64,22 @@ func restoreSealedPackage(t *testing.T, source, target restoreLoopDatabase, sour
 	}
 	// Record the digest on the source side before any transfer; the recipient
 	// must not derive the expected value from its own copy of the manifest.
-	line := dualDocker(t, "exec", "--user", "0", source.container, "sha256sum", sealed+"/manifest.json")
+	line := engine.docker(t, "exec", "--user", "0", source.container, "sha256sum", sealed+"/manifest.json")
 	trusted, _, _ := strings.Cut(line, " ")
 	if !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(trusted) {
 		t.Fatal("source did not return a valid completion digest")
 	}
 	start = time.Now()
 	received := filepath.Join(t.TempDir(), "received")
-	dualDocker(t, "cp", source.container+":"+sealed, received)
-	dualDocker(t, "stop", source.container)
-	if dualDocker(t, "inspect", "--format", "{{.State.Running}}", source.container) != "false" {
+	engine.docker(t, "cp", source.container+":"+sealed, received)
+	engine.docker(t, "stop", source.container)
+	if engine.docker(t, "inspect", "--format", "{{.State.Running}}", source.container) != "false" {
 		t.Fatal("source database stop not confirmed")
 	}
 	targetCopy := restoreStage + "/received"
-	dualDocker(t, "cp", received, target.container+":"+targetCopy)
+	engine.docker(t, "cp", received, target.container+":"+targetCopy)
 	var verified backup.TransferReceipt
-	readRestoreReceipt(t, dualDocker(t, "exec", "--user", "0", target.container, restoreTool, "verify-backup",
+	readRestoreReceipt(t, engine.docker(t, "exec", "--user", "0", target.container, restoreTool, "verify-backup",
 		"-manifest-sha256", trusted, "-timeout", "8s", targetCopy), &verified)
 	if verified.ManifestSHA256 != trusted || verified.Archive != captured.Archive ||
 		verified.JudgeFiles != captured.JudgeFiles || verified.PrivateFiles != captured.PrivateFiles {
@@ -84,21 +87,21 @@ func restoreSealedPackage(t *testing.T, source, target restoreLoopDatabase, sour
 	}
 	transferElapsed := time.Since(start)
 	start = time.Now()
-	dualDocker(t, "exec", "--user", "0", target.container, "pg_restore", "--host", restoreSock, "--port", "5432", "--username", "oj_test", "--no-password",
+	engine.docker(t, "exec", "--user", "0", target.container, "pg_restore", "--host", restoreSock, "--port", "5432", "--username", "oj_test", "--no-password",
 		"--single-transaction", "--no-owner", "--no-privileges", "--dbname", target.name, targetCopy+"/postgres.dump")
 	// Restore to fresh runtime roots, leaving the verified transport copy
 	// untouched. The private store requires a root owned by the verifier.
 	restored := restoreStage + "/restored"
-	dualDocker(t, "exec", "--user", "0", target.container, "mkdir", "-m", "700", restored)
-	dualDocker(t, "exec", "--user", "0", target.container, "cp", "-R", targetCopy+"/judge", targetCopy+"/private", restored)
-	dualDocker(t, "exec", "--user", "0", target.container, "chmod", "700", restored+"/private")
+	engine.docker(t, "exec", "--user", "0", target.container, "mkdir", "-m", "700", restored)
+	engine.docker(t, "exec", "--user", "0", target.container, "cp", "-R", targetCopy+"/judge", targetCopy+"/private", restored)
+	engine.docker(t, "exec", "--user", "0", target.container, "chmod", "700", restored+"/private")
 	dsn := "OJ_RESTORED_DATABASE_URL=host=" + restoreSock + " port=5432 user=oj_test dbname=" + target.name + " sslmode=disable"
 	if want.checkMissing {
 		empty := restored + "/empty-judge"
-		dualDocker(t, "exec", "--user", "0", target.container, "mkdir", "-m", "700", empty)
+		engine.docker(t, "exec", "--user", "0", target.container, "mkdir", "-m", "700", empty)
 		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, "docker", "--context", "desktop-linux", "exec", "--user", "0", "-e", dsn,
+		cmd := engine.command(ctx, "exec", "--user", "0", "-e", dsn,
 			target.container, restoreTool, "verify-restored-materials", "-timeout", "8s", target.name, empty, restored+"/private")
 		out, err := cmd.CombinedOutput()
 		if err == nil || ctx.Err() != nil || !strings.Contains(string(out), "restored judge file ") {
@@ -107,19 +110,19 @@ func restoreSealedPackage(t *testing.T, source, target restoreLoopDatabase, sour
 		t.Log("incomplete restored judge material rejected")
 	}
 	var checked restorecheck.MaterialSummary
-	readRestoreReceipt(t, dualDocker(t, "exec", "--user", "0", "-e", dsn, target.container, restoreTool, "verify-restored-materials", "-timeout", "8s", target.name,
+	readRestoreReceipt(t, engine.docker(t, "exec", "--user", "0", "-e", dsn, target.container, restoreTool, "verify-restored-materials", "-timeout", "8s", target.name,
 		restored+"/judge", restored+"/private"), &checked)
 	if checked != captured.References {
 		t.Fatal("restored database material inventory differed from the sealed package")
 	}
 	// The source submission had finished before capture. This command must be a
 	// no-op here; other suites exercise stale and active lease recovery.
-	if got := dualDocker(t, "exec", "--user", "0", "-e", dsn, target.container, restoreTool, "fence-restored-leases", target.name); got != "restored leases expired=0 tasks requeued=0" {
+	if got := engine.docker(t, "exec", "--user", "0", "-e", dsn, target.container, restoreTool, "fence-restored-leases", target.name); got != "restored leases expired=0 tasks requeued=0" {
 		t.Fatal("unexpected in-flight work in the completed source fixture")
 	}
 	// Feed the controller the judge files from the checked runtime root.
 	controllerRoot := filepath.Join(t.TempDir(), "judge")
-	dualDocker(t, "cp", target.container+":"+restored+"/judge", controllerRoot)
+	engine.docker(t, "cp", target.container+":"+restored+"/judge", controllerRoot)
 	t.Logf("verified sealed package %s; PostgreSQL=%s; capture=%s transfer/stop/verify=%s restore/check/stage=%s", trusted, captured.Server,
 		captureElapsed, transferElapsed, time.Since(start))
 	return controllerRoot
