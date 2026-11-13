@@ -32,6 +32,9 @@
 .editor-actions p { font-size: 12px; line-height: 1.8; margin: 0; color: var(--muted); }
 .editor-actions button { min-width: 120px; }
 .editor-notice { margin: 0; padding: 10px 24px; font-size: 13px; line-height: 1.8; background: var(--accent-soft); color: #475467; overflow-wrap: anywhere; }
+.editor-notice[aria-label="本地草稿"] { max-height: min(32dvh, 220px); overflow: auto; }
+.editor-notice p { margin: 0; }
+.editor-notice button { margin: 4px 8px 4px 0; }
 .submission-result { background: var(--surface); border-top: 1px solid var(--line); padding: 12px 24px; font-size: 14px; }
 .submission-result summary { min-height: 36px; line-height: 36px; }
 .submission-result summary > span { margin-left: 8px; font-weight: 550; }

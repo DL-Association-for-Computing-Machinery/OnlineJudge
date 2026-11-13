@@ -11,6 +11,7 @@ export interface AccountState {
   notice: { tone: 'neutral' | 'success' | 'error' | 'uncertain'; text: string }
   passwordUnknown: boolean
   passwordAvailable: boolean
+  draftCleanup?: 'complete' | 'unknown'
 }
 
 // This controller owns one synchronous in-flight slot for an entire user action,
@@ -27,6 +28,10 @@ export class AccountController {
   private generation = 0
   private abort: AbortController | null = null
   private action: AccountAction | null = null
+  private privateGeneration = 0
+
+  revokePrivateGeneration = () => { ++this.privateGeneration }
+  readPrivateGeneration = () => this.privateGeneration
 
   getSnapshot = (): AccountState => this.state
   subscribe = (listener: () => void): (() => void) => {
@@ -60,17 +65,30 @@ export class AccountController {
     for (const listener of this.listeners) listener()
   }
 
-  async run(action: AccountAction, input?: AccountInput): Promise<void> {
+  async clearDrafts(owner: string): Promise<void> {
+    const { clearAccountCodeDrafts } = await import('../preview/codeDraftStore')
+    if (!this.connected || this.running || this.state.status !== 'authenticated' || this.state.session?.subject_id !== owner) throw new Error('Account changed')
+    const generation = this.readPrivateGeneration()
+    const session = await accountRequest('read', AbortSignal.timeout(5_000))
+    if (!this.connected || this.running || this.readPrivateGeneration() !== generation || session.subject_id !== owner ||
+      this.state.status !== 'authenticated' || this.state.session?.subject_id !== owner) throw new Error('Account changed')
+    invalidatePrivateContent()
+    try { await clearAccountCodeDrafts(owner) } finally { invalidatePrivateContent() }
+  }
+
+  async run(action: AccountAction, input?: AccountInput, clearDrafts = false): Promise<void> {
     if (!this.connected || this.running || (action === 'password' && this.state.passwordUnknown)) return
     this.running = true
     const generation = ++this.generation
     const abort = new AbortController()
     this.abort = abort
     this.action = action
+    const departing = action === 'logout' && this.state.status === 'authenticated' ? this.state.session?.subject_id : undefined
     const current = () => this.connected && this.generation === generation
-    this.publish({ busy: true, notice: { tone: 'neutral', text: '正在处理，请稍候…' } })
+    this.publish({ busy: true, draftCleanup: undefined, notice: { tone: 'neutral', text: '正在处理，请稍候…' } })
     const changesCredentials = !['check', 'activity'].includes(action)
     if (changesCredentials) invalidatePrivateContent()
+    const privateGeneration = this.readPrivateGeneration()
     let issued = false
     try {
       switch (action) {
@@ -98,8 +116,25 @@ export class AccountController {
           if (current()) this.publish({ status: 'unknown', notice: { tone: 'success', text: '原登录尝试已放弃；这不等于确认退出，请检查当前会话。' } })
           break
         case 'logout':
+          if (departing && clearDrafts) {
+            const session = await accountRequest('read', abort.signal)
+            if (!current()) return
+            if (session.subject_id !== departing || this.readPrivateGeneration() !== privateGeneration) {
+              this.publish({ status: 'unknown', session: null, notice: { tone: 'error', text: '账号已变化；未退出或清理草稿。请重新检查会话。' } })
+              break
+            }
+          }
           await accountRequest('logout', abort.signal)
           if (current()) this.publish({ status: 'anonymous', session: null, notice: { tone: 'success', text: '已退出当前会话。' } })
+          if (current() && departing && clearDrafts) {
+            try {
+              const { clearAccountCodeDrafts } = await import('../preview/codeDraftStore')
+              await clearAccountCodeDrafts(departing)
+              if (current()) this.publish({ draftCleanup: 'complete' })
+            } catch {
+              if (current()) this.publish({ draftCleanup: 'unknown' })
+            }
+          }
           break
         case 'password':
           await accountRequest('password', abort.signal, input)

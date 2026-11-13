@@ -141,6 +141,14 @@ describe('browser account lifecycle', () => {
     expect(controller.getSnapshot()).toMatchObject({ status: 'unknown', busy: false, session: null, notice: { tone: 'error' } })
   })
 
+  it('does not clear or log out after a different account answers the clear preflight', async () => {
+    const { controller, fetch } = await ready(Response.json(view))
+    fetch.mockResolvedValueOnce(Response.json({ ...view, subject_id: 'e'.repeat(32) }))
+    await controller.run('logout', undefined, true)
+    expect(fetch.mock.calls.map(call => call[0])).toEqual(['/api/v1/session', '/api/v1/session'])
+    expect(controller.getSnapshot()).toMatchObject({ status: 'unknown', session: null })
+  })
+
   it('distinguishes an unusable session from a confirmed logout receipt', async () => {
     const { controller, fetch } = await ready(Response.json(view))
     fetch.mockResolvedValueOnce(problem(401, 'SESSION_REQUIRED'))
