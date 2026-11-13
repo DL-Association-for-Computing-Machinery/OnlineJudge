@@ -121,4 +121,18 @@ checker-candidate aplusb-target-handoff --mode verify \
 
 回读检查完整、停止、点序、用量、首错停止、三份固定合成源码摘要、材料和执行档位。内置的既有 Desktop 和 Ubuntu 对照归档摘要不接受作新证据。输出固定标注 `report-readback-only`：报告本身没有可信运行时间、节点身份或 Git 构建证明，不能将通过回读当作新鲜性或现场证明。回读不会写审核、发布或生产配置。独立确认目标节点、生产检查器与人工终审后才可推进相应门禁。见[本机交接演练](delivery-evidence/aplusb-target-handoff.md)。
 
+#### 封存与复核报告回执
+
+有权限核验原始材料和报告的一方，可在 `--mode reports` 的原命令上追加 `--receipt-out "$NEW_RECEIPT"`。工具在三份报告、完成标记和交接材料均通过检查后，在接收者控制的新目录写入 0600 的 `receipt.json`，同步文件和目录后输出该文件的 SHA-256。已有目录不会覆盖；失败后若已留下目录，不应自行从目录计算信任摘要，应使用新目录重新核验。
+
+```sh
+checker-candidate aplusb-target-handoff --mode receipt \
+  --directory "$RECEIVED_RECEIPT" --expected-receipt "$TRUSTED_RECEIPT_SHA256" \
+  --expected-handoff "$TRUSTED_HANDOFF_SHA256" \
+  --node "$EXPECTED_NODE" --revision "$EXPECTED_REVISION" \
+  --runtime "$EXPECTED_RUNTIME" --slot "$EXPECTED_SLOT"
+```
+
+通过可信渠道分别核对两份摘要和预期目标；不要从收到的回执自取预期值。回执固定来源锁、内容版本、完整导入修订、正式参考档位、正式计划、检查器候选、判题与运输清单、运行档位及三份报告摘要，不包含题包、源码、报告原文或测试点标识。回读只校验回执字节和绑定，无须持有原报告；它没有签名、实际运行时间、节点或构建证明，不会移除 `checker_admission_missing` 或 `target_runtime_missing`。既有 `reports` 命令未设 `--receipt-out` 时仍返回原摘要 JSON。
+
 现有草稿仍为 `configured-not-validated` / `not-run`，`production_profile` 和 `limits` 仍为 null。目标机器实测还须验证显式预算下的真实参考/错误程序、受限编译执行、输出采集及故障分类，然后由有权限的验证、非作者审核及原子发布流程使用准确的候选摘要。离线预检只验证冻结答案，没有连接 Worker 或数据库，也不解除发布阻断。
