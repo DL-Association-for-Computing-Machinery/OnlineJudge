@@ -35,8 +35,9 @@ func NewEmailDeliveryReader(pool *pgxpool.Pool, protector *emailtoken.Protector)
 // EmailDelivery is a sensitive, point-in-time result for a trusted mail
 // renderer. It is neither a queue record nor a proof that a job is owned.
 type EmailDelivery struct {
-	scope emailtoken.Scope
-	token emailtoken.Token
+	scope        emailtoken.Scope
+	token        emailtoken.Token
+	sendDeadline time.Time
 }
 
 // Scope returns the destination, purpose and deadlines for this send.
@@ -44,6 +45,10 @@ func (d EmailDelivery) Scope() emailtoken.Scope { return d.scope }
 
 // Token returns the credential for rendering the mail link.
 func (d EmailDelivery) Token() emailtoken.Token { return d.token }
+
+// SendDeadline returns a conservative local deadline derived from database
+// time. It avoids comparing clocks across hosts.
+func (d EmailDelivery) SendDeadline() time.Time { return d.sendDeadline }
 
 // Format redacts recipient and token from diagnostics.
 func (EmailDelivery) Format(state fmt.State, _ rune) {
@@ -61,6 +66,7 @@ func (r *EmailDeliveryReader) Prepare(ctx context.Context, payloadID string) (Em
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
+	started := time.Now()
 	row, err := r.q.EmailPayloadForDelivery(ctx, payloadID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return EmailDelivery{}, identity.ErrConflict
@@ -83,7 +89,8 @@ func (r *EmailDeliveryReader) Prepare(ctx context.Context, payloadID string) (Em
 	if err := ctx.Err(); err != nil {
 		return EmailDelivery{}, err
 	}
-	return EmailDelivery{scope: scope, token: token}, nil
+	remaining := scope.SendUntil.Sub(row.CheckedAt.Time)
+	return EmailDelivery{scope: scope, token: token, sendDeadline: started.Add(remaining)}, nil
 }
 
 func deliveryScope(payloadID string, row identitydb.EmailPayloadForDeliveryRow) (emailtoken.Scope, error) {
