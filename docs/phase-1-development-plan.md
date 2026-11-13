@@ -74,7 +74,7 @@
 | P2 GNU++17 文本判题 | P1、可用隔离 Linux 节点 | M0 | [M0 记录](m0-experiment.md)；完整验收待完成 |
 | P3 账号与权限 | P1 数据访问基础；会话实验在 M0 完成 | M0 实验、M1 产品、M2 补齐 | [会话实验](../tests/sessionexperiment/README.md)、[凭据持久化](architecture/session-design.md#72-主体凭据持久化与条件更新)、[浏览器账号](account-browser.md)已有分项；邮箱注册/找回、设备管理、权限及完整恢复验证待完成 |
 | P4 题库与发布 | P1、P2 受限验证、P3 权限 | M1 | 已有十题私有适配/管理/预览；[文本组件](checker-admission.md)、独立字节通路和磁盘快照接入[A+B12点/unionfind18点/zalgorithm29点/suffixarray50点/primality固定依赖13点/static_range_sum11点/associative_array20点/point_add_range_sum21点/staticrmq27点/convolution_mod53点参考验证](reference-validation.md)，尚未更新草稿状态/生产配置；十题254点/26个原子子测试固定环境维护参考验证通过，旧失败与根因未知结论保留；[内部持久化申请/回执/取消](reference-requests.md)已接PG，内部准备可校验持久化对象并冻结材料 Plan；已支持冻结后重验授权并持久化 expected Plan；判题与维护参考验证命令默认共享同机执行槽；专用参考 Worker 已接同机槽、受权领取、下载校验，并可显式启用续期和持槽执行至确认停止；确定结果可按原授权和冻结计划受信接纳，作者可通过真实会话 HTTP 创建、查回执与取消本人参考申请；作者可显式启动有界准备，专用 Worker 可在持槽时按来源选择一个未领过的已准备申请；质量/非作者终审/发布仍待完成，最终CI与合并状态见[交付记录](delivery-log.md)；新来源通过不追认历史失败或证明长期稳定 |
-| P5 训练前端 | P3、P4 和真实提交接口 | M1 | 未开始 |
+| P5 训练前端 | P3、P4 和真实提交接口 | M1 | [本人训练提交历史](../api/training-history.openapi.yaml)已接入；正式题目、提交及结果详情闭环待交付 |
 | P6 试用运行与验收 | 日志及预算随 P1/P2 建立；发布验收依赖 P3—P5 | M1，M2 回归 | 本地备份恢复、同 schema 回退及实验判题离线包已有证据；独立故障域及试用环境待验收 |
 | P7 完整训练补齐 | M1、各语言与检查器准入 | M2 | 未开始 |
 
@@ -162,7 +162,7 @@ M0 先做存储与并发实验；M1 交付公开邮箱注册、验证和找回�
 
 会话已验证子项、环境及剩余恢复缺口统一见[会话实验 README](../tests/sessionexperiment/README.md)；正式账号产品仍须满足以下完成条件。
 
-[训练账号资格](architecture/session-design.md#125-训练账号资格)已在真实 PostgreSQL 验证：邮箱激活后旧代次失效，当前验证账号才可通过；停用和恢复切换与业务事务协调。正式训练接口仍需接入此门禁，并独立核对已发布题目和本人提交权限。
+[训练账号资格](architecture/session-design.md#125-训练账号资格)已在真实 PostgreSQL 验证：邮箱激活后旧代次失效，当前验证账号才可通过；停用和恢复切换与业务事务协调。本人历史读取已接入此门禁；训练提交及详情接口仍需复用门禁并独立核对已发布题目和资源归属。
 
 完成条件：
 
@@ -223,6 +223,8 @@ M0 先做存储与并发实验；M1 交付公开邮箱注册、验证和找回�
 ### P5 训练前端闭环
 
 按[前端设计](architecture/frontend-sandbox-options.md)按需接入路由、查询缓存、CodeMirror、idb、Markdown/KaTeX 和 UI 组件。页面包括账号入口、题目列表/详情、编辑提交、结果详情及本人历史，管理页面随 P3/P4 的实际操作引入。
+
+`/submissions` 接通可选的[本人训练历史](../api/training-history.openapi.yaml)，支持查看当前账号的固定范围摘要和翻页；源码、结果详情、已发布题目及正式提交仍待接入。
 
 完成条件：
 

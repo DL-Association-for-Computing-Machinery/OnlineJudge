@@ -1,0 +1,10 @@
+.training-history { overflow-wrap: anywhere; }
+.training-history > p { color: var(--muted); }
+.history-controls, .history-row-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; }
+.history-list { padding: 0; margin: 16px 0 0; list-style: none; }
+.history-list > li { padding: 12px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); margin-block: 8px; }
+.history-row-heading { justify-content: space-between; }
+.history-row-heading h2 { margin: 0; font-size: 1rem; }
+.history-list dl { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-block: 8px 0; }
+.history-list dt { color: var(--muted); font-size: .875rem; }
+.history-list dd { margin: 0; }

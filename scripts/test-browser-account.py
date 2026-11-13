@@ -74,6 +74,7 @@ def arguments():
     mode.add_argument("--cold-firefox", type=Path, help="existing Playwright Firefox executable for strict cold HTTPS")
     mode.add_argument("--review-materials", action="store_true", help="verify assigned reviewer material reads with the synthetic fixture")
     mode.add_argument("--m1-login-load", action="store_true", help="measure 100 complete browser logins over 60 seconds on the isolated fixture")
+    mode.add_argument("--training-history", action="store_true", help="verify personal training history through ordinary HTTPS sessions")
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
     output = args.output_dir.resolve()
@@ -149,7 +150,7 @@ def fixture_script():
     source = (ROOT / "scripts/test-session-protocol.sh").read_text()
     replacements = {
         "--build-tags=integration ./tests/sessionprotocol/...": "--build-tags=integration,browser ./tests/sessionprotocol/...",
-        "go test -mod=readonly -race -count=1 -timeout=120s -tags=integration ./tests/sessionprotocol -v":
+        'go test -mod=readonly -race -count=1 -timeout=120s -tags=integration ./tests/sessionprotocol -run "$oj_pattern" -v':
             "go test -mod=readonly -race -count=1 -timeout=17m -tags=integration,browser ./tests/sessionprotocol -run '^TestBrowserFixture$' -v",
     }
     for before, after in replacements.items():
@@ -240,6 +241,8 @@ def main():
             script_name, check_count = "review-materials-qa.mjs", 5
         if args.m1_login_load:
             script_name, check_count = "m1-login-load.mjs", 2
+        if args.training_history:
+            script_name, check_count = "training-history-qa.mjs", 4
         qa_script = ROOT / "tests/browser" / script_name
         expected_checks = re.findall(r"^\s+passed\('([^'\n]+)'\)", qa_script.read_text(), re.M)
         if len(expected_checks) != check_count or len(set(expected_checks)) != check_count:
@@ -306,6 +309,8 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
             cold += ["-e", "OJ_BROWSER_REVIEW_MATERIALS=1"]
         if args.m1_login_load:
             cold += ["-e", "OJ_BROWSER_LOGIN_LOAD=1"]
+        if args.training_history:
+            cold += ["-e", "OJ_BROWSER_TRAINING_HISTORY=1"]
         process = subprocess.Popen([*docker.command, "exec", "-e", "OJ_BROWSER_ORIGIN=" + origin, "-e", "OJ_BROWSER_UI_DIR=/browser-assets", *cold, containers["test"], "sh", "/browser-fixture.sh"], stdout=handles[-1], stderr=subprocess.STDOUT)
         ready = wait_ready(process, fixture_log, origin)
         if args.cold_firefox:

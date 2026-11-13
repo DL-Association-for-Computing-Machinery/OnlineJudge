@@ -264,6 +264,9 @@ func entryConfigWithWriteTimeout(t *testing.T, c sessionruntime.Config, ca *test
 			"reference_requests": d.ReferenceRequests, "review_intake": d.ReviewIntake, "review_access": d.ReviewAccess,
 			"review_returns": d.ReviewReturns, "statement_confirmations": d.StatementConfirmations}
 	}
+	if c.TrainingHistory {
+		doc["training_history"] = true
+	}
 	body, err := json.Marshal(doc)
 	must(t, err)
 	path := filepath.Join(t.TempDir(), "entry.json")

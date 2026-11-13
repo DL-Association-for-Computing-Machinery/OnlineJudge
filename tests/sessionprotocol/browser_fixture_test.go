@@ -56,27 +56,42 @@ func TestBrowserFixture(t *testing.T) {
 	must(t, protocol.InitializeLoginLimits(f.ctx, f.store(t, c.Namespace, 0, protocol.OrdinaryPolicy()), secrets, c.LoginLimits))
 	rules := enableEntryPasswordChange(t, f, &c, protocol.PasswordChangeLimits{Global: bucket, Source: bucket, Subject: bucket}, true)
 	subject := f.subject(t, false)
-	browserDrafts(t, f, &c, subject.ID)
+	otherAuthor := f.subject(t, false)
+	historyMode := os.Getenv("OJ_BROWSER_TRAINING_HISTORY") == "1"
+	var unverified string
+	if historyMode {
+		c.TrainingHistory = true
+		setHistoryEmailVerified(t, f, subject.ID, true)
+		setHistoryEmailVerified(t, f, otherAuthor.ID, true)
+		unverified = f.subject(t, false).Email.Original()
+		seedTrainingHistory(t, f, subject.ID, otherAuthor.ID)
+	} else {
+		browserDrafts(t, f, &c, subject.ID)
+	}
 	reviewMode := os.Getenv("OJ_BROWSER_REVIEW_MATERIALS") == "1"
 	if reviewMode {
-		if !c.PrivateDrafts.ReferenceRequests {
+		if c.PrivateDrafts == nil || !c.PrivateDrafts.ReferenceRequests {
 			t.Fatal("browser review requires the synthetic reference fixture")
 		}
 		c.PrivateDrafts.ReviewIntake = true
 		c.PrivateDrafts.ReviewAccess = true
 		c.PrivateDrafts.StatementConfirmations = true
 	}
-	otherAuthor := f.subject(t, false)
 	access, err := identitypg.NewProblemAccess(f.pools[0])
 	must(t, err)
-	_, err = access.SetAuthorRole(f.ctx, identity.ProblemRoleChange{SubjectID: otherAuthor.ID, Enabled: true, ExpectedRevision: 0, Operator: "browser-fixture", Reason: "synthetic second author"})
-	must(t, err)
+	if !historyMode {
+		_, err = access.SetAuthorRole(f.ctx, identity.ProblemRoleChange{SubjectID: otherAuthor.ID, Enabled: true, ExpectedRevision: 0, Operator: "browser-fixture", Reason: "synthetic second author"})
+		must(t, err)
+	}
 	ca := testpki.New(t)
 	proxyCert, _, _ := ca.Issue(t, "spiffe://onlinejudge/proxy/browser-fixture", x509.ExtKeyUsageClientAuth, time.Now().Add(time.Hour))
 	c.Mode = sessionruntime.ProxyMTLS
 	c.Proxy.CertificateSHA256 = [][32]byte{sha256.Sum256(proxyCert.Certificate[0])}
 	connections := redisConnections(t, f)
-	writeTimeout := max(5*time.Second, c.PrivateDrafts.Timeout+time.Second)
+	writeTimeout := 5 * time.Second
+	if c.PrivateDrafts != nil {
+		writeTimeout = max(writeTimeout, c.PrivateDrafts.Timeout+time.Second)
+	}
 	process := entryStart(t, entryBinary(t), entryConfigWithWriteTimeout(t, c, ca, 3*time.Second, writeTimeout, rules), "127.0.0.1:0")
 	started := process.waitEvent(t, "API starting")
 	if started.Scope != "ordinary-session-http" {
@@ -143,6 +158,9 @@ func TestBrowserFixture(t *testing.T) {
 	plain := browserServer(t, "0.0.0.0:9444", static)
 	plain.Start()
 	info := map[string]string{"url": origin.String(), "email": subject.Email.Original(), "subject_id": subject.ID, "other_email": otherAuthor.Email.Original(), "other_subject_id": otherAuthor.ID}
+	if historyMode {
+		info["unverified_email"] = unverified
+	}
 	if loginLoad {
 		hasher, err := password.New(c.PasswordPolicy, c.PasswordLimits)
 		must(t, err)

@@ -11,7 +11,6 @@ import (
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/db"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
-	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
 )
 
 func TestSubmissionHistoryPagingAndRollback(t *testing.T) {
@@ -65,7 +64,7 @@ func TestSubmissionHistoryPagingAndRollback(t *testing.T) {
 			t.Fatal("history escaped owner or scope")
 		}
 	}
-	if _, err := f.first.ListHistory(f.ctx, owner, scope, &postgres.HistoryPosition{CreatedAt: first.Next.CreatedAt, ID: "invalid"}); !errors.Is(err, submission.ErrInvalid) {
+	if _, err := f.first.ListHistory(f.ctx, owner, scope, &submission.HistoryPosition{CreatedAt: first.Next.CreatedAt, ID: "invalid"}); !errors.Is(err, submission.ErrInvalid) {
 		t.Fatal("invalid cursor accepted")
 	}
 	checkHistoryPlan(t, f, owner, scope, *first.Next)
@@ -90,7 +89,7 @@ func TestSubmissionHistoryPagingAndRollback(t *testing.T) {
 	}
 }
 
-func checkHistoryPlan(t *testing.T, f backlogFixture, owner, scope string, after postgres.HistoryPosition) {
+func checkHistoryPlan(t *testing.T, f backlogFixture, owner, scope string, after submission.HistoryPosition) {
 	t.Helper()
 	// Give the planner unrelated rows so the indexed seek has a meaningful
 	// alternative. Fixture-only copies are rolled back after plan inspection.

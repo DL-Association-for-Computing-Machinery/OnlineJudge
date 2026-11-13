@@ -19,6 +19,7 @@ func (w document) config() (Config, error) {
 	c := Config{TLS: *w.TLS}
 	r := &c.Runtime
 	r.Namespace, r.SecretsFile = w.Namespace, w.SecretsFile
+	r.TrainingHistory = w.TrainingHistory
 	r.HTTP.Origin = w.Origin
 	if !durations([]durationField{{w.LoginWindow, &r.LoginWindow}, {w.StartupTimeout, &r.StartupTimeout},
 		{w.HTTPTimeout, &r.HTTP.Timeout}}) || r.StartupTimeout <= 0 || r.StartupTimeout > time.Minute ||

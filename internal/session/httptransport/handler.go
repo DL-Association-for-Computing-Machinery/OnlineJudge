@@ -51,6 +51,7 @@ type handler struct {
 	reviewMaterials        ReviewMaterialsReader
 	reviewReturns          ReviewReturns
 	statementConfirmations StatementConfirmations
+	trainingHistory        TrainingHistory
 }
 
 // New builds three explicit endpoints without registering any application route:
@@ -122,6 +123,12 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		method = http.MethodPost
+	case trainingHistoryPath:
+		if h.trainingHistory == nil {
+			problem(w, 404, "NOT_FOUND", "接口不存在")
+			return
+		}
+		method = http.MethodGet
 	default:
 		if statementMethod != "" {
 			if h.statementConfirmations == nil {
@@ -238,6 +245,10 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if IsEmailRequestPath(r.URL.Path) {
 		h.serveEmailRequest(w, r, source)
+		return
+	}
+	if IsTrainingHistoryPath(r.URL.Path) {
+		h.serveTrainingHistory(w, r)
 		return
 	}
 	if h.login != nil && (r.URL.Path == "/api/v1/session/login/begin" || r.URL.Path == "/api/v1/session/login/complete" || r.URL.Path == "/api/v1/session/login/abandon") {

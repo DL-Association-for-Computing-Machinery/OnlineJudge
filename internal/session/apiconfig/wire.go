@@ -20,6 +20,7 @@ type document struct {
 	Server            *serverWire            `json:"server"`
 	PasswordChange    *passwordChangeWire    `json:"password_change"`
 	PrivateDrafts     *privateDraftsWire     `json:"private_drafts"`
+	TrainingHistory   bool                   `json:"training_history"`
 }
 
 type emailConfirmationWire struct {
