@@ -33,6 +33,17 @@ func CompleteTx(ctx context.Context, tx pgx.Tx, job *river.Job[Args]) error {
 	if _, err := river.ClientFromContextSafely[pgx.Tx](ctx); err != nil {
 		return identity.ErrInvalid
 	}
+	if err := lockClaim(ctx, tx, job); err != nil {
+		return err
+	}
+	updated, err := river.JobCompleteTx[*riverpgxv5.Driver](ctx, tx, job)
+	if err != nil || updated.State != rivertype.JobStateCompleted {
+		return errQueue
+	}
+	return identitypg.RetireEmailPayload(ctx, tx, job.Args.PayloadID)
+}
+
+func lockClaim(ctx context.Context, tx pgx.Tx, job *river.Job[Args]) error {
 	var attempt int
 	var attemptedAt time.Time
 	var payloadID string
@@ -51,9 +62,5 @@ func CompleteTx(ctx context.Context, tx pgx.Tx, job *river.Job[Args]) error {
 		len(attemptedBy) == 0 || attemptedBy[len(attemptedBy)-1] != job.AttemptedBy[len(job.AttemptedBy)-1] {
 		return ErrStaleClaim
 	}
-	updated, err := river.JobCompleteTx[*riverpgxv5.Driver](ctx, tx, job)
-	if err != nil || updated.State != rivertype.JobStateCompleted {
-		return errQueue
-	}
-	return identitypg.RetireEmailPayload(ctx, tx, payloadID)
+	return nil
 }
