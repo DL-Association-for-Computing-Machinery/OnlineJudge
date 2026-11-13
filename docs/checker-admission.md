@@ -76,4 +76,27 @@ Z 算法 32 点修订也已通过 medium 槽试跑和[离线复核](delivery-log
 
 ## 后续接入条件
 
+### A+B 目标节点交接
+
+目标节点由维护者独立确认；以下工具只交接材料及核对返回报告，不连接或操作目标节点。当前只支持原 A+B 17 点清单固定的 Desktop arm64 小型参考档位和 `oj-reference-sandbox`。不同内核、镜像或隔离参数需要单独的执行适配、清单和实测。交接目录不包含 Worker 二进制、原私有题包、标程或证书；只能由有权限的维护者通过私有通道传递。
+
+```sh
+# 使用绝对路径。节点、候选 Git SHA、运行档位摘要和槽名来自独立确认。
+checker-candidate aplusb-target-handoff --mode pack \
+  --source "$PRIVATE_APLUSB_EXPORT" --directory "$NEW_HANDOFF" \
+  --node "$EXPECTED_NODE" --revision "$EXPECTED_REVISION" \
+  --runtime "$EXPECTED_RUNTIME" --slot "$EXPECTED_SLOT"
+
+checker-candidate aplusb-target-handoff --mode verify \
+  --directory "$RECEIVED_HANDOFF" --expected-handoff "$TRUSTED_HANDOFF_SHA256" \
+  --node "$EXPECTED_NODE" --revision "$EXPECTED_REVISION" \
+  --runtime "$EXPECTED_RUNTIME" --slot "$EXPECTED_SLOT"
+```
+
+单独传递 pack 输出的摘要；不要从收到的目录重建信任。目录须为接收者控制、无并发写入，文件权限保留为 0600。核验要求固定清单和所有摘要对象齐全；多余对象、缺文件或错配都拒绝。打包失败应另用新目录。
+
+有现场授权后，节点操作员须独立确认 Worker 二进制来源、Git 候选版本和节点身份，使用[固定隔离命令](../README.md#ab-固定材料隔离判题)和另行授权提供的同一私有题包运行三个固定合成对照，再确认原槽退出且 PID 为零。通过独立通道交回每份报告的字节摘要与实际节点、版本证明；用 `--mode reports` 替换 verify 模式，并附 `--ac`、`--wa`、`--ole` 三个绝对归档目录以及对应的 `--ac-sha256`、`--wa-sha256`、`--ole-sha256`。
+
+回读检查完整、停止、点序、用量、首错停止、三份固定合成源码摘要、材料和执行档位。旧的三份本机归档不接受作新证据。输出固定标注 `report-readback-only`：报告本身没有节点身份或 Git 构建证明，不能将目录中的节点标签当作现场证明。回读不会写审核、发布或生产配置。独立确认目标节点、生产检查器与人工终审后才可推进相应门禁。见[本机交接演练](delivery-evidence/aplusb-target-handoff.md)。
+
 现有草稿仍为 `configured-not-validated` / `not-run`，`production_profile` 和 `limits` 仍为 null。目标机器实测还须验证显式预算下的真实参考/错误程序、受限编译执行、输出采集及故障分类，然后由有权限的验证、非作者审核及原子发布流程使用准确的候选摘要。离线预检只验证冻结答案，没有连接 Worker 或数据库，也不解除发布阻断。
