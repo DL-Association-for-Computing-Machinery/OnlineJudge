@@ -125,6 +125,11 @@ func (s *Store) accept(ctx context.Context, subject, scope, key string, req subm
 	if err != nil {
 		return submission.Receipt{}, false, err
 	}
+	// A replay has written nothing. Preserve the confirmed historical receipt
+	// without making it depend on a new COMMIT acknowledgement.
+	if !created {
+		return result, false, nil
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return submission.Receipt{}, false, err
 	}
