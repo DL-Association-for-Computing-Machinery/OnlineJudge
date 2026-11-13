@@ -35,7 +35,7 @@ func TestEmailPayloadRetirement(t *testing.T) {
 	_, err = f.a.Exec(f.ctx, "CREATE TABLE fixture_email_jobs(id text PRIMARY KEY, completed boolean NOT NULL DEFAULT false)")
 	must(t, err)
 	id, err := issuer.IssueEmailToken(f.ctx, subject, version, emailtoken.Activation, protector,
-		func(context.Context, string) error { return nil },
+		func(context.Context, *emailtoken.Protector) error { return nil },
 		func(ctx context.Context, tx pgx.Tx, payloadID string) error {
 			_, err := tx.Exec(ctx, "INSERT INTO fixture_email_jobs(id) VALUES ($1)", payloadID)
 			return err
