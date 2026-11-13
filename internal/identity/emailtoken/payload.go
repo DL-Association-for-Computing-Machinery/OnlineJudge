@@ -13,6 +13,8 @@ import (
 
 var keyIDPattern = regexp.MustCompile(`^[a-z0-9_-]{1,16}$`)
 
+const maxProtectorKeys = 4
+
 // Scope is trusted persisted metadata for a single mail job. The worker must
 // confirm account and token state against the database before sending. All
 // three timestamps use PostgreSQL microsecond precision.
@@ -76,7 +78,7 @@ func (Protector) Format(state fmt.State, _ rune) {
 
 // NewProtector accepts up to four nonzero, distinct AES-256 keys.
 func NewProtector(current string, keys map[string][32]byte) (*Protector, error) {
-	if len(keys) < 1 || len(keys) > 4 || keys[current] == [32]byte{} {
+	if len(keys) < 1 || len(keys) > maxProtectorKeys || keys[current] == [32]byte{} {
 		return nil, ErrInvalid
 	}
 	result := &Protector{current: current, keys: make(map[string]cipher.AEAD, len(keys))}
