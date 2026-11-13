@@ -16,6 +16,7 @@ import (
 type CheckerTrial struct {
 	used         atomic.Bool
 	profile      Profile
+	tier         experiment.ReferenceTier
 	plan         problem.ReferencePlan
 	materials    referenceReader
 	candidateSHA string
@@ -55,18 +56,9 @@ func PrepareCheckerTrialWithLifetime(ctx, lifetime context.Context, prepared *pr
 	if err != nil {
 		return nil, err
 	}
-	var profile Profile
-	switch id.SourceID {
-	case "library-checker:aplusb":
-		profile = PinnedProfile()
-		profile.ID = "p4-checker-candidate-aplusb-reference-v1"
-		profile.Runtime = experiment.PinnedReferenceEnvironment()
-		profile.Diagnostics = experiment.ReferenceDiagnosticBytes
-	case "library-checker:unionfind":
-		profile = UnionFindProfile()
-		profile.ID = "p4-checker-candidate-unionfind-reference-v1"
-	default:
-		return nil, ErrCheckerCandidateBinding
+	profile, tier, err := checkerTrialProfile(id.SourceID)
+	if err != nil {
+		return nil, err
 	}
 	profile.Text = limits
 	if !limits.Valid() || limits.Bytes != profile.Runtime.OutputBytes ||
@@ -75,7 +67,7 @@ func PrepareCheckerTrialWithLifetime(ctx, lifetime context.Context, prepared *pr
 	}
 	var plan problem.ReferencePlan
 	var reader referenceReader
-	if id.SourceID == "library-checker:unionfind" {
+	if id.SourceID != "library-checker:aplusb" {
 		snapshot, err := prepared.PrepareDiskReferenceWithLifetime(ctx, lifetime)
 		if err != nil {
 			return nil, err
@@ -102,8 +94,32 @@ func PrepareCheckerTrialWithLifetime(ctx, lifetime context.Context, prepared *pr
 	if err := errors.Join(ctx.Err(), lifetime.Err()); err != nil {
 		return nil, err
 	}
-	return &CheckerTrial{plan: plan, materials: reader, profile: profile, candidateSHA: expectedCandidate}, nil
+	return &CheckerTrial{plan: plan, materials: reader, profile: profile, tier: tier, candidateSHA: expectedCandidate}, nil
 }
+
+func checkerTrialProfile(sourceID string) (Profile, experiment.ReferenceTier, error) {
+	switch sourceID {
+	case "library-checker:aplusb":
+		p := PinnedProfile()
+		p.ID = "p4-checker-candidate-aplusb-reference-v1"
+		p.Runtime = experiment.PinnedReferenceEnvironment()
+		p.Diagnostics = experiment.ReferenceDiagnosticBytes
+		return p, experiment.ReferenceSmall, nil
+	case "library-checker:unionfind":
+		p := UnionFindProfile()
+		p.ID = "p4-checker-candidate-unionfind-reference-v1"
+		return p, experiment.ReferenceSmall, nil
+	case "library-checker:zalgorithm":
+		p, tier, err := ResolveSource(sourceID)
+		p.ID = "p4-checker-candidate-zalgorithm-reference-v1"
+		return p, tier, err
+	default:
+		return Profile{}, 0, ErrCheckerCandidateBinding
+	}
+}
+
+// Tier binds the trial to its reviewed slot and cached runner configuration.
+func (t *CheckerTrial) Tier() experiment.ReferenceTier { return t.tier }
 
 // Close releases the snapshot. The owner must not call it during Run.
 func (t *CheckerTrial) Close() error {

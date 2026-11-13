@@ -1,12 +1,49 @@
 package execution
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"testing"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 )
+
+func TestMediumCheckerTrialPreservesCompleteOutputAboveSmallCap(t *testing.T) {
+	ctx := t.Context()
+	tier := experiment.ReferenceMedium
+	c, err := experiment.ResolveReferenceTier(tier)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := c.Runtime
+	f := &cacheFixture{t: t, data: map[string][]byte{}, reference: true, referenceOutput: p.OutputBytes}
+	g, err := NewReferenceGoJudgeForTier(f, func(context.Context, experiment.ExecutionProfile) error { return nil }, f, tier)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := g.Verify(ctx, p); err != nil {
+		t.Fatal(err)
+	}
+	compiled, err := g.Compile(ctx, p, "source")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.stdout = bytes.Repeat([]byte("12 34\r\n"), 150000)
+	got, err := g.RunCheckerTrial(ctx, p, compiled.Artifact, []byte("input"))
+	if err != nil || got.OutputTruncated || !bytes.Equal(got.Stdout, f.stdout) || len(f.data) != 1 {
+		t.Fatal("complete medium output or cleanup failed", err)
+	}
+	f.fail = "collector-OLE"
+	got, err = g.RunCheckerTrial(ctx, p, compiled.Artifact, []byte("input"))
+	if verdict, classifyErr := Classify(got, false); err != nil || classifyErr != nil || verdict != "OLE" ||
+		!got.OutputTruncated || len(got.Stdout) != p.OutputBytes+1 {
+		t.Fatal("medium cap+1 collector evidence rejected", err, classifyErr)
+	}
+	if err := g.Remove(ctx, compiled.Artifact); err != nil || len(f.data) != 0 {
+		t.Fatal("owned cleanup failed", err)
+	}
+}
 
 func TestCheckerTrialCachedRunAcceptsExactReceiptAndFencesAmbiguousOverflow(t *testing.T) {
 	ctx := t.Context()
