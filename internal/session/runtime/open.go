@@ -148,6 +148,12 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 	if err := startup.Err(); err != nil {
 		return nil, err
 	}
+	if c.EmailConfirmation != nil {
+		handler, err = withEmailConfirmation(startup, handler, authority, store, work, secrets, c)
+		if err != nil {
+			return nil, startupFailure(startup)
+		}
+	}
 	result := newRuntime(handler, func() error {
 		draftErr := closeDrafts()
 		err := client.Close()
