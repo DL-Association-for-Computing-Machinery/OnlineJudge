@@ -33,6 +33,19 @@ SELECT s.id, s.request_sha256, s.material_version, s.language, s.created_at,
 FROM submissions s JOIN judge_tasks t ON t.submission_id = s.id
 WHERE s.id = $1 AND s.subject_id = $2 AND s.context_id = $3;
 
+-- name: ListHistoryFirst :many
+SELECT s.id, s.material_version, s.language, s.created_at, t.state, t.verdict
+FROM submissions s JOIN judge_tasks t ON t.submission_id = s.id
+WHERE s.subject_id = $1 AND s.context_id = $2
+ORDER BY s.created_at DESC, s.id DESC LIMIT 21;
+
+-- name: ListHistoryAfter :many
+SELECT s.id, s.material_version, s.language, s.created_at, t.state, t.verdict
+FROM submissions s JOIN judge_tasks t ON t.submission_id = s.id
+WHERE s.subject_id = $1 AND s.context_id = $2
+    AND (s.created_at, s.id) < (sqlc.arg(cursor_time)::timestamptz, sqlc.arg(cursor_id)::text)
+ORDER BY s.created_at DESC, s.id DESC LIMIT 21;
+
 -- name: RegisterMaterial :exec
 INSERT INTO submission_materials (version_id, manifest_sha256, manifest)
 VALUES ($1, $2, $3) ON CONFLICT (version_id) DO NOTHING;

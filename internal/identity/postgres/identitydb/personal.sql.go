@@ -97,3 +97,15 @@ func (q *Queries) PersonalByID(ctx context.Context, id string) (PersonalByIDRow,
 	)
 	return i, err
 }
+
+const trainingEmailForShare = `-- name: TrainingEmailForShare :one
+SELECT email_verified FROM identity_personal_emails
+WHERE subject_id = $1 FOR SHARE
+`
+
+func (q *Queries) TrainingEmailForShare(ctx context.Context, subjectID string) (bool, error) {
+	row := q.db.QueryRow(ctx, trainingEmailForShare, subjectID)
+	var email_verified bool
+	err := row.Scan(&email_verified)
+	return email_verified, err
+}
