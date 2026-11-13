@@ -24,7 +24,7 @@ func validateCheckerCandidate(ctx context.Context, args []string, logger *slog.L
 	f := flag.NewFlagSet("validate-checker-candidate", flag.ContinueOnError)
 	f.SetOutput(io.Discard)
 	bundle := f.String("bundle", "", "private problem bundle")
-	sourceID := f.String("source-id", "library-checker:aplusb", "fixed A+B or unionfind source ID")
+	sourceID := f.String("source-id", "library-checker:aplusb", "fixed A+B, unionfind or Z algorithm source ID")
 	lockPath := f.String("source-lock", "", "trusted fixed source lock")
 	output := f.String("output", "", "new private report directory")
 	plan := f.String("expected-plan", "", "trusted formal plan SHA-256")
@@ -33,7 +33,7 @@ func validateCheckerCandidate(ctx context.Context, args []string, logger *slog.L
 	f.IntVar(&caps.Bytes, "bytes", 0, "explicit candidate answer and stdout cap")
 	f.IntVar(&caps.TokenBytes, "token-bytes", 0, "explicit candidate token cap")
 	start := f.Bool("start-stopped-slot", false, "explicitly start the fixed stopped reference slot")
-	if f.Parse(args) != nil || f.NArg() != 0 || !*start || (*sourceID != "library-checker:aplusb" && *sourceID != "library-checker:unionfind") || !canonicalAbsolute(*bundle) ||
+	if f.Parse(args) != nil || f.NArg() != 0 || !*start || !canonicalAbsolute(*bundle) ||
 		!canonicalAbsolute(*lockPath) || !canonicalAbsolute(*output) || !referenceOutputOutside(*bundle, *output) {
 		return errors.New("invalid checker trial arguments")
 	}
@@ -53,19 +53,28 @@ func validateCheckerCandidate(ctx context.Context, args []string, logger *slog.L
 	if err := errors.Join(err, ctx.Err()); err != nil {
 		return err
 	}
+	slot, err := workerhost.ReferenceSlotForTier(trial.Tier())
+	if err != nil {
+		return err
+	}
 	if err := os.Mkdir(*output, 0700); err != nil {
 		return errors.New("report directory must be new")
 	}
 	if err := os.WriteFile(filepath.Join(*output, "INCOMPLETE"), []byte("Checker trial incomplete; no admission.\n"), 0600); err != nil {
 		return err
 	}
-	slot := workerhost.ReferenceSlot{}
 	lock, err := lockSlotMode(slot.LockName(), false)
 	if err != nil {
 		return err
 	}
 	defer lock.Close()
-	report, err := runCheckerTrialLocked(ctx, trial, lock, openCheckerTrialHost)
+	report, err := runCheckerTrialLocked(ctx, trial, lock, func(ctx context.Context) (validationHost, error) {
+		host, err := workerhost.StartReferenceSlot(ctx, slot)
+		if host == nil {
+			return nil, err
+		}
+		return host, err
+	})
 	if report.Schema == "" {
 		return err
 	}
@@ -80,14 +89,6 @@ func validateCheckerCandidate(ctx context.Context, args []string, logger *slog.L
 	return nil
 }
 
-func openCheckerTrialHost(ctx context.Context) (validationHost, error) {
-	host, err := workerhost.StartReference(ctx)
-	if host == nil {
-		return nil, err
-	}
-	return host, err
-}
-
 func runCheckerTrialLocked(ctx context.Context, trial *problemvalidation.CheckerTrial, lock *slotLock,
 	open func(context.Context) (validationHost, error)) (report problemvalidation.CheckerTrialReport, err error) {
 	if err := lock.dirty(); err != nil {
@@ -100,7 +101,11 @@ func runCheckerTrialLocked(ctx context.Context, trial *problemvalidation.Checker
 		return report, errors.New("checker trial startup not confirmed; keep slot quarantined")
 	}
 	if err == nil {
-		report, err = trial.Run(ctx, execution.NewReferenceGoJudge(host, host.Verify, host))
+		var judge *execution.CachedGoJudge
+		judge, err = execution.NewReferenceGoJudgeForTier(host, host.Verify, host, trial.Tier())
+		if err == nil {
+			report, err = trial.Run(ctx, judge)
+		}
 	}
 	stop, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	stopErr := host.Stop(stop)
