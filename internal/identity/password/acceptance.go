@@ -22,6 +22,9 @@ var (
 
 const maxBlockedPasswords = 16384
 
+// MinimumNewPasswordCharacters is the single-factor account password floor.
+const MinimumNewPasswordCharacters = 15
+
 // Acceptance holds immutable explicit new-password rules. It is a whole-input
 // SHA-256 lookup, not credential storage, a KDF, a breach service or approval of
 // dictionary coverage. It neither normalizes nor trims, truncates or changes
