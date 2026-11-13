@@ -188,9 +188,17 @@ SIGXFSZ/OLE的纯响应、分类和冻结摘要回归随普通root后端race执�
 
 PR 使用事件中的不可变 base/head SHA 做 three-dot diff，覆盖整个 PR 而非最后一次提交；主线 push 使用 before/after 的完整 two-dot diff。checkout 获取完整历史，Git 的 NUL 分隔文件名支持空格/换行；禁用重命名折叠，以便同时检查删除源和新增目标。无 REST changed-files 分页或路径过滤文件数截断。应用测试仍检出 GitHub 合并候选，不仅测 head。
 
-PR 的 `edited` 事件继续按完整差异执行，确保标题和目标分支变更被复核；这意味着代码 PR 仅编辑描述也会重验其受影响套件。本轮优化文件影响范围，不复用旧 CI 结果。并发取消和超时保持现有配置；不引入缓存结果作为成功依据。
+PR 的 `edited` 事件继续按完整差异执行，确保标题和目标分支变更被复核；仅编辑描述也会重验受影响套件。GitHub 会把被条件跳过的必需任务报告为成功，因此不为正文编辑跳过同名门禁。按[开发工作流](development-workflow.md#每个任务的闭环)集中定稿、推送和送审，减少无谓运行。
+
+集成任务只构建一次 Docker 工具链，SQL 生成检查、真实 PostgreSQL 回归及两套协议测试复用本次任务的 Go 编译缓存。SQL 和 PostgreSQL 检查在无外网的容器中顺序执行；其后普通会话与邮箱生命周期并行，各自使用独立的 Docker 内部网络、PostgreSQL 和 Redis，邮箱使用本地 SMTP。两个驱动都必须正常退出；分别将日志写入 Actions，失败不能被另一套成功覆盖。缓存只保存 Go 构建产物；真实测试仍执行，未引入跨运行缓存。
 
 本地验证：`python3 -B -m unittest discover -s tests/governance -v` 覆盖路径矩阵、真实 Git 多提交/分叉/删除/重命名/push、缺失历史及失败门禁；已有 `actionlint` 可检查 workflow 语法和表达式。远端实际启用和结果以对应 PR head 的运行及交付记录为准。
+
+### 衡量 PR 等待与重跑
+
+在仓库目录运行 `python3 -B scripts/measure-pr-ci.py <PR号>`，只读查询已认证的 GitHub CLI。它分别统计工作流运行数、手动重试次数、每个运行最新尝试的结论，以及最终 head 最近一次运行的状态和成功时的各任务耗时。首轮成功还报告从创建运行到最后任务完成的等待时间；手动重试只报告该次执行耗时。GitHub 有时不返回 PR 归属，脚本按来源仓库、分支和 PR 存续期推断并单独计数；保留分支复用或历史截断的误差。数据不能区分正文编辑、推送等具体触发原因，也不用于批准合并。
+
+以 [#265 基线](delivery-evidence/ci-delivery-efficiency.md) 为对照，改动上线后连续采样 10 个实际跑集成套件的 PR。比较最终成功运行的中位耗时、集成任务耗时，以及每 PR 的取消数；应用测试未执行的 PR 不与全量运行混比。若集成时间仍是主要瓶颈，先检查冷构建和步骤耗时，再决定是否引入跨运行缓存或拆任务。
 
 设计依据（2026-10-28 核对）：GitHub [必需检查与跳过任务](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks)、[工作流语法与 diff](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax)、[并发控制](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)。采用影响范围选择、稳定门禁和失败阻断，不表示已具备独立人工审批或完整企业发布体系。
 

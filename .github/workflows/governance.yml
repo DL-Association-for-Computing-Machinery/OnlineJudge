@@ -60,21 +60,26 @@ jobs:
     if: needs.governance.outputs.integration == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    env:
+      OJ_CI_TOOLCHAIN: oj-session-protocol-toolchain
+      OJ_CI_BUILD_CACHE: oj-ci-go-build
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+      - name: Prepare the integration toolchain and fixtures
+        run: |
+          docker build --target toolchain --tag "$OJ_CI_TOOLCHAIN" .
+          docker volume create "$OJ_CI_BUILD_CACHE"
+          docker pull redis:7.2.17@sha256:0312984fbfeb2ff1d4382ecef45b50e7d65478a6a58cf12ce28d6de7a4142e45
       - name: Check generated SQL and real PostgreSQL integration
         run: |
-          docker compose run --build --rm toolchain sqlc
-          docker compose run --rm toolchain db
-      - name: Check ordinary sessions with real Redis and PostgreSQL
+          for suite in sqlc db; do
+            docker run --rm --network none --mount "type=volume,src=$OJ_CI_BUILD_CACHE,dst=/tmp/go-build" "$OJ_CI_TOOLCHAIN" "$suite"
+          done
+      - name: Check ordinary sessions and isolated registration and recovery
         run: |
-          docker build --target toolchain --tag oj-session-protocol-toolchain .
-          docker pull redis:7.2.17@sha256:0312984fbfeb2ff1d4382ecef45b50e7d65478a6a58cf12ce28d6de7a4142e45
-          python3 -B scripts/test-session-protocol.py --context default --toolchain-image oj-session-protocol-toolchain --build-cache-volume ''
-      - name: Check isolated registration and password recovery through local SMTP
-        run: python3 -B scripts/test-session-protocol.py --context default --toolchain-image oj-session-protocol-toolchain --build-cache-volume '' --suite email-lifecycle
+          bash scripts/test-ci-session-suites.sh --context default --toolchain-image "$OJ_CI_TOOLCHAIN" --build-cache-volume "$OJ_CI_BUILD_CACHE"
 
   frontend-tests:
     needs: governance
