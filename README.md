@@ -648,6 +648,8 @@ python3 scripts/test-compose.py
 
 `toolchain db` 也运行[数据库与材料恢复回归](docs/architecture/storage-design.md#7-备份与验收)，使用两个容器内临时 PostgreSQL 集群和合成文件，无需访问现有数据库或运行选手程序。
 
+查看 PR 的 CI 耗时、取消数和重试次数：`python3 -B scripts/measure-pr-ci.py <PR号>`。统计口径见 [CI/CD](docs/ci-cd.md#衡量-pr-等待与重跑)。
+
 训练队列的数据库负载基线另行手动运行：`docker --context desktop-linux compose run --build --rm toolchain training-load`。它在独立临时 PostgreSQL 上跑三轮合成负载，报告限额拒绝、领取顺序和延迟样本。使用已构建镜像时可用 `docker run --rm --network none --cpus=4 --memory=4g --memory-swap=4g <toolchain镜像> training-load` 固定容器预算；默认 Compose 命令不设置这些限额。该命令不启动业务服务或执行选手程序，见[采样口径](docs/submission-backlog.md#训练准入负载采样)。
 
 普通 Redis 协议专项（只执行合成账号数据）：

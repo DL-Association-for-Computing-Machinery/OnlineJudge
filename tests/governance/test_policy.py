@@ -217,8 +217,9 @@ class PolicyTests(unittest.TestCase):
         # gate with skip-on-missing manifests or a successful placeholder job.
         workflow = (SOURCE / ".github/workflows/governance.yml").read_text()
         self.assertNotIn("repo_policy.py bootstrap-ci", workflow)
-        for step in ("backend-tests:", "frontend-tests:", "toolchain backend", "toolchain db",
-                     "toolchain sqlc", "frontend-check"):
+        for step in ("backend-tests:", "frontend-tests:", "toolchain backend", "frontend-check",
+                     "for suite in sqlc db", '"$OJ_CI_TOOLCHAIN" "$suite"',
+                     "bash scripts/test-ci-session-suites.sh"):
             self.assertIn(step, workflow)
         script = (SOURCE / "scripts/toolchain.sh").read_text()
         dockerfile = (SOURCE / "Dockerfile").read_text()
