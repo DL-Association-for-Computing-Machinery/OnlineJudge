@@ -7,6 +7,7 @@ import { SiteFooter } from './layout/SiteFooter'
 import { RouteFocus } from './layout/RouteFocus'
 import { LibraryPage } from './pages/LibraryPage'
 import { LoginPage } from './pages/LoginPage'
+import { EmailRequestPage } from './pages/EmailRequestPage'
 import { NotFoundPage, SubmissionsPage } from './pages/StatusPages'
 import { PreviewDraftProvider } from './preview/PreviewDraftProvider'
 import './account/account.css'
@@ -27,6 +28,8 @@ export function App() {
         <Routes>
           <Route path="/" element={<LibraryPage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/account/register" element={<EmailRequestPage key="registration" kind="registration" />} />
+          <Route path="/account/forgot-password" element={<EmailRequestPage key="recovery" kind="recovery" />} />
           <Route path="/account" element={<AccountPanel />} />
           <Route path="/submissions" element={<SubmissionsPage />} />
           <Route path="/author/drafts" element={<Suspense fallback={<p className="page-width loading-state" role="status">正在加载导入管理…</p>}><DraftManagementPage /></Suspense>} />
