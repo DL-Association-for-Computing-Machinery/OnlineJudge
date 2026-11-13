@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/judging"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
@@ -24,6 +25,7 @@ func aplusbJudgeManifest(parent context.Context, args []string, out, diagnostics
 	candidate := f.String("expected-candidate", "", "independently trusted candidate SHA-256")
 	output := f.String("export", "", "new private directory for transport materials")
 	expected := f.String("expected-manifest", "", "independently reviewed judge manifest SHA-256")
+	ubuntu := f.Bool("ubuntu-aplusb", false, "derive the standalone Ubuntu guest manifest")
 	var limits judging.TextLimits
 	f.IntVar(&limits.Bytes, "bytes", 0, "explicit checker byte cap")
 	f.IntVar(&limits.TokenBytes, "token-bytes", 0, "explicit checker token cap")
@@ -36,6 +38,9 @@ func aplusbJudgeManifest(parent context.Context, args []string, out, diagnostics
 	if f.NArg() != 0 || !absoluteClean(*bundle) || !absoluteClean(*lock) || !limits.Valid() ||
 		!problem.ValidImportRevision(*plan) || !problem.ValidImportRevision(*candidate) {
 		return errors.New("explicit limits, paths and trusted digests required")
+	}
+	if *ubuntu && (*output != "" || *expected != "") {
+		return errors.New("the standalone Ubuntu manifest does not support lease material export")
 	}
 	raw, err := readPinnedLock(*lock)
 	if err != nil {
@@ -87,7 +92,11 @@ func aplusbJudgeManifest(parent context.Context, args []string, out, diagnostics
 		_, err = io.WriteString(out, filepath.Join(*output, "manifest.json")+"\n")
 		return err
 	}
-	manifest, err := problemvalidation.PrepareAPlusBJudgeManifest(ctx, prepared, *plan, *candidate, limits)
+	tier := experiment.ReferenceSmall
+	if *ubuntu {
+		tier = experiment.ReferenceAPlusBUbuntu
+	}
+	manifest, err := problemvalidation.PrepareAPlusBJudgeManifestForTier(ctx, prepared, *plan, *candidate, limits, tier)
 	if err := errors.Join(err, prepared.Close(), ctx.Err()); err != nil {
 		return err
 	}
