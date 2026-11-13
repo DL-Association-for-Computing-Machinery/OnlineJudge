@@ -43,7 +43,7 @@ func TestEmailDeliveryPrepare(t *testing.T) {
 	issue := func(purpose emailtoken.Purpose) string {
 		t.Helper()
 		id, err := issuer.IssueEmailToken(f.ctx, subject, version, purpose, protector,
-			func(context.Context, string) error { return nil },
+			func(context.Context, *emailtoken.Protector) error { return nil },
 			func(ctx context.Context, tx pgx.Tx, id string) error {
 				_, err := tx.Exec(ctx, "INSERT INTO synthetic_delivery_queue VALUES($1)", id)
 				return err
