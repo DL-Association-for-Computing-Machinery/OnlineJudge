@@ -75,7 +75,10 @@ func validHistoryID(id string) bool {
 		return false
 	}
 	for i := range len(id) {
-		if c := id[i]; !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+		c := id[i]
+		switch {
+		case c >= '0' && c <= '9', c >= 'a' && c <= 'f':
+		default:
 			return false
 		}
 	}
