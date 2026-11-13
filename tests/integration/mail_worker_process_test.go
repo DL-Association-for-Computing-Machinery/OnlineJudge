@@ -5,6 +5,7 @@ package integration_test
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/pem"
@@ -16,6 +17,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/mail"
+	"net/netip"
 	"net/textproto"
 	"os"
 	"os/exec"
@@ -27,7 +29,9 @@ import (
 	"time"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/emailconfirm"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/emailtoken"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/password"
 	identitypg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/postgres"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/mailqueue"
 )
@@ -48,18 +52,37 @@ func testMailWorkerProcessLoopback(t *testing.T, crash bool) {
 	must(t, err)
 	to, err := identity.ParseEmail("Mailbox+tag@example.invalid")
 	must(t, err)
-	subject := identityID(1)
-	record := identityRecord(t, h, "synthetic loopback delivery password")
-	_, err = issuer.InitializePersonal(f.ctx, subject, to, true, record)
-	must(t, err)
 	epoch, err := issuer.BeginRecovery(f.ctx)
 	must(t, err)
 	must(t, issuer.FinishRecovery(f.ctx, epoch))
 	protector, err := emailtoken.NewProtector("fixture", map[string][32]byte{"fixture": {1}})
 	must(t, err)
-	id, err := issuer.IssueEmailToken(f.ctx, subject, identity.SessionVersion{AuthGeneration: 1, RecoveryID: epoch},
-		emailtoken.Activation, protector, func(context.Context, *emailtoken.Protector) error { return nil }, queue.Enqueue)
+	work, err := password.NewBounded(h, password.AdmissionLimits{MaxInFlight: 1})
 	must(t, err)
+	must(t, issuer.RegisterPersonal(f.ctx, to, epoch, work, protector, func(context.Context, *emailtoken.Protector) error { return nil }, queue.Enqueue))
+	var id string
+	must(t, f.b.QueryRow(f.ctx, "SELECT args->>'payload_id' FROM river_job").Scan(&id))
+	account, err := issuer.LookupPersonalByEmail(f.ctx, to)
+	must(t, err)
+	if account.EmailVerified || account.AuthGeneration != 1 || account.CredentialVersion != 1 {
+		t.Fatal("registration did not leave an unverified account")
+	}
+	consumer, err := identitypg.New(f.b, h)
+	must(t, err)
+	gate, err := identity.NewPersonalCredentialGate(consumer, work)
+	must(t, err)
+	replacement := []byte("synthetic loopback delivery password")
+	calls := 0
+	observe := func(_ context.Context, state identity.SessionState) error {
+		calls++
+		if state.ID != account.ID || state.AuthGeneration != 2 {
+			t.Error("credential gate did not observe the activated account")
+		}
+		return nil
+	}
+	if err := gate.WithPersonalCredentials(f.ctx, to, replacement, observe); !errors.Is(err, identity.ErrCredentials) || calls != 0 {
+		t.Fatal("registration unexpectedly accepted the future password")
+	}
 	var schema string
 	must(t, f.a.QueryRow(f.ctx, "SELECT current_schema()").Scan(&schema))
 	dsn := f.a.Config().ConnString() + " search_path=" + schema
@@ -201,9 +224,22 @@ func testMailWorkerProcessLoopback(t *testing.T, crash bool) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	token, err := emailtoken.Parse(first)
+	rules, err := password.NewAcceptance(password.MinimumNewPasswordCharacters, work.MaxPasswordBytes(),
+		[][32]byte{sha256.Sum256([]byte("synthetic weak fixture password"))})
 	must(t, err)
-	must(t, issuer.ActivateEmail(f.ctx, token, record))
+	confirmer, err := emailconfirm.New(consumer, work, rules,
+		func(context.Context, netip.Addr, emailtoken.Purpose, [32]byte) error { return nil })
+	must(t, err)
+	must(t, confirmer.Activate(f.ctx, netip.MustParseAddr("192.0.2.7"), first, replacement))
+	verified, err := issuer.PersonalByID(f.ctx, account.ID)
+	must(t, err)
+	if !verified.EmailVerified || verified.AuthGeneration != 2 || verified.CredentialVersion != 2 {
+		t.Fatal("mail did not activate the newly registered account")
+	}
+	must(t, gate.WithPersonalCredentials(f.ctx, to, replacement, observe))
+	if calls != 1 {
+		t.Fatal("activated credentials did not pass the gate exactly once")
+	}
 	must(t, cmd.Process.Signal(syscall.SIGTERM))
 	select {
 	case err := <-done:
