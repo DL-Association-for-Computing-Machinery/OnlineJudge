@@ -25,7 +25,7 @@
 - [显式会话 API 入口](docs/architecture/session-design.md#717-显式会话-api-入口)：`OJ_SESSION_CONFIG_FILE` 启用严格配置的 TLS/mTLS 命令入口，必须同时指定 `OJ_API_ADDR`；默认 Compose 未启用。
 - [已登录改密](docs/architecture/session-design.md#718-已登录用户修改密码)：显式能力、独立三维额度和弱密码规则，核验当前密码后原子换代并撤销旧会话；[接口契约](api/account.openapi.yaml)。
 - [浏览器账号面板](docs/account-browser.md)：已有账号登录、原尝试恢复、检查/主动续期/退出和改密；[六路径契约](api/session.openapi.yaml)。默认 HTTP 预览阻止密码操作，不代表注册、训练或完整权限已开放。
-- [本人训练提交历史及详情](api/training-history.openapi.yaml)：普通会话 JSON 配置显式设置 `"training_history": true` 后，已验证邮箱的个人账号可在「我的提交」查看本人摘要和翻页。另设 `"training_submission_detail": true` 才能查看自己的提交源码和当前判定；两个开关默认关闭。
+- [本人训练提交历史及详情](api/training-history.openapi.yaml)：普通会话 JSON 配置显式设置 `"training_history": true` 后，已验证邮箱的个人账号可在「我的提交」查看本人摘要和翻页。另设 `"training_submission_detail": true` 可展开本人源码，并自动更新该条未完成提交的状态；两个开关默认关闭。
 - [Web 界面](docs/frontend-design.md)：简洁题库首页、独立登录页和双栏做题预览；示例可搜索、筛选、编辑和导入导出，正式提交尚未开放。
 - [首批题源](docs/problem-sources.md)：固定 Library Checker 10 题的断网数据准备与私有候选验证，尚未接入正式题库或发布。
 
@@ -113,6 +113,37 @@ checker-candidate verify-trial \
 ```
 
 路径须是绝对路径；报告摘要须通过独立可信的记录获得，不从待复核的副本现算并自证。成功仅输出报告、候选、计划、档位摘要和通过点数。命令不运行程序、不查当前槽状态，也不授予生产准入。
+
+### A+B 固定材料隔离判题
+
+使用上述同一私有 A+B 题包、可信计划和候选摘要及限额，先通过 `checker-candidate aplusb-judge-manifest` 核对有序材料和固定运行档位。确认输出与可信的材料计划一致后，固定其 `sha256`；Worker 会从私有题包重新生成同一清单，摘要不一致时不会启动参考槽。
+
+```sh
+checker-candidate aplusb-judge-manifest \
+  --bundle "$PRIVATE_BUNDLE" --source-lock "$PWD/config/problem-sources/library-checker.json" \
+  --expected-plan "$TRUSTED_FORMAL_PLAN_SHA256" --expected-candidate "$TRUSTED_CANDIDATE_SHA256" \
+  --bytes "$CANDIDATE_BYTES" --token-bytes "$CANDIDATE_TOKEN_BYTES"
+
+env -u OJ_WORKER_M0_SLOT -u OJ_WORKER_M0_DUAL_EXPERIMENT OJ_SANDBOX_EXPERIMENT=1 \
+  .local/validation-host/worker judge-aplusb-isolated --start-stopped-slot \
+  --bundle "$PRIVATE_BUNDLE" --source-lock "$PWD/config/problem-sources/library-checker.json" \
+  --expected-plan "$TRUSTED_FORMAL_PLAN_SHA256" --expected-candidate "$TRUSTED_CANDIDATE_SHA256" \
+  --expected-manifest "$TRUSTED_JUDGE_MANIFEST_SHA256" \
+  --submission "$PRIVATE_CPP_FILE" --expected-submission "$TRUSTED_SUBMISSION_SHA256" \
+  --bytes "$CANDIDATE_BYTES" --token-bytes "$CANDIDATE_TOKEN_BYTES" --output "$NEW_JUDGE_REPORT"
+```
+
+路径使用绝对路径。源码须是权限 0400 或 0600 的私有普通文件，最多 64 KiB，且为不含 NUL 的 UTF-8；摘要固定原字节。只用现有停止的断网小型参考槽，输出目录须新建且在题包外。退出码 0 表示已产生确定判定并完成清理，实际 AC、WA、CE 等查看私有报告。详见[隔离判题契约](docs/checker-admission.md#ab-固定材料隔离判题)。
+
+专用本地 Ubuntu arm64 VM 使用同一组命令，在生成清单和执行判题时都加 `--ubuntu-aplusb`，并固定 Ubuntu 清单自己的摘要。Worker 使用客体内的 Linux arm64 构建，以客体 root 运行，并去掉 `OJ_EXPERIMENT_MATERIAL_VERSION`。准备固定停止槽、核验边界和恢复步骤见 [Ubuntu 实验](docs/checker-admission.md#ubuntu-独立判题实验)。
+
+### A+B 租约链路联验
+
+在上一节清单命令上加 `--expected-manifest "$TRUSTED_JUDGE_MANIFEST_SHA256" --export "$NEW_PRIVATE_DIRECTORY"`，导出 `manifest.json` 及私有对象。核对后固定该运输清单的原始字节 SHA-256。隔离链路的登记、控制端和 Worker 都设置 `OJ_SANDBOX_EXPERIMENT=1`、`OJ_APLUSB_MANIFEST_FILE`（绝对路径）、`OJ_APLUSB_MANIFEST_SHA256`；不同时设置 `OJ_EXPERIMENT_MATERIAL_VERSION`、M0 槽或双槽配置。
+
+登记进程和控制端另设 `OJ_MATERIAL_ROOT` 为该导出目录。在已迁移的临时 PostgreSQL 上执行 `migrate fixture` 和显式的积压策略配置，再按现有私有 mTLS 方式启动 `worker-api`。Desktop arm64 `worker` 可使用已启动的固定断网小型参考槽，或设置 `OJ_APLUSB_START_STOPPED=1` 让它持槽锁启动已停止的参考槽。普通 API 不启用此版本。真实联验使用 sandbox 标签的 `TestAPlusBLeasedLoop`，须显式设置 `OJ_SANDBOX_APLUSB=1`、空的临时 `OJ_TEST_DATABASE_URL` 并准备同一 worktree 的 `.local/bin/{migrate,worker,worker-api}` 宿主构建产物；测试从停止的参考槽开始，自行登记材料和临时 mTLS 身份。AC 走已验证账号的训练存储入口与本人回读；WA、OLE 仍走固定实验入口。账号由测试夹具提供，真实 Redis 登录由普通会话专项另验。不得指向试用库或正在使用的参考槽。见[判题契约](docs/checker-admission.md#ab-租约链路联验)。
+
+专用 Ubuntu VM 导出时另加 `--ubuntu-aplusb` 并使用 Ubuntu 判题清单摘要。登记、控制端和 Worker 均设置 `OJ_APLUSB_RUNTIME=ubuntu-arm64` 和 Ubuntu 运输清单及其摘要，Worker 必须设置 `OJ_APLUSB_START_STOPPED=1`。在客体内用 Linux arm64 构建和相同测试，另传 `OJ_TEST_APLUSB_DESKTOP_MANIFEST` 为原 Desktop 运输清单的绝对路径，用来验证零领取。恢复后重判 Ubuntu 提交时，维护命令也需要同一档位和清单。
 
 ### 私有草稿参考验证
 
@@ -619,7 +650,7 @@ API 镜像的 `/usr/local/bin/oj-api` 在非空 `OJ_SESSION_CONFIG_FILE` 下切�
 
 数据库及 Redis 的密码来源各自显式选择 `auth: "none"` 或 `"env"`。后者只读取固定的 `OJ_SESSION_DATABASE_PASSWORD` / `OJ_SESSION_REDIS_PASSWORD`，必须非空；前者拒绝对应非空残留环境。密码、登录 key、TLS 私钥均不写入配置 JSON、镜像或命令行。数据库不消费 `OJ_DATABASE_URL`，连接类 PG 环境变量须按运行时合同清理；服务不修改进程环境。
 
-启动前须由受信维护流程完成当前 schema 23（邮箱模型始于5、积压准入始于6、私有草稿始于7、列表索引始于8、参考申请始于9、预期计划始于10、参考领取始于11、参考报告始于12、参考调度始于13、卷积对拍预期计划始于14、作者送审始于15、审核资格与分配始于16、审核退回始于17、作者确认标程始于18、审核人确认题面始于19、训练虚拟时间始于20、邮件令牌始于21、邮件全局发送限速始于22、提交历史索引始于23）、恢复状态开门、共享密钥分发及匹配的限流 marker 初始化；命令只检查，不自动迁移、初始化或修复。schema切换须在维护窗口排空/停止旧API、Worker及维护写入后执行，再启动匹配新版；运行中旧进程不会因版本变化自动停止，不混跑。精确回退条件见[邮件令牌迁移](docs/architecture/session-design.md#123-签发持久化与迁移)、[训练队列迁移](docs/submission-backlog.md#升级与回退)、[参考申请迁移](docs/reference-requests.md#迁移与回退)及[草稿历史迁移](docs/problem-drafts.md#入库版本与迁移)。本次没有迁移现有持久化localdev或部署服务器。配置与公开证书可只读挂载，登录密钥及 TLS 私钥必须满足 0400/0600、root/进程 euid 所有等约束。非 root 容器须能遍历并读取这些文件。不要把完整配置或秘密对象输出到日志。
+启动前须由受信维护流程完成当前 schema 24（邮箱模型始于5、积压准入始于6、私有草稿始于7、列表索引始于8、参考申请始于9、预期计划始于10、参考领取始于11、参考报告始于12、参考调度始于13、卷积对拍预期计划始于14、作者送审始于15、审核资格与分配始于16、审核退回始于17、作者确认标程始于18、审核人确认题面始于19、训练虚拟时间始于20、邮件令牌始于21、邮件全局发送限速始于22、提交历史索引始于23、受控重判审计始于24）、恢复状态开门、共享密钥分发及匹配的限流 marker 初始化；命令只检查，不自动迁移、初始化或修复。schema切换须在维护窗口排空/停止旧API、Worker及维护写入后执行，再启动匹配新版；运行中旧进程不会因版本变化自动停止，不混跑。精确回退条件见[邮件令牌迁移](docs/architecture/session-design.md#123-签发持久化与迁移)、[训练队列迁移](docs/submission-backlog.md#升级与回退)、[参考申请迁移](docs/reference-requests.md#迁移与回退)及[草稿历史迁移](docs/problem-drafts.md#入库版本与迁移)。本次没有迁移现有持久化localdev或部署服务器。配置与公开证书可只读挂载，登录密钥及 TLS 私钥必须满足 0400/0600、root/进程 euid 所有等约束。非 root 容器须能遍历并读取这些文件。不要把完整配置或秘密对象输出到日志。
 
 direct 模式要求客户端直接 TLS；proxy 模式要求同一监听器的已验证客户端证书和允许的叶证书指纹，健康检查也须经 mTLS。现有 Compose/Nginx 的明文 backend 和浏览器页面尚未配置该入口；部署、生产阈值、真实证书/存储 TLS 和完整账号权限另行验收。回退先停服务并移除显式配置环境，不把旧明文路径接到会话 Handler。
 
@@ -741,7 +772,7 @@ python3 scripts/test-browser-account.py \
 
 加 `--m1-login-load` 在同一隔离夹具运行集中登录。100 个合成账号在 60 秒内每 600 毫秒发起一次浏览器登录；每个浏览器上下文独立核对三步会话请求、账号身份和 Cookie。该夹具使用单 API、19 MiB / 2 轮 / 1 lane 的 Argon2id，证书例外只用于临时回环夹具。`browser-qa.json` 保留发起偏差、时延、状态和失败分类，不含邮箱或 Cookie。结果仅供本机复测，现场还须在实际配置、网络与正常证书验证下执行[试用验收](docs/phase-1-development-plan.md#试用容量和恢复默认值)。
 
-加 `--training-history` 运行本人历史和详情专项。临时库写入合成记录，验证普通会话登录后的桌面和 390px 页面、同时间戳翻页、键盘打开本人源码、翻页清除详情、另一账号隔离、未验证账号拒绝，以及刷新后须显式重新读取。夹具不发布题目、不接受正式提交、不启动 Worker。
+加 `--training-history` 运行本人历史和详情专项。临时库写入合成记录，验证普通会话登录后的桌面和 390px 页面、同时间戳翻页、键盘打开本人源码、翻页清除详情、另一账号隔离、未验证账号拒绝，以及刷新后须显式重新读取。专项推进临时库中一条排队记录，验证真实状态请求不传输源码且页面更新到终态。夹具不发布题目、不接受正式提交、不启动 Worker。
 
 要验证保留正常证书检查的冷启动，添加 `--cold-firefox /absolute/path/to/existing/playwright/firefox`，使用匹配的已有 Playwright Firefox；不同时使用 Chromium、语料或十题私有草稿包模式。先用不信任夹具 CA 的全新浏览器确认连接被拒绝，再在另一个临时浏览器配置导入公开测试 CA，不修改系统信任库。验证桌面和 390px 窄屏从同源加载题库与登录页；桌面完成真实登录、导入合成草稿，并创建、查询、准备和取消同一参考申请。刷新草稿后可用原键查到材料已准备，刷新与查询不会再次发出参考申请写请求。测试限制浏览器访问回环夹具，并记录页面资源来源；不代表整机断网、校园 DNS 或现场入口验收。
 
@@ -790,7 +821,21 @@ Worker 启动完成后，向该 Worker 进程发送 `SIGUSR1`（`kill -USR1 PID`
 
 `python3 scripts/test-worker.py restore-loop` 验证[恢复后的真实判题](docs/architecture/storage-design.md#7-备份与验收)，`all` 也包含此项。它使用两个临时 PostgreSQL 容器，实际捕获和核验备份；停止源库后，在固定离线 Desktop 沙箱重判同一合成提交。不连接现有数据库。
 
+已经按 [A+B 租约链路](#ab-租约链路联验)导出私有材料后，可用现有、已停止的固定断网参考槽和本地已有的 `postgres:14-alpine` 镜像验证 A+B 历史重判：
+
+```bash
+python3 scripts/test-worker.py aplusb-restore-loop \
+  --aplusb-materials "$PRIVATE_APLUSB_DIRECTORY" \
+  --aplusb-manifest-sha256 "$TRUSTED_APLUSB_MANIFEST_SHA256"
+```
+
+使用封存前独立保管的运输清单摘要；私有材料目录置于仓库外。此项须显式执行，`all` 不读取 A+B 私有题包。已有当前提交的 `host-artifacts` 和 `restore-artifacts` 产物时，可加 `--prebuilt` 跳过构建。两次判题使用同一清单，第二次仅从核验后的恢复目录读取对象。详见[联验记录](docs/delivery-evidence/aplusb-restored-rejudge.md)。
+
+在[专用 Ubuntu VM](docs/checker-admission.md#ubuntu-独立判题实验) 上可显式运行同一个带 `sandbox` 标签的 `TestAPlusBRestoreJudgeLoop`，从 `tests/sandbox` 目录运行测试二进制。准备 Linux arm64 的 `.local/bin/{worker,worker-api,migrate,migrate-linux}`（客体内两份 migrate 可使用同一构建）、固定停止槽，以及两个专用回环空 PostgreSQL 14.24 容器。使用各自的 `oj-ubuntu-rejudge-db-<12 位小写十六进制>` 名称及 `owner=onlinejudge.ubuntu-rejudge-test` 标签，设 `OJ_RESTORE_SOURCE_CONTAINER`、`OJ_RESTORE_TARGET_CONTAINER` 和两库都存在的空库名 `OJ_RESTORE_DATABASE=test_<数字>`。另设 `OJ_SANDBOX_EXPERIMENT=1`、`OJ_SANDBOX_APLUSB_RESTORE=1` 和同上 Ubuntu 材料及档位环境。源库将在联验中被停止；测试只供专用客体内的本轮临时库。
+
 `python3 scripts/test-worker.py rollback-loop` 单独运行[兼容回退专项](docs/architecture/operations-design.md#兼容回退专项)。需要本地 Git 历史包含 `771ff3f`；构建该版本和当前工作树，使用同一个临时 PostgreSQL，在固定离线 Desktop 沙箱切换真实 Worker。该专项不包含在 `all` 中，不连接试用环境。
+
+恢复后若需重判一条已完成的个人训练提交，使用[维护者重判命令](docs/rejudge.md)。
 
 仅在核验并隔离恢复库后，使用 `OJ_RESTORED_DATABASE_URL` 指向该副本，再执行 `.local/bin/migrate fence-restored-leases <恢复库名>`。命令拒绝使用常规 `OJ_DATABASE_URL`；隔离、结果读回和重新开放前的条件见[恢复提交租约](docs/architecture/operations-design.md#恢复提交租约)。
 

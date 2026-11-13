@@ -45,6 +45,8 @@ func (s ReferenceTierSlot) configuration() (name, lock string, tier experiment.R
 	switch s.tier {
 	case experiment.ReferenceSmall:
 		return ReferenceSlot{}.ContainerName(), ReferenceSlot{}.LockName(), s.tier, nil
+	case experiment.ReferenceAPlusBUbuntu:
+		return "oj-aplusb-ubuntu-sandbox", ReferenceSlot{}.LockName(), s.tier, nil
 	case experiment.ReferenceConvolution:
 		return "oj-reference-convolution-sandbox", convolutionLock, s.tier, nil
 	case experiment.ReferenceMedium, experiment.ReferenceMediumBulk, experiment.ReferencePrimality, experiment.ReferenceStaticRMQ, experiment.ReferenceStaticRangeSum, experiment.ReferenceAssociativeArray:
@@ -60,12 +62,18 @@ func (s ReferenceTierSlot) ContainerName() string { name, _, _, _ := s.configura
 // LockName is empty for an invalid slot, never another slot's canonical lock.
 func (s ReferenceTierSlot) LockName() string { _, name, _, _ := s.configuration(); return name }
 
+// IsUbuntuAPlusB identifies the slot that uses the native pinned guest Engine.
+func (s ReferenceTierSlot) IsUbuntuAPlusB() bool { return s.tier == experiment.ReferenceAPlusBUbuntu }
+
 // OpenReferenceSlot verifies the separately provisioned fixed tier slot.
 // Its caller holds the matching canonical lock until independent Stop completes.
 func OpenReferenceSlot(ctx context.Context, slot ReferenceTierSlot) (*Host, error) {
 	name, _, tier, err := slot.configuration()
 	if err != nil {
 		return nil, err
+	}
+	if slot.IsUbuntuAPlusB() {
+		return nil, errors.New("the Ubuntu A+B experiment requires starting a stopped slot")
 	}
 	return openConfiguredSlot(ctx, runCommand, name, tier)
 }
@@ -76,6 +84,9 @@ func StartReferenceSlot(ctx context.Context, slot ReferenceTierSlot) (*Host, err
 	name, _, tier, err := slot.configuration()
 	if err != nil {
 		return nil, err
+	}
+	if slot.IsUbuntuAPlusB() {
+		return startConfiguredSlot(ctx, ubuntuCommand, name, tier)
 	}
 	return startConfiguredSlot(ctx, runCommand, name, tier)
 }

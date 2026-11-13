@@ -27,6 +27,43 @@ func run(ctx context.Context, logger *slog.Logger, drain <-chan struct{}) error 
 	if err != nil {
 		return err
 	}
+	if c.fixture.IsAPlusB() {
+		slot, err := workerhost.ReferenceSlotForTier(c.fixture.APlusBTier())
+		if err != nil {
+			return err
+		}
+		if slot.IsUbuntuAPlusB() {
+			probe, cancel := context.WithTimeout(ctx, 5*time.Second)
+			err := workerhost.CheckUbuntuAPlusBHost(probe)
+			cancel()
+			if err != nil {
+				return err
+			}
+		}
+		lock, err := lockReferenceRuntime(slot, false)
+		if err != nil {
+			return err
+		}
+		defer lock.Close()
+		return runSlot(ctx, c, logger, lock, func(ctx context.Context) (sandboxHost, error) {
+			if c.startAPlusB {
+				if err := lock.dirty(); err != nil {
+					return nil, err
+				}
+				host, err := workerhost.StartReferenceSlot(ctx, slot)
+				if host == nil {
+					if slot.IsUbuntuAPlusB() {
+						// Match the guest's standalone entry: an unconfirmed startup stays fenced.
+						return nil, err
+					}
+					// Desktop preserves the managed startup contract.
+					return nil, errors.Join(err, lock.clean())
+				}
+				return host, err
+			}
+			return workerhost.OpenReferenceSlot(ctx, slot)
+		}, drain)
+	}
 	ubuntu := c.fixture.Version() == experiment.UbuntuVersion
 	lock, err := lockM0Runtime(c.slot, false, os.Getenv(dualModeEnv), ubuntu)
 	if err != nil {
@@ -59,8 +96,11 @@ func runSlot(ctx context.Context, c config, logger *slog.Logger, lock *slotLock,
 	defer reporter.Close()
 	startup, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	host, err := open(startup)
-	if err != nil {
+	host, openErr := open(startup)
+	if host == nil && c.startAPlusB {
+		return errors.Join(errors.New("A+B slot startup refused; no task claimed"), openErr)
+	}
+	if host == nil || (openErr != nil && !c.startAPlusB) {
 		return errors.New("M0 sandbox preflight failed; no task claimed")
 	}
 	// Both LeasedRunner and final shutdown use the same stop result. A failed
@@ -82,19 +122,49 @@ func runSlot(ctx context.Context, c config, logger *slog.Logger, lock *slotLock,
 			result = err
 		}
 	}()
-	if err := lock.dirty(); err != nil {
-		return err
+	if c.startAPlusB {
+		if openErr != nil {
+			return errors.New("A+B slot startup failed; no task claimed")
+		}
+	} else {
+		if err := lock.dirty(); err != nil {
+			return err
+		}
 	}
 	sandbox := execution.NewGoJudge(host, host.Verify)
-	if err := sandbox.Verify(startup, c.fixture.Profile()); err != nil {
-		return errors.New("M0 sandbox protocol preflight failed; no task claimed")
+	var runner *execution.LeasedRunner
+	if c.fixture.IsAPlusB() {
+		files, ok := host.(execution.FileTransport)
+		if !ok {
+			return errors.New("A+B cached transport required")
+		}
+		factory := execution.NewAPlusBCacheFactory(host, host.Verify, files, c.fixture)
+		if factory == nil {
+			return errors.New("A+B cached runtime unavailable")
+		}
+		if err := factory().Verify(startup, c.fixture.Profile()); err != nil {
+			return errors.New("A+B sandbox protocol preflight failed; no task claimed")
+		}
+		runner, err = execution.NewLeasedAPlusB(factory, renewer.Renew, stop, c.fixture)
+		if err != nil {
+			return err
+		}
+	} else {
+		if err := sandbox.Verify(startup, c.fixture.Profile()); err != nil {
+			return errors.New("M0 sandbox protocol preflight failed; no task claimed")
+		}
+		runner = execution.NewLeasedForFixture(sandbox, renewer.Renew, stop, c.fixture)
 	}
 	cancel()
-	w, err := worker.New(acquirer, acquirer, execution.NewLeasedForFixture(sandbox, renewer.Renew, stop, c.fixture), reporter)
+	w, err := worker.New(acquirer, acquirer, runner, reporter)
 	if err != nil {
 		return err
 	}
-	logger.Info("Worker 已就绪", "mode", "m0-single-slot")
+	mode := "m0-single-slot"
+	if c.fixture.IsAPlusB() {
+		mode = "isolated-aplusb-single-slot"
+	}
+	logger.Info("Worker 已就绪", "mode", mode)
 	err = w.RunWithDrain(ctx, drain)
 	if errors.Is(err, execution.ErrStopUnconfirmed) {
 		return errors.New("sandbox stop unconfirmed")

@@ -26,6 +26,8 @@ const (
 	ReferenceAssociativeArray ReferenceTier = 7
 	// ReferenceConvolution admits the fixed complete source on its own output slot.
 	ReferenceConvolution ReferenceTier = 8
+	// ReferenceAPlusBUbuntu admits only the standalone A+B guest experiment.
+	ReferenceAPlusBUbuntu ReferenceTier = 9
 )
 
 // ReferenceConfiguration binds runtime and both file-transport budget ledgers.
@@ -41,6 +43,11 @@ func ResolveReferenceTier(tier ReferenceTier) (ReferenceConfiguration, error) {
 	switch tier {
 	case ReferenceSmall:
 		return ReferenceConfiguration{Runtime: PinnedReferenceEnvironment(), Files: PinnedReferenceFiles()}, nil
+	case ReferenceAPlusBUbuntu:
+		p := PinnedReferenceEnvironment()
+		p.ID = "p4-aplusb-gnu17-ubuntu-arm64-v1"
+		p.KernelRelease = "6.8.0-106-generic"
+		return ReferenceConfiguration{Runtime: p, Files: PinnedReferenceFiles()}, nil
 	case ReferenceMedium, ReferenceMediumBulk, ReferencePrimality, ReferenceStaticRMQ, ReferenceStaticRangeSum, ReferenceAssociativeArray, ReferenceConvolution:
 		p := PinnedReferenceEnvironment()
 		p.ID = "p4-reference-medium-gnu17-desktop-arm64-v1"

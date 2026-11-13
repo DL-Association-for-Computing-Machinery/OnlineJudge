@@ -49,21 +49,28 @@ func (q *Queries) BeginAttempt(ctx context.Context, submissionID string) (JudgeT
 }
 
 const claimCandidate = `-- name: ClaimCandidate :one
-SELECT t.submission_id, t.virtual_finish::bigint AS virtual_finish
+SELECT t.submission_id, t.virtual_finish::bigint AS virtual_finish, s.material_version, s.manifest_sha256
 FROM judge_tasks t JOIN submissions s ON s.id = t.submission_id
 WHERE t.state = 'queued' AND t.queue_version = $1::text AND s.material_version = $1::text
 ORDER BY t.virtual_finish, t.enqueue_order, t.submission_id LIMIT 1 FOR UPDATE OF t
 `
 
 type ClaimCandidateRow struct {
-	SubmissionID  string
-	VirtualFinish int64
+	SubmissionID    string
+	VirtualFinish   int64
+	MaterialVersion string
+	ManifestSha256  string
 }
 
 func (q *Queries) ClaimCandidate(ctx context.Context, versionID string) (ClaimCandidateRow, error) {
 	row := q.db.QueryRow(ctx, claimCandidate, versionID)
 	var i ClaimCandidateRow
-	err := row.Scan(&i.SubmissionID, &i.VirtualFinish)
+	err := row.Scan(
+		&i.SubmissionID,
+		&i.VirtualFinish,
+		&i.MaterialVersion,
+		&i.ManifestSha256,
+	)
 	return i, err
 }
 

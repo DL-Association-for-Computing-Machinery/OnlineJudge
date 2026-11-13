@@ -65,13 +65,29 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	if err := db.CheckSchema(startup, pool); err != nil {
 		return err
 	}
+	aplusb, aplusbFixture, err := experiment.LoadAPlusBFixture(os.Getenv)
+	if err != nil {
+		return err
+	}
 	version, manifest, err := experiment.SelectFixture(os.Getenv("OJ_EXPERIMENT_MATERIAL_VERSION"))
 	if err != nil {
 		return err
 	}
+	enabled := aplusbFixture.IsAPlusB()
+	if enabled {
+		if os.Getenv("OJ_MATERIAL_ROOT") == "" || referenceNodeID != "" || referenceRoot != "" {
+			return errors.New("A+B controller requires a material root and no reference request service")
+		}
+		version, manifest = aplusb.Version, aplusbFixture.Manifest()
+	}
 	store, err := postgres.New(pool, version, manifest)
 	if err != nil {
 		return err
+	}
+	if enabled {
+		if err := store.CheckRegisteredMaterial(startup); err != nil {
+			return err
+		}
 	}
 	var materialService *materials.Service
 	if path := os.Getenv("OJ_MATERIAL_ROOT"); path != "" {
@@ -98,6 +114,13 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	base := workerapi.NewHandler(store, tlsConfig.ClientCAs, materialService)
 	if version == experiment.UbuntuVersion {
 		base = workerapi.NewUbuntuFixtureHandler(store, tlsConfig.ClientCAs, materialService)
+	}
+	if enabled {
+		if aplusbFixture.APlusBTier() == experiment.ReferenceAPlusBUbuntu {
+			base = workerapi.NewUbuntuAPlusBHandler(store, tlsConfig.ClientCAs, materialService, aplusb.Version, os.Getenv("OJ_APLUSB_MANIFEST_SHA256"))
+		} else {
+			base = workerapi.NewAPlusBHandler(store, tlsConfig.ClientCAs, materialService, aplusb)
+		}
 	}
 	handler, err := configureReferenceClaims(base,
 		pool, tlsConfig.ClientCAs, referenceNodeID, referenceObjects, referenceExecution, dispatchSetting == "1")

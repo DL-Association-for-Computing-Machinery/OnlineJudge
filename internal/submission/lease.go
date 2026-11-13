@@ -19,9 +19,11 @@ type NodeIdentity struct {
 	CredentialVersion int64
 }
 
-// Lease pins independent generations and an attempt; Token is never a public receipt.
+// Lease pins independent generations, an attempt and the task's immutable
+// materials; Token is never a public receipt.
 type Lease struct {
 	Token, SubmissionID                 string
+	MaterialVersion, ManifestSHA256     string
 	JudgeGeneration, RecoveryGeneration int64
 	AttemptNumber                       int32
 	Until                               time.Time

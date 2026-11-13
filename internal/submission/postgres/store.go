@@ -91,9 +91,18 @@ func (s *Store) checkMaterial(ctx context.Context, q *submissiondb.Queries) erro
 	return nil
 }
 
+// CheckRegisteredMaterial confirms the configured immutable version without writing.
+func (s *Store) CheckRegisteredMaterial(ctx context.Context) error {
+	return s.checkMaterial(ctx, submissiondb.New(s.pool))
+}
+
 // Accept atomically persists source and task, or returns the original receipt.
 // A commit error remains ambiguous: callers must query/retry with the same key.
 func (s *Store) Accept(ctx context.Context, subject, scope, key string, req submission.Request) (submission.Receipt, bool, error) {
+	return s.accept(ctx, subject, scope, key, req, nil)
+}
+
+func (s *Store) accept(ctx context.Context, subject, scope, key string, req submission.Request, authorize func(context.Context, pgx.Tx) error) (submission.Receipt, bool, error) {
 	if err := submission.Validate(subject, scope, key, req); err != nil {
 		return submission.Receipt{}, false, err
 	}
@@ -106,12 +115,28 @@ func (s *Store) Accept(ctx context.Context, subject, scope, key string, req subm
 	if err != nil {
 		return submission.Receipt{}, false, err
 	}
-	defer func() {
-		cleanup, stop := context.WithTimeout(context.Background(), time.Second)
-		defer stop()
-		_ = tx.Rollback(cleanup)
-	}()
-	q := submissiondb.New(tx)
+	defer rollback(tx)
+	if authorize != nil {
+		if err := authorize(ctx, tx); err != nil {
+			return submission.Receipt{}, false, err
+		}
+	}
+	result, created, err := s.enqueue(ctx, submissiondb.New(tx), subject, scope, key, req)
+	if err != nil {
+		return submission.Receipt{}, false, err
+	}
+	// A replay has written nothing. Preserve the confirmed historical receipt
+	// without making it depend on a new COMMIT acknowledgement.
+	if !created {
+		return result, false, nil
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return submission.Receipt{}, false, err
+	}
+	return result, created, nil
+}
+
+func (s *Store) enqueue(ctx context.Context, q *submissiondb.Queries, subject, scope, key string, req submission.Request) (submission.Receipt, bool, error) {
 	receiptKey := submissiondb.GetReceiptParams{SubjectID: subject, ContextID: scope, IdempotencyKey: key}
 	fingerprint := submission.Digest(req)
 	// Return historical acceptance even if the material store later becomes unavailable.
@@ -173,9 +198,6 @@ func (s *Store) Accept(ctx context.Context, subject, scope, key string, req subm
 	if row.RequestSha256 != fingerprint {
 		return submission.Receipt{}, false, submission.ErrConflict
 	}
-	if err := tx.Commit(ctx); err != nil {
-		return submission.Receipt{}, false, err
-	}
 	return receipt(row), created, nil
 }
 
@@ -186,7 +208,11 @@ func (s *Store) Receipt(ctx context.Context, subject, scope, key string) (submis
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	row, err := submissiondb.New(s.pool).GetReceipt(ctx, submissiondb.GetReceiptParams{
+	return lookupReceipt(ctx, submissiondb.New(s.pool), subject, scope, key)
+}
+
+func lookupReceipt(ctx context.Context, q *submissiondb.Queries, subject, scope, key string) (submission.Receipt, error) {
+	row, err := q.GetReceipt(ctx, submissiondb.GetReceiptParams{
 		SubjectID: subject, ContextID: scope, IdempotencyKey: key,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {

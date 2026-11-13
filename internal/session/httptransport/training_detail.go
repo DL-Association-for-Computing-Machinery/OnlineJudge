@@ -15,14 +15,18 @@ import (
 // TrainingDetail rechecks training eligibility while reading an owner's submission.
 type TrainingDetail func(context.Context, identity.TrainingActor, string) (submission.Detail, error)
 
+// TrainingStatus reads the same current receipt without loading the source.
+type TrainingStatus func(context.Context, identity.TrainingActor, string) (submission.Receipt, error)
+
 // WithTrainingDetail enables the optional read-only submission detail route.
-func WithTrainingDetail(base http.Handler, read TrainingDetail) (http.Handler, error) {
+func WithTrainingDetail(base http.Handler, read TrainingDetail, status TrainingStatus) (http.Handler, error) {
 	h, ok := base.(*handler)
-	if !ok || h == nil || read == nil || h.trainingDetail != nil {
+	if !ok || h == nil || read == nil || status == nil || h.trainingDetail != nil {
 		return nil, redisstore.ErrInvalid
 	}
 	next := *h
 	next.trainingDetail = read
+	next.trainingStatus = status
 	return &next, nil
 }
 
@@ -39,7 +43,8 @@ func trainingDetailID(path string) string {
 
 func (h *handler) serveTrainingDetail(w http.ResponseWriter, r *http.Request, id string) {
 	expected, pinned := expectedSubject(r)
-	if !pinned || r.URL.RawPath != "" || r.URL.RawQuery != "" || r.URL.ForceQuery ||
+	statusOnly := r.URL.RawQuery == "view=status"
+	if !pinned || r.URL.RawPath != "" || (r.URL.RawQuery != "" && !statusOnly) || r.URL.ForceQuery ||
 		r.ContentLength != 0 || len(r.TransferEncoding) != 0 {
 		problem(w, 400, "INVALID_TRAINING_DETAIL_REQUEST", "提交详情请求格式无效")
 		return
@@ -50,7 +55,13 @@ func (h *handler) serveTrainingDetail(w http.ResponseWriter, r *http.Request, id
 	if !ok {
 		return
 	}
-	detail, err := h.trainingDetail(ctx, actor, id)
+	var result any
+	var err error
+	if statusOnly {
+		result, err = h.trainingStatus(ctx, actor, id)
+	} else {
+		result, err = h.trainingDetail(ctx, actor, id)
+	}
 	if ctx.Err() != nil {
 		detailUnavailable(w)
 		return
@@ -63,7 +74,7 @@ func (h *handler) serveTrainingDetail(w http.ResponseWriter, r *http.Request, id
 		trainingError(w, err, detailUnavailable)
 		return
 	}
-	body, err := json.Marshal(detail)
+	body, err := json.Marshal(result)
 	if err != nil || ctx.Err() != nil {
 		detailUnavailable(w)
 		return

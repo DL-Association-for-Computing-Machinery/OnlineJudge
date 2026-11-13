@@ -53,15 +53,23 @@ func validLease(l submission.Lease) bool {
 		l.JudgeGeneration > 0 && l.RecoveryGeneration > 0 && l.AttemptNumber > 0 && !l.Until.IsZero()
 }
 
+func (a *Acquirer) supportsMaterials(l submission.Lease) bool {
+	return l.MaterialVersion == a.fixture.Version() && l.ManifestSHA256 == checksum(a.fixture.Manifest())
+}
+
 // Claim accepts only a complete lease or an explicit empty queue. Until is
 // informational: execution must obtain a fresh renewal using LeasedRunner's
 // monotonic budget, rather than trusting clocks shared across hosts.
 func (a *Acquirer) Claim(ctx context.Context) (submission.Lease, error) {
 	var req struct {
-		Version string `json:"fixture_version,omitempty"`
+		Version  string `json:"fixture_version,omitempty"`
+		Manifest string `json:"fixture_manifest_sha256,omitempty"`
 	}
 	if a.fixture.Version() != experiment.PinnedVersion {
 		req.Version = a.fixture.Version()
+	}
+	if a.fixture.APlusBTier() == experiment.ReferenceAPlusBUbuntu {
+		req.Manifest = checksum(a.fixture.Manifest())
 	}
 	resp, err := a.post(ctx, "claim", req)
 	if err != nil {
@@ -87,13 +95,16 @@ func (a *Acquirer) Claim(ctx context.Context) (submission.Lease, error) {
 		Recovery int64     `json:"recovery_generation"`
 		Attempt  int32     `json:"attempt_number"`
 		Until    time.Time `json:"lease_until"`
+		Version  string    `json:"material_version"`
+		Manifest string    `json:"manifest_sha256"`
 	}
 	if readJSON(resp, 1024, &value) != nil {
 		return submission.Lease{}, ErrClaimUnknown
 	}
 	l := submission.Lease{Token: value.Token, SubmissionID: value.ID, JudgeGeneration: value.Judge,
-		RecoveryGeneration: value.Recovery, AttemptNumber: value.Attempt, Until: value.Until}
-	if !validLease(l) {
+		RecoveryGeneration: value.Recovery, AttemptNumber: value.Attempt, Until: value.Until,
+		MaterialVersion: value.Version, ManifestSHA256: value.Manifest}
+	if !validLease(l) || !a.supportsMaterials(l) {
 		return submission.Lease{}, ErrClaimUnknown
 	}
 	return l, nil

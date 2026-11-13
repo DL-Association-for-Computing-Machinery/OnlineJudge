@@ -37,6 +37,17 @@ func RecoverReferenceSlot(ctx context.Context, slot ReferenceTierSlot, expectedI
 	if err != nil {
 		return err
 	}
+	if slot.IsUbuntuAPlusB() {
+		h := &Host{run: ubuntuCommand, tier: tier}
+		p, _, err := h.configuration()
+		if err != nil {
+			return err
+		}
+		if err := h.verifyUbuntuGuest(ctx, p); err != nil {
+			return err
+		}
+		return recoverConfiguredHost(ctx, h, name, expectedID)
+	}
 	return recoverConfiguredSlot(ctx, runCommand, name, expectedID, tier)
 }
 
@@ -76,6 +87,11 @@ func recoverConfiguredHost(ctx context.Context, h *Host, name, expectedID string
 	}
 	if err := h.validateIsolation(s, p); err != nil {
 		return err
+	}
+	if h.tier == experiment.ReferenceAPlusBUbuntu {
+		if err := h.verifySlotOwner(ctx); err != nil {
+			return err
+		}
 	}
 	h.started = s.Started
 	if s.Running {

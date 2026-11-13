@@ -152,6 +152,7 @@ func testEntryTrainingHistory(t *testing.T, f *fixture, binary string) {
 	setHistoryEmailVerified(t, f, subject.ID, false)
 	loginStatus(t, historyGET(api, "?cursor="+first.NextCursor, subject.ID, ownerCookie), 403)
 	loginStatus(t, historyGET(api, "/"+fmt.Sprintf("%032d", 22), subject.ID, ownerCookie), 403)
+	loginStatus(t, historyGET(api, "/"+fmt.Sprintf("%032d", 22)+"?view=status", subject.ID, ownerCookie), 403)
 	loginStatus(t, loginCall(api, "/api/v1/session/logout", "", ownerCookie, nil), 204)
 	loginStatus(t, historyGET(api, "", subject.ID, ownerCookie), 401)
 	loginStatus(t, historyGET(api, "/"+fmt.Sprintf("%032d", 22), subject.ID, ownerCookie), 401)
@@ -162,9 +163,14 @@ func testTrainingDetail(t *testing.T, f *fixture, api, disabled *loginEndpoint, 
 	id := fmt.Sprintf("%032d", 22)
 	path := "/" + id
 	loginStatus(t, historyGET(disabled, path, owner, ownerCookie), 404)
+	loginStatus(t, historyGET(disabled, path+"?view=status", owner, ownerCookie), 404)
 	loginStatus(t, historyGET(api, path, owner, nil), 401)
+	loginStatus(t, historyGET(api, path+"?view=status", owner, nil), 401)
 	loginStatus(t, historyGET(api, path, other, ownerCookie), 409)
+	loginStatus(t, historyGET(api, path+"?view=status", other, ownerCookie), 409)
 	loginStatus(t, historyGET(api, path+"?cursor=x", owner, ownerCookie), 400)
+	loginStatus(t, historyGET(api, path+"?view=status&view=status", owner, ownerCookie), 400)
+	loginStatus(t, historyGET(api, path+"?view=%73tatus", owner, ownerCookie), 400)
 	loginStatus(t, historyGET(api, path+"?", owner, ownerCookie), 400)
 	loginStatus(t, historyGET(api, "/%30"+id[1:], owner, ownerCookie), 400)
 	loginStatus(t, historyGET(api, "/bad", owner, ownerCookie), 404)
@@ -214,6 +220,27 @@ func testTrainingDetail(t *testing.T, f *fixture, api, disabled *loginEndpoint, 
 	must(t, json.Unmarshal(response.body, &detail))
 	if detail.State != "queued" || detail.Verdict != nil || detail.Source != source {
 		t.Fatal("detail did not read current task state")
+	}
+	statusPath := path + "?view=status"
+	loginStatus(t, historyGET(api, statusPath, other, otherCookie), 404)
+	queued := historyGET(api, statusPath, owner, ownerCookie)
+	loginStatus(t, queued, 200)
+	fields = nil
+	var summary submission.Receipt
+	must(t, json.Unmarshal(queued.body, &fields))
+	must(t, json.Unmarshal(queued.body, &summary))
+	if len(fields) != 6 || fields["source"] != nil || len(queued.cookies) != 0 ||
+		queued.headers.Get("Cache-Control") != "no-store" || summary.ID != id ||
+		summary.State != "queued" || summary.Verdict != nil {
+		t.Fatal("status did not return an uncached source-free current receipt")
+	}
+	_, err = f.pools[0].Exec(f.ctx, `UPDATE judge_tasks SET state='finished', verdict='AC' WHERE submission_id=$1`, id)
+	must(t, err)
+	finished := historyGET(api, statusPath, owner, ownerCookie)
+	loginStatus(t, finished, 200)
+	must(t, json.Unmarshal(finished.body, &summary))
+	if summary.State != "finished" || summary.Verdict == nil || *summary.Verdict != "AC" {
+		t.Fatal("status did not read the terminal result")
 	}
 }
 

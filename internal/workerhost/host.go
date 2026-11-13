@@ -92,10 +92,15 @@ func (h *Host) configuration() (experiment.ExecutionProfile, experiment.Referenc
 var containerID = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 func (h *Host) docker(ctx context.Context, input io.Reader, args ...string) ([]byte, error) {
-	if h.fixture.Version() == experiment.UbuntuVersion {
-		return h.run(ctx, input, "/usr/bin/docker", append([]string{"--host=unix:///var/run/docker.sock"}, args...)...)
+	name, commandArgs := h.dockerCommand(args)
+	return h.run(ctx, input, name, commandArgs...)
+}
+
+func (h *Host) dockerCommand(args []string) (string, []string) {
+	if h.nativeUbuntu() {
+		return "/usr/bin/docker", append([]string{"--host=unix:///var/run/docker.sock"}, args...)
 	}
-	return h.run(ctx, input, "docker", append([]string{"--context", "desktop-linux"}, args...)...)
+	return "docker", append([]string{"--context", "desktop-linux"}, args...)
 }
 
 func (h *Host) begin(ctx context.Context) (context.Context, func(), error) {
@@ -157,7 +162,7 @@ func (h *Host) Verify(ctx context.Context, p experiment.ExecutionProfile) error 
 			return errors.New("host execution environment mismatch")
 		}
 	}
-	if h.fixture.Version() == experiment.UbuntuVersion {
+	if h.nativeUbuntu() {
 		if err := h.verifyUbuntuLimits(ctx); err != nil {
 			return err
 		}
@@ -184,7 +189,7 @@ type state struct {
 func (h *Host) inspect(ctx context.Context, id string) (state, error) {
 	var s state
 	format := inspection
-	if h.fixture.Version() == experiment.UbuntuVersion {
+	if h.nativeUbuntu() {
 		format = strings.TrimSuffix(format, "}") + `,"Cgroupns":{{json .HostConfig.CgroupnsMode}},"Swap":{{.HostConfig.MemorySwap}},"PortBindings":{{len .HostConfig.PortBindings}},"PublishAllPorts":{{.HostConfig.PublishAllPorts}}}`
 	}
 	out, err := h.docker(ctx, nil, "inspect", "--format", format, id)
@@ -205,7 +210,7 @@ func (h *Host) validate(s state, p experiment.ExecutionProfile) error {
 }
 
 func (h *Host) validateIsolation(s state, p experiment.ExecutionProfile) error {
-	if h.fixture.Version() == experiment.UbuntuVersion &&
+	if h.nativeUbuntu() &&
 		(s.Cgroupns != "private" || s.Swap != 1<<30 || s.PortBindings != 0 || s.PublishAllPorts) {
 		return errors.New("sandbox isolation mismatch for Ubuntu")
 	}

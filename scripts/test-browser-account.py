@@ -242,7 +242,7 @@ def main():
         if args.m1_login_load:
             script_name, check_count = "m1-login-load.mjs", 2
         if args.training_history:
-            script_name, check_count = "training-history-qa.mjs", 4
+            script_name, check_count = "training-history-qa.mjs", 5
         qa_script = ROOT / "tests/browser" / script_name
         expected_checks = re.findall(r"^\s+passed\('([^'\n]+)'\)", qa_script.read_text(), re.M)
         if len(expected_checks) != check_count or len(set(expected_checks)) != check_count:

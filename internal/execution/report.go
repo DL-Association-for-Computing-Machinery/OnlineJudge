@@ -18,6 +18,8 @@ var leaseToken = regexp.MustCompile(`^[0-9a-f]{64}$`)
 // value and original token for retries: rerunning code produces different evidence.
 func (r *LeasedRunner) JudgeReport(ctx context.Context, lease submission.Lease, d materials.Descriptor, blobs map[string][]byte) (submission.Result, error) {
 	if !leaseToken.MatchString(lease.Token) || lease.SubmissionID == "" || lease.SubmissionID != d.SubmissionID ||
+		lease.MaterialVersion == "" || lease.MaterialVersion != d.Version ||
+		lease.ManifestSHA256 == "" || lease.ManifestSHA256 != d.ManifestSHA256 ||
 		lease.JudgeGeneration < 1 || lease.RecoveryGeneration < 1 || lease.AttemptNumber < 1 {
 		return submission.Result{}, errors.New("invalid attempt attribution")
 	}
@@ -35,6 +37,10 @@ func (r *LeasedRunner) JudgeReport(ctx context.Context, lease submission.Lease, 
 // keep credentials, source, answers, raw output and ephemeral artifact IDs out of
 // evidence. The manifest digest binds environment, checker and ordered tests.
 func freezeReport(lease submission.Lease, d materials.Descriptor, result Result) submission.Result {
+	schema := "m0-execution-evidence-v1"
+	if _, err := materials.ParseAPlusB(d.Manifest, d.ManifestSHA256); err == nil {
+		schema = "isolated-aplusb-execution-evidence-v1"
+	}
 	type compilation struct {
 		Status          string
 		Exit            int
@@ -51,7 +57,7 @@ func freezeReport(lease submission.Lease, d materials.Descriptor, result Result)
 		Compile                                                 compilation
 		Points                                                  []Point
 		Max                                                     *Usage
-	}{Schema: "m0-execution-evidence-v1", SubmissionID: lease.SubmissionID,
+	}{Schema: schema, SubmissionID: lease.SubmissionID,
 		JudgeGeneration: lease.JudgeGeneration, RecoveryGeneration: lease.RecoveryGeneration,
 		AttemptNumber: lease.AttemptNumber, MaterialVersion: d.Version, Language: d.Language,
 		ManifestSHA256: d.ManifestSHA256, SourceSHA256: d.SourceSHA256,

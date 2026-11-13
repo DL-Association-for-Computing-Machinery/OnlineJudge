@@ -179,13 +179,18 @@ func (r *Runner) validateMaterials(ctx context.Context, profile Profile, sourceI
 
 func (r *Runner) runPrepared(ctx context.Context, report Report, profile Profile, plan problem.ReferencePlan,
 	frozen referenceReader, compilation execution.CompilationSandbox, trial *execution.CachedGoJudge) (result Report, err error) {
-	run := r.sandbox.Run
-	if trial != nil {
-		run = trial.RunCheckerTrial
-	}
 	source, err := frozen.ReadSource(ctx)
 	if err != nil {
 		return report, err
+	}
+	return r.runPreparedSource(ctx, report, profile, plan, frozen, compilation, trial, source)
+}
+
+func (r *Runner) runPreparedSource(ctx context.Context, report Report, profile Profile, plan problem.ReferencePlan,
+	frozen referenceReader, compilation execution.CompilationSandbox, trial *execution.CachedGoJudge, source []byte) (result Report, err error) {
+	run := r.sandbox.Run
+	if trial != nil {
+		run = trial.RunCheckerTrial
 	}
 	var files []execution.SourceFile
 	if compilation != nil {

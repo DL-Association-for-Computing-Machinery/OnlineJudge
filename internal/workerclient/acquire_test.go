@@ -51,6 +51,7 @@ func acquisitionFixture() (submission.Lease, materials.Descriptor) {
 	l := submission.Lease{Token: strings.Repeat("a", 64), SubmissionID: "12345678123412341234123456789012",
 		JudgeGeneration: 1, RecoveryGeneration: 2, AttemptNumber: 3, Until: time.Now().Add(30 * time.Second).UTC()}
 	version, manifest, _ := experiment.SelectFixture(experiment.PinnedVersion)
+	l.MaterialVersion, l.ManifestSHA256 = version, checksum(manifest)
 	source := "// 原样源码😀\n"
 	d := materials.Descriptor{TaskMaterials: submission.TaskMaterials{SubmissionID: l.SubmissionID, Version: version,
 		Manifest: manifest, ManifestSHA256: checksum(manifest), Language: "gnu++17", Source: source}, SourceSHA256: checksum([]byte(source))}
@@ -59,8 +60,9 @@ func acquisitionFixture() (submission.Lease, materials.Descriptor) {
 
 func TestClaimBoundaries(t *testing.T) {
 	l, _ := acquisitionFixture()
-	body := fmt.Sprintf(`{"lease_token":%q,"submission_id":%q,"judge_generation":1,"recovery_generation":2,"attempt_number":3,"lease_until":%q}`,
+	legacy := fmt.Sprintf(`{"lease_token":%q,"submission_id":%q,"judge_generation":1,"recovery_generation":2,"attempt_number":3,"lease_until":%q}`,
 		l.Token, l.SubmissionID, l.Until.Format(time.RFC3339Nano))
+	body := strings.TrimSuffix(legacy, "}") + fmt.Sprintf(`,"material_version":%q,"manifest_sha256":%q}`, l.MaterialVersion, l.ManifestSHA256)
 	for _, tc := range []struct {
 		name, body string
 		status     int
@@ -70,6 +72,9 @@ func TestClaimBoundaries(t *testing.T) {
 		{"revoked", l.Token, 403, submission.ErrNode}, {"unauthorized", "", 401, submission.ErrNode},
 		{"unavailable", l.Token, 503, ErrClaimUnknown}, {"redirect", "", 307, ErrClaimUnknown},
 		{"null", "null", 200, ErrClaimUnknown}, {"missing", `{}`, 200, ErrClaimUnknown},
+		{"legacy unbound response", legacy, 200, ErrClaimUnknown},
+		{"wrong version", strings.Replace(body, l.MaterialVersion, experiment.UbuntuVersion, 1), 200, ErrClaimUnknown},
+		{"wrong manifest", strings.Replace(body, l.ManifestSHA256, strings.Repeat("f", 64), 1), 200, ErrClaimUnknown},
 		{"oversized", strings.Repeat(" ", 1025) + body, 200, ErrClaimUnknown},
 		{"trailing", body + `{}`, 200, ErrClaimUnknown},
 		{"token", strings.Replace(body, l.Token, "bad", 1), 200, ErrClaimUnknown},
@@ -119,6 +124,17 @@ func TestClaimBoundaries(t *testing.T) {
 				t.Fatal("partial lease exposed")
 			}
 		})
+	}
+}
+
+func TestFetchDoesNotContactControllerForUnsupportedLeaseMaterials(t *testing.T) {
+	a := acquisitionServer(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Error("unsupported lease contacted the controller")
+	}))
+	l, _ := acquisitionFixture()
+	l.ManifestSHA256 = strings.Repeat("f", 64)
+	if _, blobs, err := a.Fetch(t.Context(), l); !errors.Is(err, ErrMaterials) || blobs != nil {
+		t.Fatalf("unsupported lease yielded materials: %v", err)
 	}
 }
 

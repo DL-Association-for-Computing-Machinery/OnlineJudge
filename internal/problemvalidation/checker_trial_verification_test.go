@@ -84,6 +84,10 @@ func TestVerifyPassingCheckerTrial(t *testing.T) {
 		change func(*problemvalidation.CheckerTrialReport)
 	}{
 		{"wrong schema", func(r *problemvalidation.CheckerTrialReport) { r.Schema = "oj.checker-trial.v2" }},
+		{"isolated judge schema", func(r *problemvalidation.CheckerTrialReport) { r.Schema = "oj.aplusb-isolated-judge-report.v1" }},
+		{"legacy schema carrying a submission binding", func(r *problemvalidation.CheckerTrialReport) {
+			r.SubmissionSHA256 = strings.Repeat("a", 64)
+		}},
 		{"incomplete", func(r *problemvalidation.CheckerTrialReport) { r.Complete = false }},
 		{"stop not confirmed", func(r *problemvalidation.CheckerTrialReport) { r.StopConfirmed = false }},
 		{"completed wrong answer", func(r *problemvalidation.CheckerTrialReport) { r.Verdict = "WA" }},

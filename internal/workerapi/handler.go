@@ -29,11 +29,26 @@ func NewUbuntuFixtureHandler(store submission.LeaseStore, roots *x509.CertPool, 
 	return newFixtureHandler(store, roots, time.Now, experiment.UbuntuVersion, materialService)
 }
 
+// NewAPlusBHandler requires an explicit version assertion before acquiring a
+// task from the isolated A+B queue.
+func NewAPlusBHandler(store submission.LeaseStore, roots *x509.CertPool, materialService *materials.Service, m materials.APlusBManifest) http.Handler {
+	return newFixtureHandler(store, roots, time.Now, m.Version, materialService)
+}
+
+// NewUbuntuAPlusBHandler binds the exact transport manifest before creating a lease.
+func NewUbuntuAPlusBHandler(store submission.LeaseStore, roots *x509.CertPool, materialService *materials.Service, version, manifestSHA string) http.Handler {
+	return newBoundFixtureHandler(store, roots, time.Now, version, manifestSHA, materialService)
+}
+
 func newHandler(store submission.LeaseStore, roots *x509.CertPool, now func() time.Time, materialService ...*materials.Service) http.Handler {
 	return newFixtureHandler(store, roots, now, "", materialService...)
 }
 
 func newFixtureHandler(store submission.LeaseStore, roots *x509.CertPool, now func() time.Time, claimFixture string, materialService ...*materials.Service) http.Handler {
+	return newBoundFixtureHandler(store, roots, now, claimFixture, "", materialService...)
+}
+
+func newBoundFixtureHandler(store submission.LeaseStore, roots *x509.CertPool, now func() time.Time, claimFixture, claimManifest string, materialService ...*materials.Service) http.Handler {
 	var service *materials.Service
 	if len(materialService) > 0 {
 		service = materialService[0]
@@ -67,14 +82,17 @@ func newFixtureHandler(store submission.LeaseStore, roots *x509.CertPool, now fu
 			serveMaterials(w, r, service, node, roots, now)
 		case "/api/v1/worker/claim":
 			var req struct {
-				Version json.RawMessage `json:"fixture_version"`
+				Version  json.RawMessage `json:"fixture_version"`
+				Manifest json.RawMessage `json:"fixture_manifest_sha256"`
 			}
 			if !decode(w, r, &req) {
 				return
 			}
-			var version string
+			var version, manifest string
 			if (claimFixture == "" && len(req.Version) != 0) ||
-				(claimFixture != "" && (json.Unmarshal(req.Version, &version) != nil || version != claimFixture)) {
+				(claimFixture != "" && (json.Unmarshal(req.Version, &version) != nil || version != claimFixture)) ||
+				(claimManifest == "" && len(req.Manifest) != 0) ||
+				(claimManifest != "" && (json.Unmarshal(req.Manifest, &manifest) != nil || manifest != claimManifest)) {
 				problem(w, 412, "FIXTURE_MISMATCH", "节点与控制器的判题材料版本不一致")
 				return
 			}
@@ -92,7 +110,10 @@ func newFixtureHandler(store submission.LeaseStore, roots *x509.CertPool, now fu
 					Recovery int64     `json:"recovery_generation"`
 					Attempt  int32     `json:"attempt_number"`
 					Until    time.Time `json:"lease_until"`
-				}{lease.Token, lease.SubmissionID, lease.JudgeGeneration, lease.RecoveryGeneration, lease.AttemptNumber, lease.Until})
+					Version  string    `json:"material_version"`
+					Manifest string    `json:"manifest_sha256"`
+				}{lease.Token, lease.SubmissionID, lease.JudgeGeneration, lease.RecoveryGeneration, lease.AttemptNumber, lease.Until,
+					lease.MaterialVersion, lease.ManifestSHA256})
 			}
 		case "/api/v1/worker/renew":
 			var req struct {

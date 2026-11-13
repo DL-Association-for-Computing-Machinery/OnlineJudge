@@ -52,6 +52,9 @@ func (s *Store) Claim(ctx context.Context, node submission.NodeIdentity) (submis
 	if err != nil {
 		return submission.Lease{}, err
 	}
+	if candidate.MaterialVersion != s.version || candidate.ManifestSha256 != s.manifestHash {
+		return submission.Lease{}, submission.ErrMaterial
+	}
 	id := candidate.SubmissionID
 	task, err := q.BeginAttempt(ctx, id)
 	if err != nil {
@@ -76,7 +79,8 @@ func (s *Store) Claim(ctx context.Context, node submission.NodeIdentity) (submis
 	if err := tx.Commit(ctx); err != nil {
 		return submission.Lease{}, err
 	}
-	return submission.Lease{Token: token, SubmissionID: id, JudgeGeneration: task.JudgeGeneration,
+	return submission.Lease{Token: token, SubmissionID: id, MaterialVersion: candidate.MaterialVersion,
+		ManifestSHA256: candidate.ManifestSha256, JudgeGeneration: task.JudgeGeneration,
 		RecoveryGeneration: task.RecoveryGeneration, AttemptNumber: task.AttemptNumber, Until: until.Time}, nil
 }
 

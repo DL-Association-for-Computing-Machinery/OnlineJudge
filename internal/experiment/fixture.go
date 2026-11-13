@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materials"
 )
 
 // Version names the synthetic A+B fixture; changing material requires a new version.
@@ -19,7 +21,55 @@ const UbuntuVersion = "m0-sum-ubuntu-arm64-v1"
 
 // WorkerFixture is a closed selection of executable M0 fixtures. The zero
 // value preserves the existing Desktop fixture.
-type WorkerFixture struct{ ubuntu bool }
+type WorkerFixture struct {
+	ubuntu        bool
+	aplusb        string
+	aplusbVersion string
+	aplusbTier    ReferenceTier
+}
+
+// APlusBFixture enables only the explicit, independently pinned transport
+// manifest. It cannot be selected by a task or a server response.
+func APlusBFixture(raw []byte, expected string) (WorkerFixture, error) {
+	return aplusbFixtureForTier(raw, expected, ReferenceSmall)
+}
+
+func aplusbFixtureForTier(raw []byte, expected string, tier ReferenceTier) (WorkerFixture, error) {
+	m, err := materials.ParseAPlusB(raw, expected)
+	if err != nil {
+		return WorkerFixture{}, err
+	}
+	runtimeSHA := APlusBRuntimeSHA256ForTier(tier)
+	if runtimeSHA == "" || m.RuntimeSHA256 != runtimeSHA {
+		return WorkerFixture{}, errors.New("A+B runtime binding mismatch")
+	}
+	return WorkerFixture{aplusb: string(raw), aplusbVersion: m.Version, aplusbTier: tier}, nil
+}
+
+// APlusBRuntimeSHA256 binds both the execution and cached-file budgets.
+func APlusBRuntimeSHA256() string {
+	return APlusBRuntimeSHA256ForTier(ReferenceSmall)
+}
+
+// APlusBRuntimeSHA256ForTier binds a supported A+B runtime and cache budget.
+func APlusBRuntimeSHA256ForTier(tier ReferenceTier) string {
+	if tier != ReferenceSmall && tier != ReferenceAPlusBUbuntu {
+		return ""
+	}
+	config, err := ResolveReferenceTier(tier)
+	if err != nil {
+		return ""
+	}
+	raw, _ := json.Marshal(config)
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
+}
+
+// IsAPlusB identifies the isolated cached execution profile.
+func (f WorkerFixture) IsAPlusB() bool { return f.aplusb != "" }
+
+// APlusBTier returns zero for fixtures outside the A+B lease experiment.
+func (f WorkerFixture) APlusBTier() ReferenceTier { return f.aplusbTier }
 
 // ParseWorkerFixture refuses historical and arbitrary manifests for execution.
 func ParseWorkerFixture(version string) (WorkerFixture, error) {
@@ -35,6 +85,9 @@ func ParseWorkerFixture(version string) (WorkerFixture, error) {
 
 // Version is the version on the controller's queue and material record.
 func (f WorkerFixture) Version() string {
+	if f.IsAPlusB() {
+		return f.aplusbVersion
+	}
 	if f.ubuntu {
 		return UbuntuVersion
 	}
@@ -43,6 +96,10 @@ func (f WorkerFixture) Version() string {
 
 // Profile returns a fresh copy of the built-in runtime definition.
 func (f WorkerFixture) Profile() ExecutionProfile {
+	if f.IsAPlusB() {
+		config, _ := ResolveReferenceTier(f.aplusbTier)
+		return config.Runtime
+	}
 	p := PinnedEnvironment()
 	if f.ubuntu {
 		p.ID = "m0-gnu17-ubuntu-arm64-v1"
@@ -52,7 +109,12 @@ func (f WorkerFixture) Profile() ExecutionProfile {
 }
 
 // Manifest returns the canonical bytes for this execution fixture.
-func (f WorkerFixture) Manifest() []byte { return manifest(f.Version(), f.Profile()) }
+func (f WorkerFixture) Manifest() []byte {
+	if f.IsAPlusB() {
+		return []byte(f.aplusb)
+	}
+	return manifest(f.Version(), f.Profile())
+}
 
 // SelectFixture accepts only built-in fixtures; empty preserves the legacy default.
 // This is explicit process configuration, never a caller-supplied image or command.

@@ -46,6 +46,93 @@
 
 Z 算法 32 点修订也已通过 medium 槽试跑和[离线复核](delivery-log.md#2026-11-14z-算法候选检查器试跑)。仅提供固定本机档位证据，不改变审核准入或发布状态。
 
+## A+B 固定材料隔离判题
+
+本阶段把 A+B 有序正式计划转成 `oj.aplusb-isolated-judge.v1` 清单。清单绑定候选及其限额、内容版本、完整导入修订、来源锁、正式计划、运行档位，以及每个点输入/答案的 SHA-256 和长度；只输出元数据。Worker 接受独立核对的清单和提交字节摘要，从私有包重新冻结并核对全部材料和答案，随后用现有固定断网参考槽编译指定 GNU++17 源码。前置绑定失败不创建报告目录、不启动槽。按正式顺序首错停止，剩余点为 `NOT_RUN`。
+
+独立 `oj.aplusb-isolated-judge-report.v1` 报告绑定清单、提交、候选、计划和运行档位，不含源码、答案或程序输出。仅在判定明确、制品清理、停止确认及锁清理都通过时完成。旧的标程试跑报告与离线复核保持原协议，不能将隔离判题报告用作标程验证。回退移除两个维护入口即可，无数据库或运行配置迁移。复现见 [README](../README.md#ab-固定材料隔离判题)，联验见[交付证据](delivery-evidence/aplusb-isolated-judging.md)。
+
+### Ubuntu 独立判题实验
+
+`--ubuntu-aplusb` 显式选择独立的 Ubuntu 运行档位。只用于无宿主共享的本地 Apple 虚拟机、Linux arm64、内核 `6.8.0-106-generic` 和客体的固定 cgroup v2 Engine。清单含不同的档位摘要，不能与 Desktop 互换。判题前核对独立的 `oj-aplusb-ubuntu-sandbox` 名称、所有者、固定镜像、入口及隔离；启动后核对有效 CPU、内存、swap 和进程上限。控制与文件传输均走客体的固定 Unix socket。只在专用客体确认无其他槽运行或隔离后，使用已存在的镜像预置停止槽，不下载镜像：
+
+```sh
+/usr/bin/docker --host=unix:///var/run/docker.sock create --pull=never \
+  --name oj-aplusb-ubuntu-sandbox --label owner=onlinejudge.ubuntu-aplusb-test \
+  --privileged --network none --read-only --ipc private --cgroupns private \
+  --restart no --tmpfs /tmp:rw,nosuid,size=128m --shm-size 128m \
+  --memory 1g --memory-swap 1g --cpus 1 --pids-limit 128 \
+  sha256:cd40ffdb32619806a8d97e59fe03e890fe4066835f57efa6ae13f919ef3262c5
+```
+
+保存返回的原始完整容器 ID。Ubuntu A+B 与小型 Desktop 参考槽共享宿主锁名，Ubuntu 的隔离标记不能用 Desktop 恢复命令清除。仅在确认旧 Worker 及在途控制操作全部排空、仍持有可信原始 ID 的前提下，由原客体 root 执行 `OJ_SANDBOX_EXPERIMENT=1 worker recover-aplusb-ubuntu <原始完整容器ID>`，保持 M0 槽和材料环境变量未设置。恢复不启动槽，不接受替换容器；已停止路径仍需按原 ID 回读。回退可停用专用命令；有未确认停止或隔离标记时先用支持该档位的二进制恢复，旧版本不清除此标记。
+
+独立判题不登记租约；同一档位的运输清单可按[下节](#ab-租约链路联验)另行导出。旧归档复核、目标节点交接和生产门禁保持原契约。见 [本地实测](delivery-evidence/aplusb-isolated-judging.md#ubuntu-arm64-专用客体)。
+
+### A+B 归档报告复核
+
+`checker-candidate verify-aplusb-archive` 专用于已归档的 A+B 17 点本机 AC、WA、OLE 三份报告。用独立固定的来源锁、正式计划、候选及上限，从私有题包重建判题清单。按角色核对固定报告字节和提交摘要、实际档位、点序、用量、首错停止及清理记录。错误归档、互换、改写或有未完成标记均拒绝。复核只读取证据，不启动容器，也不能证明现场节点运行过。
+
+```sh
+.local/bin/checker-candidate verify-aplusb-archive \
+  --bundle "$PRIVATE_BUNDLE" --source-lock "$TRUSTED_SOURCE_LOCK" \
+  --ac "$AC_ARCHIVE" --wa "$WA_ARCHIVE" --ole "$OLE_ARCHIVE"
+```
+
+路径使用绝对路径；输出仅有固定摘要、点数和本机范围。审核人可从现有授权的[批准准入](problem-drafts.md#批准准入状态)读取同一份摘要。生产检查器与目标节点门禁仍须各自的受信证据。
+
+## A+B 租约链路联验
+
+现有的 A+B 17 点清单可以导出为独立隔离配置。运输清单绑定原判题清单摘要、检查器语义、单 token 限额、执行环境及缓存预算摘要，并按正式顺序声明输入和答案对象。维护命令在新私有目录写入内容寻址对象，最后写清单；只含判题输入和答案，不导出标程。登记前复核所有对象，成功后才向 PostgreSQL 写入版本和队列时钟；相同配置可重复登记，同版本不同清单拒绝覆盖。
+
+控制端与 Worker 均须显式设置同一份 `OJ_APLUSB_MANIFEST_FILE`、`OJ_APLUSB_MANIFEST_SHA256` 与 `OJ_SANDBOX_EXPERIMENT=1`。配置与 M0 档位互斥；`OJ_APLUSB_RUNTIME` 未设置时使用原 macOS arm64 Desktop 断网小型参考槽。Ubuntu 档位在登记、控制端及 Worker 三处均须明确设置 `OJ_APLUSB_RUNTIME=ubuntu-arm64`，并与其运输清单的固定运行摘要吻合。Ubuntu Worker 必须使用[客体停止槽](#ubuntu-独立判题实验)和 `OJ_APLUSB_START_STOPPED=1`。控制端限定回环 mTLS 和登记的一套队列版本，Worker 的领取请求须声明该版本；Ubuntu 请求还须提供 `fixture_manifest_sha256`，任一不符均在创建租约前拒绝。租约、描述、源码及材料字节逐层核对。每次尝试新建缓存账本；租约监督、首错停止、制品清理与未知状态整槽停止沿用原有边界。轮询和回报没有新增公开入口。
+
+此阶段在临时数据库通过受信存储直接排入合成任务，以验证控制端和 Worker，不开放普通用户提交。回退先排空并停止隔离 Worker 和控制端，再撤下 A+B 配置；已登记材料和历史结果保留，不要求迁移，也不将隔离版本改写成 M0 版本。复现步骤见 [README](../README.md#ab-租约链路联验)，结果见[交付证据](delivery-evidence/aplusb-leased-judging.md)。
+
+`OJ_APLUSB_START_STOPPED=1` 仅允许显式 A+B Worker 在持有主机及参考槽所有权锁时启动已停止的固定槽。租约开始前先写隔离标记；启动回执不确定时只尝试停止已绑定的容器，无法确认则保留隔离标记。Ubuntu 仍使用独立的槽恢复命令；恢复联验的外层脚本不启停参考槽。[历史重判](rejudge.md)保留 Desktop 清单行为，Ubuntu 必须明确配置原运输清单及档位。
+
 ## 后续接入条件
+
+### A+B 目标节点交接
+
+目标节点由维护者独立确认；以下工具只交接材料及核对返回报告，不连接或操作目标节点。同一 A+B 17 点材料可以使用下列两套固定档位，槽名和档位摘要须成对提交。每套只接受自己的判题及运输清单。不同内核、镜像或隔离参数需要单独的执行适配、清单和实测。交接目录不包含 Worker 二进制、原私有题包、标程或证书；只能由有权限的维护者通过私有通道传递。
+
+| 固定环境 | 槽 | `--runtime`（报告档位摘要） |
+| --- | --- | --- |
+| Desktop arm64 | `oj-reference-sandbox` | `1dacc3c77e44446d598490dd0d808ff32e1bcd1114e715af521406fcc7804ef6` |
+| 专用 Ubuntu arm64 | `oj-aplusb-ubuntu-sandbox` | `8cf3b8386627d1a92b7566521c78dd030bf00fdd2acd5485dcc9bc4357e492b8` |
+
+```sh
+# 使用绝对路径。节点、候选 Git SHA、运行档位摘要和槽名来自独立确认。
+checker-candidate aplusb-target-handoff --mode pack \
+  --source "$PRIVATE_APLUSB_EXPORT" --directory "$NEW_HANDOFF" \
+  --node "$EXPECTED_NODE" --revision "$EXPECTED_REVISION" \
+  --runtime "$EXPECTED_RUNTIME" --slot "$EXPECTED_SLOT"
+
+checker-candidate aplusb-target-handoff --mode verify \
+  --directory "$RECEIVED_HANDOFF" --expected-handoff "$TRUSTED_HANDOFF_SHA256" \
+  --node "$EXPECTED_NODE" --revision "$EXPECTED_REVISION" \
+  --runtime "$EXPECTED_RUNTIME" --slot "$EXPECTED_SLOT"
+```
+
+单独传递 pack 输出的摘要；不要从收到的目录重建信任。目录须为接收者控制、无并发写入，文件权限保留为 0600。核验要求固定清单和所有摘要对象齐全；多余对象、缺文件或错配都拒绝。打包失败应另用新目录。
+
+有现场授权后，节点操作员须独立确认 Worker 二进制来源、Git 候选版本和节点身份，使用[固定隔离命令](../README.md#ab-固定材料隔离判题)和另行授权提供的同一私有题包运行三个固定合成对照，再确认原槽退出且 PID 为零。Ubuntu 判题须加 `--ubuntu-aplusb` 并使用其独立判题摘要。通过独立通道交回每份报告的字节摘要与实际节点、版本证明；用 `--mode reports` 替换 verify 模式，并附 `--ac`、`--wa`、`--ole` 三个绝对归档目录以及对应的 `--ac-sha256`、`--wa-sha256`、`--ole-sha256`。
+
+回读检查完整、停止、点序、用量、首错停止、三份固定合成源码摘要、材料和执行档位。内置的既有 Desktop 和 Ubuntu 对照归档摘要不接受作新证据。输出固定标注 `report-readback-only`：报告本身没有可信运行时间、节点身份或 Git 构建证明，不能将通过回读当作新鲜性或现场证明。回读不会写审核、发布或生产配置。独立确认目标节点、生产检查器与人工终审后才可推进相应门禁。见[本机交接演练](delivery-evidence/aplusb-target-handoff.md)。
+
+#### 封存与复核报告回执
+
+有权限核验原始材料和报告的一方，可在 `--mode reports` 的原命令上追加 `--receipt-out "$NEW_RECEIPT"`。工具在三份报告、完成标记和交接材料均通过检查后，在接收者控制的新目录写入 0600 的 `receipt.json`，同步文件和目录后输出该文件的 SHA-256。已有目录不会覆盖；失败后若已留下目录，不应自行从目录计算信任摘要，应使用新目录重新核验。
+
+```sh
+checker-candidate aplusb-target-handoff --mode receipt \
+  --directory "$RECEIVED_RECEIPT" --expected-receipt "$TRUSTED_RECEIPT_SHA256" \
+  --expected-handoff "$TRUSTED_HANDOFF_SHA256" \
+  --node "$EXPECTED_NODE" --revision "$EXPECTED_REVISION" \
+  --runtime "$EXPECTED_RUNTIME" --slot "$EXPECTED_SLOT"
+```
+
+通过可信渠道分别核对两份摘要和预期目标；不要从收到的回执自取预期值。回执固定来源锁、内容版本、完整导入修订、正式参考档位、正式计划、检查器候选、判题与运输清单、运行档位及三份报告摘要，不包含题包、源码、报告原文或测试点标识。回读只校验回执字节和绑定，无须持有原报告；它没有签名、实际运行时间、节点或构建证明，不会移除 `checker_admission_missing` 或 `target_runtime_missing`。既有 `reports` 命令未设 `--receipt-out` 时仍返回原摘要 JSON。
 
 现有草稿仍为 `configured-not-validated` / `not-run`，`production_profile` 和 `limits` 仍为 null。目标机器实测还须验证显式预算下的真实参考/错误程序、受限编译执行、输出采集及故障分类，然后由有权限的验证、非作者审核及原子发布流程使用准确的候选摘要。离线预检只验证冻结答案，没有连接 Worker 或数据库，也不解除发布阻断。

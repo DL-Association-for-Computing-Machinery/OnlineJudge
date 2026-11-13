@@ -10,18 +10,29 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/checkedfile"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/execution"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/judging"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/workerhost"
 )
 
-func validateCheckerCandidate(ctx context.Context, args []string, logger *slog.Logger) (err error) {
+func validateCheckerCandidate(ctx context.Context, args []string, logger *slog.Logger) error {
+	return runCheckerCommand(ctx, args, logger, false)
+}
+
+func runCheckerCommand(ctx context.Context, args []string, logger *slog.Logger, isolatedJudge bool) (err error) {
 	if os.Getenv("OJ_SANDBOX_EXPERIMENT") != "1" || os.Getenv("OJ_WORKER_M0_SLOT") != "" || os.Getenv(dualModeEnv) != "" {
 		return errors.New("checker trial requires the explicit, single reference slot")
 	}
-	f := flag.NewFlagSet("validate-checker-candidate", flag.ContinueOnError)
+	name := "validate-checker-candidate"
+	if isolatedJudge {
+		name = "judge-aplusb-isolated"
+	}
+	f := flag.NewFlagSet(name, flag.ContinueOnError)
 	f.SetOutput(io.Discard)
 	bundle := f.String("bundle", "", "private problem bundle")
 	sourceID := f.String("source-id", "library-checker:aplusb", "fixed A+B, unionfind or Z algorithm source ID")
@@ -29,12 +40,21 @@ func validateCheckerCandidate(ctx context.Context, args []string, logger *slog.L
 	output := f.String("output", "", "new private report directory")
 	plan := f.String("expected-plan", "", "trusted formal plan SHA-256")
 	candidate := f.String("expected-candidate", "", "trusted candidate SHA-256")
+	var manifest, sourcePath, sourceSHA string
+	var ubuntu bool
+	if isolatedJudge {
+		f.BoolVar(&ubuntu, "ubuntu-aplusb", false, "use the fixed standalone Ubuntu guest runtime")
+		f.StringVar(&manifest, "expected-manifest", "", "independently reviewed judge manifest SHA-256")
+		f.StringVar(&sourcePath, "submission", "", "absolute path to the private UTF-8 GNU++17 submission")
+		f.StringVar(&sourceSHA, "expected-submission", "", "trusted submission byte SHA-256")
+	}
 	caps := judging.TextLimits{}
 	f.IntVar(&caps.Bytes, "bytes", 0, "explicit candidate answer and stdout cap")
 	f.IntVar(&caps.TokenBytes, "token-bytes", 0, "explicit candidate token cap")
 	start := f.Bool("start-stopped-slot", false, "explicitly start the fixed stopped reference slot")
 	if f.Parse(args) != nil || f.NArg() != 0 || !*start || !canonicalAbsolute(*bundle) ||
-		!canonicalAbsolute(*lockPath) || !canonicalAbsolute(*output) || !referenceOutputOutside(*bundle, *output) {
+		!canonicalAbsolute(*lockPath) || !canonicalAbsolute(*output) || !referenceOutputOutside(*bundle, *output) ||
+		(isolatedJudge && (!canonicalAbsolute(sourcePath) || !problem.ValidImportRevision(manifest) || !problem.ValidImportRevision(sourceSHA))) {
 		return errors.New("invalid checker trial arguments")
 	}
 	lockBytes, err := readValidationLock(*lockPath)
@@ -47,7 +67,23 @@ func validateCheckerCandidate(ctx context.Context, args []string, logger *slog.L
 	}
 	defer func() { err = errors.Join(err, prepared.Close()) }()
 	preflightCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-	trial, err := problemvalidation.PrepareCheckerTrialWithLifetime(preflightCtx, ctx, prepared, *plan, *candidate, caps)
+	var trial *problemvalidation.CheckerTrial
+	if isolatedJudge {
+		var source []byte
+		source, err = checkedfile.ReadSecret(sourcePath, submission.MaxSourceBytes)
+		if err == nil {
+			tier := experiment.ReferenceSmall
+			if ubuntu {
+				tier = experiment.ReferenceAPlusBUbuntu
+			}
+			trial, err = problemvalidation.PrepareAPlusBJudgeForTier(preflightCtx, prepared, *plan, *candidate, manifest, sourceSHA, string(source), caps, tier)
+		}
+		if err == nil && ubuntu {
+			err = workerhost.CheckUbuntuAPlusBHost(preflightCtx)
+		}
+	} else {
+		trial, err = problemvalidation.PrepareCheckerTrialWithLifetime(preflightCtx, ctx, prepared, *plan, *candidate, caps)
+	}
 	cancel()
 	defer func() { err = errors.Join(err, trial.Close()) }()
 	if err := errors.Join(err, ctx.Err()); err != nil {
@@ -63,7 +99,7 @@ func validateCheckerCandidate(ctx context.Context, args []string, logger *slog.L
 	if err := os.WriteFile(filepath.Join(*output, "INCOMPLETE"), []byte("Checker trial incomplete; no admission.\n"), 0600); err != nil {
 		return err
 	}
-	lock, err := lockSlotMode(slot.LockName(), false)
+	lock, err := lockReferenceRuntime(slot, false)
 	if err != nil {
 		return err
 	}
@@ -82,8 +118,12 @@ func validateCheckerCandidate(ctx context.Context, args []string, logger *slog.L
 	if writeErr := persistPrivateValidationReport(*output, report, report.Complete); writeErr != nil {
 		return errors.New("checker trial report persistence failed")
 	}
-	if err != nil || report.Verdict != "AC" {
+	if err != nil || (!isolatedJudge && report.Verdict != "AC") {
 		return errors.New("checker trial did not pass; inspect the private report")
+	}
+	if isolatedJudge {
+		logger.Info("A+B 隔离判题完成", "judge_manifest_sha256", report.JudgeManifestSHA256, "verdict", report.Verdict)
+		return nil
 	}
 	logger.Info("候选检查器试跑通过，未准入生产", "candidate_sha256", report.CandidateSHA256, "points", len(report.Points))
 	return nil

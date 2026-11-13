@@ -12,6 +12,7 @@ import (
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/db"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materials"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
 	referencepg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference/postgres"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
@@ -20,6 +21,13 @@ import (
 var errRestoredDatabaseURL = errors.New("OJ_RESTORED_DATABASE_URL is required")
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "rejudge" {
+		if err := runRejudge(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) > 1 && (os.Args[1] == "mail-budget-init" || os.Args[1] == "mail-budget-provision") {
 		if err := runMailBudget(os.Args[1], os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, err)
@@ -161,6 +169,33 @@ func run() error {
 		version, manifest, err := experiment.SelectFixture(os.Getenv("OJ_EXPERIMENT_MATERIAL_VERSION"))
 		if err != nil {
 			return err
+		}
+		aplusb, aplusbFixture, err := experiment.LoadAPlusBFixture(os.Getenv)
+		if err != nil {
+			return err
+		}
+		if aplusbFixture.IsAPlusB() {
+			reader, err := materials.OpenLocal(os.Getenv("OJ_MATERIAL_ROOT"))
+			if err != nil {
+				return err
+			}
+			defer func() { _ = reader.Close() }()
+			for _, point := range aplusb.Tests {
+				for _, hash := range []string{point.Input, point.Answer} {
+					if err := reader.Verify(ctx, hash); err != nil {
+						return err
+					}
+				}
+			}
+			store, err := postgres.New(pool, aplusb.Version, aplusbFixture.Manifest())
+			if err != nil {
+				return err
+			}
+			if err := store.RegisterFixture(ctx); err != nil {
+				return err
+			}
+			fmt.Println("A+B isolated materials registered:", aplusb.Version)
+			return nil
 		}
 		store, err := postgres.New(pool, version, manifest)
 		if err != nil {

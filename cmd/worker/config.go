@@ -14,11 +14,12 @@ import (
 )
 
 type config struct {
-	slot     workerhost.M0Slot
-	fixture  experiment.WorkerFixture
-	endpoint string
-	roots    *x509.CertPool
-	cert     tls.Certificate
+	slot        workerhost.M0Slot
+	fixture     experiment.WorkerFixture
+	endpoint    string
+	roots       *x509.CertPool
+	cert        tls.Certificate
+	startAPlusB bool
 }
 
 // Configuration errors never echo file paths, endpoints or credential contents.
@@ -35,6 +36,33 @@ func loadConfig(getenv func(string) string) (config, error) {
 	c.fixture, err = m0Fixture(getenv, c.slot)
 	if err != nil {
 		return c, err
+	}
+	_, aplusb, err := experiment.LoadAPlusBFixture(getenv)
+	if err != nil {
+		return c, err
+	}
+	if aplusb.IsAPlusB() {
+		if getenv("OJ_WORKER_M0_SLOT") != "" || getenv(dualModeEnv) != "" || runtime.GOARCH != "arm64" {
+			return c, errors.New("A+B requires a dedicated arm64 single reference slot")
+		}
+		if aplusb.APlusBTier() == experiment.ReferenceAPlusBUbuntu {
+			if runtime.GOOS != "linux" || os.Geteuid() != 0 || getenv("OJ_APLUSB_START_STOPPED") != "1" {
+				return c, errors.New("the Ubuntu A+B Worker requires the dedicated guest owner and explicit stopped-slot startup")
+			}
+		} else if runtime.GOOS != "darwin" {
+			return c, errors.New("the Desktop A+B Worker requires the isolated Desktop reference slot")
+		}
+		c.fixture = aplusb
+	}
+	switch getenv("OJ_APLUSB_START_STOPPED") {
+	case "":
+	case "1":
+		if !c.fixture.IsAPlusB() {
+			return c, errors.New("managed reference startup requires an explicit A+B fixture")
+		}
+		c.startAPlusB = true
+	default:
+		return c, errors.New("invalid managed A+B startup setting")
 	}
 	c.endpoint = getenv("OJ_WORKER_CONTROLLER_URL")
 	u, err := url.Parse(c.endpoint)
