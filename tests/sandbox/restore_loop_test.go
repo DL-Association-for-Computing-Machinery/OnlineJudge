@@ -86,7 +86,7 @@ func TestRestoreJudgeLoop(t *testing.T) {
 	judge(source, sourceRoot, original)
 	history := restoreAttempt(t, ctx, source.pool, accepted.ID, 1)
 
-	targetRoot := restoreSealedPackage(t, source, target, sourceRoot)
+	targetRoot := restoreSealedPackage(t, source, target, sourceRoot, restoreMaterialExpectation{files: 4, references: 4})
 	if err := db.CheckSchema(ctx, target.pool); err != nil {
 		t.Fatal(err)
 	}

@@ -6,10 +6,12 @@ The exported host executables are synthetic test drivers, not Linux sandboxes.
 """
 import argparse
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
 import platform
+import re
 import shutil
 import subprocess
 import tempfile
@@ -20,6 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DOCKER = ["docker", "--context", "desktop-linux"]
 OWNER = "onlinejudge.desktop-test"
 SLOTS = ["oj-m0-sandbox", "oj-m0-sandbox-secondary"]
+REFERENCE_SLOT = "oj-reference-sandbox"
 ROLLBACK_REVISION = "771ff3ffa977dee790a918363c34d3076836c700"
 
 
@@ -49,6 +52,41 @@ def browser_environment(args):
         env["OJ_BROWSER_CHROMIUM"] = str(binary)
     output.mkdir(mode=0o700)
     return env
+
+
+def aplusb_environment(args):
+    if args.suite != "aplusb-restore-loop":
+        if args.aplusb_materials or args.aplusb_manifest_sha256:
+            raise ValueError("A+B material options require aplusb-restore-loop")
+        return {}
+    pin = args.aplusb_manifest_sha256
+    if not args.aplusb_materials or not pin or not re.fullmatch(r"[a-f0-9]{64}", pin):
+        raise ValueError("a private material root and independent manifest SHA-256 are required")
+    root = args.aplusb_materials.resolve(strict=True)
+    manifest = root / "manifest.json"
+    info = manifest.lstat()
+    if (not root.is_dir() or root.is_relative_to(ROOT) or manifest.is_symlink() or not manifest.is_file()
+            or info.st_uid != os.getuid() or info.st_mode & 0o777 not in {0o400, 0o600} or info.st_size > 16384):
+        raise ValueError("A+B manifest must be a bounded, owner-private file outside the repository")
+    if hashlib.sha256(manifest.read_bytes()).hexdigest() != pin:
+        raise ValueError("A+B manifest does not match the supplied pin")
+    return {"OJ_MATERIAL_ROOT": str(root), "OJ_APLUSB_MANIFEST_FILE": str(manifest), "OJ_APLUSB_MANIFEST_SHA256": pin}
+
+
+def existing_reference():
+    fields = '{{.Id}} {{.State.Status}} {{.State.Pid}} {{.HostConfig.NetworkMode}} {{index .Config.Labels "owner"}}'
+    identity = docker("inspect", "--format", fields, REFERENCE_SLOT, capture=True).strip().split()
+    if len(identity) != 5 or identity[1:] != ["exited", "0", "none", OWNER]:
+        raise RuntimeError("A+B requires an existing, stopped, owned and offline reference slot")
+    return identity[0]
+
+
+def check_restore_artifacts():
+    required = ("migrate", "migrate-linux", "worker", "worker-api", "sandbox.test")
+    for name in required:
+        path = ROOT / ".local/bin" / name
+        if not path.is_file() or not os.access(path, os.X_OK):
+            raise ValueError("prebuilt restore artifacts must exist in .local/bin")
 
 
 def docker(*args, capture=False):
@@ -81,9 +119,10 @@ def ready(name):
     raise RuntimeError("Sandbox readiness timeout")
 
 
-def start_database(owned):
+def start_database(owned, offline=False):
     name = "oj-worker-db-" + uuid.uuid4().hex[:12]
-    docker("run", "-d", "--name", name, "--label", "owner=" + OWNER,
+    pull = ["--pull=never"] if offline else []
+    docker("run", "-d", *pull, "--name", name, "--label", "owner=" + OWNER,
            "-p", "127.0.0.1::5432", "-e", "POSTGRES_USER=oj_test", "-e", "POSTGRES_HOST_AUTH_METHOD=trust",
            "--tmpfs", "/var/lib/postgresql/data", "postgres:14-alpine")
     owned.append(name)
@@ -98,19 +137,30 @@ def start_database(owned):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("suite", choices=["all", "sandbox", "report", "dual-worker", "worker-fault", "slot-recovery", "network-fault", "compile-lease", "resource-bounds", "http-loop", "browser-loop", "restore-loop", "rollback-loop"])
+    parser.add_argument("suite", choices=["all", "sandbox", "report", "dual-worker", "worker-fault", "slot-recovery", "network-fault", "compile-lease", "resource-bounds", "http-loop", "browser-loop", "restore-loop", "rollback-loop", "aplusb-restore-loop"])
     parser.add_argument("--playwright-module", type=Path)
     parser.add_argument("--chromium-executable", type=Path)
     parser.add_argument("--output-dir", type=Path)
+    parser.add_argument("--aplusb-materials", type=Path)
+    parser.add_argument("--aplusb-manifest-sha256")
+    parser.add_argument("--prebuilt", action="store_true", help="use this checkout's existing A+B restore artifacts")
     args = parser.parse_args()
     if platform.system() != "Darwin" or platform.machine() != "arm64":
         raise RuntimeError("Pinned Desktop experiment requires macOS arm64; other profiles need validation")
     browser_env = browser_environment(args)
-    docker("build", "--target", "host-artifacts", "--output", "type=local,dest=.local/bin", ".")
-    if args.suite in {"all", "restore-loop"}:
-        docker("build", "--target", "restore-artifacts", "--output", "type=local,dest=.local/bin", ".")
-    docker("build", "--provenance=false", "-t", "oj-m0-sandbox:local", "-f",
-           "deploy/experiments/go-judge.Dockerfile", "deploy/experiments")
+    aplusb_env = aplusb_environment(args)
+    if args.prebuilt and not aplusb_env:
+        raise ValueError("--prebuilt requires aplusb-restore-loop")
+    reference_id = existing_reference() if aplusb_env else None
+    if args.prebuilt:
+        check_restore_artifacts()
+    else:
+        docker("build", "--target", "host-artifacts", "--output", "type=local,dest=.local/bin", ".")
+        if args.suite in {"all", "restore-loop", "aplusb-restore-loop"}:
+            docker("build", "--target", "restore-artifacts", "--output", "type=local,dest=.local/bin", ".")
+    if not aplusb_env:
+        docker("build", "--provenance=false", "-t", "oj-m0-sandbox:local", "-f",
+               "deploy/experiments/go-judge.Dockerfile", "deploy/experiments")
     owned = []
     databases = []
     old_build = None
@@ -119,7 +169,7 @@ def main():
         if args.suite == "rollback-loop":
             old_build = tempfile.TemporaryDirectory(prefix="oj-worker-rollback-")
             rollback_env = build_rollback_release(Path(old_build.name))
-        for slot in SLOTS:
+        for slot in [] if aplusb_env else SLOTS:
             exists = subprocess.run(DOCKER + ["inspect", slot], stdout=subprocess.DEVNULL,
                                     stderr=subprocess.DEVNULL).returncode == 0
             if exists:
@@ -133,9 +183,11 @@ def main():
                        "/tmp:rw,nosuid,size=128m", "--shm-size=128m", "--memory=1g",
                        "--cpus=1", "--pids-limit=128", "oj-m0-sandbox:local")
             owned.append(slot)
-        db, port = start_database(databases)
+        db, port = start_database(databases, offline=bool(aplusb_env))
         suites = ["sandbox", "report", "dual-worker", "worker-fault", "slot-recovery", "network-fault", "compile-lease", "resource-bounds", "http-loop", "restore-loop"] if args.suite == "all" else [args.suite]
         for i, suite in enumerate(suites):
+            if aplusb_env and existing_reference() != reference_id:
+                raise RuntimeError("reference slot changed during preparation")
             for slot in owned:
                 ready(slot)
             database = "test_" + str(i)
@@ -144,9 +196,10 @@ def main():
             env.update(OJ_SANDBOX_EXPERIMENT="1",
                        OJ_TEST_DATABASE_URL=f"host=127.0.0.1 port={port} user=oj_test dbname={database} sslmode=disable")
             env.update(browser_env)
+            env.update(aplusb_env)
             env.update(rollback_env)
-            if suite == "restore-loop":
-                target, _ = start_database(databases)
+            if suite in {"restore-loop", "aplusb-restore-loop"}:
+                target, _ = start_database(databases, offline=bool(aplusb_env))
                 docker("exec", target, "createdb", "-U", "oj_test", database)
                 env.update(OJ_RESTORE_SOURCE_CONTAINER=db, OJ_RESTORE_TARGET_CONTAINER=target, OJ_RESTORE_DATABASE=database)
             if suite == "rollback-loop":
@@ -160,6 +213,7 @@ def main():
                          "resource-bounds": ("OJ_SANDBOX_RESOURCES", "TestSandboxResourceBounds"),
                          "http-loop": ("OJ_SANDBOX_HTTP", "TestHTTPJudgeLoop"),
                          "restore-loop": ("OJ_SANDBOX_RESTORE", "TestRestoreJudgeLoop"),
+                         "aplusb-restore-loop": ("OJ_SANDBOX_APLUSB_RESTORE", "TestAPlusBRestoreJudgeLoop"),
                          "rollback-loop": ("OJ_SANDBOX_ROLLBACK", "TestCompatibleRollbackLoop"),
                          "browser-loop": ("OJ_SANDBOX_BROWSER", "TestBrowserJudgeLoop")}
             command = [str(ROOT / ".local/bin/sandbox.test"), "-test.v", "-test.count=1", "-test.timeout=10m"]
