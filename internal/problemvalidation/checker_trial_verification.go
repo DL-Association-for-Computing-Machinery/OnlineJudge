@@ -11,8 +11,8 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 )
 
-// MaxCheckerTrialReportBytes bounds a report for the fixed A+B trial, including
-// its profile and at most the fixed number of formal points.
+// MaxCheckerTrialReportBytes bounds a report including its fixed profile and
+// at most the admitted number of formal points.
 const MaxCheckerTrialReportBytes = 64 << 10
 
 // ErrCheckerTrialEvidence means a stored report does not verify as a complete

@@ -20,7 +20,8 @@ import (
 func verifyTrial(parent context.Context, args []string, out, diagnostics io.Writer) error {
 	f := flag.NewFlagSet("checker-candidate verify-trial", flag.ContinueOnError)
 	f.SetOutput(diagnostics)
-	bundle := f.String("bundle", "", "absolute path to the private A+B bundle")
+	bundle := f.String("bundle", "", "absolute path to the private problem bundle")
+	sourceID := f.String("source-id", "library-checker:aplusb", "fixed A+B or unionfind source ID")
 	lock := f.String("source-lock", "", "trusted checked-in source lock file")
 	directory := f.String("report-dir", "", "absolute path to the completed private report directory")
 	plan := f.String("expected-plan", "", "independently trusted formal plan SHA-256")
@@ -35,7 +36,7 @@ func verifyTrial(parent context.Context, args []string, out, diagnostics io.Writ
 		}
 		return errors.New("invalid checker trial verification flags")
 	}
-	if f.NArg() != 0 || !absoluteClean(*bundle) || !absoluteClean(*lock) || !absoluteClean(*directory) ||
+	if f.NArg() != 0 || (*sourceID != "library-checker:aplusb" && *sourceID != "library-checker:unionfind") || !absoluteClean(*bundle) || !absoluteClean(*lock) || !absoluteClean(*directory) ||
 		!problem.ValidImportRevision(*plan) || !problem.ValidImportRevision(*candidate) || !problem.ValidImportRevision(*reportSHA) || !caps.Valid() {
 		f.Usage()
 		return errors.New("explicit limits, paths and three trusted digests required")
@@ -55,16 +56,16 @@ func verifyTrial(parent context.Context, args []string, out, diagnostics io.Writ
 	if err != nil {
 		return err
 	}
-	prepared, err := problem.LoadBundle(*bundle, "library-checker:aplusb", sourceLock)
+	prepared, err := problem.LoadBundle(*bundle, *sourceID, sourceLock)
 	if err != nil {
 		return err
 	}
 	trial, err := problemvalidation.PrepareCheckerTrial(ctx, prepared, *plan, *candidate, caps)
-	if err := errors.Join(err, prepared.Close(), ctx.Err()); err != nil {
-		return err
+	if err != nil {
+		return errors.Join(err, prepared.Close())
 	}
 	verified, err := trial.VerifyPassingReport(raw, *reportSHA, (workerhost.ReferenceSlot{}).ContainerName())
-	if err != nil {
+	if err := errors.Join(err, trial.Close(), prepared.Close(), ctx.Err()); err != nil {
 		return err
 	}
 	if err := errors.Join(checkTrialMarker(archive), ctx.Err()); err != nil {

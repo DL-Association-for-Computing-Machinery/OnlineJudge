@@ -17,13 +17,14 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/workerhost"
 )
 
-func validateCheckerCandidate(ctx context.Context, args []string, logger *slog.Logger) error {
+func validateCheckerCandidate(ctx context.Context, args []string, logger *slog.Logger) (err error) {
 	if os.Getenv("OJ_SANDBOX_EXPERIMENT") != "1" || os.Getenv("OJ_WORKER_M0_SLOT") != "" || os.Getenv(dualModeEnv) != "" {
 		return errors.New("checker trial requires the explicit, single reference slot")
 	}
 	f := flag.NewFlagSet("validate-checker-candidate", flag.ContinueOnError)
 	f.SetOutput(io.Discard)
-	bundle := f.String("bundle", "", "private A+B bundle")
+	bundle := f.String("bundle", "", "private problem bundle")
+	sourceID := f.String("source-id", "library-checker:aplusb", "fixed A+B or unionfind source ID")
 	lockPath := f.String("source-lock", "", "trusted fixed source lock")
 	output := f.String("output", "", "new private report directory")
 	plan := f.String("expected-plan", "", "trusted formal plan SHA-256")
@@ -32,7 +33,7 @@ func validateCheckerCandidate(ctx context.Context, args []string, logger *slog.L
 	f.IntVar(&caps.Bytes, "bytes", 0, "explicit candidate answer and stdout cap")
 	f.IntVar(&caps.TokenBytes, "token-bytes", 0, "explicit candidate token cap")
 	start := f.Bool("start-stopped-slot", false, "explicitly start the fixed stopped reference slot")
-	if f.Parse(args) != nil || f.NArg() != 0 || !*start || !canonicalAbsolute(*bundle) ||
+	if f.Parse(args) != nil || f.NArg() != 0 || !*start || (*sourceID != "library-checker:aplusb" && *sourceID != "library-checker:unionfind") || !canonicalAbsolute(*bundle) ||
 		!canonicalAbsolute(*lockPath) || !canonicalAbsolute(*output) || !referenceOutputOutside(*bundle, *output) {
 		return errors.New("invalid checker trial arguments")
 	}
@@ -40,14 +41,16 @@ func validateCheckerCandidate(ctx context.Context, args []string, logger *slog.L
 	if err != nil {
 		return err
 	}
-	prepared, err := problem.LoadBundle(*bundle, "library-checker:aplusb", lockBytes)
+	prepared, err := problem.LoadBundle(*bundle, *sourceID, lockBytes)
 	if err != nil {
 		return err
 	}
+	defer func() { err = errors.Join(err, prepared.Close()) }()
 	preflightCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-	trial, err := problemvalidation.PrepareCheckerTrial(preflightCtx, prepared, *plan, *candidate, caps)
+	trial, err := problemvalidation.PrepareCheckerTrialWithLifetime(preflightCtx, ctx, prepared, *plan, *candidate, caps)
 	cancel()
-	if err := errors.Join(err, prepared.Close(), ctx.Err()); err != nil {
+	defer func() { err = errors.Join(err, trial.Close()) }()
+	if err := errors.Join(err, ctx.Err()); err != nil {
 		return err
 	}
 	if err := os.Mkdir(*output, 0700); err != nil {
@@ -107,6 +110,6 @@ func runCheckerTrialLocked(ctx context.Context, trial *problemvalidation.Checker
 	if stopErr == nil {
 		cleanErr = lock.clean()
 	}
-	err = report.Finalize(errors.Join(err, ctx.Err()), stopErr, cleanErr)
+	err = report.Finalize(errors.Join(err, ctx.Err(), trial.Close()), stopErr, cleanErr)
 	return report, err
 }

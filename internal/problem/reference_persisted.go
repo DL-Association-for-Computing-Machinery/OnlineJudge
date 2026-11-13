@@ -39,7 +39,7 @@ func (d Draft) FreezeReference(ctx context.Context, id, owner string, expected I
 	// The complete import revision already binds the document to the exact
 	// logical inventory. Only objects selected by the admitted layout are
 	// opened; bundle paths are never interpreted by the persistent reader.
-	return freezeReferenceSnapshot(ctx, c, c.SourceID, admission, persistedReferenceOpen(store), nil)
+	return freezeReferenceSnapshot(ctx, ctx, c, c.SourceID, admission, persistedReferenceOpen(store), nil)
 }
 
 func persistedReferenceOpen(store ReferenceObjectReader) referenceOpen {
