@@ -20,6 +20,17 @@ type JudgeTask struct {
 	EnqueueOrder       pgtype.Int8
 }
 
+type SubmissionRejudge struct {
+	Operator           string
+	RequestKey         string
+	SubmissionID       string
+	PreviousGeneration int64
+	MaterialVersion    string
+	ManifestSha256     string
+	Reason             string
+	RequestedAt        pgtype.Timestamptz
+}
+
 type WorkerNode struct {
 	ID                string
 	CredentialVersion int64

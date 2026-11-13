@@ -26,6 +26,7 @@ sql:
       - db/queries/materials.sql
       - db/queries/leases.sql
       - db/queries/submissions.sql
+      - db/queries/rejudges.sql
     gen:
       go:
         package: submissiondb
