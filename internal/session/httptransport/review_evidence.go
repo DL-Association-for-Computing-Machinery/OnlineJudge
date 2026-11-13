@@ -35,7 +35,7 @@ func WithReviewEvidence(base http.Handler, reader ReviewEvidenceReader, material
 		return nil, redisstore.ErrInvalid
 	}
 	return &handler{store: h.store, config: h.config, host: h.host, login: h.login, proxy: h.proxy,
-		passwordChange: h.passwordChange, emailConfirmation: h.emailConfirmation, drafts: h.drafts, draftTimeout: h.draftTimeout,
+		passwordChange: h.passwordChange, emailConfirmation: h.emailConfirmation, emailRequest: h.emailRequest, drafts: h.drafts, draftTimeout: h.draftTimeout,
 		references: h.references, preparation: h.preparation, reviewIntake: h.reviewIntake, reviewSolution: h.reviewSolution,
 		reviewEvidence: reader, reviewMaterials: materials, reviewReturns: returns, statementConfirmations: statements}, nil
 }
