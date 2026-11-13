@@ -7,11 +7,13 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/jackc/pgx/v5"
-
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/emailmessage"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/emailtoken"
 	identitypg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/postgres"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/maildelivery"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/mailqueue"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/mailtransport"
 )
 
 func TestArchivedEmailAuthorityFencedAfterRestore(t *testing.T) {
@@ -29,12 +31,10 @@ func TestArchivedEmailAuthorityFencedAfterRestore(t *testing.T) {
 	oldVersion := identity.SessionVersion{RecoveryID: epoch, AuthGeneration: 1}
 	record := identityRecord(t, hasher, "synthetic initial mailbox password")
 	replacement := identityRecord(t, hasher, "synthetic replacement mailbox password")
-	_, err = f.a.Exec(f.ctx, "CREATE TABLE fixture_restore_mail (id text PRIMARY KEY)")
+	must(t, mailqueue.MigrateUp(f.ctx, f.a))
+	must(t, mailqueue.ConfigureSendRate(f.ctx, f.a, 100))
+	queue, err := mailqueue.NewEnqueuer(f.ctx, f.a)
 	must(t, err)
-	enqueue := func(ctx context.Context, tx pgx.Tx, id string) error {
-		_, err := tx.Exec(ctx, "INSERT INTO fixture_restore_mail VALUES ($1)", id)
-		return err
-	}
 	reserve := func(context.Context, string) error { return nil }
 	type fixture struct {
 		subject, id string
@@ -53,7 +53,7 @@ func TestArchivedEmailAuthorityFencedAfterRestore(t *testing.T) {
 			_, err = f.a.Exec(f.ctx, "UPDATE identity_personal_emails SET email_verified=true WHERE subject_id=$1", subject)
 			must(t, err)
 		}
-		id, err := source.IssueEmailToken(f.ctx, subject, oldVersion, purpose, key, reserve, enqueue)
+		id, err := source.IssueEmailToken(f.ctx, subject, oldVersion, purpose, key, reserve, queue.Enqueue)
 		must(t, err)
 		delivery, err := sourceReader.Prepare(f.ctx, id)
 		must(t, err)
@@ -121,6 +121,49 @@ func TestArchivedEmailAuthorityFencedAfterRestore(t *testing.T) {
 	must(t, store.FinishRecovery(f.ctx, next))
 	t.Run("reopened", func(t *testing.T) { assertFenced(t, identity.ErrConflict) })
 
+	dispatch, err := mailqueue.NewDispatcher(f.ctx, target)
+	must(t, err)
+	renderer, err := emailmessage.New("https://oj.example.invalid")
+	must(t, err)
+	rate, err := mailqueue.NewSendRate(f.ctx, target)
+	must(t, err)
+	var permits, sends int
+	attempt, err := maildelivery.New(reader, renderer, func(ctx context.Context) (bool, error) {
+		permits++
+		return rate.TryTake(ctx)
+	}, func(context.Context, identity.Email, string, string) mailtransport.Outcome {
+		sends++
+		return mailtransport.Accepted
+	})
+	must(t, err)
+	for range archived {
+		claimed, err := dispatch.RunOne(f.ctx, func(ctx context.Context, id string) mailqueue.DeliveryResult {
+			if attempt.Run(ctx, id) != maildelivery.Obsolete {
+				t.Error("restored mail was not classified as obsolete")
+				return mailqueue.DeliveryRetry
+			}
+			return mailqueue.DeliveryObsolete
+		})
+		must(t, err)
+		if !claimed {
+			t.Fatal("archived job was not restored")
+		}
+	}
+	if permits != 0 || sends != 0 {
+		t.Fatal("old generation reached permit or SMTP")
+	}
+	for _, mail := range archived {
+		var retired bool
+		must(t, target.QueryRow(f.ctx, `SELECT EXISTS (
+			SELECT 1 FROM river_job WHERE args->>'payload_id'=$1 AND state='completed'
+				AND metadata->>'oj_delivery_result'='obsolete')
+			AND EXISTS (SELECT 1 FROM identity_email_tokens WHERE id=$1)
+			AND NOT EXISTS (SELECT 1 FROM identity_email_payloads WHERE token_id=$1)`, mail.id).Scan(&retired))
+		if !retired {
+			t.Fatal("obsolete job did not complete with only the encrypted payload removed")
+		}
+	}
+
 	// A new account can issue and consume with the new generation. Avoid
 	// changing the archived same-purpose resend clock to make this succeed.
 	subject := identityID(3)
@@ -129,9 +172,22 @@ func TestArchivedEmailAuthorityFencedAfterRestore(t *testing.T) {
 	_, err = store.InitializePersonal(f.ctx, subject, addr, true, record)
 	must(t, err)
 	current := identity.SessionVersion{RecoveryID: next, AuthGeneration: 1}
-	id, err := store.IssueEmailToken(f.ctx, subject, current, emailtoken.Activation, key, reserve, enqueue)
+	targetQueue, err := mailqueue.NewEnqueuer(f.ctx, target)
+	must(t, err)
+	id, err := store.IssueEmailToken(f.ctx, subject, current, emailtoken.Activation, key, reserve, targetQueue.Enqueue)
 	must(t, err)
 	delivery, err := reader.Prepare(f.ctx, id)
 	must(t, err)
+	claimed, err := dispatch.RunOne(f.ctx, func(ctx context.Context, payload string) mailqueue.DeliveryResult {
+		if payload != id || attempt.Run(ctx, payload) != maildelivery.Accepted {
+			t.Error("new generation did not reach the test SMTP boundary")
+			return mailqueue.DeliveryRetry
+		}
+		return mailqueue.DeliveryAccepted
+	})
+	must(t, err)
+	if !claimed || permits != 1 || sends != 1 {
+		t.Fatal("new generation did not attempt exactly one delivery")
+	}
 	must(t, store.ActivateEmail(f.ctx, delivery.Token(), replacement))
 }
