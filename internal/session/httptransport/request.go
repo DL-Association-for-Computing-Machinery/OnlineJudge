@@ -6,8 +6,11 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/redisstore"
 )
 
+// The standard checker has no per-handler configuration or trusted origins.
+var originProtection http.CrossOriginProtection
+
 func (h *handler) sameOrigin(r *http.Request) bool {
-	if h.protection.Check(r) != nil {
+	if originProtection.Check(r) != nil {
 		return false
 	}
 	origins, originPresent := r.Header["Origin"]
