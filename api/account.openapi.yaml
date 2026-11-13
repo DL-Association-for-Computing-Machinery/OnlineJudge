@@ -6,7 +6,7 @@ info:
     public HTTPS Origin/Host 固定配置；代理模式须实际验证并 pin 后端 mTLS 叶证书，
     由受信单跳代理删除覆写转发头。Cookie 认证不授予训练或管理权限。
     缺少或不可信的客户端证书会在 TLS 握手失败，可无 HTTP 响应；403 仅指已到达 Handler 的拒绝。
-    邮箱确认端点默认关闭；仅在显式装配确认服务后启用。任何写请求都不自动重试。
+    邮箱确认端点默认关闭；仅配置 email_confirmation、email_limits 及有效的 Redis 限流标记后启用。任何写请求都不自动重试。
 security:
   - ordinarySession: []
 paths:

@@ -1,23 +1,39 @@
 package apiconfig
 
 type document struct {
-	Version           int                 `json:"version"`
-	Mode              string              `json:"mode"`
-	Namespace         string              `json:"namespace"`
-	SecretsFile       string              `json:"secrets_file"`
-	Origin            string              `json:"origin"`
-	LoginWindow       string              `json:"login_window"`
-	StartupTimeout    string              `json:"startup_timeout"`
-	HTTPTimeout       string              `json:"http_timeout"`
-	Database          *databaseWire       `json:"database"`
-	Redis             *redisWire          `json:"redis"`
-	Password          *passwordWire       `json:"password"`
-	LoginLimits       *limitsWire         `json:"login_limits"`
-	ProxyFingerprints []string            `json:"proxy_fingerprints"`
-	TLS               *Material           `json:"tls"`
-	Server            *serverWire         `json:"server"`
-	PasswordChange    *passwordChangeWire `json:"password_change"`
-	PrivateDrafts     *privateDraftsWire  `json:"private_drafts"`
+	Version           int                    `json:"version"`
+	Mode              string                 `json:"mode"`
+	Namespace         string                 `json:"namespace"`
+	SecretsFile       string                 `json:"secrets_file"`
+	Origin            string                 `json:"origin"`
+	LoginWindow       string                 `json:"login_window"`
+	StartupTimeout    string                 `json:"startup_timeout"`
+	HTTPTimeout       string                 `json:"http_timeout"`
+	Database          *databaseWire          `json:"database"`
+	Redis             *redisWire             `json:"redis"`
+	Password          *passwordWire          `json:"password"`
+	LoginLimits       *limitsWire            `json:"login_limits"`
+	EmailLimits       *emailLimitsWire       `json:"email_limits"`
+	EmailConfirmation *emailConfirmationWire `json:"email_confirmation"`
+	ProxyFingerprints []string               `json:"proxy_fingerprints"`
+	TLS               *Material              `json:"tls"`
+	Server            *serverWire            `json:"server"`
+	PasswordChange    *passwordChangeWire    `json:"password_change"`
+	PrivateDrafts     *privateDraftsWire     `json:"private_drafts"`
+}
+
+type emailConfirmationWire struct {
+	MinimumCharacters int    `json:"minimum_characters"`
+	BlocklistFile     string `json:"blocklist_file"`
+}
+
+type emailLimitsWire struct {
+	RequestGlobal  *bucketWire `json:"request_global"`
+	RequestSource  *bucketWire `json:"request_source"`
+	RequestMailbox *bucketWire `json:"request_mailbox"`
+	ConfirmGlobal  *bucketWire `json:"confirm_global"`
+	ConfirmSource  *bucketWire `json:"confirm_source"`
+	ConfirmToken   *bucketWire `json:"confirm_token"`
 }
 
 type privateDraftsWire struct {

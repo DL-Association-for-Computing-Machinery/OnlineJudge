@@ -156,5 +156,13 @@ func prepareReplacementRedis(ctx context.Context, c Config, authority *identityp
 			return ErrRecoveryRedis
 		}
 	}
+	if c.EmailLimits != nil {
+		if err := redisstore.InitializeEmailLimits(ctx, store, secrets, *c.EmailLimits); err != nil {
+			return ErrRecoveryRedis
+		}
+		if _, err := redisstore.NewEmailAdmission(ctx, store, secrets, *c.EmailLimits); err != nil {
+			return ErrRecoveryRedis
+		}
+	}
 	return nil
 }

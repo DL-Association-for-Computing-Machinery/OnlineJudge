@@ -21,6 +21,8 @@ type Config struct {
 	Server                     ServerConfig
 	PasswordBlocklistFile      string
 	MinimumPasswordCharacters  int
+	EmailBlocklistFile         string
+	EmailMinimumCharacters     int
 }
 
 // Material names explicit TLS files; Parse validates only their lexical paths.
