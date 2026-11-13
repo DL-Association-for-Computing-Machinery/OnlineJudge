@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -34,4 +36,47 @@ func TestAPlusBFixtureBindsCheckerAndRuntime(t *testing.T) {
 	bad = base
 	bad.Checker = "ascii-tokens-v1"
 	check(bad, false)
+}
+
+func TestAPlusBConfigurationRejectsCrossRuntimeManifests(t *testing.T) {
+	if APlusBRuntimeSHA256() != "dfe2ee521a3102051494301c829524105991c030732f15afb910803723461725" {
+		t.Fatal("existing Desktop runtime pin changed")
+	}
+	identity := strings.Repeat("a", 64)
+	manifest := materials.APlusBManifest{Checker: judging.LibraryCheckerTextVersion,
+		JudgeSHA256: identity, Version: "aplusb-" + identity, Origin: materials.APlusBOrigin, Language: "gnu++17", TokenBytes: 12}
+	for i := range 17 {
+		manifest.Tests = append(manifest.Tests, materials.APlusBPoint{ID: fmt.Sprintf("case-%02d", i), Input: identity, Answer: identity})
+	}
+	for _, target := range []struct {
+		setting string
+		tier    ReferenceTier
+		kernel  string
+	}{
+		{"", ReferenceSmall, "7.0.14-linuxkit"},
+		{"ubuntu-arm64", ReferenceAPlusBUbuntu, "6.8.0-106-generic"},
+	} {
+		manifest.RuntimeSHA256 = APlusBRuntimeSHA256ForTier(target.tier)
+		raw := manifest.Canonical()
+		hash := sha256.Sum256(raw)
+		path := filepath.Join(t.TempDir(), "manifest.json")
+		if err := os.WriteFile(path, raw, 0600); err != nil {
+			t.Fatal(err)
+		}
+		env := map[string]string{
+			"OJ_SANDBOX_EXPERIMENT": "1", "OJ_APLUSB_MANIFEST_FILE": path,
+			"OJ_APLUSB_MANIFEST_SHA256": hex.EncodeToString(hash[:]),
+		}
+		for _, setup := range []string{"", "ubuntu-arm64", "unsupported"} {
+			env["OJ_APLUSB_RUNTIME"] = setup
+			_, f, err := LoadAPlusBFixture(func(k string) string { return env[k] })
+			if setup != target.setting {
+				if err == nil || f.IsAPlusB() {
+					t.Fatal("incorrect runtime admitted a manifest")
+				}
+			} else if err != nil || f.APlusBTier() != target.tier || f.Profile().KernelRelease != target.kernel {
+				t.Fatalf("pinned runtime unavailable: %v", err)
+			}
+		}
+	}
 }

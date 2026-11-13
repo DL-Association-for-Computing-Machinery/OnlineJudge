@@ -67,7 +67,7 @@ Z 算法 32 点修订也已通过 medium 槽试跑和[离线复核](delivery-log
 
 保存返回的原始完整容器 ID。Ubuntu A+B 与小型 Desktop 参考槽共享宿主锁名，Ubuntu 的隔离标记不能用 Desktop 恢复命令清除。仅在确认旧 Worker 及在途控制操作全部排空、仍持有可信原始 ID 的前提下，由原客体 root 执行 `OJ_SANDBOX_EXPERIMENT=1 worker recover-aplusb-ubuntu <原始完整容器ID>`，保持 M0 槽和材料环境变量未设置。恢复不启动槽，不接受替换容器；已停止路径仍需按原 ID 回读。回退可停用专用命令；有未确认停止或隔离标记时先用支持该档位的二进制恢复，旧版本不清除此标记。
 
-此档位不导出租约材料，不改变旧归档复核、目标节点交接或生产门禁。见 [本地实测](delivery-evidence/aplusb-isolated-judging.md#ubuntu-arm64-专用客体)。
+独立判题不登记租约；同一档位的运输清单可按[下节](#ab-租约链路联验)另行导出。旧归档复核、目标节点交接和生产门禁保持原契约。见 [本地实测](delivery-evidence/aplusb-isolated-judging.md#ubuntu-arm64-专用客体)。
 
 ### A+B 归档报告复核
 
@@ -85,11 +85,11 @@ Z 算法 32 点修订也已通过 medium 槽试跑和[离线复核](delivery-log
 
 现有的 A+B 17 点清单可以导出为独立隔离配置。运输清单绑定原判题清单摘要、检查器语义、单 token 限额、执行环境及缓存预算摘要，并按正式顺序声明输入和答案对象。维护命令在新私有目录写入内容寻址对象，最后写清单；只含判题输入和答案，不导出标程。登记前复核所有对象，成功后才向 PostgreSQL 写入版本和队列时钟；相同配置可重复登记，同版本不同清单拒绝覆盖。
 
-控制端与 Worker 均须显式设置同一份 `OJ_APLUSB_MANIFEST_FILE`、`OJ_APLUSB_MANIFEST_SHA256` 与 `OJ_SANDBOX_EXPERIMENT=1`。配置与 M0 档位互斥，默认保持原流程。控制端限定回环 mTLS 和登记的一套队列版本，Worker 的领取请求也须明确声明该版本。租约、描述、源码及材料字节逐层核对。执行仅使用 macOS arm64 的既有断网小型参考槽，每次尝试新建缓存账本；租约监督、首错停止、制品清理与未知状态整槽停止沿用原有边界。轮询和回报没有新增公开入口。
+控制端与 Worker 均须显式设置同一份 `OJ_APLUSB_MANIFEST_FILE`、`OJ_APLUSB_MANIFEST_SHA256` 与 `OJ_SANDBOX_EXPERIMENT=1`。配置与 M0 档位互斥；`OJ_APLUSB_RUNTIME` 未设置时使用原 macOS arm64 Desktop 断网小型参考槽。Ubuntu 档位在登记、控制端及 Worker 三处均须明确设置 `OJ_APLUSB_RUNTIME=ubuntu-arm64`，并与其运输清单的固定运行摘要吻合。Ubuntu Worker 必须使用[客体停止槽](#ubuntu-独立判题实验)和 `OJ_APLUSB_START_STOPPED=1`。控制端限定回环 mTLS 和登记的一套队列版本，Worker 的领取请求须声明该版本；Ubuntu 请求还须提供 `fixture_manifest_sha256`，任一不符均在创建租约前拒绝。租约、描述、源码及材料字节逐层核对。每次尝试新建缓存账本；租约监督、首错停止、制品清理与未知状态整槽停止沿用原有边界。轮询和回报没有新增公开入口。
 
 此阶段在临时数据库通过受信存储直接排入合成任务，以验证控制端和 Worker，不开放普通用户提交。回退先排空并停止隔离 Worker 和控制端，再撤下 A+B 配置；已登记材料和历史结果保留，不要求迁移，也不将隔离版本改写成 M0 版本。复现步骤见 [README](../README.md#ab-租约链路联验)，结果见[交付证据](delivery-evidence/aplusb-leased-judging.md)。
 
-`OJ_APLUSB_START_STOPPED=1` 仅允许显式 A+B Worker 在持有主机及参考槽所有权锁时启动已停止的固定槽。租约开始前先写隔离标记；启动回执不确定时只尝试停止已绑定的容器，无法确认则保留隔离标记。恢复联验的外层脚本不启停参考槽。
+`OJ_APLUSB_START_STOPPED=1` 仅允许显式 A+B Worker 在持有主机及参考槽所有权锁时启动已停止的固定槽。租约开始前先写隔离标记；启动回执不确定时只尝试停止已绑定的容器，无法确认则保留隔离标记。Ubuntu 仍使用独立的恢复命令；恢复联验的外层脚本不启停参考槽。现有历史重判维护入口继续支持原 Desktop 清单，Ubuntu 清单尚未接入。
 
 ## 后续接入条件
 

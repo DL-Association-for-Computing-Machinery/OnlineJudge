@@ -25,7 +25,7 @@ func aplusbJudgeManifest(parent context.Context, args []string, out, diagnostics
 	candidate := f.String("expected-candidate", "", "independently trusted candidate SHA-256")
 	output := f.String("export", "", "new private directory for transport materials")
 	expected := f.String("expected-manifest", "", "independently reviewed judge manifest SHA-256")
-	ubuntu := f.Bool("ubuntu-aplusb", false, "derive the standalone Ubuntu guest manifest")
+	ubuntu := f.Bool("ubuntu-aplusb", false, "select the fixed Ubuntu guest runtime")
 	var limits judging.TextLimits
 	f.IntVar(&limits.Bytes, "bytes", 0, "explicit checker byte cap")
 	f.IntVar(&limits.TokenBytes, "token-bytes", 0, "explicit checker token cap")
@@ -39,8 +39,9 @@ func aplusbJudgeManifest(parent context.Context, args []string, out, diagnostics
 		!problem.ValidImportRevision(*plan) || !problem.ValidImportRevision(*candidate) {
 		return errors.New("explicit limits, paths and trusted digests required")
 	}
-	if *ubuntu && (*output != "" || *expected != "") {
-		return errors.New("the standalone Ubuntu manifest does not support lease material export")
+	tier := experiment.ReferenceSmall
+	if *ubuntu {
+		tier = experiment.ReferenceAPlusBUbuntu
 	}
 	raw, err := readPinnedLock(*lock)
 	if err != nil {
@@ -58,7 +59,7 @@ func aplusbJudgeManifest(parent context.Context, args []string, out, diagnostics
 			return errors.New("export requires an absolute new directory and trusted judge manifest")
 		}
 		var root *os.Root
-		manifest, err := problemvalidation.ExportAPlusBMaterials(ctx, prepared, *plan, *candidate, *expected, limits, func(hash string, data []byte) error {
+		manifest, err := problemvalidation.ExportAPlusBMaterialsForTier(ctx, prepared, *plan, *candidate, *expected, limits, tier, func(hash string, data []byte) error {
 			if root == nil {
 				if err := os.Mkdir(*output, 0700); err != nil {
 					return err
@@ -91,10 +92,6 @@ func aplusbJudgeManifest(parent context.Context, args []string, out, diagnostics
 		}
 		_, err = io.WriteString(out, filepath.Join(*output, "manifest.json")+"\n")
 		return err
-	}
-	tier := experiment.ReferenceSmall
-	if *ubuntu {
-		tier = experiment.ReferenceAPlusBUbuntu
 	}
 	manifest, err := problemvalidation.PrepareAPlusBJudgeManifestForTier(ctx, prepared, *plan, *candidate, limits, tier)
 	if err := errors.Join(err, prepared.Close(), ctx.Err()); err != nil {

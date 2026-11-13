@@ -135,13 +135,15 @@ env -u OJ_WORKER_M0_SLOT -u OJ_WORKER_M0_DUAL_EXPERIMENT OJ_SANDBOX_EXPERIMENT=1
 
 路径使用绝对路径。源码须是权限 0400 或 0600 的私有普通文件，最多 64 KiB，且为不含 NUL 的 UTF-8；摘要固定原字节。只用现有停止的断网小型参考槽，输出目录须新建且在题包外。退出码 0 表示已产生确定判定并完成清理，实际 AC、WA、CE 等查看私有报告。详见[隔离判题契约](docs/checker-admission.md#ab-固定材料隔离判题)。
 
-专用本地 Ubuntu arm64 VM 使用同一组命令，在生成清单和执行判题时都加 `--ubuntu-aplusb`，并固定 Ubuntu 清单自己的摘要。Worker 使用客体内的 Linux arm64 构建，以客体 root 运行，并去掉 `OJ_EXPERIMENT_MATERIAL_VERSION`。准备固定停止槽、核验边界和恢复步骤见 [Ubuntu 实验](docs/checker-admission.md#ubuntu-独立判题实验)。租约链路仍使用下文的 Desktop 清单。
+专用本地 Ubuntu arm64 VM 使用同一组命令，在生成清单和执行判题时都加 `--ubuntu-aplusb`，并固定 Ubuntu 清单自己的摘要。Worker 使用客体内的 Linux arm64 构建，以客体 root 运行，并去掉 `OJ_EXPERIMENT_MATERIAL_VERSION`。准备固定停止槽、核验边界和恢复步骤见 [Ubuntu 实验](docs/checker-admission.md#ubuntu-独立判题实验)。
 
 ### A+B 租约链路联验
 
 在上一节清单命令上加 `--expected-manifest "$TRUSTED_JUDGE_MANIFEST_SHA256" --export "$NEW_PRIVATE_DIRECTORY"`，导出 `manifest.json` 及私有对象。核对后固定该运输清单的原始字节 SHA-256。隔离链路的登记、控制端和 Worker 都设置 `OJ_SANDBOX_EXPERIMENT=1`、`OJ_APLUSB_MANIFEST_FILE`（绝对路径）、`OJ_APLUSB_MANIFEST_SHA256`；不同时设置 `OJ_EXPERIMENT_MATERIAL_VERSION`、M0 槽或双槽配置。
 
 登记进程和控制端另设 `OJ_MATERIAL_ROOT` 为该导出目录。在已迁移的临时 PostgreSQL 上执行 `migrate fixture` 和显式的积压策略配置，再按现有私有 mTLS 方式启动 `worker-api`。Desktop arm64 `worker` 可使用已启动的固定断网小型参考槽，或设置 `OJ_APLUSB_START_STOPPED=1` 让它持槽锁启动已停止的参考槽。普通 API 不启用此版本。真实联验使用 sandbox 标签的 `TestAPlusBLeasedLoop`，须显式设置 `OJ_SANDBOX_APLUSB=1`、空的临时 `OJ_TEST_DATABASE_URL` 并准备同一 worktree 的 `.local/bin/{migrate,worker,worker-api}` 宿主构建产物；测试从停止的参考槽开始，自行登记、排入固定合成源码和生成临时 mTLS 身份。不得指向试用库或正在使用的参考槽。见[判题契约](docs/checker-admission.md#ab-租约链路联验)。
+
+专用 Ubuntu VM 导出时另加 `--ubuntu-aplusb` 并使用 Ubuntu 判题清单摘要。登记、控制端和 Worker 均设置 `OJ_APLUSB_RUNTIME=ubuntu-arm64` 和 Ubuntu 运输清单及其摘要，Worker 必须设置 `OJ_APLUSB_START_STOPPED=1`。在客体内用 Linux arm64 构建和相同测试，另传 `OJ_TEST_APLUSB_DESKTOP_MANIFEST` 为原 Desktop 运输清单的绝对路径，用来验证零领取。当前支持首次判题租约；Ubuntu 清单尚未接入历史重判维护命令。
 
 ### 私有草稿参考验证
 

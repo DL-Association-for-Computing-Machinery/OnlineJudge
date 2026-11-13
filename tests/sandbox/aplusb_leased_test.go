@@ -12,10 +12,12 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 	"testing"
 	"time"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materials"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
@@ -32,7 +34,7 @@ const (
 
 func aplusbEnvironment() []string {
 	return []string{"OJ_SANDBOX_EXPERIMENT=1", "OJ_APLUSB_MANIFEST_FILE=" + os.Getenv("OJ_APLUSB_MANIFEST_FILE"),
-		"OJ_APLUSB_MANIFEST_SHA256=" + os.Getenv("OJ_APLUSB_MANIFEST_SHA256")}
+		"OJ_APLUSB_MANIFEST_SHA256=" + os.Getenv("OJ_APLUSB_MANIFEST_SHA256"), "OJ_APLUSB_RUNTIME=" + os.Getenv("OJ_APLUSB_RUNTIME")}
 }
 
 func aplusbDBEnvironment(dsn, root string) []string {
@@ -135,6 +137,19 @@ func TestAPlusBLeasedLoop(t *testing.T) {
 	if err := pool.QueryRow(ctx, "SELECT count(*) FROM submission_materials").Scan(&versions); err != nil || versions != 0 {
 		t.Fatal("failed registration left a material version")
 	}
+	ubuntu := os.Getenv("OJ_APLUSB_RUNTIME") == "ubuntu-arm64"
+	if ubuntu {
+		// A correctly hashed private manifest must still be refused by default
+		// Desktop registration, before any material version is written.
+		wrong := exec.CommandContext(ctx, "../../.local/bin/migrate", "fixture")
+		wrong.Env = httpLoopEnvironment(append(aplusbDBEnvironment(dsn, root), "OJ_APLUSB_RUNTIME=")...)
+		if err := wrong.Run(); err == nil {
+			t.Fatal("Desktop registration admitted the Ubuntu material")
+		}
+		if err := pool.QueryRow(ctx, "SELECT count(*) FROM submission_materials").Scan(&versions); err != nil || versions != 0 {
+			t.Fatal("wrong runtime left a material version")
+		}
+	}
 	for range 2 {
 		migrateAPlusB(t, ctx, dsn, root, "fixture")
 	}
@@ -184,6 +199,13 @@ func TestAPlusBLeasedLoop(t *testing.T) {
 	if err := pool.QueryRow(ctx, "SELECT count(*) FROM judge_attempts").Scan(&attempts); err != nil || attempts != 0 {
 		t.Fatal("wrong fixture created an attempt")
 	}
+	if ubuntu {
+		assertDesktopAPlusBClaimRejected(t, ctx, endpoint, ca.Roots, pair)
+		assertUbuntuAPlusBManifestMismatch(t, ctx, endpoint, ca.Roots, pair, m)
+		if err := pool.QueryRow(ctx, "SELECT count(*) FROM judge_attempts").Scan(&attempts); err != nil || attempts != 0 {
+			t.Fatal("Desktop A+B runtime created an Ubuntu attempt")
+		}
+	}
 	worker := startAPlusBWorker(t, endpoint, ca.CAFile, clientCert, clientKey)
 	for i, want := range []string{"AC", "WA", "OLE"} {
 		waitAPlusBVerdict(t, ctx, worker, store, receipts[i], want)
@@ -197,4 +219,53 @@ func TestAPlusBLeasedLoop(t *testing.T) {
 	drainAPlusB(t, ctx, worker)
 	controller.stop(t)
 	t.Log("registered fixed materials, wrong fixture refused, three single-attempt AC/WA/OLE results and drain confirmed")
+}
+
+func assertUbuntuAPlusBManifestMismatch(t *testing.T, ctx context.Context, endpoint string, roots *x509.CertPool, pair tls.Certificate, m materials.APlusBManifest) {
+	t.Helper()
+	// Version alone cannot distinguish two differently pinned transport projections.
+	m.TokenBytes++
+	raw := m.Canonical()
+	sum := sha256.Sum256(raw)
+	path := filepath.Join(t.TempDir(), "manifest.json")
+	if err := os.WriteFile(path, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	env := map[string]string{
+		"OJ_SANDBOX_EXPERIMENT": "1", "OJ_APLUSB_RUNTIME": "ubuntu-arm64",
+		"OJ_APLUSB_MANIFEST_FILE": path, "OJ_APLUSB_MANIFEST_SHA256": hex.EncodeToString(sum[:]),
+	}
+	_, fixture, err := experiment.LoadAPlusBFixture(func(k string) string { return env[k] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrong, err := workerclient.NewAcquirerForFixture(endpoint, roots, pair, fixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer wrong.Close()
+	if _, err := wrong.Claim(ctx); !errors.Is(err, workerclient.ErrMaterials) {
+		t.Fatal("the Ubuntu controller accepted a different manifest with the same version")
+	}
+}
+
+func assertDesktopAPlusBClaimRejected(t *testing.T, ctx context.Context, endpoint string, roots *x509.CertPool, pair tls.Certificate) {
+	t.Helper()
+	raw, err := os.ReadFile(os.Getenv("OJ_TEST_APLUSB_DESKTOP_MANIFEST"))
+	if err != nil {
+		t.Fatal("Ubuntu comparison requires the original Desktop manifest")
+	}
+	sum := sha256.Sum256(raw)
+	f, err := experiment.APlusBFixture(raw, hex.EncodeToString(sum[:]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	old, err := workerclient.NewAcquirerForFixture(endpoint, roots, pair, f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer old.Close()
+	if _, err := old.Claim(ctx); !errors.Is(err, workerclient.ErrMaterials) {
+		t.Fatal("Ubuntu controller did not refuse the Desktop A+B fixture")
+	}
 }

@@ -64,6 +64,22 @@ func NewReferenceGoJudgeForTier(transport http.RoundTripper, verify func(context
 	return g, nil
 }
 
+// NewAPlusBCacheFactory creates an independent attempt ledger for the Worker fixture.
+func NewAPlusBCacheFactory(transport http.RoundTripper, verify func(context.Context, experiment.ExecutionProfile) error, files FileTransport, fixture experiment.WorkerFixture) func() *CachedGoJudge {
+	tier := fixture.APlusBTier()
+	if tier == experiment.ReferenceSmall {
+		return func() *CachedGoJudge { return NewReferenceGoJudge(transport, verify, files) }
+	}
+	if tier != experiment.ReferenceAPlusBUbuntu {
+		return nil
+	}
+	return func() *CachedGoJudge {
+		// The tier has been admitted by the fixed fixture parser.
+		g, _ := NewReferenceGoJudgeForTier(transport, verify, files, tier)
+		return g
+	}
+}
+
 // NewConvolutionComparisonGoJudge retains the convolution host profile but
 // reserves only the output that the fixed small-corpus parser can accept.
 func NewConvolutionComparisonGoJudge(transport http.RoundTripper, verify func(context.Context, experiment.ExecutionProfile) error, files FileTransport) (*CachedGoJudge, error) {

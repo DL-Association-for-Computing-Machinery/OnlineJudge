@@ -170,14 +170,11 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		aplusb, raw, enabled, err := materials.ConfiguredAPlusB()
+		aplusb, aplusbFixture, err := experiment.LoadAPlusBFixture(os.Getenv)
 		if err != nil {
 			return err
 		}
-		if enabled {
-			if _, err := experiment.APlusBFixture(raw, os.Getenv("OJ_APLUSB_MANIFEST_SHA256")); err != nil {
-				return err
-			}
+		if aplusbFixture.IsAPlusB() {
 			reader, err := materials.OpenLocal(os.Getenv("OJ_MATERIAL_ROOT"))
 			if err != nil {
 				return err
@@ -190,7 +187,7 @@ func run() error {
 					}
 				}
 			}
-			store, err := postgres.New(pool, aplusb.Version, raw)
+			store, err := postgres.New(pool, aplusb.Version, aplusbFixture.Manifest())
 			if err != nil {
 				return err
 			}
