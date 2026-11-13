@@ -15,6 +15,7 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/emailtoken"
 	identitypg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/postgres"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/maildelivery"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/mailqueue"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/mailtransport"
 )
 
@@ -49,7 +50,9 @@ func TestAccountMailDeliveryAttempt(t *testing.T) {
 	var cancelWhileSending context.CancelFunc
 	var latestDeadline time.Time
 	const linkPrefix = "https://oj.example.invalid/account/activate#token="
+	permitCalls := 0
 	attempt, err := maildelivery.New(reader, renderer,
+		func(context.Context) (bool, error) { permitCalls++; return true, nil },
 		func(ctx context.Context, to identity.Email, subject, body string) mailtransport.Outcome {
 			calls++
 			deadline, ok := ctx.Deadline()
@@ -125,15 +128,97 @@ func TestAccountMailDeliveryAttempt(t *testing.T) {
 	if attempt.Run(f.ctx, identityID(99)) != maildelivery.Obsolete || calls != 7 {
 		t.Fatal("missing payload reached SMTP")
 	}
+	if permitCalls != 7 {
+		t.Fatal("canceled or missing payload consumed a permit")
+	}
+	_, err = f.a.Exec(f.ctx, "INSERT INTO account_mail_send_rate (spacing_ms) VALUES ($1)", 30000)
+	must(t, err)
+	firstRate, err := mailqueue.NewSendRate(f.ctx, f.a)
+	must(t, err)
+	secondRate, err := mailqueue.NewSendRate(f.ctx, f.b)
+	must(t, err)
+	sent := 0
+	send := func(context.Context, identity.Email, string, string) mailtransport.Outcome {
+		sent++
+		return mailtransport.Accepted
+	}
+	first, err := maildelivery.New(reader, renderer, firstRate.TryTake, send)
+	must(t, err)
+	second, err := maildelivery.New(reader, renderer, secondRate.TryTake, send)
+	must(t, err)
+	if first.Run(f.ctx, id) != maildelivery.Accepted || second.Run(f.ctx, id) != maildelivery.Deferred || sent != 1 {
+		t.Fatal("shared rate did not defer the second sender before SMTP")
+	}
+	_, err = f.a.Exec(f.ctx, "DELETE FROM account_mail_send_rate")
+	must(t, err)
+	if second.Run(f.ctx, id) != maildelivery.Deferred || sent != 1 {
+		t.Fatal("missing rate state allowed SMTP")
+	}
+	waiting, stopWaiting := context.WithCancel(f.ctx)
+	defer stopWaiting()
+	interrupted, err := maildelivery.New(reader, renderer, func(context.Context) (bool, error) {
+		stopWaiting()
+		return true, nil
+	}, send)
+	must(t, err)
+	if interrupted.Run(waiting, id) != maildelivery.Deferred || sent != 1 {
+		t.Fatal("cancellation while requesting a permit still allowed SMTP")
+	}
+	shortWindow := prepared.Scope()
+	shortWindow.SendUntil = shortWindow.IssuedAt.Add(2 * time.Second)
+	// Place the two-second window relative to the database clock instead
+	// of counting on the initial fixture setup to take less than two seconds.
+	var dbNow time.Time
+	must(t, f.a.QueryRow(f.ctx, "SELECT clock_timestamp()").Scan(&dbNow))
+	shift := dbNow.Truncate(time.Microsecond).Sub(shortWindow.IssuedAt)
+	shortWindow.IssuedAt = shortWindow.IssuedAt.Add(shift)
+	shortWindow.SendUntil = shortWindow.SendUntil.Add(shift)
+	shortWindow.TokenExpiry = shortWindow.TokenExpiry.Add(shift)
+	sealed, err := protector.Seal(shortWindow.IssuedAt, shortWindow, prepared.Token())
+	must(t, err)
+	tx, err := f.a.Begin(f.ctx)
+	must(t, err)
+	defer func() { _ = tx.Rollback(f.ctx) }()
+	_, err = tx.Exec(f.ctx, "UPDATE identity_email_tokens SET issued_at=$2,expires_at=$3 WHERE id=$1",
+		id, shortWindow.IssuedAt, shortWindow.TokenExpiry)
+	must(t, err)
+	_, err = tx.Exec(f.ctx, "UPDATE identity_email_payloads SET send_until=$2,ciphertext=$3 WHERE token_id=$1",
+		id, shortWindow.SendUntil, sealed.Ciphertext)
+	must(t, err)
+	must(t, tx.Commit(f.ctx))
+	entered := false
+	expires, err := maildelivery.New(reader, renderer, func(ctx context.Context) (bool, error) {
+		entered = true
+		<-ctx.Done()
+		return true, nil
+	}, send)
+	must(t, err)
+	if expires.Run(f.ctx, id) != maildelivery.Obsolete || !entered || sent != 1 {
+		t.Fatal("expiry while requesting a permit still allowed SMTP")
+	}
 	_, err = f.a.Exec(f.ctx, "UPDATE identity_email_payloads SET send_until=clock_timestamp()-interval '1 second' WHERE token_id=$1", id)
 	must(t, err)
 	if attempt.Run(f.ctx, id) != maildelivery.Obsolete || calls != 7 {
 		t.Fatal("expired payload reached SMTP")
 	}
-	_, err = f.a.Exec(f.ctx, "UPDATE identity_email_payloads SET send_until=$2 WHERE token_id=$1", id, prepared.Scope().SendUntil)
+	original := prepared.Scope()
+	originalSeal, err := protector.Seal(original.IssuedAt, original, prepared.Token())
 	must(t, err)
+	tx, err = f.a.Begin(f.ctx)
+	must(t, err)
+	defer func() { _ = tx.Rollback(f.ctx) }()
+	_, err = tx.Exec(f.ctx, "UPDATE identity_email_tokens SET issued_at=$2,expires_at=$3 WHERE id=$1",
+		id, original.IssuedAt, original.TokenExpiry)
+	must(t, err)
+	_, err = tx.Exec(f.ctx, "UPDATE identity_email_payloads SET send_until=$2,ciphertext=$3 WHERE token_id=$1",
+		id, original.SendUntil, originalSeal.Ciphertext)
+	must(t, err)
+	must(t, tx.Commit(f.ctx))
 	must(t, issuer.ActivateEmail(f.ctx, prepared.Token(), record))
 	if attempt.Run(f.ctx, id) != maildelivery.Obsolete || calls != 7 {
 		t.Fatal("consumed credential reached SMTP")
+	}
+	if permitCalls != 7 {
+		t.Fatal("expired or consumed payload consumed a permit")
 	}
 }
