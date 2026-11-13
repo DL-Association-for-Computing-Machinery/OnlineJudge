@@ -58,7 +58,7 @@ func testMailWorkerProcessLoopback(t *testing.T, crash bool) {
 	protector, err := emailtoken.NewProtector("fixture", map[string][32]byte{"fixture": {1}})
 	must(t, err)
 	id, err := issuer.IssueEmailToken(f.ctx, subject, identity.SessionVersion{AuthGeneration: 1, RecoveryID: epoch},
-		emailtoken.Activation, protector, func(context.Context, string) error { return nil }, queue.Enqueue)
+		emailtoken.Activation, protector, func(context.Context, *emailtoken.Protector) error { return nil }, queue.Enqueue)
 	must(t, err)
 	_, err = f.a.Exec(f.ctx, "INSERT INTO account_mail_send_rate(spacing_ms) VALUES (100)")
 	must(t, err)
