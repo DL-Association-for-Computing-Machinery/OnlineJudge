@@ -10,7 +10,6 @@ import (
 	"runtime"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
-	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materials"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/workerhost"
 )
 
@@ -38,18 +37,22 @@ func loadConfig(getenv func(string) string) (config, error) {
 	if err != nil {
 		return c, err
 	}
-	_, raw, enabled, err := materials.LoadAPlusB(getenv)
+	_, aplusb, err := experiment.LoadAPlusBFixture(getenv)
 	if err != nil {
 		return c, err
 	}
-	if enabled {
-		if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" || getenv("OJ_WORKER_M0_SLOT") != "" || getenv(dualModeEnv) != "" {
-			return c, errors.New("A+B requires the isolated Desktop reference slot")
+	if aplusb.IsAPlusB() {
+		if getenv("OJ_WORKER_M0_SLOT") != "" || getenv(dualModeEnv) != "" || runtime.GOARCH != "arm64" {
+			return c, errors.New("A+B requires a dedicated arm64 single reference slot")
 		}
-		c.fixture, err = experiment.APlusBFixture(raw, getenv("OJ_APLUSB_MANIFEST_SHA256"))
-		if err != nil {
-			return c, err
+		if aplusb.APlusBTier() == experiment.ReferenceAPlusBUbuntu {
+			if runtime.GOOS != "linux" || os.Geteuid() != 0 || getenv("OJ_APLUSB_START_STOPPED") != "1" {
+				return c, errors.New("the Ubuntu A+B Worker requires the dedicated guest owner and explicit stopped-slot startup")
+			}
+		} else if runtime.GOOS != "darwin" {
+			return c, errors.New("the Desktop A+B Worker requires the isolated Desktop reference slot")
 		}
+		c.fixture = aplusb
 	}
 	switch getenv("OJ_APLUSB_START_STOPPED") {
 	case "":

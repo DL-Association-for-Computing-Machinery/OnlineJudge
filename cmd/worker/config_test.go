@@ -27,6 +27,8 @@ func TestConfig(t *testing.T) {
 		{"slot-path", "OJ_WORKER_M0_SLOT", "../secret", false},
 		{"managed-start-without-A+B", "OJ_APLUSB_START_STOPPED", "1", false},
 		{"invalid-managed-start", "OJ_APLUSB_START_STOPPED", "yes", false},
+		{"ubuntu-runtime-without-material", "OJ_APLUSB_RUNTIME", "ubuntu-arm64", false},
+		{"unknown-aplusb-runtime", "OJ_APLUSB_RUNTIME", "unlisted", false},
 		{"opt-in", "OJ_SANDBOX_EXPERIMENT", "", false},
 		{"plaintext", "OJ_WORKER_CONTROLLER_URL", "http://127.0.0.1", false},
 		{"external", "OJ_WORKER_CONTROLLER_URL", "https://192.0.2.1", false},

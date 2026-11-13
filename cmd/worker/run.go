@@ -28,8 +28,19 @@ func run(ctx context.Context, logger *slog.Logger, drain <-chan struct{}) error 
 		return err
 	}
 	if c.fixture.IsAPlusB() {
-		slot := workerhost.ReferenceSlot{}
-		lock, err := lockSlotMode(slot.LockName(), false)
+		slot, err := workerhost.ReferenceSlotForTier(c.fixture.APlusBTier())
+		if err != nil {
+			return err
+		}
+		if slot.IsUbuntuAPlusB() {
+			probe, cancel := context.WithTimeout(ctx, 5*time.Second)
+			err := workerhost.CheckUbuntuAPlusBHost(probe)
+			cancel()
+			if err != nil {
+				return err
+			}
+		}
+		lock, err := lockReferenceRuntime(slot, false)
 		if err != nil {
 			return err
 		}
@@ -39,14 +50,18 @@ func run(ctx context.Context, logger *slog.Logger, drain <-chan struct{}) error 
 				if err := lock.dirty(); err != nil {
 					return nil, err
 				}
-				host, err := workerhost.StartReference(ctx)
+				host, err := workerhost.StartReferenceSlot(ctx, slot)
 				if host == nil {
-					// No Docker start was requested; the slot is still unclaimed.
+					if slot.IsUbuntuAPlusB() {
+						// Match the guest's standalone entry: an unconfirmed startup stays fenced.
+						return nil, err
+					}
+					// Desktop preserves the managed startup contract.
 					return nil, errors.Join(err, lock.clean())
 				}
 				return host, err
 			}
-			return workerhost.OpenReference(ctx)
+			return workerhost.OpenReferenceSlot(ctx, slot)
 		}, drain)
 	}
 	ubuntu := c.fixture.Version() == experiment.UbuntuVersion
@@ -123,7 +138,10 @@ func runSlot(ctx context.Context, c config, logger *slog.Logger, lock *slotLock,
 		if !ok {
 			return errors.New("A+B cached transport required")
 		}
-		factory := func() *execution.CachedGoJudge { return execution.NewReferenceGoJudge(host, host.Verify, files) }
+		factory := execution.NewAPlusBCacheFactory(host, host.Verify, files, c.fixture)
+		if factory == nil {
+			return errors.New("A+B cached runtime unavailable")
+		}
 		if err := factory().Verify(startup, c.fixture.Profile()); err != nil {
 			return errors.New("A+B sandbox protocol preflight failed; no task claimed")
 		}
