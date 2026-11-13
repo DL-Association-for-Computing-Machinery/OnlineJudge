@@ -40,6 +40,7 @@ type handler struct {
 	proxy                  *proxyTrust
 	passwordChange         *redisstore.PasswordChange
 	emailConfirmation      EmailConfirmation
+	emailRequest           EmailRequest
 	drafts                 Drafts
 	draftTimeout           time.Duration
 	references             ReferenceRequests
@@ -77,7 +78,7 @@ func (config Config) Validate() error {
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	if IsEmailConfirmationPath(r.URL.Path) {
+	if IsEmailConfirmationPath(r.URL.Path) || IsEmailRequestPath(r.URL.Path) {
 		w.Header().Set("Referrer-Policy", "no-referrer")
 	}
 	source, trusted := h.requestSource(r)
@@ -111,6 +112,12 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		method = http.MethodPost
 	case emailActivationPath, emailResetPath:
 		if h.emailConfirmation == nil {
+			problem(w, 404, "NOT_FOUND", "接口不存在")
+			return
+		}
+		method = http.MethodPost
+	case emailRegisterPath, emailRecoveryRequestPath:
+		if h.emailRequest == nil {
 			problem(w, 404, "NOT_FOUND", "接口不存在")
 			return
 		}
@@ -227,6 +234,10 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if IsEmailConfirmationPath(r.URL.Path) {
 		h.serveEmailConfirmation(w, r, source)
+		return
+	}
+	if IsEmailRequestPath(r.URL.Path) {
+		h.serveEmailRequest(w, r, source)
 		return
 	}
 	if h.login != nil && (r.URL.Path == "/api/v1/session/login/begin" || r.URL.Path == "/api/v1/session/login/complete" || r.URL.Path == "/api/v1/session/login/abandon") {
