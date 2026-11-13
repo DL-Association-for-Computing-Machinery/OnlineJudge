@@ -89,6 +89,30 @@ func New(pool *pgxpool.Pool, protector *emailtoken.Protector) (*Budget, error) {
 	return &Budget{pool: pool, id: protector.CurrentKeyID(), fingerprint: fingerprint}, nil
 }
 
+// CheckReady checks an explicitly selected budget database and the availability
+// of the active key's budget without reserving a seal or repairing state. It
+// also refuses a database containing known application relations. Physical storage
+// independence and future availability are deployment responsibilities.
+func (b *Budget) CheckReady(ctx context.Context, expectedDatabase string) error {
+	if b == nil || b.pool == nil || ctx == nil || expectedDatabase == "" {
+		return ErrUnavailable
+	}
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	var ready bool
+	err := b.pool.QueryRow(ctx, `SELECT pg_catalog.current_database()=$1
+		AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_class WHERE relname IN ('identity_credentials', 'goose_db_version'))
+		AND pg_catalog.current_setting('transaction_read_only')='off'
+		AND pg_catalog.has_column_privilege('public.oj_mail_seal_budget', 'used', 'UPDATE')
+		AND EXISTS (SELECT 1 FROM public.oj_mail_seal_budget
+			WHERE fingerprint=$2 AND used>=0 AND used<max_seals AND max_seals BETWEEN 1 AND 2147483648)`,
+		expectedDatabase, b.fingerprint[:]).Scan(&ready)
+	if err != nil || !ready {
+		return ErrUnavailable
+	}
+	return nil
+}
+
 // Reserve checks the issuer's active material and label, then reserves one
 // seal. It returns nil only after a confirmed commit. Failures never trigger
 // a refund, retry or reinitialization.

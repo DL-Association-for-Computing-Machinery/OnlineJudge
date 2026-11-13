@@ -62,6 +62,9 @@ func TestMailSealBudgetAcrossIndependentPools(t *testing.T) {
 	if a.Reserve(f.ctx, original) != mailbudget.ErrUnavailable {
 		t.Fatal("missing ledger allowed a seal")
 	}
+	if a.CheckReady(f.ctx, dbname) != mailbudget.ErrUnavailable {
+		t.Fatal("missing ledger was ready")
+	}
 	bin, err := filepath.Abs("../../.local/bin/migrate")
 	must(t, err)
 	keyPath := filepath.Join(t.TempDir(), "keys.json")
@@ -103,8 +106,64 @@ func TestMailSealBudgetAcrossIndependentPools(t *testing.T) {
 	if a.Reserve(f.ctx, original) != mailbudget.ErrUnavailable {
 		t.Fatal("missing budget allowed a seal")
 	}
+	if a.CheckReady(f.ctx, dbname) != mailbudget.ErrUnavailable {
+		t.Fatal("missing active key budget was ready")
+	}
 	run(budgetDSN, false, "mail-budget-provision", dbname, "3")
 	run(budgetDSN, true, "mail-budget-provision", dbname, "3", "--fresh-key")
+	must(t, a.CheckReady(f.ctx, dbname))
+	must(t, b.CheckReady(f.ctx, dbname))
+	if a.CheckReady(f.ctx, "wrong-database") != mailbudget.ErrUnavailable {
+		t.Fatal("wrong ledger destination was ready")
+	}
+	var used int64
+	must(t, first.QueryRow(f.ctx, "SELECT used FROM public.oj_mail_seal_budget").Scan(&used))
+	if used != 0 {
+		t.Fatal("startup readiness charged a seal")
+	}
+	readOnlyConfig := first.Config()
+	readOnlyConfig.ConnConfig.RuntimeParams["default_transaction_read_only"] = "on"
+	readOnlyPool, err := pgxpool.NewWithConfig(f.ctx, readOnlyConfig)
+	must(t, err)
+	t.Cleanup(readOnlyPool.Close)
+	readOnly, err := mailbudget.New(readOnlyPool, original)
+	must(t, err)
+	if readOnly.CheckReady(f.ctx, dbname) != mailbudget.ErrUnavailable {
+		t.Fatal("read-only budget connection was ready for issuance")
+	}
+	role := pgx.Identifier{dbname + "_issuer"}.Sanitize()
+	_, err = first.Exec(f.ctx, "CREATE ROLE "+role)
+	must(t, err)
+	t.Cleanup(func() {
+		_, err := first.Exec(f.ctx, "DROP OWNED BY "+role)
+		must(t, err)
+		_, err = first.Exec(f.ctx, "DROP ROLE "+role)
+		must(t, err)
+	})
+	_, err = first.Exec(f.ctx, "GRANT USAGE ON SCHEMA public TO "+role+"; GRANT SELECT ON public.oj_mail_seal_budget TO "+role)
+	must(t, err)
+	roleConfig := first.Config()
+	roleConfig.ConnConfig.RuntimeParams["role"] = dbname + "_issuer"
+	rolePool, err := pgxpool.NewWithConfig(f.ctx, roleConfig)
+	must(t, err)
+	t.Cleanup(rolePool.Close)
+	issuerBudget, err := mailbudget.New(rolePool, original)
+	must(t, err)
+	if issuerBudget.CheckReady(f.ctx, dbname) != mailbudget.ErrUnavailable {
+		t.Fatal("budget role with only SELECT was ready for issuance")
+	}
+	_, err = first.Exec(f.ctx, "GRANT UPDATE (used) ON public.oj_mail_seal_budget TO "+role)
+	must(t, err)
+	must(t, issuerBudget.CheckReady(f.ctx, dbname))
+	// Even a database with a provisioned ledger is not a valid destination if
+	// the application schema is present. Use a temporary fixture relation.
+	_, err = first.Exec(f.ctx, "CREATE TABLE public.identity_credentials (fixture int)")
+	must(t, err)
+	if a.CheckReady(f.ctx, dbname) != mailbudget.ErrUnavailable {
+		t.Fatal("database with application relations was ready")
+	}
+	_, err = first.Exec(f.ctx, "DROP TABLE public.identity_credentials")
+	must(t, err)
 	if mailbudget.Provision(f.ctx, second, alias, 10) != mailbudget.ErrUnavailable {
 		t.Fatal("same key material was provisioned a second time under a new name")
 	}
@@ -161,6 +220,9 @@ func TestMailSealBudgetAcrossIndependentPools(t *testing.T) {
 	workers.Wait()
 	if admitted.Load() != 2 || b.Reserve(f.ctx, alias) != mailbudget.ErrUnavailable {
 		t.Fatal("shared ceiling or non-refund invariant failed")
+	}
+	if a.CheckReady(f.ctx, dbname) != mailbudget.ErrUnavailable {
+		t.Fatal("exhausted budget was ready")
 	}
 	must(t, mailbudget.Provision(f.ctx, second, fresh, 1))
 	c, err := mailbudget.New(first, fresh)
