@@ -240,14 +240,23 @@ func entryConfigWithWriteTimeout(t *testing.T, c sessionruntime.Config, ca *test
 		doc["proxy_fingerprints"] = pins
 		doc["tls"].(map[string]any)["ca_file"] = entryPath(t, ca.CAFile)
 	}
+	if (c.PasswordChange != nil || c.EmailConfirmation != nil) && len(blocklist) != 1 {
+		t.Fatal("enabled password capability needs explicit rule file")
+	}
+	if c.PasswordChange == nil && c.EmailConfirmation == nil && len(blocklist) != 0 {
+		t.Fatal("rule file supplied without enabled capability")
+	}
 	if c.PasswordChange != nil {
-		if len(blocklist) != 1 {
-			t.Fatal("enabled password change needs explicit rule file")
-		}
 		limits := c.PasswordChange.Limits
 		doc["password_change"] = map[string]any{"minimum_characters": c.PasswordChange.Acceptance.MinimumCharacters(), "blocklist_file": blocklist[0], "global": bucket(limits.Global), "source": bucket(limits.Source), "subject": bucket(limits.Subject)}
-	} else if len(blocklist) != 0 {
-		t.Fatal("rule file supplied without enabled capability")
+	}
+	if email := c.EmailLimits; email != nil {
+		doc["email_limits"] = map[string]any{"request_global": bucket(email.RequestGlobal), "request_source": bucket(email.RequestSource),
+			"request_mailbox": bucket(email.RequestMailbox), "confirm_global": bucket(email.ConfirmGlobal),
+			"confirm_source": bucket(email.ConfirmSource), "confirm_token": bucket(email.ConfirmToken)}
+	}
+	if c.EmailConfirmation != nil {
+		doc["email_confirmation"] = map[string]any{"minimum_characters": c.EmailConfirmation.MinimumCharacters(), "blocklist_file": blocklist[0]}
 	}
 	if d := c.PrivateDrafts; d != nil {
 		doc["private_drafts"] = map[string]any{"material_root": d.MaterialRoot, "bundle_directory": d.BundleDirectory,
