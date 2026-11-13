@@ -33,6 +33,12 @@ import (
 )
 
 func TestMailWorkerProcessLoopback(t *testing.T) {
+	t.Run("lost acknowledgement", func(t *testing.T) { testMailWorkerProcessLoopback(t, false) })
+	t.Run("process killed before acknowledgement", func(t *testing.T) { testMailWorkerProcessLoopback(t, true) })
+}
+
+func testMailWorkerProcessLoopback(t *testing.T, crash bool) {
+	t.Helper()
 	f := newBacklogFixture(t)
 	must(t, mailqueue.MigrateUp(f.ctx, f.a))
 	queue, err := mailqueue.NewEnqueuer(f.ctx, f.a)
@@ -70,7 +76,7 @@ func TestMailWorkerProcessLoopback(t *testing.T) {
 	listener, err := net.ListenTCP("tcp4", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	must(t, err)
 	defer func() { _ = listener.Close() }()
-	must(t, listener.SetDeadline(time.Now().Add(14*time.Second)))
+	must(t, listener.SetDeadline(time.Now().Add(18*time.Second)))
 	type reception struct {
 		value string
 		err   error
@@ -78,7 +84,14 @@ func TestMailWorkerProcessLoopback(t *testing.T) {
 	received := make(chan reception, 2)
 	go func() {
 		for _, ack := range []bool{false, true} {
-			value, err := readAccountSMTP(listener, tlsConfig, to, ack)
+			onData := func(string) {}
+			if crash && !ack {
+				onData = func(token string) { received <- reception{value: token} }
+			}
+			value, err := readAccountSMTP(listener, tlsConfig, to, ack, crash && !ack, onData)
+			if crash && !ack && err == nil {
+				continue
+			}
 			received <- reception{value, err}
 			if err != nil {
 				return
@@ -91,18 +104,24 @@ func TestMailWorkerProcessLoopback(t *testing.T) {
 	must(t, err)
 	process, cancel := context.WithCancel(f.ctx)
 	defer cancel()
-	cmd := exec.CommandContext(process, path)
-	cmd.Env = []string{
+	env := []string{
 		"OJ_DATABASE_URL=" + f.a.Config().ConnString() + " search_path=" + schema,
 		"OJ_EMAIL_PAYLOAD_KEYS_FILE=" + keyFile, "SSL_CERT_FILE=" + certFile,
 		"OJ_ACCOUNT_PUBLIC_ORIGIN=https://oj.example.invalid",
 		"OJ_SMTP_HOST=127.0.0.1", "OJ_SMTP_TLS=implicit", "OJ_SMTP_FROM=sender@example.invalid",
 		"OJ_SMTP_PORT=" + strconv.Itoa(listener.Addr().(*net.TCPAddr).Port),
 	}
-	must(t, cmd.Start())
-	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
-	t.Cleanup(func() { cancel() })
+	startWorker := func() (*exec.Cmd, <-chan error) {
+		t.Helper()
+		cmd := exec.CommandContext(process, path)
+		cmd.Env = env
+		must(t, cmd.Start())
+		done := make(chan error, 1)
+		go func() { done <- cmd.Wait(); close(done) }()
+		t.Cleanup(func() { cancel(); <-done })
+		return cmd, done
+	}
+	cmd, done := startWorker()
 	next := func() string {
 		t.Helper()
 		select {
@@ -117,6 +136,48 @@ func TestMailWorkerProcessLoopback(t *testing.T) {
 		return ""
 	}
 	first := next()
+	if crash {
+		must(t, cmd.Process.Kill())
+		select {
+		case err := <-done:
+			var exited *exec.ExitError
+			if !errors.As(err, &exited) {
+				t.Fatal("first mail process did not exit from the forced stop")
+			}
+			status, ok := exited.Sys().(syscall.WaitStatus)
+			if !ok || status.Signal() != syscall.SIGKILL {
+				t.Fatal("first mail process was not killed")
+			}
+		case <-f.ctx.Done():
+			t.Fatal("forced stop was not observed")
+		}
+		var firstOwner string
+		must(t, f.a.QueryRow(f.ctx, `SELECT attempted_by[1] FROM river_job
+			WHERE args->>'payload_id'=$1 AND state='running' AND attempt=1
+			  AND NOT (metadata ? 'oj_delivery_result') AND finalized_at IS NULL
+			  AND EXISTS (SELECT 1 FROM identity_email_payloads WHERE token_id=$1)`, id).Scan(&firstOwner))
+		// Keep real process death, polling and recovery SQL in the test.
+		// Advance only the abandoned claim's age to avoid a two-minute sleep.
+		tag, err := f.a.Exec(f.ctx, `UPDATE river_job SET attempted_at=clock_timestamp()-interval '3 minutes'
+			WHERE args->>'payload_id'=$1 AND state='running' AND attempt=1`, id)
+		must(t, err)
+		if tag.RowsAffected() != 1 {
+			t.Fatal("abandoned claim was not available for rescue")
+		}
+		cmd, done = startWorker()
+		t.Cleanup(func() {
+			if t.Failed() {
+				return
+			}
+			var distinctOwners bool
+			must(t, f.a.QueryRow(f.ctx, `SELECT cardinality(attempted_by)=2
+				AND attempted_by[1]=$2 AND attempted_by[2]<>$2
+				FROM river_job WHERE args->>'payload_id'=$1`, id, firstOwner).Scan(&distinctOwners))
+			if !distinctOwners {
+				t.Error("the recovered delivery did not use a new claimant")
+			}
+		})
+	}
 	if next() != first {
 		t.Fatal("automatic retry changed the activation credential")
 	}
@@ -148,7 +209,7 @@ func TestMailWorkerProcessLoopback(t *testing.T) {
 	}
 }
 
-func readAccountSMTP(listener *net.TCPListener, config *tls.Config, to identity.Email, acknowledge bool) (string, error) {
+func readAccountSMTP(listener *net.TCPListener, config *tls.Config, to identity.Email, acknowledge, waitForKill bool, onData func(string)) (string, error) {
 	raw, err := listener.AcceptTCP()
 	if err != nil {
 		return "", err
@@ -184,6 +245,13 @@ func readAccountSMTP(listener *net.TCPListener, config *tls.Config, to identity.
 				return "", err
 			}
 			token, err = readActivationLink(reader.DotReader())
+			if err == nil && waitForKill {
+				onData(token)
+				if _, err := reader.R.ReadByte(); !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
+					return "", errors.New("first SMTP connection did not close while waiting for acknowledgement")
+				}
+				return token, nil
+			}
 			if err != nil || !acknowledge {
 				return token, err
 			}
