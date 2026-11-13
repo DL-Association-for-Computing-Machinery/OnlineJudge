@@ -706,6 +706,16 @@ python3 -B scripts/test-session-protocol.py --toolchain-image oj-session-protoco
 .local/bin/migrate verify-backup -manifest-sha256 '源端完成清单的原始摘要' -timeout 10m '/绝对路径/收到的备份目录'
 ```
 
+### 核对 M1 恢复证据
+
+独立恢复演练完成后，按[计时与证据约定](docs/architecture/operations-design.md#试用恢复计时与证据)填入脱敏记录，并传入收到的原始清单：
+
+```sh
+python3 scripts/assess-m1-restore.py '/绝对路径/恢复观测.json' '/绝对路径/收到的备份目录/manifest.json'
+```
+
+退出码 `0` 表示记录满足计时与完整性条件、可供人工复核，`1` 表示记录有未通过项，`2` 表示输入无效或不一致。命令不执行恢复、不验证备份目录内容，也不替代负责人对故障域与原始记录的复核。
+
 ### 浏览器账号专项
 
 账号页面与 API 必须由同一 HTTPS Origin 提供；当前默认 Compose/Vite HTTP 入口会阻止账号请求。不要通过关闭 Secure Cookie/来源检查或启用跨源代理来让密码表单工作。实际流程及限制见[浏览器账号](docs/account-browser.md)。
