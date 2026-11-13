@@ -8,9 +8,17 @@ const encoder = new TextEncoder()
 const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
 const bodyLimit = 7 * 1024 * 1024
 const sourceLimit = 64 * 1024
+const evidenceHashes = ['content_version', 'import_revision', 'source_lock_sha256', 'formal_plan_sha256', 'profile_sha256', 'evidence_sha256'] as const
+const evidenceFields = ['review_id', 'draft_id', 'source_id', 'reference_request_id', 'assignment_revision', 'formal_verdict',
+  'comparison_plan_sha256', 'comparison_outcome', ...evidenceHashes] as const
+
+type ReviewEvidence = Record<typeof evidenceHashes[number], string> & {
+  review_id: string; draft_id: string; source_id: string; reference_request_id: string; assignment_revision: number; formal_verdict: string
+  comparison_plan_sha256?: string; comparison_outcome?: 'passed' | 'mismatch'
+}
 
 interface ReviewMaterials {
-  evidence: { review_id: string; draft_id: string; content_version: string; assignment_revision: number; import_revision: string; evidence_sha256: string; formal_verdict: string }
+  evidence: ReviewEvidence
   statement: DraftPreview
   standard_solution: { source: string; dependencies?: { name: string; source: string }[] }
 }
@@ -37,14 +45,12 @@ export interface ReviewEligibility {
 
 function decodeEvidence(value: unknown, review: string): ReviewMaterials['evidence'] {
   if (!object(value)) throw invalid()
-  const hashes = ['content_version', 'import_revision', 'source_lock_sha256', 'formal_plan_sha256', 'profile_sha256', 'evidence_sha256']
-  const fields = ['review_id', 'draft_id', 'source_id', 'reference_request_id', 'assignment_revision', 'formal_verdict', ...hashes]
-  if (Object.keys(value).some(key => !fields.includes(key) && key !== 'comparison_plan_sha256' && key !== 'comparison_outcome') ||
+  if (Object.keys(value).some(key => !evidenceFields.some(field => field === key)) ||
     value.review_id !== review || !id(value.review_id) || !id(value.draft_id) || !id(value.reference_request_id) ||
     typeof value.source_id !== 'string' || !value.source_id || encoder.encode(value.source_id).byteLength > 128 ||
     typeof value.assignment_revision !== 'number' || !Number.isSafeInteger(value.assignment_revision) || value.assignment_revision < 1 ||
     typeof value.formal_verdict !== 'string' || !['AC', 'WA', 'CE', 'RE', 'TLE', 'MLE', 'OLE'].includes(value.formal_verdict) ||
-    !hashes.every(key => digest(value[key])) ||
+    !evidenceHashes.every(key => digest(value[key])) ||
     ('comparison_plan_sha256' in value && !digest(value.comparison_plan_sha256)) ||
     ('comparison_outcome' in value && (!digest(value.comparison_plan_sha256) || (value.comparison_outcome !== 'passed' && value.comparison_outcome !== 'mismatch')))) throw invalid()
   return value as unknown as ReviewMaterials['evidence']
@@ -88,9 +94,7 @@ export async function fetchReviewEligibility(evidence: ReviewMaterials['evidence
   if (!object(value) || value.policy_version !== 'oj.review-approval.v14' || value.eligible !== false ||
     ('statement_semantics_confirmed' in value && value.statement_semantics_confirmed !== true)) throw invalid()
   const actual = decodeEvidence(value.evidence, evidence.review_id)
-  if (actual.draft_id !== evidence.draft_id || actual.content_version !== evidence.content_version ||
-    actual.import_revision !== evidence.import_revision || actual.assignment_revision !== evidence.assignment_revision ||
-    actual.evidence_sha256 !== evidence.evidence_sha256) throw invalid()
+  if (evidenceFields.some(field => actual[field] !== evidence[field])) throw invalid()
   const blockers: unknown = value.blockers
   if (!Array.isArray(blockers) || blockers.length === 0 || blockers.length > Object.keys(reviewBlockerLabels).length ||
     new Set(blockers).size !== blockers.length || !blockers.every((code): code is keyof typeof reviewBlockerLabels =>

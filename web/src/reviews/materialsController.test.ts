@@ -60,6 +60,20 @@ it('reads current blockers only on request and discards a response for another a
   } finally { f.stop() }
 })
 
+it.each([
+  { formal_plan_sha256: 'f'.repeat(64) }, { profile_sha256: 'f'.repeat(64) },
+  { source_lock_sha256: 'f'.repeat(64) }, { formal_verdict: 'WA' },
+  { comparison_plan_sha256: 'f'.repeat(64), comparison_outcome: 'passed' },
+])('clears materials when a blocker response changes frozen evidence: %o', async changed => {
+  const f = await setup()
+  try {
+    await f.controller.load()
+    f.fetch.mockResolvedValueOnce(Response.json({ ...eligibility(), evidence: { ...material().evidence, ...changed } }))
+    await f.controller.readEligibility()
+    expect(f.controller.getSnapshot()).toMatchObject({ data: null, eligibility: null, busy: false })
+  } finally { f.stop() }
+})
+
 it('does not revive eligibility after account invalidation', async () => {
   const f = await setup()
   try {
