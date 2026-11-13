@@ -59,7 +59,7 @@ func testMailWorkerProcessLoopback(t *testing.T, crash bool) {
 	must(t, err)
 	work, err := password.NewBounded(h, password.AdmissionLimits{MaxInFlight: 1})
 	must(t, err)
-	must(t, issuer.RegisterPersonal(f.ctx, to, epoch, work, protector, func(context.Context, string) error { return nil }, queue.Enqueue))
+	must(t, issuer.RegisterPersonal(f.ctx, to, epoch, work, protector, func(context.Context, *emailtoken.Protector) error { return nil }, queue.Enqueue))
 	var id string
 	must(t, f.b.QueryRow(f.ctx, "SELECT args->>'payload_id' FROM river_job").Scan(&id))
 	account, err := issuer.LookupPersonalByEmail(f.ctx, to)

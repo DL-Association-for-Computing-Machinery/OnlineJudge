@@ -1,6 +1,13 @@
 #!/bin/sh
 # Run only the protocol suite against a private, disposable PostgreSQL cluster.
 set -eu
+case "$#:${1:-ordinary}" in
+    0:ordinary|1:ordinary) oj_pattern='^TestOrdinaryProtocol$' ;;
+    1:email-lifecycle)
+        export OJ_ISOLATED_EMAIL_LIFECYCLE=1
+        oj_pattern='^TestIsolatedEmailLifecycle$' ;;
+    *) echo "Invalid session protocol suite" >&2; exit 2 ;;
+esac
 umask 077
 oj_protocol_dir=$(mktemp -d /tmp/oj-protocol.XXXXXX)
 oj_pg_started=0
@@ -33,9 +40,16 @@ mkdir "$oj_protocol_dir/workspace/cmd"
 cp -R /workspace/cmd/api /workspace/cmd/migrate "$oj_protocol_dir/workspace/cmd/"
 cd "$oj_protocol_dir/workspace"
 if [ -d /verified-module-cache ]; then
-    # Never replace image-cached source; verify the merged temporary cache below.
-    cp -Rn /verified-module-cache/. /go/pkg/mod/
+    # The image cache may be read-only to the fixture user.
+    oj_image_cache=$(go env GOMODCACHE)
+    export GOMODCACHE="$oj_protocol_dir/modules"
+    mkdir "$GOMODCACHE"
+    if [ -d "$oj_image_cache" ]; then
+        cp -R "$oj_image_cache/." "$GOMODCACHE/"
+        chmod -R u+rwX "$GOMODCACHE"
+    fi
+    cp -Rn /verified-module-cache/. "$GOMODCACHE/"
 fi
 go mod verify
 golangci-lint run --config /workspace/.golangci.yml --build-tags=integration ./tests/sessionprotocol/...
-go test -mod=readonly -race -count=1 -timeout=120s -tags=integration ./tests/sessionprotocol -v
+go test -mod=readonly -race -count=1 -timeout=120s -tags=integration ./tests/sessionprotocol -run "$oj_pattern" -v

@@ -59,7 +59,7 @@ jobs:
     needs: governance
     if: needs.governance.outputs.integration == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -73,6 +73,8 @@ jobs:
           docker build --target toolchain --tag oj-session-protocol-toolchain .
           docker pull redis:7.2.17@sha256:0312984fbfeb2ff1d4382ecef45b50e7d65478a6a58cf12ce28d6de7a4142e45
           python3 -B scripts/test-session-protocol.py --context default --toolchain-image oj-session-protocol-toolchain --build-cache-volume ''
+      - name: Check isolated registration and password recovery through local SMTP
+        run: python3 -B scripts/test-session-protocol.py --context default --toolchain-image oj-session-protocol-toolchain --build-cache-volume '' --suite email-lifecycle
 
   frontend-tests:
     needs: governance

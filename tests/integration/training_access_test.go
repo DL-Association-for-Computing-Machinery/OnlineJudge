@@ -65,7 +65,7 @@ func TestTrainingAccountAuthority(t *testing.T) {
 	protector, err := emailtoken.NewProtector("fixture", map[string][32]byte{"fixture": {1}})
 	must(t, err)
 	payload, err := first.IssueEmailToken(f.ctx, actor.SubjectID, actor.SessionVersion, emailtoken.Activation, protector,
-		func(context.Context, string) error { return nil }, func(context.Context, pgx.Tx, string) error { return nil })
+		func(context.Context, *emailtoken.Protector) error { return nil }, func(context.Context, pgx.Tx, string) error { return nil })
 	must(t, err)
 	reader, err := identitypg.NewEmailDeliveryReader(f.b, protector)
 	must(t, err)

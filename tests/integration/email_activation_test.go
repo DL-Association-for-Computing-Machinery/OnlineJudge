@@ -42,7 +42,7 @@ func TestEmailActivation(t *testing.T) {
 	issue := func() (string, emailtoken.Token) {
 		t.Helper()
 		id, err := first.IssueEmailToken(f.ctx, subject, version, emailtoken.Activation, protector,
-			func(context.Context, string) error { return nil },
+			func(context.Context, *emailtoken.Protector) error { return nil },
 			func(ctx context.Context, tx pgx.Tx, id string) error {
 				_, err := tx.Exec(ctx, "INSERT INTO synthetic_activation_queue VALUES($1)", id)
 				return err

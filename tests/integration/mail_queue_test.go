@@ -74,7 +74,7 @@ func TestMailQueueMigrationAndIssuance(t *testing.T) {
 	version := identity.SessionVersion{AuthGeneration: 1, RecoveryID: epoch}
 	protector, err := emailtoken.NewProtector("fixture", map[string][32]byte{"fixture": {1}})
 	must(t, err)
-	reserve := func(context.Context, string) error { return nil }
+	reserve := func(context.Context, *emailtoken.Protector) error { return nil }
 	counts := func(want int) {
 		t.Helper()
 		var jobs, payloads, tokens int

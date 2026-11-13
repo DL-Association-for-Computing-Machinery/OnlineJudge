@@ -49,7 +49,7 @@ func TestEmailConfirmationAppliesPasswordPolicy(t *testing.T) {
 	issue := func(p emailtoken.Purpose) emailtoken.Token {
 		t.Helper()
 		id, err := issuer.IssueEmailToken(f.ctx, subject, version, p, keys,
-			func(context.Context, string) error { return nil },
+			func(context.Context, *emailtoken.Protector) error { return nil },
 			func(ctx context.Context, tx pgx.Tx, id string) error {
 				_, err := tx.Exec(ctx, "INSERT INTO fixture_confirmation_jobs VALUES ($1)", id)
 				return err
