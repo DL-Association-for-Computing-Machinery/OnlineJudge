@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materials"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
@@ -76,9 +77,16 @@ func startAPlusBWorker(t *testing.T, endpoint, ca, cert, key string) *dualProces
 
 func waitAPlusBVerdict(t *testing.T, ctx context.Context, worker *dualProcess, store *postgres.Store, initial submission.Receipt, want string) {
 	t.Helper()
+	waitAPlusBReceipt(t, ctx, worker, initial, want, func() (submission.Receipt, error) {
+		return store.Get(ctx, aplusbSubject, aplusbScope, initial.ID)
+	})
+}
+
+func waitAPlusBReceipt(t *testing.T, ctx context.Context, worker *dualProcess, initial submission.Receipt, want string, read func() (submission.Receipt, error)) {
+	t.Helper()
 	for ctx.Err() == nil {
 		worker.alive(t)
-		row, err := store.Get(ctx, aplusbSubject, aplusbScope, initial.ID)
+		row, err := read()
 		if err != nil || row.ID != initial.ID || row.MaterialVersion != initial.MaterialVersion ||
 			row.Language != initial.Language || !row.CreatedAt.Equal(initial.CreatedAt) {
 			t.Fatal("A+B submission identity changed")
@@ -169,8 +177,16 @@ func TestAPlusBLeasedLoop(t *testing.T) {
 		t.Fatal("regression expects the reviewed 12-byte token configuration")
 	}
 	receipts := make([]submission.Receipt, 0, len(sources))
+	var trainingActor identity.TrainingActor
 	for i, source := range sources {
-		row, created, err := store.Accept(ctx, aplusbSubject, aplusbScope, "aplusb-fixture-key-"+string(rune('a'+i)),
+		key := "aplusb-fixture-key-" + string(rune('a'+i))
+		if i == 0 {
+			actor, row := acceptAPlusBTraining(t, ctx, pool, store, key, source)
+			trainingActor = actor
+			receipts = append(receipts, row)
+			continue
+		}
+		row, created, err := store.Accept(ctx, aplusbSubject, aplusbScope, key,
 			submission.Request{MaterialVersion: m.Version, Language: "gnu++17", Source: source})
 		if err != nil || !created {
 			t.Fatalf("accept synthetic task: %v", err)
@@ -208,6 +224,17 @@ func TestAPlusBLeasedLoop(t *testing.T) {
 	}
 	worker := startAPlusBWorker(t, endpoint, ca.CAFile, clientCert, clientKey)
 	for i, want := range []string{"AC", "WA", "OLE"} {
+		if i == 0 {
+			row := receipts[i]
+			waitAPlusBReceipt(t, ctx, worker, row, want, func() (submission.Receipt, error) {
+				return postgres.ReadTrainingStatus(ctx, pool, trainingActor, row.ID)
+			})
+			detail, err := postgres.ReadTrainingDetail(ctx, pool, trainingActor, row.ID)
+			if err != nil || detail.Source != sources[i] || detail.Verdict == nil || *detail.Verdict != want {
+				t.Fatal("training owner did not recover the source and real Worker verdict")
+			}
+			continue
+		}
 		waitAPlusBVerdict(t, ctx, worker, store, receipts[i], want)
 	}
 	sum := sha256.Sum256(raw)
@@ -218,7 +245,7 @@ func TestAPlusBLeasedLoop(t *testing.T) {
 	}
 	drainAPlusB(t, ctx, worker)
 	controller.stop(t)
-	t.Log("registered fixed materials, wrong fixture refused, three single-attempt AC/WA/OLE results and drain confirmed")
+	t.Log("authenticated store accepted fixed A+B, owner read real AC, wrong fixture refused, WA/OLE and drain confirmed")
 }
 
 func assertUbuntuAPlusBManifestMismatch(t *testing.T, ctx context.Context, endpoint string, roots *x509.CertPool, pair tls.Certificate, m materials.APlusBManifest) {
