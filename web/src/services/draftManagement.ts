@@ -99,3 +99,23 @@ export async function fetchOwnDraftPage(owner: string, cursor: string, signal: A
   if (cursor && page.next_cursor === cursor) throw new ImportError()
   return page
 }
+
+export interface ReviewIntakeIntent {
+  request_key: string; draft_id: string; import_revision: string; reference_request_id: string
+}
+
+export async function requestReviewIntake(
+  action: 'submit' | 'read', owner: string, intent: ReviewIntakeIntent, version: string, signal: AbortSignal,
+): Promise<string> {
+  if (!validKey(intent.request_key) || !validDraftID(intent.draft_id) || !validDraftID(intent.reference_request_id) ||
+    !validRevision(intent.import_revision) || !validRevision(version)) throw new ImportError()
+  const path = '/review-submissions'
+  const data = await (action === 'submit'
+    ? request(owner, path, signal, intent)
+    : request(owner, `${path}/${intent.request_key}`, signal))
+  if (!object(data) || Object.keys(data).length !== 7 || typeof data.id !== 'string' || !validDraftID(data.id) ||
+    data.content_version !== version || Object.entries(intent).some(([key, value]) => data[key] !== value) ||
+    typeof data.created_at !== 'string' || !/^\d{4}-\d\d-\d\dT/.test(data.created_at) ||
+    !Number.isFinite(Date.parse(data.created_at))) throw new ImportError()
+  return data.id
+}

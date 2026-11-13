@@ -137,7 +137,8 @@ func TestBrowserFixture(t *testing.T) {
 	plain.Start()
 	info := map[string]string{"url": origin.String(), "email": subject.Email.Original(), "subject_id": subject.ID, "other_email": otherAuthor.Email.Original(), "other_subject_id": otherAuthor.ID}
 	if reviewMode {
-		info["review_id"] = seedBrowserReview(t, f, origin, ca.Roots, subject, otherAuthor, access)
+		info["review_id"], info["review_draft_id"] = seedBrowserReview(t, f, origin, ca.Roots, subject, otherAuthor, access)
+		info["review_reference_key"] = entryTerminalReferenceKey
 	}
 	if os.Getenv("OJ_BROWSER_COLD_TLS") == "1" {
 		publicCA, err := os.ReadFile(ca.CAFile)

@@ -3,11 +3,12 @@ import { useCurrentAccount } from '../account/context'
 import { subscribePrivateInvalidation } from '../account/privateInvalidation'
 import type { ReferenceReport } from '../services/referenceRequests'
 import { ReferenceController } from './referenceController'
+import { ReviewIntake } from './ReviewIntake'
 import './referenceRequests.css'
 
 const labels = { queued: '待完成', cancelled: '已取消', reported: '已收到验证报告' }
 
-export function ReferenceRequests({ draft }: { draft: string }) {
+export function ReferenceRequests({ draft, version }: { draft: string; version: string }) {
   const { controller: account, state: accountState } = useCurrentAccount()
   const [controller] = useState(() => new ReferenceController(account, draft))
   const { receipt, ready, report, busy, notice } = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
@@ -35,6 +36,8 @@ export function ReferenceRequests({ draft }: { draft: string }) {
     </div>
     <p role="status">{notice}{receipt ? ` 状态：${labels[receipt.state]}。` : ''}</p>
     {report && <ReferenceResult report={report} />}
+    {report?.import_revision && report.content_version === version &&
+      <ReviewIntake key={report.request_id} report={{ ...report, import_revision: report.import_revision }} />}
   </section>
 }
 
