@@ -518,12 +518,12 @@ AC25 进一步验证：事务回滚不留孤立发信任务；提交成功后进
 
 配合既有路线的验证边界：
 
-- **sqlc＋pgx**：使用同一个受支持的 pgx 事务执行账号更新和 River 事务入队，不能一侧提交后才另一侧入队；sqlc 只管理自有业务 SQL，不直接修改 River 私有表。精确 Go/pgx/PostgreSQL/River 版本组合待核验。
-- **Goose**：优先评估导出固定 River 版本的原始迁移 SQL，保留来源、版本、哈希及事务限制，纳入一次独立迁移和显式锁流程；检查 River 迁移元数据兼容，不能两套入口重复管理同一 schema，也不在每个 API/执行器启动时迁移。导出方式只是候选集成方案，需真实升级/失败恢复验证。
+- **sqlc＋pgx**：已固定 River v0.51.2、pgx v5.11.0，沿用 Go 1.26.11 和 PostgreSQL 14。入队适配器与令牌摘要、密文共用签发事务；River 参数只存载荷 ID，使用独立邮件队列和最多六次尝试。sqlc 只管理自有业务 SQL。
+- **迁移**：River 八步 SQL 一起放入单个事务会触发 PostgreSQL 枚举值限制（`55P04`）。使用 [v0.51.2 官方迁移器](https://github.com/riverqueue/river/blob/v0.51.2/rivermigrate/river_migrate.go) 的逐步提交，由显式维护命令执行，沿用 Goose 的独占维护锁。Goose 不管理 River 表，应用启动不迁移。只接受固定的连续迁移版本；中途中断可从已提交版本继续，入队在版本不全或未知时拒绝。
 - **发送额度**：开源核心的每实例 `MaxWorkers` 不等于跨实例全局并发或每秒邮件额度；River Pro 付费能力已排除，不能假定开源核心自动满足全局额度。首期可评估单活发送执行器＋有界并发/速率，故障恢复需防旧实例继续发送；若多活，再明确全局额度方案。API 负载均衡不要求发送器也多活。
 - **秘密与业务有效性**：不采用 River Pro；用户已选任务仅存业务 ID、业务侧短期 AES-GCM 加密载荷和独立密钥文件；密钥、清理、访问权与日志/UI 脱敏须完整设计。两种方案均须发送前检查令牌有效性、控制任务保留和 SMTP 结果未知，不将队列库当成完整邮件系统。
 
-准入时比较相同硬件与负载下的空闲/高峰 CPU、RSS、连接、数据库写入与判题延迟；覆盖同事务回滚、两执行器竞争、进程终止、断网积压/恢复、过期丢弃和迁移回退。不采用官网跑分作为 OJ 容量证明；目前没有安装、代码、基准、故障实验或费用承诺。
+运行准入时比较相同硬件与负载下的空闲/高峰 CPU、RSS、连接、数据库写入与判题延迟。真实 PostgreSQL 已验证同事务提交/回滚、迁移锁和从部分版本继续；两执行器竞争、进程终止、断网积压/恢复、过期丢弃及目标环境仍待验收。River v0.51.2 及 pgx 驱动为 MPL-2.0，未复制或改动上游代码。发行镜像前还须核对依赖许可证和分发要求。
 
 查阅日期：2026-10-25。来源：[River 项目与许可](https://github.com/riverqueue/river)、[事务入队](https://riverqueue.com/docs/transactional-enqueueing)、[入门与 pgx 配置](https://riverqueue.com/docs)、[迁移及 SQL 导出](https://riverqueue.com/docs/migrations)、[重试](https://riverqueue.com/docs/job-retries)、[卡住任务恢复](https://riverqueue.com/docs/stuck-jobs)、[Pro 加密任务](https://riverqueue.com/docs/pro/encrypted-jobs)。
 
