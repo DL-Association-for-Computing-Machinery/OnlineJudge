@@ -29,6 +29,20 @@ const LedgerSQL = `CREATE TABLE public.oj_mail_seal_budget (
     CHECK (used <= max_seals)
 )`
 
+// Initialize creates a ledger in a dedicated database during maintenance.
+// An existing relation is an error; this operation never repairs or resets it.
+func Initialize(ctx context.Context, pool *pgxpool.Pool) error {
+	if ctx == nil || pool == nil {
+		return ErrUnavailable
+	}
+	return write(ctx, pool, func(ctx context.Context, tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, LedgerSQL); err != nil {
+			return ErrUnavailable
+		}
+		return nil
+	})
+}
+
 // Provision initializes a budget for demonstrably fresh key material. The pool
 // is a trusted maintenance pool; never use this to recover missing state.
 // An existing fingerprint keeps its counter and ceiling even under a new ID.

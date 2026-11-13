@@ -4,7 +4,13 @@ package integration_test
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -56,8 +62,32 @@ func TestMailSealBudgetAcrossIndependentPools(t *testing.T) {
 	if a.Reserve(f.ctx, original) != mailbudget.ErrUnavailable {
 		t.Fatal("missing ledger allowed a seal")
 	}
-	_, err = first.Exec(f.ctx, mailbudget.LedgerSQL)
+	bin, err := filepath.Abs("../../.local/bin/migrate")
 	must(t, err)
+	keyPath := filepath.Join(t.TempDir(), "keys.json")
+	raw := [32]byte{1}
+	body, err := json.Marshal(map[string]any{"format": "oj.email-payload-keys.v1", "current": "original",
+		"keys": map[string]string{"original": base64.RawURLEncoding.EncodeToString(raw[:])}})
+	must(t, err)
+	must(t, os.WriteFile(keyPath, body, 0600))
+	budgetDSN := first.Config().ConnString() + " dbname=" + dbname + " synchronous_commit=off"
+	run := func(dsn string, ok bool, args ...string) {
+		t.Helper()
+		cmd := exec.CommandContext(f.ctx, bin, args...)
+		cmd.Env = []string{"OJ_MAIL_BUDGET_DATABASE_URL=" + dsn, "OJ_EMAIL_PAYLOAD_KEYS_FILE=" + keyPath}
+		out, err := cmd.CombinedOutput()
+		if (err == nil) != ok || (ok && string(out) != "mail budget maintenance completed\n") {
+			t.Fatalf("unexpected maintenance result for %s", args[0])
+		}
+		if !ok && (strings.Contains(string(out), dsn) || strings.Contains(string(out), keyPath) ||
+			strings.Contains(string(out), base64.RawURLEncoding.EncodeToString(raw[:]))) {
+			t.Fatal("maintenance error included sensitive configuration")
+		}
+	}
+	run(f.a.Config().ConnString(), false, "mail-budget-init", f.a.Config().ConnConfig.Database)
+	run(budgetDSN, false, "mail-budget-init", "wrong-database")
+	run(budgetDSN, true, "mail-budget-init", dbname)
+	run(budgetDSN, false, "mail-budget-init", dbname)
 	_, err = first.Exec(f.ctx, `CREATE FUNCTION public.check_budget_commit_mode() RETURNS trigger
 		LANGUAGE plpgsql AS $$
 		BEGIN
@@ -73,7 +103,8 @@ func TestMailSealBudgetAcrossIndependentPools(t *testing.T) {
 	if a.Reserve(f.ctx, original) != mailbudget.ErrUnavailable {
 		t.Fatal("missing budget allowed a seal")
 	}
-	must(t, mailbudget.Provision(f.ctx, first, original, 3))
+	run(budgetDSN, false, "mail-budget-provision", dbname, "3")
+	run(budgetDSN, true, "mail-budget-provision", dbname, "3", "--fresh-key")
 	if mailbudget.Provision(f.ctx, second, alias, 10) != mailbudget.ErrUnavailable {
 		t.Fatal("same key material was provisioned a second time under a new name")
 	}
@@ -111,6 +142,7 @@ func TestMailSealBudgetAcrossIndependentPools(t *testing.T) {
 	if tokens != 0 {
 		t.Fatal("failed issuance persisted a token")
 	}
+	run(budgetDSN, false, "mail-budget-provision", dbname, "10", "--fresh-key")
 	var admitted atomic.Int64
 	var workers sync.WaitGroup
 	for i := range 10 {
