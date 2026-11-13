@@ -25,28 +25,33 @@ const (
 	Unknown
 	// Accepted means the SMTP server accepted the message.
 	Accepted
+	// Deferred means SMTP was not called because no usable permit was obtained.
+	Deferred
 )
 
 // Attempt connects the eligibility reader, trusted renderer and SMTP transport.
 type Attempt struct {
 	reader   *identitypg.EmailDeliveryReader
 	renderer *emailmessage.Renderer
+	take     func(context.Context) (bool, error)
 	send     func(context.Context, identity.Email, string, string) mailtransport.Outcome
 }
 
-// New constructs an attempt runner without opening a connection.
+// New constructs an attempt runner without opening a connection. take must
+// confirm a shared permit before returning true.
 func New(reader *identitypg.EmailDeliveryReader, renderer *emailmessage.Renderer,
+	take func(context.Context) (bool, error),
 	send func(context.Context, identity.Email, string, string) mailtransport.Outcome,
 ) (*Attempt, error) {
-	if reader == nil || renderer == nil || send == nil {
+	if reader == nil || renderer == nil || take == nil || send == nil {
 		return nil, identity.ErrInvalid
 	}
-	return &Attempt{reader: reader, renderer: renderer, send: send}, nil
+	return &Attempt{reader: reader, renderer: renderer, take: take, send: send}, nil
 }
 
 // Run performs at most one SMTP attempt. The caller must own the job and
-// enforce attempt counts and shared admission. No database transaction or
-// connection is retained during SMTP. Run does not acknowledge the job.
+// enforce attempt counts. Run obtains a shared permit only for prepared
+// mail, immediately before SMTP. It does not acknowledge the job.
 func (a *Attempt) Run(ctx context.Context, payloadID string) Outcome {
 	if a == nil || a.reader == nil || ctx == nil || !identity.ValidID(payloadID) {
 		return Rejected
@@ -75,6 +80,16 @@ func (a *Attempt) Run(ctx context.Context, payloadID string) Outcome {
 	}
 	if sendCtx.Err() != nil {
 		return Obsolete
+	}
+	allowed, err := a.take(sendCtx)
+	if ctx.Err() != nil {
+		return Deferred
+	}
+	if sendCtx.Err() != nil {
+		return Obsolete
+	}
+	if err != nil || !allowed {
+		return Deferred
 	}
 	switch a.send(sendCtx, message.Recipient(), message.Subject(), message.Text()) {
 	case mailtransport.Accepted:
