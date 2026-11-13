@@ -46,25 +46,35 @@ func (p *Prepared) PrepareUnionFindReference(ctx context.Context, limits Referen
 // PrepareDiskReference selects the complete source's fixed admission internally.
 // No caller-supplied layout or budget can widen the shared snapshot protocol.
 func (p *Prepared) PrepareDiskReference(ctx context.Context) (*ReferenceSnapshot, error) {
-	if p == nil || ctx == nil {
+	return p.PrepareDiskReferenceWithLifetime(ctx, ctx)
+}
+
+// PrepareDiskReferenceWithLifetime separates the deadline for freezing from
+// the lifetime of the already frozen material. The caller still owns Close.
+func (p *Prepared) PrepareDiskReferenceWithLifetime(ctx, lifetime context.Context) (*ReferenceSnapshot, error) {
+	if p == nil || ctx == nil || lifetime == nil {
 		return nil, ErrInvalid
 	}
 	a, err := referenceDiskAdmission(p.content.SourceID)
 	if err != nil {
 		return nil, err
 	}
-	return p.prepareDiskReference(ctx, p.content.SourceID, a)
+	return p.prepareDiskReferenceWithLifetime(ctx, lifetime, p.content.SourceID, a)
 }
 
 func (p *Prepared) prepareDiskReference(ctx context.Context, sourceID string, admission diskReferenceAdmission) (*ReferenceSnapshot, error) {
+	return p.prepareDiskReferenceWithLifetime(ctx, ctx, sourceID, admission)
+}
+
+func (p *Prepared) prepareDiskReferenceWithLifetime(ctx, lifetime context.Context, sourceID string, admission diskReferenceAdmission) (*ReferenceSnapshot, error) {
 	if err := p.acquire(); err != nil {
 		return nil, err
 	}
-	return freezeReferenceSnapshot(ctx, p.content, sourceID, admission, p.openReference, p.release)
+	return freezeReferenceSnapshot(ctx, lifetime, p.content, sourceID, admission, p.openReference, p.release)
 }
 
-func freezeReferenceSnapshot(ctx context.Context, content Content, sourceID string, admission diskReferenceAdmission, open referenceOpen, release func()) (_ *ReferenceSnapshot, err error) {
-	return freezeSnapshot(ctx, ctx, open, release, func() (ReferencePlan, []fileReference, error) {
+func freezeReferenceSnapshot(ctx, lifetime context.Context, content Content, sourceID string, admission diskReferenceAdmission, open referenceOpen, release func()) (_ *ReferenceSnapshot, err error) {
+	return freezeSnapshot(ctx, lifetime, open, release, func() (ReferencePlan, []fileReference, error) {
 		plan, d, err := referenceMetadata(content, admission.limits, sourceID, admission.path)
 		if err != nil {
 			return plan, nil, err
