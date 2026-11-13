@@ -66,16 +66,24 @@ func testWorkerAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool, store 
 		}
 		return data
 	}
+	_, manifestSHA, err := postgres.CanonicalManifest(experiment.Manifest())
+	must(t, err)
 	type lease struct {
-		Token string `json:"lease_token"`
-		ID    string `json:"submission_id"`
+		Token       string `json:"lease_token"`
+		ID          string `json:"submission_id"`
+		Version     string `json:"material_version"`
+		ManifestSHA string `json:"manifest_sha256"`
+	}
+	checkBinding := func(l lease) {
+		t.Helper()
+		if len(l.Token) != 64 || l.ID == "" || l.Version != experiment.Version || l.ManifestSHA != manifestSHA {
+			t.Fatal("lease did not bind the registered material version and digest")
+		}
 	}
 	claim := func(client *http.Client, base string) lease {
 		var l lease
 		must(t, json.Unmarshal(call(client, base, "claim", "{}", 200), &l))
-		if len(l.Token) != 64 || l.ID == "" {
-			t.Fatal("invalid lease response")
-		}
+		checkBinding(l)
 		return l
 	}
 	renew := func(l lease) string { return `{"lease_token":"` + l.Token + `"}` }
@@ -120,6 +128,7 @@ func testWorkerAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool, store 
 		if winner < 0 || l.ID != expected.ID {
 			t.Fatal("task not uniquely claimed")
 		}
+		checkBinding(l)
 		call(clients[winner], urls[1-winner], "claim", "{}", 204)
 		call(clients[1-winner], urls[winner], "renew", renew(l), 409)
 		call(clients[1-winner], urls[winner], "report", report(l, "AC"), 409)

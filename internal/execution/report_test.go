@@ -10,11 +10,12 @@ import (
 )
 
 func TestJudgeReport(t *testing.T) {
-	for _, name := range []string{"AC", "WA", "CE", "cleanup", "lease", "cancel", "attribution"} {
+	for _, name := range []string{"AC", "WA", "CE", "cleanup", "lease", "cancel", "attribution", "unbound version", "manifest mismatch"} {
 		t.Run(name, func(t *testing.T) {
 			d, blobs := fixture()
 			d.SubmissionID = "submission-a"
-			l := submission.Lease{Token: strings.Repeat("a", 64), SubmissionID: d.SubmissionID, JudgeGeneration: 1, RecoveryGeneration: 1, AttemptNumber: 1}
+			l := submission.Lease{Token: strings.Repeat("a", 64), SubmissionID: d.SubmissionID, JudgeGeneration: 1, RecoveryGeneration: 1, AttemptNumber: 1,
+				MaterialVersion: d.Version, ManifestSHA256: d.ManifestSHA256}
 			s := goodSandbox()
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -32,6 +33,10 @@ func TestJudgeReport(t *testing.T) {
 				cancel()
 			case "attribution":
 				l.SubmissionID = "other"
+			case "unbound version":
+				l.MaterialVersion = ""
+			case "manifest mismatch":
+				l.ManifestSHA256 = strings.Repeat("f", 64)
 			}
 			report, err := NewLeased(s, renew, func(context.Context) error { return nil }).JudgeReport(ctx, l, d, blobs)
 			if name == "AC" || name == "WA" || name == "CE" {
@@ -44,8 +49,8 @@ func TestJudgeReport(t *testing.T) {
 			} else if err == nil || report != (submission.Result{}) {
 				t.Fatal("failed attempt produced report")
 			}
-			if name == "attribution" && len(s.calls) != 0 {
-				t.Fatal("wrong submission executed")
+			if (name == "attribution" || name == "unbound version" || name == "manifest mismatch") && len(s.calls) != 0 {
+				t.Fatal("wrong submission or materials executed")
 			}
 		})
 	}

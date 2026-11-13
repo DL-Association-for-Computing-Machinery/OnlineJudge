@@ -72,10 +72,14 @@ func testAcquisition(t *testing.T, ctx context.Context, pool *pgxpool.Pool, ca *
 	if winner < 0 {
 		t.Fatal("task not claimed")
 	}
+	if lease.MaterialVersion != version || lease.ManifestSHA256 != materialHash(manifest) {
+		t.Fatal("claimed lease did not pin the accepted task's material")
+	}
 	for _, client := range clients[winner] {
 		d, blobs, err := client.Fetch(ctx, lease)
 		must(t, err)
-		if d.Source != source || !bytes.Equal(d.Manifest, manifest) || d.SubmissionID != row.ID || len(blobs) != 4 {
+		if d.Source != source || !bytes.Equal(d.Manifest, manifest) || d.SubmissionID != row.ID ||
+			d.Version != lease.MaterialVersion || d.ManifestSHA256 != lease.ManifestSHA256 || len(blobs) != 4 {
 			t.Fatal("assignment not preserved")
 		}
 		for _, data := range []string{"1 2\n", "3\n", "-7 4\n", "-3\n"} {

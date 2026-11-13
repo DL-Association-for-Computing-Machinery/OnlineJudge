@@ -92,7 +92,10 @@ func newFixtureHandler(store submission.LeaseStore, roots *x509.CertPool, now fu
 					Recovery int64     `json:"recovery_generation"`
 					Attempt  int32     `json:"attempt_number"`
 					Until    time.Time `json:"lease_until"`
-				}{lease.Token, lease.SubmissionID, lease.JudgeGeneration, lease.RecoveryGeneration, lease.AttemptNumber, lease.Until})
+					Version  string    `json:"material_version"`
+					Manifest string    `json:"manifest_sha256"`
+				}{lease.Token, lease.SubmissionID, lease.JudgeGeneration, lease.RecoveryGeneration, lease.AttemptNumber, lease.Until,
+					lease.MaterialVersion, lease.ManifestSHA256})
 			}
 		case "/api/v1/worker/renew":
 			var req struct {
