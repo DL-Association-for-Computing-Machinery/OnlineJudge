@@ -18,10 +18,22 @@ import (
 // applies password policy and bounded KDF work before calling; no HTTP request
 // or session is authorized here. A commit error may have an unknown outcome.
 func (s *Store) ActivateEmail(ctx context.Context, token emailtoken.Token, record password.Record) error {
+	return s.consumeEmailToken(ctx, emailtoken.Activation, token, record)
+}
+
+// ResetPasswordByEmail consumes a recovery credential for a verified email.
+// It replaces the password and revokes earlier login authority atomically.
+// The caller applies password policy and bounded KDF work; no session is issued.
+// A commit error may have an unknown outcome.
+func (s *Store) ResetPasswordByEmail(ctx context.Context, token emailtoken.Token, record password.Record) error {
+	return s.consumeEmailToken(ctx, emailtoken.Recovery, token, record)
+}
+
+func (s *Store) consumeEmailToken(ctx context.Context, purpose emailtoken.Purpose, token emailtoken.Token, record password.Record) error {
 	if err := s.checkPersonal(ctx); err != nil {
 		return err
 	}
-	digest, err := token.Digest(emailtoken.Activation)
+	digest, err := token.Digest(purpose)
 	if err != nil {
 		return identity.ErrInvalid
 	}
@@ -39,7 +51,7 @@ func (s *Store) ActivateEmail(ctx context.Context, token emailtoken.Token, recor
 	q := s.q.WithTx(tx)
 	// Discover the lock keys without taking a token lock before the account.
 	// Check the same immutable token again after acquiring authority.
-	binding, err := q.ActivationTokenIdentity(ctx, digest[:])
+	binding, err := q.EmailTokenIdentity(ctx, identitydb.EmailTokenIdentityParams{Digest: digest[:], Purpose: string(purpose)})
 	if err != nil {
 		return emailIssueReadError(err)
 	}
@@ -52,7 +64,7 @@ func (s *Store) ActivateEmail(ctx context.Context, token emailtoken.Token, recor
 	if err := lockRecovery(ctx, q, binding.RecoveryID); err != nil {
 		return err
 	}
-	account, err := q.EmailActivationAccount(ctx, binding.SubjectID)
+	account, err := q.EmailTokenConsumeAccount(ctx, binding.SubjectID)
 	if err != nil {
 		return emailIssueReadError(err)
 	}
@@ -63,7 +75,7 @@ func (s *Store) ActivateEmail(ctx context.Context, token emailtoken.Token, recor
 	if err != nil {
 		return emailIssueReadError(err)
 	}
-	if email.EmailVerified {
+	if email.EmailVerified != (purpose == emailtoken.Recovery) {
 		return identity.ErrConflict
 	}
 	now, err := q.EmailIssueTime(ctx)
@@ -73,8 +85,8 @@ func (s *Store) ActivateEmail(ctx context.Context, token emailtoken.Token, recor
 	if !now.Valid || now.InfinityModifier != pgtype.Finite {
 		return storageError{identity.ErrInvalid}
 	}
-	current, err := q.ActivationTokenCurrent(ctx, identitydb.ActivationTokenCurrentParams{
-		ID: binding.ID, SubjectID: binding.SubjectID, Digest: digest[:],
+	current, err := q.EmailTokenCurrent(ctx, identitydb.EmailTokenCurrentParams{
+		ID: binding.ID, SubjectID: binding.SubjectID, Digest: digest[:], Purpose: string(purpose),
 		AuthGeneration: binding.AuthGeneration, RecoveryID: binding.RecoveryID, CheckedAt: now,
 	})
 	if err != nil {
@@ -88,15 +100,18 @@ func (s *Store) ActivateEmail(ctx context.Context, token emailtoken.Token, recor
 	if _, err := s.writeResult(changed, err); err != nil {
 		return err
 	}
-	verified, err := q.MarkEmailVerified(ctx, binding.SubjectID)
-	if err != nil {
-		return storageError{err}
+	if purpose == emailtoken.Activation {
+		verified, err := q.MarkEmailVerified(ctx, binding.SubjectID)
+		if err != nil {
+			return storageError{err}
+		}
+		if verified != 1 {
+			return identity.ErrConflict
+		}
 	}
-	if verified != 1 {
-		return identity.ErrConflict
-	}
-	if err := q.DeleteLiveActivationPayloads(ctx, identitydb.DeleteLiveActivationPayloadsParams{
-		SubjectID: binding.SubjectID, AuthGeneration: binding.AuthGeneration, RecoveryID: binding.RecoveryID, CheckedAt: now,
+	if err := q.DeleteLiveEmailTokenPayloads(ctx, identitydb.DeleteLiveEmailTokenPayloadsParams{
+		SubjectID: binding.SubjectID, Purpose: string(purpose),
+		AuthGeneration: binding.AuthGeneration, RecoveryID: binding.RecoveryID, CheckedAt: now,
 	}); err != nil {
 		return storageError{err}
 	}
