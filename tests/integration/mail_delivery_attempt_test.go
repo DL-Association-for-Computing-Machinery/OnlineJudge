@@ -37,7 +37,7 @@ func TestAccountMailDeliveryAttempt(t *testing.T) {
 	must(t, err)
 	// The callback stands in for the queue: this test drives already claimed jobs.
 	id, err := issuer.IssueEmailToken(f.ctx, subject, identity.SessionVersion{AuthGeneration: 1, RecoveryID: epoch},
-		emailtoken.Activation, protector, func(context.Context, string) error { return nil },
+		emailtoken.Activation, protector, func(context.Context, *emailtoken.Protector) error { return nil },
 		func(context.Context, pgx.Tx, string) error { return nil })
 	must(t, err)
 	reader, err := identitypg.NewEmailDeliveryReader(f.b, protector)

@@ -50,8 +50,8 @@ func TestEmailTokenIssue(t *testing.T) {
 		return err
 	}
 	var seals atomic.Int32
-	reserve := func(_ context.Context, key string) error {
-		if key != "fixture" {
+	reserve := func(_ context.Context, key *emailtoken.Protector) error {
+		if key != protector {
 			return errors.New("wrong fixture key")
 		}
 		seals.Add(1)
@@ -81,7 +81,7 @@ func TestEmailTokenIssue(t *testing.T) {
 	deny(identity.ErrConflict, identity.SessionVersion{AuthGeneration: 2, RecoveryID: epoch}, emailtoken.Activation)
 	budgetErr := errors.New("synthetic budget unavailable")
 	if id, err := a.IssueEmailToken(f.ctx, subject, version, emailtoken.Activation, protector,
-		func(context.Context, string) error { return budgetErr }, enqueue); id != "" || !errors.Is(err, budgetErr) {
+		func(context.Context, *emailtoken.Protector) error { return budgetErr }, enqueue); id != "" || !errors.Is(err, budgetErr) {
 		t.Fatal("failed budget did not stop issuance")
 	}
 	cause := errors.New("synthetic enqueue failure")

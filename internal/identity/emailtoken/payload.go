@@ -3,6 +3,8 @@ package emailtoken
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"regexp"
@@ -59,8 +61,18 @@ func (Payload) MarshalJSON() ([]byte, error) { return []byte(`"[redacted email p
 // an explicit rotation overlap. Callers provision independent file-backed keys
 // and rotate before reaching 2^32 seals per key across all replicas.
 type Protector struct {
-	current string
-	keys    map[string]cipher.AEAD
+	current           string
+	keys              map[string]cipher.AEAD
+	activeFingerprint [32]byte
+}
+
+// CurrentKeyFingerprint identifies active key material across key ID changes.
+// It is internal budget metadata and must not be logged or exported.
+func (p *Protector) CurrentKeyFingerprint() [32]byte {
+	if p == nil {
+		return [32]byte{}
+	}
+	return p.activeFingerprint
 }
 
 // CurrentKeyID identifies the immutable active key for aggregate usage admission.
@@ -97,6 +109,11 @@ func NewProtector(current string, keys map[string][32]byte) (*Protector, error) 
 			return nil, ErrInvalid
 		}
 		result.keys[id] = aead
+		if id == current {
+			mac := hmac.New(sha256.New, key[:])
+			_, _ = mac.Write([]byte("oj.email-payload.seal-budget.v1"))
+			copy(result.activeFingerprint[:], mac.Sum(nil))
+		}
 	}
 	return result, nil
 }
