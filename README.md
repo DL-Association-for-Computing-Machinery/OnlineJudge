@@ -618,7 +618,7 @@ API 镜像的 `/usr/local/bin/oj-api` 在非空 `OJ_SESSION_CONFIG_FILE` 下切�
 
 数据库及 Redis 的密码来源各自显式选择 `auth: "none"` 或 `"env"`。后者只读取固定的 `OJ_SESSION_DATABASE_PASSWORD` / `OJ_SESSION_REDIS_PASSWORD`，必须非空；前者拒绝对应非空残留环境。密码、登录 key、TLS 私钥均不写入配置 JSON、镜像或命令行。数据库不消费 `OJ_DATABASE_URL`，连接类 PG 环境变量须按运行时合同清理；服务不修改进程环境。
 
-启动前须由受信维护流程完成当前 schema 21（邮箱模型始于5、积压准入始于6、私有草稿始于7、列表索引始于8、参考申请始于9、预期计划始于10、参考领取始于11、参考报告始于12、参考调度始于13、卷积对拍预期计划始于14、作者送审始于15、审核资格与分配始于16、审核退回始于17、作者确认标程始于18、审核人确认题面始于19、训练虚拟时间始于20、邮件令牌始于21）、恢复状态开门、共享密钥分发及匹配的限流 marker 初始化；命令只检查，不自动迁移、初始化或修复。schema切换须在维护窗口排空/停止旧API、Worker及维护写入后执行，再启动匹配新版；运行中旧进程不会因版本变化自动停止，不混跑。精确回退条件见[邮件令牌迁移](docs/architecture/session-design.md#123-签发持久化与迁移)、[训练队列迁移](docs/submission-backlog.md#升级与回退)、[参考申请迁移](docs/reference-requests.md#迁移与回退)及[草稿历史迁移](docs/problem-drafts.md#入库版本与迁移)。本次没有迁移现有持久化localdev或部署服务器。配置与公开证书可只读挂载，登录密钥及 TLS 私钥必须满足 0400/0600、root/进程 euid 所有等约束。非 root 容器须能遍历并读取这些文件。不要把完整配置或秘密对象输出到日志。
+启动前须由受信维护流程完成当前 schema 22（邮箱模型始于5、积压准入始于6、私有草稿始于7、列表索引始于8、参考申请始于9、预期计划始于10、参考领取始于11、参考报告始于12、参考调度始于13、卷积对拍预期计划始于14、作者送审始于15、审核资格与分配始于16、审核退回始于17、作者确认标程始于18、审核人确认题面始于19、训练虚拟时间始于20、邮件令牌始于21、邮件全局发送限速始于22）、恢复状态开门、共享密钥分发及匹配的限流 marker 初始化；命令只检查，不自动迁移、初始化或修复。schema切换须在维护窗口排空/停止旧API、Worker及维护写入后执行，再启动匹配新版；运行中旧进程不会因版本变化自动停止，不混跑。精确回退条件见[邮件令牌迁移](docs/architecture/session-design.md#123-签发持久化与迁移)、[训练队列迁移](docs/submission-backlog.md#升级与回退)、[参考申请迁移](docs/reference-requests.md#迁移与回退)及[草稿历史迁移](docs/problem-drafts.md#入库版本与迁移)。本次没有迁移现有持久化localdev或部署服务器。配置与公开证书可只读挂载，登录密钥及 TLS 私钥必须满足 0400/0600、root/进程 euid 所有等约束。非 root 容器须能遍历并读取这些文件。不要把完整配置或秘密对象输出到日志。
 
 direct 模式要求客户端直接 TLS；proxy 模式要求同一监听器的已验证客户端证书和允许的叶证书指纹，健康检查也须经 mTLS。现有 Compose/Nginx 的明文 backend 和浏览器页面尚未配置该入口；部署、生产阈值、真实证书/存储 TLS 和完整账号权限另行验收。回退先停服务并移除显式配置环境，不把旧明文路径接到会话 Handler。
 
@@ -756,6 +756,8 @@ Worker 启动完成后，向该 Worker 进程发送 `SIGUSR1`（`kill -USR1 PID`
 受信维护流程须先使用 Docker 构建的 `.local/bin/migrate up` 升级 schema，再按材料版本执行 `.local/bin/migrate fixture`，最后显式执行 `.local/bin/migrate backlog <全局上限> <主体上限>`；命令共用私有 `OJ_DATABASE_URL`。不执行最后一步会拒绝新提交，API 不自动设值。HTTP 判题专项在独占临时库将两项上限设为 2 以触发过载，其他夹具可用较高上限。升级已有服务必须先停止全部旧版写入 API，详见[升级与回退](docs/submission-backlog.md#升级与回退)。
 
 账号邮件队列有独立维护命令 `.local/bin/migrate mail-queue-up`。先完成应用 `migrate up`，停用邮件写入和发送后，以相同数据库和搜索路径执行。维护连接须直连 PostgreSQL 或使用会话级连接池，`idle_session_timeout` 须关闭或长于整个维护窗口。中断后确认上一迁移进程已退出，再重跑；如连接异常断开，应检查迁移版本后再恢复写入。禁用邮件功能或回退应用时保留 River 表和任务，本命令不提供删除队列的降级。默认 Compose 及 API/判题 Worker 启动均不执行此命令；它也不会启动发信。见[邮件队列设计](docs/architecture/session-design.md#101-river-开源核心验证路线与专用表备选)。
+
+账号邮件使用独立的 `.local/bin/mail-worker`，默认 Compose 不启动。完成应用迁移、River 迁移和共享许可配置后，使用同一 `OJ_DATABASE_URL`、私有 `OJ_EMAIL_PAYLOAD_KEYS_FILE`、可信 HTTPS `OJ_ACCOUNT_PUBLIC_ORIGIN`，以及 `OJ_SMTP_HOST`、`OJ_SMTP_PORT`、`OJ_SMTP_FROM`、`OJ_SMTP_TLS`（`implicit` 或 `starttls`）。供应商要求认证时，同时设 `OJ_SMTP_USER` 和仅所有者可读的 `OJ_SMTP_PASSWORD_FILE`，文件内容是原始密码。发送器不迁移或初始化额度，不向判题 Worker 分发这些凭据。不要在同一队列同时运行 River 的默认 worker。领取、救援或提交遇到存储错误时进程退出，由运行管理器在存储恢复后重启。
 
 `python3 scripts/test-worker.py http-loop` 显式设置 `OJ_SANDBOX_HTTP=1`，`all` 同样包含此项。驱动使用临时 PostgreSQL、两个提交 API 进程、mTLS 控制端和真实 Worker。先以固定 AC/WA 源码填满队列；两个 API 都对第三个新键返回 `429 BACKLOG_LIMIT`，跨实例查询该键均为 404，已接收的原键仍可回读，数据库无新增提交、任务或尝试。Worker 将原两份判到终态后，测试显式按原键、原正文再提交，验证新增提交取得 AC。三份已接收提交各有一次完成尝试。
 
