@@ -757,6 +757,8 @@ Worker 启动完成后，向该 Worker 进程发送 `SIGUSR1`（`kill -USR1 PID`
 
 账号邮件队列有独立维护命令 `.local/bin/migrate mail-queue-up`。先完成应用 `migrate up`，停用邮件写入和发送后，以相同数据库和搜索路径执行。维护连接须直连 PostgreSQL 或使用会话级连接池，`idle_session_timeout` 须关闭或长于整个维护窗口。中断后确认上一迁移进程已退出，再重跑；如连接异常断开，应检查迁移版本后再恢复写入。禁用邮件功能或回退应用时保留 River 表和任务，本命令不提供删除队列的降级。默认 Compose 及 API/判题 Worker 启动均不执行此命令；它也不会启动发信。见[邮件队列设计](docs/architecture/session-design.md#101-river-开源核心验证路线与专用表备选)。
 
+账号邮件使用独立的 `.local/bin/mail-worker`，默认 Compose 不启动。完成应用迁移、River 迁移和共享许可配置后，使用同一 `OJ_DATABASE_URL`、私有 `OJ_EMAIL_PAYLOAD_KEYS_FILE`、可信 HTTPS `OJ_ACCOUNT_PUBLIC_ORIGIN`，以及 `OJ_SMTP_HOST`、`OJ_SMTP_PORT`、`OJ_SMTP_FROM`、`OJ_SMTP_TLS`（`implicit` 或 `starttls`）。供应商要求认证时，同时设 `OJ_SMTP_USER` 和仅所有者可读的 `OJ_SMTP_PASSWORD_FILE`，文件内容是原始密码。发送器不迁移或初始化额度，不向判题 Worker 分发这些凭据。不要在同一队列同时运行 River 的默认 worker。领取、救援或提交遇到存储错误时进程退出，由运行管理器在存储恢复后重启。
+
 `python3 scripts/test-worker.py http-loop` 显式设置 `OJ_SANDBOX_HTTP=1`，`all` 同样包含此项。驱动使用临时 PostgreSQL、两个提交 API 进程、mTLS 控制端和真实 Worker。先以固定 AC/WA 源码填满队列；两个 API 都对第三个新键返回 `429 BACKLOG_LIMIT`，跨实例查询该键均为 404，已接收的原键仍可回读，数据库无新增提交、任务或尝试。Worker 将原两份判到终态后，测试显式按原键、原正文再提交，验证新增提交取得 AC。三份已接收提交各有一次完成尝试。
 
 `python3 scripts/test-worker.py restore-loop` 验证[恢复后的真实判题](docs/architecture/storage-design.md#7-备份与验收)，`all` 也包含此项。它使用两个临时 PostgreSQL 容器，实际捕获和核验备份；停止源库后，在固定离线 Desktop 沙箱重判同一合成提交。不连接现有数据库。
