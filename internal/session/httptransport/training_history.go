@@ -46,27 +46,10 @@ func (h *handler) serveTrainingHistory(w http.ResponseWriter, r *http.Request) {
 		problem(w, 400, "INVALID_HISTORY_REQUEST", "提交历史请求格式无效")
 		return
 	}
-	credential, err := requestCredential(r)
-	if err != nil {
-		sessionError(w, redisstore.ErrNotFound)
-		return
-	}
 	ctx, cancel := context.WithTimeout(r.Context(), h.config.Timeout)
 	defer cancel()
-	view, err := h.store.Read(ctx, credential)
-	if err != nil {
-		sessionError(w, err)
-		return
-	}
-	actor := identity.TrainingActor{SubjectID: view.SubjectID, SessionVersion: identity.SessionVersion{
-		AuthGeneration: view.AuthGeneration, RecoveryID: view.RecoveryID,
-	}}
-	if !actor.Valid() || ctx.Err() != nil {
-		historyUnavailable(w)
-		return
-	}
-	if actor.SubjectID != expected {
-		problem(w, 409, "TRAINING_SUBJECT_CHANGED", "会话用户已变化")
+	actor, ok := h.trainingActor(ctx, w, r, expected, historyUnavailable)
+	if !ok {
 		return
 	}
 	page, err := h.trainingHistory(ctx, actor, after)
@@ -75,16 +58,7 @@ func (h *handler) serveTrainingHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		switch {
-		case errors.Is(err, identity.ErrStore), errors.Is(err, identity.ErrRecovering):
-			historyUnavailable(w)
-		case errors.Is(err, identity.ErrTrainingAccountRequired):
-			problem(w, 403, "TRAINING_ACCOUNT_REQUIRED", "训练需要已验证邮箱的个人账号")
-		case sessionDenied(err):
-			sessionError(w, err)
-		default:
-			historyUnavailable(w)
-		}
+		trainingError(w, err, historyUnavailable)
 		return
 	}
 	next := ""
@@ -105,6 +79,44 @@ func (h *handler) serveTrainingHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write(body)
+}
+
+func (h *handler) trainingActor(ctx context.Context, w http.ResponseWriter, r *http.Request, expected string, unavailable func(http.ResponseWriter)) (identity.TrainingActor, bool) {
+	credential, err := requestCredential(r)
+	if err != nil {
+		sessionError(w, redisstore.ErrNotFound)
+		return identity.TrainingActor{}, false
+	}
+	view, err := h.store.Read(ctx, credential)
+	if err != nil {
+		sessionError(w, err)
+		return identity.TrainingActor{}, false
+	}
+	actor := identity.TrainingActor{SubjectID: view.SubjectID, SessionVersion: identity.SessionVersion{
+		AuthGeneration: view.AuthGeneration, RecoveryID: view.RecoveryID,
+	}}
+	if !actor.Valid() || ctx.Err() != nil {
+		unavailable(w)
+		return identity.TrainingActor{}, false
+	}
+	if actor.SubjectID != expected {
+		problem(w, 409, "TRAINING_SUBJECT_CHANGED", "会话用户已变化")
+		return identity.TrainingActor{}, false
+	}
+	return actor, true
+}
+
+func trainingError(w http.ResponseWriter, err error, unavailable func(http.ResponseWriter)) {
+	switch {
+	case errors.Is(err, identity.ErrStore), errors.Is(err, identity.ErrRecovering):
+		unavailable(w)
+	case errors.Is(err, identity.ErrTrainingAccountRequired):
+		problem(w, 403, "TRAINING_ACCOUNT_REQUIRED", "训练需要已验证邮箱的个人账号")
+	case sessionDenied(err):
+		sessionError(w, err)
+	default:
+		unavailable(w)
+	}
 }
 
 func historyUnavailable(w http.ResponseWriter) {

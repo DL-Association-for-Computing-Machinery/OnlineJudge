@@ -33,6 +33,11 @@ SELECT s.id, s.request_sha256, s.material_version, s.language, s.created_at,
 FROM submissions s JOIN judge_tasks t ON t.submission_id = s.id
 WHERE s.id = $1 AND s.subject_id = $2 AND s.context_id = $3;
 
+-- name: GetTrainingSubmissionDetail :one
+SELECT s.id, s.material_version, s.language, s.created_at, t.state, t.verdict, s.source_code
+FROM submissions s JOIN judge_tasks t ON t.submission_id = s.id
+WHERE s.id = $1 AND s.subject_id = $2 AND s.context_id = $3;
+
 -- name: ListHistoryFirst :many
 SELECT s.id, s.material_version, s.language, s.created_at, t.state, t.verdict
 FROM submissions s JOIN judge_tasks t ON t.submission_id = s.id

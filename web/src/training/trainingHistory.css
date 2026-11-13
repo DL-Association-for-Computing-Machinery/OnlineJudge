@@ -8,3 +8,12 @@
 .history-list dl { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-block: 8px 0; }
 .history-list dt { color: var(--muted); font-size: .875rem; }
 .history-list dd { margin: 0; }
+.history-detail { margin-block-start: 0.75rem; }
+.history-detail pre {
+  max-block-size: 24rem;
+  overflow: auto;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

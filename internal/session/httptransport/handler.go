@@ -52,6 +52,7 @@ type handler struct {
 	reviewReturns          ReviewReturns
 	statementConfirmations StatementConfirmations
 	trainingHistory        TrainingHistory
+	trainingDetail         TrainingDetail
 }
 
 // New builds three explicit endpoints without registering any application route:
@@ -94,6 +95,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	reviewID, reviewRead := reviewReadRoute(r.URL.Path)
 	returnID, returnKey, returnMethod := reviewReturnRoute(r.URL.Path)
 	statementID, statementKey, statementMethod := reviewActionRoute(r.URL.Path, statementConfirmationAction)
+	trainingID := trainingDetailID(r.URL.Path)
 	switch r.URL.Path {
 	case "/api/v1/session":
 		method = http.MethodGet
@@ -130,6 +132,14 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		method = http.MethodGet
 	default:
+		if trainingID != "" {
+			if h.trainingDetail == nil {
+				problem(w, 404, "NOT_FOUND", "接口不存在")
+				return
+			}
+			method = http.MethodGet
+			break
+		}
 		if statementMethod != "" {
 			if h.statementConfirmations == nil {
 				problem(w, http.StatusNotFound, "NOT_FOUND", "接口不存在")
@@ -249,6 +259,10 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if IsTrainingHistoryPath(r.URL.Path) {
 		h.serveTrainingHistory(w, r)
+		return
+	}
+	if trainingID != "" {
+		h.serveTrainingDetail(w, r, trainingID)
 		return
 	}
 	if h.login != nil && (r.URL.Path == "/api/v1/session/login/begin" || r.URL.Path == "/api/v1/session/login/complete" || r.URL.Path == "/api/v1/session/login/abandon") {

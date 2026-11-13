@@ -75,3 +75,42 @@ it('clears the page on a mismatched subject and checks the cookie without retryi
     ])
   } finally { f.stop() }
 })
+
+it('discards a late source when another detail is opened or the account changes', async () => {
+  const f = await setup()
+  try {
+    f.fetch.mockResolvedValueOnce(last())
+    await f.history.first()
+    let release!: (response: Response) => void
+    f.fetch.mockImplementationOnce(() => new Promise(resolve => { release = resolve }))
+    const old = f.history.openDetail(row(1).id)
+    const source = '\x01'.repeat(65_536)
+    // Go escapes every control byte in this payload as six JSON bytes.
+    const encoded = JSON.stringify({ ...row(2), source })
+    f.fetch.mockResolvedValueOnce(new Response(encoded, { headers: { 'Content-Type': 'application/json' } }))
+    await f.history.openDetail(row(2).id)
+    expect(f.history.getSnapshot().detail?.value).toEqual({ ...row(2), source })
+    release(Response.json({ ...row(1), source: 'older source' }))
+    await old
+    expect(f.history.getSnapshot().detail?.value?.id).toBe(row(2).id)
+
+    f.fetch.mockImplementationOnce(() => new Promise(resolve => { release = resolve }))
+    const pending = f.history.openDetail(row(2).id)
+    f.fetch.mockResolvedValueOnce(Response.json(session(other)))
+    await f.account.run('check')
+    release(Response.json({ ...row(2), source }))
+    await pending
+    expect(f.history.getSnapshot().detail).toBeNull()
+  } finally { f.stop() }
+})
+
+it('rejects a detail response for a different submission', async () => {
+  const f = await setup()
+  try {
+    f.fetch.mockResolvedValueOnce(last())
+    await f.history.first()
+    f.fetch.mockResolvedValueOnce(Response.json({ ...row(1), source: 'unexpected source' }))
+    await f.history.openDetail(row(2).id)
+    expect(f.history.getSnapshot().detail).toMatchObject({ id: row(2).id, value: null, busy: false })
+  } finally { f.stop() }
+})

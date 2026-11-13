@@ -3,10 +3,12 @@
 package sessionprotocol_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -96,6 +98,8 @@ func testEntryTrainingHistory(t *testing.T, f *fixture, binary string) {
 	}
 	disabled := start()
 	c.TrainingHistory = true
+	historyOnly := start()
+	c.TrainingSubmissionDetail = true
 	api := start()
 	subject, other, empty := f.subject(t, false), f.subject(t, false), f.subject(t, false)
 	for _, p := range []identity.Personal{subject, other, empty} {
@@ -144,10 +148,73 @@ func testEntryTrainingHistory(t *testing.T, f *fixture, binary string) {
 	if page := readHistoryResponse(t, historyGET(api, "", empty.ID, emptyCookie)); len(page.Submissions) != 0 || page.NextCursor != "" {
 		t.Fatal("empty account has history")
 	}
+	testTrainingDetail(t, f, api, historyOnly, subject.ID, other.ID, ownerCookie, otherCookie)
 	setHistoryEmailVerified(t, f, subject.ID, false)
 	loginStatus(t, historyGET(api, "?cursor="+first.NextCursor, subject.ID, ownerCookie), 403)
+	loginStatus(t, historyGET(api, "/"+fmt.Sprintf("%032d", 22), subject.ID, ownerCookie), 403)
 	loginStatus(t, loginCall(api, "/api/v1/session/logout", "", ownerCookie, nil), 204)
 	loginStatus(t, historyGET(api, "", subject.ID, ownerCookie), 401)
+	loginStatus(t, historyGET(api, "/"+fmt.Sprintf("%032d", 22), subject.ID, ownerCookie), 401)
+}
+
+func testTrainingDetail(t *testing.T, f *fixture, api, disabled *loginEndpoint, owner, other string, ownerCookie, otherCookie []*http.Cookie) {
+	t.Helper()
+	id := fmt.Sprintf("%032d", 22)
+	path := "/" + id
+	loginStatus(t, historyGET(disabled, path, owner, ownerCookie), 404)
+	loginStatus(t, historyGET(api, path, owner, nil), 401)
+	loginStatus(t, historyGET(api, path, other, ownerCookie), 409)
+	loginStatus(t, historyGET(api, path+"?cursor=x", owner, ownerCookie), 400)
+	loginStatus(t, historyGET(api, path+"?", owner, ownerCookie), 400)
+	loginStatus(t, historyGET(api, "/%30"+id[1:], owner, ownerCookie), 400)
+	loginStatus(t, historyGET(api, "/bad", owner, ownerCookie), 404)
+	loginStatus(t, loginCall(api, entryTrainingHistory+path, "{}", ownerCookie, nil), 405)
+	loginStatus(t, loginCall(api, entryTrainingHistory+path, "{}", ownerCookie, func(r *http.Request) {
+		r.Method = http.MethodGet
+		r.Header.Set("X-OJ-Expected-Subject", owner)
+	}), 400)
+
+	absent := historyGET(api, "/"+fmt.Sprintf("%032d", 25), owner, ownerCookie)
+	for _, response := range []loginResponse{
+		absent, historyGET(api, path, other, otherCookie),
+		historyGET(api, "/"+fmt.Sprintf("%032d", 23), owner, ownerCookie),
+	} {
+		loginStatus(t, response, 404)
+		if !bytes.Equal(response.body, absent.body) {
+			t.Fatal("missing, other owner and other scope must be indistinguishable")
+		}
+	}
+
+	// Exercise the legal byte limit, including control bytes that JSON escapes.
+	source := "中文\r\n" + strings.Repeat("\x01", submission.MaxSourceBytes-len("中文\r\n"))
+	_, err := f.pools[0].Exec(f.ctx, `UPDATE submissions SET source_code=$2 WHERE id=$1`, id, source)
+	must(t, err)
+	response := historyGET(api, path, owner, ownerCookie)
+	loginStatus(t, response, 200)
+	if len(response.cookies) != 0 || response.headers.Get("Content-Type") != "application/json" {
+		t.Fatal("detail changed session or response media type")
+	}
+	var detail submission.Detail
+	var fields map[string]json.RawMessage
+	must(t, json.Unmarshal(response.body, &detail))
+	must(t, json.Unmarshal(response.body, &fields))
+	if len(fields) != 7 || detail.ID != id || detail.Source != source || detail.State != "finished" ||
+		detail.Verdict == nil || *detail.Verdict != "WA" || detail.CreatedAt.Nanosecond() != 123456000 ||
+		detail.Language != "gnu++17" || detail.MaterialVersion != "synthetic-history-material" {
+		t.Fatal("detail did not preserve the source and exact receipt projection")
+	}
+	_, err = f.pools[0].Exec(f.ctx, `INSERT INTO training_queue_clock (version_id) VALUES ($1)`, detail.MaterialVersion)
+	must(t, err)
+	_, err = f.pools[0].Exec(f.ctx, `UPDATE judge_tasks SET state='queued', verdict=NULL,
+		queue_version=$2, virtual_finish=1, enqueue_order=nextval('training_enqueue_order') WHERE submission_id=$1`,
+		id, detail.MaterialVersion)
+	must(t, err)
+	response = historyGET(api, path, owner, ownerCookie)
+	loginStatus(t, response, 200)
+	must(t, json.Unmarshal(response.body, &detail))
+	if detail.State != "queued" || detail.Verdict != nil || detail.Source != source {
+		t.Fatal("detail did not read current task state")
+	}
 }
 
 func setHistoryEmailVerified(t *testing.T, f *fixture, subject string, verified bool) {

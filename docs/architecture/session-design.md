@@ -407,7 +407,8 @@ Close 在同一 mutex 下停止入口和登记活动请求，503/no-store/无 Co
 | 存储 `tls` | private 模式为 `{}`；tls 模式须有 `ca_file`、`server_name`，可另给成对 `certificate_file`/`key_file`；禁止明文 fallback/跳过校验 |
 | `server` | `read_header_timeout`、`read_timeout`、`write_timeout`、`idle_timeout`、`shutdown_timeout`、`max_header_bytes`；header/read/write/shutdown 为正且至多 1m，idle 至多 10m，read ≥ header，write ≥ HTTP 期限，header 1 KiB—1 MiB |
 | 可选 `private_drafts` | `material_root`、`bundle_directory`、外置`source_lock_file`、1—10唯一`source_ids`、正且至多1m的`timeout`、1—10的`max_in_flight`；write ≥ 草稿调用期限。省略关闭，导入/本人预览共享材料段预算；可选 `reference_requests: true` 单独启用本人申请，不读取材料或自动配置额度。路径/权限见[README](../../README.md#显式启用私有草稿-http) |
-| 可选 `training_history` | 布尔值，省略或 `false` 关闭，`true` 仅启用[本人训练历史 GET](../../api/training-history.openapi.yaml)。共用会话的 PostgreSQL 池、Redis 和 `http_timeout`。 |
+| 可选 `training_history` | 布尔值，省略或 `false` 关闭，`true` 仅启用[本人训练历史列表 GET](../../api/training-history.openapi.yaml)。共用会话的 PostgreSQL 池、Redis 和 `http_timeout`。 |
+| 可选 `training_submission_detail` | 布尔值，省略或 `false` 关闭，`true` 独立启用[本人训练提交详情 GET](../../api/training-history.openapi.yaml)。复用列表的会话、资格与固定范围检查；仅返回本人源码和当前回执。 |
 
 数据库/Redis 的 `security` 只能为 `"private"`/`"tls"`，`auth` 只能为 `"none"`/`"env"`。后者分别从固定的两个密码环境读取非空值；前者拒绝对应非空残留。解析结果不包含环境获取副作用，配置/解析错误只给固定类别。解析夹具使用合成参数，不能直接作为生产 KDF、限流或资源推荐。
 

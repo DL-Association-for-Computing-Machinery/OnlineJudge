@@ -164,6 +164,14 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 			return nil, ErrConfig
 		}
 	}
+	if c.TrainingSubmissionDetail {
+		handler, err = httptransport.WithTrainingDetail(handler, func(ctx context.Context, actor identity.TrainingActor, id string) (submission.Detail, error) {
+			return submissionpg.ReadTrainingDetail(ctx, pool, actor, id)
+		})
+		if err != nil {
+			return nil, ErrConfig
+		}
+	}
 	closeIntake := func() {}
 	if c.IsolatedEmailIntake != nil {
 		handler, closeIntake, err = withIsolatedEmailIntake(startup, handler, authority, store, work, secrets, pool, c)

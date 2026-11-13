@@ -195,6 +195,43 @@ func (q *Queries) GetSubmission(ctx context.Context, arg GetSubmissionParams) (G
 	return i, err
 }
 
+const getTrainingSubmissionDetail = `-- name: GetTrainingSubmissionDetail :one
+SELECT s.id, s.material_version, s.language, s.created_at, t.state, t.verdict, s.source_code
+FROM submissions s JOIN judge_tasks t ON t.submission_id = s.id
+WHERE s.id = $1 AND s.subject_id = $2 AND s.context_id = $3
+`
+
+type GetTrainingSubmissionDetailParams struct {
+	ID        string
+	SubjectID string
+	ContextID string
+}
+
+type GetTrainingSubmissionDetailRow struct {
+	ID              string
+	MaterialVersion string
+	Language        string
+	CreatedAt       pgtype.Timestamptz
+	State           string
+	Verdict         pgtype.Text
+	SourceCode      string
+}
+
+func (q *Queries) GetTrainingSubmissionDetail(ctx context.Context, arg GetTrainingSubmissionDetailParams) (GetTrainingSubmissionDetailRow, error) {
+	row := q.db.QueryRow(ctx, getTrainingSubmissionDetail, arg.ID, arg.SubjectID, arg.ContextID)
+	var i GetTrainingSubmissionDetailRow
+	err := row.Scan(
+		&i.ID,
+		&i.MaterialVersion,
+		&i.Language,
+		&i.CreatedAt,
+		&i.State,
+		&i.Verdict,
+		&i.SourceCode,
+	)
+	return i, err
+}
+
 const listHistoryAfter = `-- name: ListHistoryAfter :many
 SELECT s.id, s.material_version, s.language, s.created_at, t.state, t.verdict
 FROM submissions s JOIN judge_tasks t ON t.submission_id = s.id

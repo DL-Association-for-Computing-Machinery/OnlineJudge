@@ -38,14 +38,29 @@ async function openHistory(page, name, expectedStatus) {
     page.getByRole('button', { name, exact: true }).click(),
   ])
   assert.equal(response.status(), expectedStatus)
-  // The UI intentionally cancels bodies for non-success responses.
-  return expectedStatus === 200 ? response.json() : undefined
+  return response.url()
 }
 
 async function rows(page, expected) {
   const list = page.getByRole('list', { name: '训练提交记录' })
   await list.waitFor()
   assert.deepEqual(await list.locator('h2 code').allTextContents(), expected.map(rowID))
+}
+
+async function openDetail(page, id) {
+  const row = page.getByRole('heading', { name: '提交 ' + rowID(id), exact: true }).locator('..').locator('..')
+  const button = row.getByRole('button', { name: '查看提交详情' })
+  await button.focus()
+  const [response] = await Promise.all([
+    page.waitForResponse(response => response.url() === endpoint + '/' + rowID(id)),
+    button.press('Enter'),
+  ])
+  assert.equal(response.status(), 200, 'detail HTTP status')
+  const cache = response.headers()['cache-control']?.split(',').map(value => value.trim())
+  assert(cache?.length && cache.every(value => value === 'no-store'), 'detail response must not be cached')
+  await row.getByRole('heading', { name: '提交时的源码' }).waitFor()
+  assert.equal(await row.locator('pre code').textContent(), 'synthetic-history-private-source', 'visible stored source')
+  return row
 }
 
 async function screenshot(page, name) {
@@ -87,21 +102,22 @@ try {
 
   step = 'owner first and next page'
   await signIn(page, ready.email)
-  const first = await openHistory(page, '查看提交历史', 200)
-  assert.match(first.next_cursor, /^[A-Za-z0-9_-]+$/)
+  await openHistory(page, '查看提交历史', 200)
   await page.getByText('第 1 页，共 20 条。', { exact: true }).waitFor()
   await rows(page, Array.from({ length: 20 }, (_, i) => 22 - i))
-  assert(!JSON.stringify(first).includes('synthetic-history-private-source'))
-  assert(!JSON.stringify(first).includes('synthetic-history-key-'))
+  assert.equal(await page.getByRole('heading', { name: '提交时的源码' }).count(), 0)
   await screenshot(page, 'training-history-desktop.png')
-  const second = await openHistory(page, '查看下一页', 200)
-  assert.equal(second.next_cursor, '')
+  await openDetail(page, 22)
+  await screenshot(page, 'training-detail-desktop.png')
+  const secondURL = await openHistory(page, '查看下一页', 200)
+  assert.match(new URL(secondURL).searchParams.get('cursor') ?? '', /^[A-Za-z0-9_-]{80}$/)
   await page.getByText('第 2 页，共 2 条。已到末页。', { exact: true }).waitFor()
   await rows(page, [2, 1])
+  assert.equal(await page.getByRole('heading', { name: '提交时的源码' }).count(), 0)
   assert(await page.getByRole('button', { name: '查看下一页' }).isDisabled())
   assert.deepEqual(seen.history, [
     { method: 'GET', subject: ready.subject_id, url: endpoint },
-    { method: 'GET', subject: ready.subject_id, url: endpoint + '?cursor=' + first.next_cursor },
+    { method: 'GET', subject: ready.subject_id, url: secondURL },
   ])
   await page.reload()
   await page.getByRole('button', { name: '查看提交历史', exact: true }).waitFor()
@@ -118,9 +134,12 @@ try {
   await openHistory(narrow, '查看提交历史', 200)
   await narrow.getByText('第 1 页，共 1 条。已到末页。', { exact: true }).waitFor()
   await rows(narrow, [24])
+  const narrowRow = await openDetail(narrow, 24)
   assert(narrowSeen.history.every(request => request.method === 'GET' && request.subject === ready.other_subject_id))
   assert.deepEqual(narrowSeen.errors, [])
   await screenshot(narrow, 'training-history-mobile.png')
+  await narrowRow.getByRole('button', { name: '收起提交详情' }).click()
+  assert.equal(await narrow.getByRole('heading', { name: '提交时的源码' }).count(), 0)
   passed('390px second account sees only its own summary')
 
   step = 'unverified personal account'
