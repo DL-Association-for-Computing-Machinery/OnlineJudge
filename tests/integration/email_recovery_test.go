@@ -39,7 +39,7 @@ func TestEmailPasswordRecovery(t *testing.T) {
 	issue := func(purpose emailtoken.Purpose) (string, emailtoken.Token) {
 		t.Helper()
 		id, err := first.IssueEmailToken(f.ctx, subject, version, purpose, protector,
-			func(context.Context, string) error { return nil },
+			func(context.Context, *emailtoken.Protector) error { return nil },
 			func(ctx context.Context, tx pgx.Tx, id string) error {
 				_, err := tx.Exec(ctx, "INSERT INTO synthetic_recovery_queue VALUES($1)", id)
 				return err

@@ -58,7 +58,7 @@ func TestMailTerminalWithRiverClaim(t *testing.T) {
 	protector, err := emailtoken.NewProtector("fixture", map[string][32]byte{"fixture": {1}})
 	must(t, err)
 	id, err := issuer.IssueEmailToken(f.ctx, subject, identity.SessionVersion{AuthGeneration: 1, RecoveryID: epoch},
-		emailtoken.Activation, protector, func(context.Context, string) error { return nil }, queue.Enqueue)
+		emailtoken.Activation, protector, func(context.Context, *emailtoken.Protector) error { return nil }, queue.Enqueue)
 	must(t, err)
 	reader, err := identitypg.NewEmailDeliveryReader(f.a, protector)
 	must(t, err)

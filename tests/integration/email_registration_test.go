@@ -39,7 +39,7 @@ func TestRegistrationAtomicallyQueuesActivation(t *testing.T) {
 	alternate, err := identity.ParseEmail("mailbox+TAG@EXAMPLE.INVALID")
 	must(t, err)
 	var reservations atomic.Int64
-	reserve := func(context.Context, string) error { reservations.Add(1); return nil }
+	reserve := func(context.Context, *emailtoken.Protector) error { reservations.Add(1); return nil }
 	counts := func(want int) {
 		t.Helper()
 		var creds, mailboxes, tokens, payloads, jobs int
