@@ -33,7 +33,7 @@ func WithReviewIntake(base http.Handler, intake ReviewIntake, solutions AuthorRe
 		return nil, redisstore.ErrInvalid
 	}
 	return &handler{store: h.store, config: h.config, host: h.host, login: h.login, proxy: h.proxy,
-		passwordChange: h.passwordChange, drafts: h.drafts, draftTimeout: h.draftTimeout,
+		passwordChange: h.passwordChange, emailConfirmation: h.emailConfirmation, drafts: h.drafts, draftTimeout: h.draftTimeout,
 		references: h.references, preparation: h.preparation, reviewIntake: intake, reviewSolution: solutions}, nil
 }
 

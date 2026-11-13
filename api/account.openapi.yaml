@@ -1,22 +1,54 @@
 openapi: 3.1.0
 info:
-  title: OnlineJudge Authenticated Password Change
-  version: 0.1.0
+  title: OnlineJudge Account API
+  version: 0.2.0
   description: >-
-    仅在显式会话 HTTPS 模式另行配置 password_change 后启用；默认 Compose 未启用。
-    登录取得 __Host-oj_session 后，凭当前密码修改自身密码，不接受主体或代次选择器。
     public HTTPS Origin/Host 固定配置；代理模式须实际验证并 pin 后端 mTLS 叶证书，
     由受信单跳代理删除覆写转发头。Cookie 认证不授予训练或管理权限。
     缺少或不可信的客户端证书会在 TLS 握手失败，可无 HTTP 响应；403 仅指已到达 Handler 的拒绝。
-    请求首次读取会话后固定其账号/恢复代次；稍后的 logout/自然过期不撤回已受理工作，
-    最终提交仍检查 enabled、凭据/认证两代次及原恢复代次。任何写请求都不自动重试。
+    邮箱确认端点默认关闭；仅配置 email_confirmation、email_limits 及有效的 Redis 限流标记后启用。任何写请求都不自动重试。
 security:
   - ordinarySession: []
 paths:
+  /api/v1/account/activate:
+    post:
+      operationId: activateAccountEmail
+      security: []
+      requestBody:
+        $ref: '#/components/requestBodies/EmailConfirmation'
+      responses:
+        '204': {description: 邮箱已验证且新密码已提交；无响应体或 Cookie。}
+        '400': {description: 格式或密码无效，或链接不可用。}
+        '403': {description: HTTPS 或来源不可信。}
+        '404': {description: 未启用确认能力。}
+        '405': {description: 只接受 POST。}
+        '413': {description: 请求体超过 4096 字节。}
+        '415': {description: 不支持该媒体类型。}
+        '429': {description: 共享准入拒绝。}
+        '503': {description: 无法确认结果；先尝试登录，不自动重发。}
+  /api/v1/account/reset-password:
+    post:
+      operationId: resetPasswordByEmail
+      security: []
+      requestBody:
+        $ref: '#/components/requestBodies/EmailConfirmation'
+      responses:
+        '204': {description: 新密码已提交；无响应体或 Cookie。}
+        '400': {description: 格式或密码无效，或链接不可用。}
+        '403': {description: HTTPS 或来源不可信。}
+        '404': {description: 未启用确认能力。}
+        '405': {description: 只接受 POST。}
+        '413': {description: 请求体超过 4096 字节。}
+        '415': {description: 不支持该媒体类型。}
+        '429': {description: 共享准入拒绝。}
+        '503': {description: 无法确认结果；先尝试登录，不自动重发。}
   /api/v1/account/password:
     post:
       operationId: changeOwnPassword
       description: >-
+        仅在显式会话 HTTPS 模式另行配置 password_change 后启用；默认 Compose 未启用。
+        凭当前密码修改自身密码，不接受主体或代次选择器。首次读取会话后固定账号和恢复代次，
+        随后的 logout 或自然过期不撤回已受理工作，最终提交仍检查账号状态和原代次。
         至少提供一个正向同源字段 Origin 或 Sec-Fetch-Site；任一字段出现时都须正确，
         重复/错误字段不能由另一个正确字段抵消。当前密码按原始 UTF-8 字节校验，
         新密码按配置的 Unicode code point 最低长度、字节上限及整串摘要弱密码表检查，
@@ -138,6 +170,30 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
 components:
+  requestBodies:
+    EmailConfirmation:
+      required: true
+      description: >-
+        路径决定令牌用途。要求可信 HTTPS Host 和正向同源请求，拒绝查询参数。
+        最多 4096 字节，拒绝未知、重复、null、坏 Unicode 和尾随数据。
+        令牌只从 JSON 读取；不自动重试或发放会话。
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [token, new_password]
+            properties:
+              token:
+                type: string
+                minLength: 1
+                writeOnly: true
+              new_password:
+                type: string
+                format: password
+                minLength: 1
+                writeOnly: true
+                description: 传输保留原始内容，服务检查站点密码规则。
   securitySchemes:
     ordinarySession:
       type: apiKey

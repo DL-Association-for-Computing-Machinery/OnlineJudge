@@ -78,10 +78,15 @@ func testRecoveryCommand(t *testing.T, f *fixture, api, command string, c sessio
 	_, err = authority.DisableCAS(ctx, account.ID, account.Revision)
 	must(t, err)
 	blocklist := enableEntryPasswordChange(t, f, &c, changeLimits(), false)
+	bucket := protocol.LoginBucket{Count: 10, Window: time.Hour}
+	c.EmailLimits = &protocol.EmailLimits{RequestGlobal: bucket, RequestSource: bucket, RequestMailbox: bucket,
+		ConfirmGlobal: bucket, ConfirmSource: bucket, ConfirmToken: bucket}
+	c.EmailLimits.ConfirmToken.Count = 2
+	c.EmailConfirmation = c.PasswordChange.Acceptance
 	interrupted := c
 	interrupted.Redis.Addr = interruptedAddr
 	interruptedPath := entryConfig(t, interrupted, ca, 3*time.Second, blocklist)
-	// Force the real PostgreSQL update to fail after both Redis markers are written.
+	// Force the real PostgreSQL update to fail after all Redis markers are written.
 	_, err = pool.Exec(ctx, `CREATE FUNCTION reject_fixture_session_open() RETURNS trigger LANGUAGE plpgsql AS $$
 		BEGIN RAISE EXCEPTION 'synthetic open failure'; END; $$;
 		CREATE TRIGGER reject_fixture_session_open BEFORE UPDATE OF enabled ON identity_session_recovery
@@ -95,8 +100,8 @@ func testRecoveryCommand(t *testing.T, f *fixture, api, command string, c sessio
 	t.Cleanup(func() { must(t, client.Close()) })
 	count, err := client.DBSize(ctx).Result()
 	must(t, err)
-	if count != 2 {
-		t.Fatal("failed open did not leave the two prepared markers for inspection")
+	if count != 3 {
+		t.Fatal("failed open did not leave all three prepared markers for inspection")
 	}
 	_, err = pool.Exec(ctx, `DROP TRIGGER reject_fixture_session_open ON identity_session_recovery; DROP FUNCTION reject_fixture_session_open()`)
 	must(t, err)
@@ -115,11 +120,20 @@ func testRecoveryCommand(t *testing.T, f *fixture, api, command string, c sessio
 	run(closingPath, receipt(closed), true, "status", c.Database.Database)
 	opened := identity.RecoveryState{Generation: closed.Generation, Enabled: true}
 	run(path, receipt(opened), true, "open", c.Database.Database, closed.Generation, "--accounts-reviewed")
+	replacement, err := protocol.NewClient(c.Redis)
+	must(t, err)
+	t.Cleanup(func() { must(t, replacement.Close()) })
+	if ttl, err := replacement.PTTL(ctx, "oj-email-limit:"+c.Namespace+":config").Result(); err != nil || ttl != -1 {
+		t.Fatal("successful recovery did not leave a persistent email marker")
+	}
 	run(path, sessionruntime.ErrRecoveryEpoch.Error(), false, "open", c.Database.Database, closed.Generation, "--accounts-reviewed")
 	var children []*entryProcess
 	var endpoints []*loginEndpoint
 	for _, name := range []string{"_recovery_a", "_recovery_b"} {
 		replica := c
+		if name == "_recovery_b" {
+			replica.PasswordChange = nil
+		}
 		replica.Database.ApplicationName += name
 		child := entryStart(t, api, entryConfig(t, replica, ca, 3*time.Second, blocklist), "127.0.0.1:0")
 		endpoint := entryClient(t, child, ca)
@@ -138,6 +152,7 @@ func testRecoveryCommand(t *testing.T, f *fixture, api, command string, c sessio
 	fresh := entryCredential(t, endpoints[0], owner, "synthetic protocol password")
 	loginStatus(t, loginCall(endpoints[1], "/api/v1/session", "", credentialCookies(fresh), get), 200)
 	checkReferenceQueue(endpoints[0], endpoints[1], fresh, opened.Generation)
+	checkPublicEmailConfirmation(t, ctx, pool, authority, endpoints, owner.ID, opened.Generation)
 	for _, child := range children {
 		child.signal(t)
 		child.wait(t, true)

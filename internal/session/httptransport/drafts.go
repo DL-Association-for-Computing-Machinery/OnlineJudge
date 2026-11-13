@@ -31,7 +31,7 @@ func WithPrivateDrafts(base http.Handler, drafts Drafts, timeout time.Duration) 
 		return nil, redisstore.ErrInvalid
 	}
 	return &handler{store: h.store, config: h.config, host: h.host, login: h.login, proxy: h.proxy,
-		passwordChange: h.passwordChange, drafts: drafts, draftTimeout: timeout}, nil
+		passwordChange: h.passwordChange, emailConfirmation: h.emailConfirmation, drafts: drafts, draftTimeout: timeout}, nil
 }
 
 // IsPrivateDraftPath recognizes route shapes only, without granting capability
