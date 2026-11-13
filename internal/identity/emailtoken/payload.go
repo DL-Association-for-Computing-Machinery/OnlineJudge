@@ -18,6 +18,7 @@ var keyIDPattern = regexp.MustCompile(`^[a-z0-9_-]{1,16}$`)
 // three timestamps use PostgreSQL microsecond precision.
 type Scope struct {
 	PayloadID, SubjectID, RecoveryID string
+	AuthGeneration                   int64
 	Recipient                        identity.Email
 	Purpose                          Purpose
 	IssuedAt, SendUntil, TokenExpiry time.Time
@@ -25,7 +26,7 @@ type Scope struct {
 
 func (s Scope) validAt(now time.Time) bool {
 	lifetime := s.Purpose.Lifetime()
-	return lifetime != 0 && identity.ValidID(s.PayloadID) && identity.ValidID(s.SubjectID) &&
+	return lifetime != 0 && s.AuthGeneration > 0 && identity.ValidID(s.PayloadID) && identity.ValidID(s.SubjectID) &&
 		identity.ValidRecoveryID(s.RecoveryID) && s.Recipient.Valid() && !s.IssuedAt.IsZero() &&
 		s.IssuedAt.Nanosecond()%1000 == 0 && s.SendUntil.Nanosecond()%1000 == 0 && s.TokenExpiry.Nanosecond()%1000 == 0 &&
 		!now.Before(s.IssuedAt) && now.Before(s.SendUntil) && s.IssuedAt.Before(s.SendUntil) &&
@@ -58,6 +59,14 @@ func (Payload) MarshalJSON() ([]byte, error) { return []byte(`"[redacted email p
 type Protector struct {
 	current string
 	keys    map[string]cipher.AEAD
+}
+
+// CurrentKeyID identifies the immutable active key for aggregate usage admission.
+func (p *Protector) CurrentKeyID() string {
+	if p == nil {
+		return ""
+	}
+	return p.current
 }
 
 // Format prevents diagnostic formatting from inspecting the key ring.
@@ -132,5 +141,5 @@ func (s Scope) aad(keyID string) []byte {
 		data = binary.BigEndian.AppendUint64(data, uint64(instant.Unix()))
 		data = binary.BigEndian.AppendUint32(data, uint32(instant.Nanosecond()))
 	}
-	return data
+	return binary.BigEndian.AppendUint64(data, uint64(s.AuthGeneration))
 }

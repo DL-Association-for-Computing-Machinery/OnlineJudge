@@ -39,7 +39,8 @@ func TestPayloadRotationAndBinding(t *testing.T) {
 	now := time.Date(2026, 11, 13, 0, 0, 0, 123000, time.UTC)
 	scope := emailtoken.Scope{
 		PayloadID: strings.Repeat("a", 32), SubjectID: strings.Repeat("b", 32), RecoveryID: strings.Repeat("c", 32),
-		Recipient: email(t, "Test+one@example.invalid"), Purpose: emailtoken.Recovery,
+		AuthGeneration: 1,
+		Recipient:      email(t, "Test+one@example.invalid"), Purpose: emailtoken.Recovery,
 		IssuedAt: now, SendUntil: now.Add(10 * time.Minute), TokenExpiry: now.Add(30 * time.Minute),
 	}
 	token := newToken(t)
@@ -96,6 +97,7 @@ func TestPayloadRotationAndBinding(t *testing.T) {
 		func(s *emailtoken.Scope) { s.PayloadID = strings.Repeat("d", 32) },
 		func(s *emailtoken.Scope) { s.SubjectID = strings.Repeat("d", 32) },
 		func(s *emailtoken.Scope) { s.RecoveryID = strings.Repeat("d", 32) },
+		func(s *emailtoken.Scope) { s.AuthGeneration++ },
 		func(s *emailtoken.Scope) { s.Recipient = email(t, "test+one@example.invalid") },
 		func(s *emailtoken.Scope) { s.Purpose = emailtoken.Activation },
 		func(s *emailtoken.Scope) { s.TokenExpiry = s.TokenExpiry.Add(-time.Microsecond) },

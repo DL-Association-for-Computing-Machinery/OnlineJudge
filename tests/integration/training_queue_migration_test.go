@@ -58,7 +58,7 @@ func TestTrainingQueueMigration(t *testing.T) {
 	if floor != 3 || rank != 4 || order != 5 {
 		t.Fatalf("new task did not follow migrated clock and order: (%d,%d,%d)", floor, rank, order)
 	}
-	if _, err = f.provider.Down(f.ctx); err == nil || !strings.Contains(err.Error(), "cannot discard active training queue order") {
+	if _, err = f.provider.DownTo(f.ctx, 19); err == nil || !strings.Contains(err.Error(), "cannot discard active training queue order") {
 		t.Fatalf("unexpected rollback result with active tasks: %v", err)
 	}
 	node := submission.NodeIdentity{ID: "migration-train", CredentialVersion: 1}
@@ -72,7 +72,7 @@ func TestTrainingQueueMigration(t *testing.T) {
 		}
 		must(t, f.first.Report(f.ctx, node, lease.Token, ac))
 	}
-	_, err = f.provider.Down(f.ctx)
+	_, err = f.provider.DownTo(f.ctx, 19)
 	must(t, err)
 	_, err = f.provider.Up(f.ctx)
 	must(t, err)

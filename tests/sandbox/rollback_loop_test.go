@@ -78,8 +78,7 @@ func TestCompatibleRollbackLoop(t *testing.T) {
 		t.FailNow()
 	}
 
-	// Run migration independently during the closed window. For this release
-	// pair it must be a no-op on the existing database.
+	// Upgrade while the old processes are stopped, on the same database.
 	runFixtureMigration(t, ctx, rollbackCurrent, f.database.dsn, f.root, rollbackVersion, []string{"up"})
 	restartDrainedSandbox(t, slot)
 	verifyEnvironment(t)
@@ -94,9 +93,12 @@ func TestCompatibleRollbackLoop(t *testing.T) {
 	if t.Failed() {
 		t.FailNow()
 	}
-	f.counts(t, ctx, 2, migrationRows)
+	f.counts(t, ctx, 2, migrationRows+1, 21)
 
 	start := time.Now()
+	// Down21 is permitted only because this judging fixture has issued no
+	// email tokens. It must leave the accepted judging work intact.
+	runFixtureMigration(t, ctx, rollbackCurrent, f.database.dsn, f.root, rollbackVersion, []string{"down"})
 	restartDrainedSandbox(t, slot)
 	verifyEnvironment(t)
 	reverted := startHTTPLoopAPIFrom(t, ctx, oldDir, f.client, f.database.dsn, f.tokenFile)
@@ -107,7 +109,7 @@ func TestCompatibleRollbackLoop(t *testing.T) {
 	// Replay before the old Worker starts. A second POST may only read back the
 	// accepted ID, never create a replacement submission or another attempt.
 	f.checkReceipt(t, ctx, reverted, queued, "queued", http.MethodPost)
-	f.counts(t, ctx, 2, migrationRows)
+	f.counts(t, ctx, 2, migrationRows, 20)
 	controller, worker := f.startWorker(t, oldDir)
 	f.await(t, ctx, reverted, worker, queued)
 	f.checkReceipt(t, ctx, reverted, queued, "finished", http.MethodPost)
@@ -115,11 +117,11 @@ func TestCompatibleRollbackLoop(t *testing.T) {
 		t.Fatal("reverting the application changed a completed attempt")
 	}
 	f.result(t, ctx, queued)
-	f.counts(t, ctx, 3, migrationRows)
+	f.counts(t, ctx, 3, migrationRows, 20)
 	reverted.process.stop(t)
 	f.stopWorker(t, worker)
 	controller.stop(t)
-	t.Logf("same schema and database: old AC and new WA unchanged; prior release finished the queued new submission as AC; 3 submissions/3 attempts; revert and drain=%s", time.Since(start))
+	t.Logf("same database after empty-token downgrade: old AC and new WA unchanged; prior release finished the queued new submission as AC; 3 submissions/3 attempts; revert and drain=%s", time.Since(start))
 }
 
 const rollbackSum = "#include <cstdio>\nint main(){int a,b;if(std::scanf(\"%d%d\",&a,&b)!=2)return 1;std::printf(\"%d\\n\",a+b);}\n"
@@ -246,11 +248,11 @@ func (f rollbackFixture) result(t *testing.T, ctx context.Context, tc rollbackCa
 	return result
 }
 
-func (f rollbackFixture) counts(t *testing.T, ctx context.Context, attempts, migrationRows int) {
+func (f rollbackFixture) counts(t *testing.T, ctx context.Context, attempts, migrationRows, version int) {
 	t.Helper()
 	var submissions, tasks, actualAttempts, actualMigrations, schema int
 	if err := f.database.pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM submissions), (SELECT count(*) FROM judge_tasks),
-		(SELECT count(*) FROM judge_attempts), count(*), max(version_id) FROM goose_db_version`).Scan(&submissions, &tasks, &actualAttempts, &actualMigrations, &schema); err != nil || submissions != 3 || tasks != 3 || actualAttempts != attempts || actualMigrations != migrationRows || schema != 20 {
+		(SELECT count(*) FROM judge_attempts), count(*), max(version_id) FROM goose_db_version`).Scan(&submissions, &tasks, &actualAttempts, &actualMigrations, &schema); err != nil || submissions != 3 || tasks != 3 || actualAttempts != attempts || actualMigrations != migrationRows || schema != version {
 		t.Fatal("release switch changed the submission, task, attempt or migration inventory")
 	}
 }
