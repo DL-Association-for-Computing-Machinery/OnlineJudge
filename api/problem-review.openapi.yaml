@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OnlineJudge Assigned Problem Review
-  version: 0.1.0
+  version: 0.2.0
   description: >-
     默认关闭的独立审核读取能力。使用普通 HTTPS 会话及当前审核资格；
     每次只按明确分配读取一项的固定验证结论、对拍详情、批准阻断或审核材料。退回另需显式开启；不提供批准或发布。
@@ -282,6 +282,20 @@ components:
         evidence: { $ref: '#/components/schemas/ReviewEvidence' }
         policy_version: { const: 'oj.review-approval.v14' }
         eligible: { const: false }
+        local_checker_evidence:
+          type: object
+          additionalProperties: false
+          description: A+B 17 点精确绑定的本机隔离报告摘要，保留生产检查器及目标节点阻断。
+          required: [scope, candidate_sha256, judge_manifest_sha256, runtime_profile_sha256, points, ac_report_sha256, wa_report_sha256, ole_report_sha256]
+          properties:
+            scope: { const: 'isolated-desktop' }
+            candidate_sha256: { $ref: '#/components/schemas/SHA256' }
+            judge_manifest_sha256: { $ref: '#/components/schemas/SHA256' }
+            runtime_profile_sha256: { $ref: '#/components/schemas/SHA256' }
+            points: { const: 17 }
+            ac_report_sha256: { $ref: '#/components/schemas/SHA256' }
+            wa_report_sha256: { $ref: '#/components/schemas/SHA256' }
+            ole_report_sha256: { $ref: '#/components/schemas/SHA256' }
         statement_semantics_confirmed:
           const: true
           description: 仅当前分配有有效确认且材料未退回时返回。题面质量仍要求可信渲染证据。
