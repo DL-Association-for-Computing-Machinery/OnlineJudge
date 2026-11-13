@@ -79,6 +79,8 @@ type Config struct {
 	Proxy                       httptransport.ProxyConfig
 	PasswordChange              *PasswordChangeConfig
 	PrivateDrafts               *PrivateDraftsConfig
+	// TrainingHistory enables only the read-only personal history route.
+	TrainingHistory bool
 
 	// EmailLimits optionally provisions the email marker during isolated
 	// recovery. This alone does not enable any public account route.

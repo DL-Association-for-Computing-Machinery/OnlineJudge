@@ -26,7 +26,7 @@ export function AccountPanel() {
         <h1 id="account-title" tabIndex={-1}>账号与安全</h1>
         <span className={`account-badge ${state.status}`}>{labels[state.status]}</span>
       </div>
-      <p className="account-intro">管理当前浏览器的会话与密码。训练功能尚未开放。</p>
+      <p className="account-intro">管理当前浏览器的会话与密码。</p>
       <AccountNotice />
 
       {authenticated && state.session ? (

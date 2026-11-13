@@ -12,6 +12,8 @@ import (
 	identitypg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/postgres"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/httptransport"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/redisstore"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
+	submissionpg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
 )
 
 // Open owns one bounded pool, Redis client, identity authority and shared KDF
@@ -152,6 +154,14 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 		handler, err = withEmailConfirmation(startup, handler, authority, store, work, secrets, c)
 		if err != nil {
 			return nil, startupFailure(startup)
+		}
+	}
+	if c.TrainingHistory {
+		handler, err = httptransport.WithTrainingHistory(handler, func(ctx context.Context, actor identity.TrainingActor, after *submission.HistoryPosition) (submission.HistoryPage, error) {
+			return submissionpg.ListTrainingHistory(ctx, pool, actor, after)
+		})
+		if err != nil {
+			return nil, ErrConfig
 		}
 	}
 	closeIntake := func() {}

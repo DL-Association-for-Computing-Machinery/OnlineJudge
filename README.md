@@ -25,6 +25,7 @@
 - [显式会话 API 入口](docs/architecture/session-design.md#717-显式会话-api-入口)：`OJ_SESSION_CONFIG_FILE` 启用严格配置的 TLS/mTLS 命令入口，必须同时指定 `OJ_API_ADDR`；默认 Compose 未启用。
 - [已登录改密](docs/architecture/session-design.md#718-已登录用户修改密码)：显式能力、独立三维额度和弱密码规则，核验当前密码后原子换代并撤销旧会话；[接口契约](api/account.openapi.yaml)。
 - [浏览器账号面板](docs/account-browser.md)：已有账号登录、原尝试恢复、检查/主动续期/退出和改密；[六路径契约](api/session.openapi.yaml)。默认 HTTP 预览阻止密码操作，不代表注册、训练或完整权限已开放。
+- [本人训练提交历史](api/training-history.openapi.yaml)：普通会话 JSON 配置显式设置 `"training_history": true` 后，已验证邮箱的个人账号可在「我的提交」查看本人摘要和翻页；默认关闭。
 - [Web 界面](docs/frontend-design.md)：简洁题库首页、独立登录页和双栏做题预览；示例可搜索、筛选、编辑和导入导出，正式提交尚未开放。
 - [首批题源](docs/problem-sources.md)：固定 Library Checker 10 题的断网数据准备与私有候选验证，尚未接入正式题库或发布。
 
@@ -739,6 +740,8 @@ python3 scripts/test-browser-account.py \
 加 `--review-materials` 运行独立审核材料专项。夹具仅在临时库准备一项合成送审和非作者分配。验证 `/review/materials` 的桌面选择与 390px 直接入口、冻结题面和原始样例／标程、刷新清除，以及有审核资格的作者仍无法读取自己的送审材料。另验证四项都勾选后才可确认、确认丢响应后原键回读，以及作者送审丢响应后更换当前参考申请仍能回读原送审 ID。该模式不执行参考 Worker，不与其他专项模式同时使用。
 
 加 `--m1-login-load` 在同一隔离夹具运行集中登录。100 个合成账号在 60 秒内每 600 毫秒发起一次浏览器登录；每个浏览器上下文独立核对三步会话请求、账号身份和 Cookie。该夹具使用单 API、19 MiB / 2 轮 / 1 lane 的 Argon2id，证书例外只用于临时回环夹具。`browser-qa.json` 保留发起偏差、时延、状态和失败分类，不含邮箱或 Cookie。结果仅供本机复测，现场还须在实际配置、网络与正常证书验证下执行[试用验收](docs/phase-1-development-plan.md#试用容量和恢复默认值)。
+
+加 `--training-history` 运行本人历史专项。临时库写入合成历史摘要，验证普通会话登录后的桌面和 390px 页面、同时间戳翻页、另一账号隔离、未验证账号拒绝，以及刷新后须显式重新读取。夹具不发布题目、不接受正式提交、不启动 Worker。
 
 要验证保留正常证书检查的冷启动，添加 `--cold-firefox /absolute/path/to/existing/playwright/firefox`，使用匹配的已有 Playwright Firefox；不同时使用 Chromium、语料或十题私有草稿包模式。先用不信任夹具 CA 的全新浏览器确认连接被拒绝，再在另一个临时浏览器配置导入公开测试 CA，不修改系统信任库。验证桌面和 390px 窄屏从同源加载题库与登录页；桌面完成真实登录、导入合成草稿，并创建、查询、准备和取消同一参考申请。刷新草稿后可用原键查到材料已准备，刷新与查询不会再次发出参考申请写请求。测试限制浏览器访问回环夹具，并记录页面资源来源；不代表整机断网、校园 DNS 或现场入口验收。
 

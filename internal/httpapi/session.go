@@ -6,7 +6,7 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/httptransport"
 )
 
-// NewSessionHandler delegates session and optional account/private-draft paths
+// NewSessionHandler delegates session and optional authenticated API paths
 // for every method without rewriting transport metadata. Runtime capabilities
 // control availability. Health/unknown paths retain bootstrap; no redirects or
 // experiment routes are added.
@@ -16,7 +16,8 @@ func NewSessionHandler(session http.Handler) http.Handler {
 		optional := httptransport.IsPrivateDraftPath(r.URL.Path) || httptransport.IsReferenceRequestPath(r.URL.Path) ||
 			httptransport.IsReviewIntakePath(r.URL.Path) || httptransport.IsReviewReadPath(r.URL.Path) ||
 			httptransport.IsReviewReturnPath(r.URL.Path) || httptransport.IsStatementConfirmationPath(r.URL.Path) ||
-			httptransport.IsEmailConfirmationPath(r.URL.Path) || httptransport.IsEmailRequestPath(r.URL.Path)
+			httptransport.IsEmailConfirmationPath(r.URL.Path) || httptransport.IsEmailRequestPath(r.URL.Path) ||
+			httptransport.IsTrainingHistoryPath(r.URL.Path)
 		switch r.URL.Path {
 		case "/api/v1/session", "/api/v1/session/activity", "/api/v1/session/logout",
 			"/api/v1/session/login/begin", "/api/v1/session/login/complete", "/api/v1/session/login/abandon", "/api/v1/account/password":

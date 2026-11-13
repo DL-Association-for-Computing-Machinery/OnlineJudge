@@ -1,0 +1,90 @@
+openapi: 3.1.0
+info:
+  title: OnlineJudge Personal Training Submission History
+  version: 0.1.0
+  description: >-
+    普通会话 HTTPS 下的可选只读能力。显式设置 training_history: true 才启用；
+    沿用普通会话的固定 Host、直连 TLS 或单跳 mTLS 代理。响应不缓存、不设置 Cookie。
+security:
+  - ordinarySession: []
+paths:
+  /api/v1/training/submissions:
+    get:
+      operationId: listOwnTrainingSubmissions
+      description: >-
+        每次从实际会话取得主体，再在同一 PostgreSQL 事务中复核当前账号资格并读取该主体的 personal-training 范围。
+        不接受请求体、主体/范围参数或编码路径别名。按接收时间和提交 ID 降序，每页最多 20 条。
+        游标仅指定查找边界，不能授权或切换主体。每页独立读取，不提供跨页快照；刷新第一页查看新提交和状态。
+      parameters:
+        - name: X-OJ-Expected-Subject
+          in: header
+          required: true
+          description: 客户端最后确认的会话主体；只用于拒绝账号变化，不作为身份来源。
+          schema: { type: string, pattern: '^[a-f0-9]{32}$' }
+        - name: cursor
+          in: query
+          description: 首页省略；继续时原样回传非空 next_cursor。拒绝空值、重复、未知字段及编码别名。
+          schema: { type: string, pattern: '^[A-Za-z0-9_-]{80}$' }
+      responses:
+        '200':
+          description: 本人摘要，不含源码、幂等键、其他范围或全局计数。
+          headers:
+            Cache-Control: { $ref: './session.openapi.yaml#/components/headers/NoStore' }
+            X-Content-Type-Options: { $ref: './session.openapi.yaml#/components/headers/NoSniff' }
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [submissions, next_cursor]
+                properties:
+                  submissions:
+                    type: array
+                    maxItems: 20
+                    items: { $ref: '#/components/schemas/SubmissionSummary' }
+                  next_cursor:
+                    type: string
+                    pattern: '^(?:[A-Za-z0-9_-]{80})?$'
+                    description: 空字符串表示该次读取未观察到下一页。
+        '400': { description: INVALID_HISTORY_REQUEST, $ref: '#/components/responses/Failure' }
+        '401': { description: SESSION_REQUIRED, $ref: '#/components/responses/Failure' }
+        '403': { description: TRAINING_ACCOUNT_REQUIRED 或 ORIGIN_REJECTED, $ref: '#/components/responses/Failure' }
+        '404': { description: NOT_FOUND，普通会话入口未启用此能力, $ref: '#/components/responses/Failure' }
+        '405':
+          description: METHOD_NOT_ALLOWED
+          headers:
+            Allow: { schema: { type: string, const: GET } }
+            Cache-Control: { $ref: './session.openapi.yaml#/components/headers/NoStore' }
+            X-Content-Type-Options: { $ref: './session.openapi.yaml#/components/headers/NoSniff' }
+          content:
+            application/problem+json:
+              schema: { $ref: './session.openapi.yaml#/components/schemas/Problem' }
+        '409': { description: TRAINING_SUBJECT_CHANGED，当前会话主体与请求头不符, $ref: '#/components/responses/Failure' }
+        '503': { description: SESSION_UNAVAILABLE 或 TRAINING_HISTORY_UNAVAILABLE, $ref: '#/components/responses/Failure' }
+components:
+  securitySchemes:
+    ordinarySession: { type: apiKey, in: cookie, name: __Host-oj_session }
+  responses:
+    Failure:
+      description: 拒绝或暂不可用；不返回提交摘要。
+      headers:
+        Cache-Control: { $ref: './session.openapi.yaml#/components/headers/NoStore' }
+        X-Content-Type-Options: { $ref: './session.openapi.yaml#/components/headers/NoSniff' }
+      content:
+        application/problem+json:
+          schema: { $ref: './session.openapi.yaml#/components/schemas/Problem' }
+  schemas:
+    SubmissionSummary:
+      type: object
+      additionalProperties: false
+      required: [id, material_version, language, created_at, state, verdict]
+      properties:
+        id: { type: string, pattern: '^[a-f0-9]{32}$' }
+        material_version: { type: string, minLength: 1, maxLength: 128 }
+        language: { type: string, const: 'gnu++17' }
+        created_at: { type: string, format: date-time }
+        state: { type: string, enum: [queued, running, finished, failed] }
+        verdict:
+          type: [string, 'null']
+          enum: [AC, WA, CE, RE, TLE, MLE, OLE, SE, null]
+          description: 仅 finished 有判定。

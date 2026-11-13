@@ -1,0 +1,66 @@
+import { useEffect, useState, useSyncExternalStore } from 'react'
+import { Link } from 'react-router'
+import { useCurrentAccount } from '../account/context'
+import { subscribePrivateInvalidation } from '../account/privateInvalidation'
+import { HistoryController } from './historyController'
+import type { SubmissionSummary } from '../services/trainingHistory'
+import './trainingHistory.css'
+
+const stateLabels = { queued: '排队中', running: '判题中', finished: '已判定', failed: '判题失败' }
+const formatDate = new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'medium' })
+
+function HistoryRow({ row }: { row: SubmissionSummary }) {
+  return <li>
+    <div className="history-row-heading">
+      <h2>提交 <code>{row.id}</code></h2>
+      <span>{stateLabels[row.state]}{row.verdict ? ` · ${row.verdict}` : ''}</span>
+    </div>
+    <dl>
+      <div><dt>接收时间</dt><dd><time dateTime={row.created_at}>{formatDate.format(new Date(row.created_at))}</time></dd></div>
+      <div><dt>语言</dt><dd>GNU++17</dd></div>
+      <div><dt>题目材料版本</dt><dd><code>{row.material_version}</code></dd></div>
+    </dl>
+  </li>
+}
+
+export function SubmissionsPage() {
+  const { state: account, controller: accountController } = useCurrentAccount()
+  const [history] = useState(() => new HistoryController(accountController))
+  const state = useSyncExternalStore(history.subscribe, history.getSnapshot)
+  useEffect(() => {
+    history.connect()
+    const unsubscribe = subscribePrivateInvalidation(history.clear)
+    for (const event of ['focus', 'pagehide', 'pageshow']) window.addEventListener(event, history.clear)
+    document.addEventListener('visibilitychange', history.clear)
+    return () => {
+      unsubscribe()
+      history.disconnect()
+      for (const event of ['focus', 'pagehide', 'pageshow']) window.removeEventListener(event, history.clear)
+      document.removeEventListener('visibilitychange', history.clear)
+    }
+  }, [history])
+
+  return <section className="page-width status-page training-history">
+    <h1>我的提交</h1>
+    <p>查看本人个人训练的提交摘要。每次翻页都会重新读取当前记录；如需查看最新结果，请刷新第一页。</p>
+    {account.status === 'authenticated' ? <>
+      <div className="history-controls">
+        <button type="button" className="button button-outline" disabled={state.busy || account.busy} onClick={() => void history.first()}>
+          {state.page ? '刷新第一页' : '查看提交历史'}
+        </button>
+        <button type="button" className="button button-outline" disabled={state.busy || account.busy || !state.page?.next_cursor}
+          onClick={() => void history.next()}>查看下一页</button>
+      </div>
+      <p role="status">{state.notice}</p>
+      {state.page?.submissions.length ? <ol className="history-list" aria-label="训练提交记录">
+        {state.page.submissions.map(row => <HistoryRow key={row.id} row={row} />)}
+      </ol> : null}
+    </> : <div className="empty-state">
+      <h2>{account.status === 'anonymous' ? '登录后查看提交历史' : '当前会话未确认'}</h2>
+      {account.status === 'checking' || account.busy ? <p role="status">正在检查当前会话…</p> : account.status === 'anonymous' ?
+        <Link className="button button-neutral" to="/login">登录已有账号</Link> :
+        <button type="button" className="button button-outline" onClick={() => void accountController.run('check')}>重新检查会话</button>}
+      <Link className="text-link" to="/">返回题库预览</Link>
+    </div>}
+  </section>
+}

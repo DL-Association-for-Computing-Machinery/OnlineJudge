@@ -389,7 +389,7 @@ Close 在同一 mutex 下停止入口和登记活动请求，503/no-store/无 Co
 
 ### 7.17 显式会话 API 入口
 
-`cmd/api` 在非空 `OJ_SESSION_CONFIG_FILE` 下调用 `apiapp.Run`，一个进程只拥有一个 Runtime 和一个 HTTPS listener。必须同时显式配置 `OJ_API_ADDR`（数字端口，可用 0 供隔离测试），与实验 token 模式互斥；这些检查先于配置、秘密和网络访问。未启用时保留 bootstrap/实验模式。启动参数和密码环境合同、镜像入口见 [README](../../README.md#显式启用普通会话-api)。基础能力开放六个会话路径及健康检查，可选改密能力见第 7.18 节；不开放注册、邮件或训练资源。
+`cmd/api` 在非空 `OJ_SESSION_CONFIG_FILE` 下调用 `apiapp.Run`，一个进程只拥有一个 Runtime 和一个 HTTPS listener。必须同时显式配置 `OJ_API_ADDR`（数字端口，可用 0 供隔离测试），与实验 token 模式互斥；这些检查先于配置、秘密和网络访问。未启用时保留 bootstrap/实验模式。启动参数和密码环境合同、镜像入口见 [README](../../README.md#显式启用普通会话-api)。基础能力开放六个会话路径及健康检查；改密、邮件确认、私有草稿及本人训练历史按各自配置启用。
 
 `apiconfig.Parse` 是无 I/O 的版本 1 JSON 解析器，不接受 DSN、内联密码/key、任意环境名或回调。文件至多 64 KiB、一个根对象；拒绝未知字段、重复解码字段名（包括转义别名）、非小写 snake_case 名、null、错误 Unicode、整数溢出、尾随内容、深度超过 12、单数组超过 16 项或总字段超过 256。时间必须是显式 Go duration 字符串，数字零不替代遗漏预算。下表列出完整配置层次；空数组仍须显式给定，`tls` 对象不能省略。
 
@@ -407,6 +407,7 @@ Close 在同一 mutex 下停止入口和登记活动请求，503/no-store/无 Co
 | 存储 `tls` | private 模式为 `{}`；tls 模式须有 `ca_file`、`server_name`，可另给成对 `certificate_file`/`key_file`；禁止明文 fallback/跳过校验 |
 | `server` | `read_header_timeout`、`read_timeout`、`write_timeout`、`idle_timeout`、`shutdown_timeout`、`max_header_bytes`；header/read/write/shutdown 为正且至多 1m，idle 至多 10m，read ≥ header，write ≥ HTTP 期限，header 1 KiB—1 MiB |
 | 可选 `private_drafts` | `material_root`、`bundle_directory`、外置`source_lock_file`、1—10唯一`source_ids`、正且至多1m的`timeout`、1—10的`max_in_flight`；write ≥ 草稿调用期限。省略关闭，导入/本人预览共享材料段预算；可选 `reference_requests: true` 单独启用本人申请，不读取材料或自动配置额度。路径/权限见[README](../../README.md#显式启用私有草稿-http) |
+| 可选 `training_history` | 布尔值，省略或 `false` 关闭，`true` 仅启用[本人训练历史 GET](../../api/training-history.openapi.yaml)。共用会话的 PostgreSQL 池、Redis 和 `http_timeout`。 |
 
 数据库/Redis 的 `security` 只能为 `"private"`/`"tls"`，`auth` 只能为 `"none"`/`"env"`。后者分别从固定的两个密码环境读取非空值；前者拒绝对应非空残留。解析结果不包含环境获取副作用，配置/解析错误只给固定类别。解析夹具使用合成参数，不能直接作为生产 KDF、限流或资源推荐。
 
@@ -629,7 +630,7 @@ AC25 增补：完整流程还须用可控时钟验证 24 小时/30 分钟、60 �
 
 受保护训练操作先从普通会话取得当前主体和代次，再在同一权威 PostgreSQL 的业务事务内调用 `LockTrainingAccount`。事务用 READ COMMITTED，按恢复状态 → 账号 → 个人邮箱顺序取得共享锁，再访问业务资源。恢复关闭、代次变化、账号停用、没有个人邮箱或邮箱未验证均拒绝。只使用已有恢复、账号、邮箱主键，无需迁移或新索引。
 
-调用失败必须结束事务，不得返回部分业务数据；锁内不调用 Redis、不读写文件或发送响应。账号资格只在当前事务有效。单会话退出与过期沿用普通会话的在途边界：最终会话读取之后发生的变化不追回已经进入事务的操作，账号撤销与恢复切换仍由数据库锁协调。题目发布、提交归属及其他权限仍由业务层检查。当前没有公开训练路由调用它。
+调用失败必须结束事务，不得返回部分业务数据；锁内不调用 Redis、不读写文件或发送响应。账号资格只在当前事务有效。单会话退出与过期沿用普通会话的在途边界：最终会话读取之后发生的变化不追回已经进入事务的操作，账号撤销与恢复切换仍由数据库锁协调。[本人历史](../submission-backlog.md)在此事务内按会话主体和固定个人训练范围读取；题目发布和后续训练操作仍须各自验证资源权限。
 
 ### 12.6 邮箱隔离联验
 

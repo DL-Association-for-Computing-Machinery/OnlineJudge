@@ -17,6 +17,7 @@ import (
 func testEntry(t *testing.T, f *fixture) {
 	binary := entryBinary(t)
 	t.Run("private draft HTTP", func(t *testing.T) { testEntryPrivateDrafts(t, f, binary) })
+	t.Run("personal training history HTTP", func(t *testing.T) { testEntryTrainingHistory(t, f, binary) })
 	t.Run("default bootstrap has no session entry", func(t *testing.T) {
 		p := entryStart(t, binary, "", "127.0.0.1:0")
 		event := p.waitEvent(t, "API starting")
@@ -24,7 +25,7 @@ func testEntry(t *testing.T, f *fixture) {
 			t.Fatal("default API selected a privileged scope")
 		}
 		client := &http.Client{Timeout: 3 * time.Second}
-		for path, want := range map[string]int{"/api/v1/healthz": 200, "/api/v1/session": 404, "/api/v1/session/login/begin": 404} {
+		for path, want := range map[string]int{"/api/v1/healthz": 200, "/api/v1/session": 404, "/api/v1/session/login/begin": 404, entryTrainingHistory: 404} {
 			response, err := client.Get("http://" + event.Address + path)
 			must(t, err)
 			_, err = io.Copy(io.Discard, response.Body)
