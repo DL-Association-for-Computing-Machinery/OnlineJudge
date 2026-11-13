@@ -143,7 +143,7 @@ env -u OJ_WORKER_M0_SLOT -u OJ_WORKER_M0_DUAL_EXPERIMENT OJ_SANDBOX_EXPERIMENT=1
 
 登记进程和控制端另设 `OJ_MATERIAL_ROOT` 为该导出目录。在已迁移的临时 PostgreSQL 上执行 `migrate fixture` 和显式的积压策略配置，再按现有私有 mTLS 方式启动 `worker-api`。Desktop arm64 `worker` 可使用已启动的固定断网小型参考槽，或设置 `OJ_APLUSB_START_STOPPED=1` 让它持槽锁启动已停止的参考槽。普通 API 不启用此版本。真实联验使用 sandbox 标签的 `TestAPlusBLeasedLoop`，须显式设置 `OJ_SANDBOX_APLUSB=1`、空的临时 `OJ_TEST_DATABASE_URL` 并准备同一 worktree 的 `.local/bin/{migrate,worker,worker-api}` 宿主构建产物；测试从停止的参考槽开始，自行登记、排入固定合成源码和生成临时 mTLS 身份。不得指向试用库或正在使用的参考槽。见[判题契约](docs/checker-admission.md#ab-租约链路联验)。
 
-专用 Ubuntu VM 导出时另加 `--ubuntu-aplusb` 并使用 Ubuntu 判题清单摘要。登记、控制端和 Worker 均设置 `OJ_APLUSB_RUNTIME=ubuntu-arm64` 和 Ubuntu 运输清单及其摘要，Worker 必须设置 `OJ_APLUSB_START_STOPPED=1`。在客体内用 Linux arm64 构建和相同测试，另传 `OJ_TEST_APLUSB_DESKTOP_MANIFEST` 为原 Desktop 运输清单的绝对路径，用来验证零领取。当前支持首次判题租约；Ubuntu 清单尚未接入历史重判维护命令。
+专用 Ubuntu VM 导出时另加 `--ubuntu-aplusb` 并使用 Ubuntu 判题清单摘要。登记、控制端和 Worker 均设置 `OJ_APLUSB_RUNTIME=ubuntu-arm64` 和 Ubuntu 运输清单及其摘要，Worker 必须设置 `OJ_APLUSB_START_STOPPED=1`。在客体内用 Linux arm64 构建和相同测试，另传 `OJ_TEST_APLUSB_DESKTOP_MANIFEST` 为原 Desktop 运输清单的绝对路径，用来验证零领取。恢复后重判 Ubuntu 提交时，维护命令也需要同一档位和清单。
 
 ### 私有草稿参考验证
 
@@ -830,6 +830,8 @@ python3 scripts/test-worker.py aplusb-restore-loop \
 ```
 
 使用封存前独立保管的运输清单摘要；私有材料目录置于仓库外。此项须显式执行，`all` 不读取 A+B 私有题包。已有当前提交的 `host-artifacts` 和 `restore-artifacts` 产物时，可加 `--prebuilt` 跳过构建。两次判题使用同一清单，第二次仅从核验后的恢复目录读取对象。详见[联验记录](docs/delivery-evidence/aplusb-restored-rejudge.md)。
+
+在[专用 Ubuntu VM](docs/checker-admission.md#ubuntu-独立判题实验) 上可显式运行同一个带 `sandbox` 标签的 `TestAPlusBRestoreJudgeLoop`，从 `tests/sandbox` 目录运行测试二进制。准备 Linux arm64 的 `.local/bin/{worker,worker-api,migrate,migrate-linux}`（客体内两份 migrate 可使用同一构建）、固定停止槽，以及两个专用回环空 PostgreSQL 14.24 容器。使用各自的 `oj-ubuntu-rejudge-db-<12 位小写十六进制>` 名称及 `owner=onlinejudge.ubuntu-rejudge-test` 标签，设 `OJ_RESTORE_SOURCE_CONTAINER`、`OJ_RESTORE_TARGET_CONTAINER` 和两库都存在的空库名 `OJ_RESTORE_DATABASE=test_<数字>`。另设 `OJ_SANDBOX_EXPERIMENT=1`、`OJ_SANDBOX_APLUSB_RESTORE=1` 和同上 Ubuntu 材料及档位环境。源库将在联验中被停止；测试只供专用客体内的本轮临时库。
 
 `python3 scripts/test-worker.py rollback-loop` 单独运行[兼容回退专项](docs/architecture/operations-design.md#兼容回退专项)。需要本地 Git 历史包含 `771ff3f`；构建该版本和当前工作树，使用同一个临时 PostgreSQL，在固定离线 Desktop 沙箱切换真实 Worker。该专项不包含在 `all` 中，不连接试用环境。
 

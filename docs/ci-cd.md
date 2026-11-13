@@ -132,6 +132,8 @@ MediumBulk的共享槽/原tier保留、两端256/512MiB累计额度及失败清�
 
 `restore-loop` 另外导出 Linux 维护工具，由两个临时 PostgreSQL 容器执行捕获、接收核验和还原后检查；宿主仍运行 Darwin Worker 与控制端。普通 CI 对该沙箱源码做静态检查，真实备份到重判的组合验证由 Desktop 专项完成。
 
+`TestAPlusBRestoreJudgeLoop` 可另在显式配置的专用 Ubuntu VM 用固定原生 socket 运行，验证同一提交的恢复和第二代次；普通 CI 不创建客体容器或运行该专项。见[复现方式](../README.md#构建与测试docker-desktop)。
+
 `rollback-loop` 是单独的 Desktop 专项：从固定 Git 历史构建旧版，与当前版本在同一个临时库上切换，验证原回执、已完成报告和排队提交。普通 CI 静态检查其源码，不构建历史版本或启动特权槽。
 
 实验判题离线包的清单、文件和镜像拒绝行为由普通治理测试验证，不调用 Docker；包括非空库不导入、空库导入后缺失或额外镜像不通过。空库接收、导入和禁拉取的真实判题由[专用 Ubuntu 实验](../README.md#专用-ubuntu-vm-判题实验)验证。

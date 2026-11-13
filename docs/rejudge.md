@@ -26,6 +26,8 @@ GRANT USAGE ON SEQUENCE training_enqueue_order TO oj_rejudge_operator;
 
 维护端使用专用 `OJ_REJUDGE_DATABASE_URL`，与服务运行凭据分开设置。执行时把 `OJ_MATERIAL_ROOT` 指向该控制端实际读取的同一绝对目录。材料须在操作和 Worker 执行期间保持不可变；提交之前的核验不能证明后续节点可用。理由只写可审计的操作说明，勿包含凭据、选手源码或私有题目内容。
 
+Ubuntu A+B 入队还须显式设置 `OJ_SANDBOX_EXPERIMENT=1`、`OJ_APLUSB_RUNTIME=ubuntu-arm64`、`OJ_APLUSB_MANIFEST_FILE`、`OJ_APLUSB_MANIFEST_SHA256`，与恢复库中的原版本、摘要、清单字节逐一核对，并重新核验恢复目录中的所有原对象。档位和可信摘要由维护端独立配置。Desktop A+B 原命令仍可用，状态回读不需要清单。
+
 ```sh
 .local/bin/migrate rejudge enqueue "$DATABASE" "$SUBMISSION_ID" "$OLD_GENERATION" \
   "$MATERIAL_VERSION" "$MANIFEST_SHA256" "$REQUEST_KEY" "verify restored result" --confirm-rejudge
@@ -37,3 +39,5 @@ GRANT USAGE ON SEQUENCE training_enqueue_order TO oj_rejudge_operator;
 Schema 24 追加一张审计表，无历史回填。两个唯一索引分别支持按操作员和原键回读、限制每个提交的旧代次只能重判一次；额外成本为每次成功重判写入两条 B-tree 记录及 WAL。停止维护写入后，空审计表可回退。已有审计记录须前滚修复；无需删除历史。可撤销角色授权停止新增操作，保留已有记录。
 
 隔离 PostgreSQL 竞态回归覆盖同键／不同键并发、积压拒绝、文件核验期间撤权、非训练范围、旧租约拒绝及非空审计表回退拒绝。原键回读的 `EXPLAIN (ANALYZE, BUFFERS)` 在关闭顺序扫描的夹具中使用主键索引，全程访问两个缓存块；不作为容量数据。`aplusb-restore-loop` 在两个临时 PostgreSQL 14.24 容器和断网参考槽实测：间接成员和缺失材料被拒，专用登录入队并按原键读回，真实 Worker 在还原材料上完成第二个 AC，旧证据不变。该专项在同一宿主，未验证现场独立故障域。
+
+[Ubuntu 本地恢复与重判](delivery-evidence/aplusb-restored-rejudge.md#ubuntu-arm64-专用客体)还验证未设档位、同版本不同运输摘要均拒绝且无新增审计或尝试；合法请求在同一提交上完成第二个 AC。现场独立故障域仍待验证。
