@@ -660,6 +660,8 @@ python3 -B scripts/test-session-protocol.py --toolchain-image oj-session-protoco
 
 脚本只使用已有本地镜像，检查 Linux/架构，创建带唯一 owner 标签的私有 internal 网络、旧/替换/中断恢复 Redis 和工具链容器；无宿主发布端口或 Docker socket。临时 PostgreSQL 只开放容器内 Unix socket，复制源码白名单并运行真实存储/race 专项。结束检查退出码/OOM 并仅清理自有容器和网络，保留缓存卷。可用 `--redis-image` 指定已核验本地镜像、`--module-cache` 挂载既有只读模块缓存；合并缓存后执行 `go mod verify`，测试使用 `-mod=readonly`。Linux CI 使用 `--context default`；此专项不是完整 AC23、容量或部署验收。
 
+在上述脚本命令末尾加 `--suite email-lifecycle` 可用另一套全新的临时 PostgreSQL 和 Redis 验证邮箱整链路。邮件仅送往容器内回环 TLS 收件器；此选项不启用 API 文件配置的注册或找回入口。
+
 ### 会话恢复维护
 
 会话恢复维护命令只用于已经隔离的恢复副本。先设置 `OJ_RESTORED_SESSION_CONFIG_FILE` 指向该副本专用的 API 配置，再按[恢复普通会话](docs/architecture/operations-design.md#恢复普通会话)执行；不要在在线库使用。
@@ -760,6 +762,8 @@ Worker 启动完成后，向该 Worker 进程发送 `SIGUSR1`（`kill -USR1 PID`
 账号邮件队列有独立维护命令 `.local/bin/migrate mail-queue-up`。先完成应用 `migrate up`，停用邮件写入和发送后，以相同数据库和搜索路径执行。维护连接须直连 PostgreSQL 或使用会话级连接池，`idle_session_timeout` 须关闭或长于整个维护窗口。中断后确认上一迁移进程已退出，再重跑；如连接异常断开，应检查迁移版本后再恢复写入。禁用邮件功能或回退应用时保留 River 表和任务，本命令不提供删除队列的降级。默认 Compose 及 API/判题 Worker 启动均不执行此命令；它也不会启动发信。见[邮件队列设计](docs/architecture/session-design.md#101-river-开源核心验证路线与专用表备选)。
 
 启用邮件发送前，维护角色使用同一 `OJ_DATABASE_URL` 执行 `.local/bin/migrate mail-send-rate <spacing-ms>`，按供应商额度指定全局发送许可间隔（100 至 60,000 毫秒）。重复配置不重置限速；缩短间隔不提前释放现有许可，延长间隔保守推迟下一次许可。Down22 后重新升级须再次显式配置。命令不启动发送。
+
+邮件加密额度由独立数据库保存。维护角色将 `OJ_MAIL_BUDGET_DATABASE_URL` 指向独立额度库，执行 `.local/bin/migrate mail-budget-init <预算库名>`。仅对从未使用的密钥，用私有 `OJ_EMAIL_PAYLOAD_KEYS_FILE` 执行 `.local/bin/migrate mail-budget-provision <预算库名> <最大次数> --fresh-key`。不得为旧密钥重新登记丢失的计数。见[邮箱隔离联验](docs/architecture/session-design.md#126-邮箱隔离联验)。
 
 账号邮件使用独立的 `.local/bin/mail-worker`，默认 Compose 不启动。完成应用迁移、River 迁移和共享许可配置后，使用同一 `OJ_DATABASE_URL`、私有 `OJ_EMAIL_PAYLOAD_KEYS_FILE`、可信 HTTPS `OJ_ACCOUNT_PUBLIC_ORIGIN`，以及 `OJ_SMTP_HOST`、`OJ_SMTP_PORT`、`OJ_SMTP_FROM`、`OJ_SMTP_TLS`（`implicit` 或 `starttls`）。供应商要求认证时，同时设 `OJ_SMTP_USER` 和仅所有者可读的 `OJ_SMTP_PASSWORD_FILE`，文件内容是原始密码。发送器不迁移或初始化额度，不向判题 Worker 分发这些凭据。不要在同一队列同时运行 River 的默认 worker。领取、救援或提交遇到存储错误时进程退出，由运行管理器在存储恢复后重启。
 
