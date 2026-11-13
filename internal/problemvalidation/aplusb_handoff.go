@@ -264,7 +264,7 @@ func VerifyAPlusBHandoffReports(ctx context.Context, path, pin string, target AP
 			return zero, errHandoff
 		}
 	}
-	return APlusBHandoffReadback{"report-readback-only", pin, target, digests, len(points)}, ctx.Err()
+	return APlusBHandoffReadback{handoffReadbackScope, pin, target, digests, len(points)}, ctx.Err()
 }
 
 // Known local runs are excluded; an independent operator pin is still required
