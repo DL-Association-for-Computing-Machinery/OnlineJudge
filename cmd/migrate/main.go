@@ -27,6 +27,13 @@ func main() {
 		}
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "mail-send-rate" {
+		if err := runMailSendRate(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "mail-queue-up" {
 		if err := runMailQueueUp(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, err)
