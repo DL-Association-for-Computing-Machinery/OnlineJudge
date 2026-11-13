@@ -15,3 +15,7 @@ SELECT c.id, c.enabled, c.credential_version, c.auth_generation,
        e.email_key, e.original_email, e.email_verified
 FROM identity_personal_emails e JOIN identity_credentials c ON c.id = e.subject_id
 WHERE e.email_key = @email_key;
+
+-- name: TrainingEmailForShare :one
+SELECT email_verified FROM identity_personal_emails
+WHERE subject_id = @subject_id FOR SHARE;
