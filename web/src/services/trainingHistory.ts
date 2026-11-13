@@ -3,6 +3,8 @@ const idPattern = /^[a-f0-9]{32}$/
 const cursorPattern = /^[A-Za-z0-9_-]{80}$/
 const timePattern = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?Z$/
 const verdicts = ['AC', 'WA', 'CE', 'RE', 'TLE', 'MLE', 'OLE', 'SE']
+const maxSourceBytes = 65_536
+const encoder = new TextEncoder()
 
 export interface SubmissionSummary {
   id: string
@@ -18,8 +20,12 @@ export interface HistoryPage {
   next_cursor: string
 }
 
+export interface SubmissionDetail extends SubmissionSummary {
+  source: string
+}
+
 export class HistoryError extends Error {
-  constructor(readonly status = 0) { super('无法读取训练提交历史。') }
+  constructor(readonly status = 0) { super('无法读取训练提交。') }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -31,23 +37,48 @@ export function decodeHistoryPage(value: unknown): HistoryPage {
     value.submissions.length > 20 || typeof value.next_cursor !== 'string' ||
     (value.next_cursor !== '' && (!cursorPattern.test(value.next_cursor) || value.submissions.length !== 20))) throw new HistoryError()
   const ids = new Set<string>()
-  const submissions = value.submissions.map((row: unknown) => {
-    if (!isRecord(row) || Object.keys(row).length !== 6 || typeof row.id !== 'string' || !idPattern.test(row.id) || ids.has(row.id) ||
-      typeof row.material_version !== 'string' || row.material_version === '' || new TextEncoder().encode(row.material_version).length > 128 ||
-      row.language !== 'gnu++17' || typeof row.created_at !== 'string' || !timePattern.test(row.created_at) ||
-      !Number.isFinite(Date.parse(row.created_at)) ||
-      (row.state === 'finished' ? typeof row.verdict !== 'string' || !verdicts.includes(row.verdict) :
-        (row.state !== 'queued' && row.state !== 'running' && row.state !== 'failed') || row.verdict !== null)) throw new HistoryError()
+  const submissions = value.submissions.map(value => {
+    const row = decodeSummary(value)
+    if (ids.has(row.id)) throw new HistoryError()
     ids.add(row.id)
-    return row as unknown as SubmissionSummary
+    return row
   })
   return { submissions, next_cursor: value.next_cursor }
 }
 
+function decodeSummary(row: unknown): SubmissionSummary {
+  if (!isRecord(row) || Object.keys(row).length !== 6 || typeof row.id !== 'string' || !idPattern.test(row.id) ||
+    typeof row.material_version !== 'string' || row.material_version === '' || encoder.encode(row.material_version).length > 128 ||
+    row.language !== 'gnu++17' || typeof row.created_at !== 'string' || !timePattern.test(row.created_at) ||
+    !Number.isFinite(Date.parse(row.created_at)) ||
+    (row.state === 'finished' ? typeof row.verdict !== 'string' || !verdicts.includes(row.verdict) :
+      (row.state !== 'queued' && row.state !== 'running' && row.state !== 'failed') || row.verdict !== null)) throw new HistoryError()
+  return row as unknown as SubmissionSummary
+}
+
 export async function fetchTrainingHistory(subject: string, cursor: string, signal: AbortSignal): Promise<HistoryPage> {
-  if (location.protocol !== 'https:' || !idPattern.test(subject) || (cursor && !cursorPattern.test(cursor))) throw new HistoryError()
+  if (cursor && !cursorPattern.test(cursor)) throw new HistoryError()
   // The server cursor preserves PostgreSQL microseconds; JavaScript dates do not.
-  const response = await fetch(path + (cursor ? '?cursor=' + cursor : ''), {
+  const page = decodeHistoryPage(await readTrainingJSON(path + (cursor ? '?cursor=' + cursor : ''), subject, signal, 32_768))
+  if (cursor && page.next_cursor === cursor) throw new HistoryError()
+  return page
+}
+
+export async function fetchTrainingDetail(subject: string, id: string, signal: AbortSignal): Promise<SubmissionDetail> {
+  if (!idPattern.test(id)) throw new HistoryError()
+  // Control characters may each take six bytes in JSON, plus the receipt fields.
+  const value = await readTrainingJSON(path + '/' + id, subject, signal, maxSourceBytes * 6 + 4096)
+  if (!isRecord(value)) throw new HistoryError()
+  const { source, ...summary } = value
+  const row = decodeSummary(summary)
+  if (row.id !== id || typeof source !== 'string' || !source || source.includes('\0') ||
+    encoder.encode(source).length > maxSourceBytes) throw new HistoryError()
+  return { ...row, source }
+}
+
+async function readTrainingJSON(url: string, subject: string, signal: AbortSignal, limit: number): Promise<unknown> {
+  if (location.protocol !== 'https:' || !idPattern.test(subject)) throw new HistoryError()
+  const response = await fetch(url, {
     credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer',
     headers: { Accept: 'application/json', 'X-OJ-Expected-Subject': subject },
     signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
@@ -65,12 +96,10 @@ export async function fetchTrainingHistory(subject: string, cursor: string, sign
       const { done, value } = await reader.read()
       if (done) break
       size += value.byteLength
-      if (size > 32_768) throw new HistoryError()
+      if (size > limit) throw new HistoryError()
       text += decoder.decode(value, { stream: true })
     }
-    const page = decodeHistoryPage(JSON.parse(text + decoder.decode()) as unknown)
-    if (cursor && page.next_cursor === cursor) throw new HistoryError()
-    return page
+    return JSON.parse(text + decoder.decode()) as unknown
   } finally {
     await reader.cancel().catch(() => undefined)
     reader.releaseLock()

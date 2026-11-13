@@ -81,6 +81,8 @@ type Config struct {
 	PrivateDrafts               *PrivateDraftsConfig
 	// TrainingHistory enables only the read-only personal history route.
 	TrainingHistory bool
+	// TrainingSubmissionDetail independently enables owner-only source and verdict reads.
+	TrainingSubmissionDetail bool
 
 	// EmailLimits optionally provisions the email marker during isolated
 	// recovery. This alone does not enable any public account route.

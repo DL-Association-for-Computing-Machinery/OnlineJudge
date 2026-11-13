@@ -61,6 +61,7 @@ func TestBrowserFixture(t *testing.T) {
 	var unverified string
 	if historyMode {
 		c.TrainingHistory = true
+		c.TrainingSubmissionDetail = true
 		setHistoryEmailVerified(t, f, subject.ID, true)
 		setHistoryEmailVerified(t, f, otherAuthor.ID, true)
 		unverified = f.subject(t, false).Email.Original()

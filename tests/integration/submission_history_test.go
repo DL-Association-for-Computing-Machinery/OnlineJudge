@@ -121,4 +121,23 @@ func checkHistoryPlan(t *testing.T, f backlogFixture, owner, scope string, after
 		t.Fatalf("expected an index seek:\n%s", plan.String())
 	}
 	t.Log(plan.String())
+
+	rows.Close()
+	detail, err := tx.Query(f.ctx, `EXPLAIN (ANALYZE, BUFFERS)
+		SELECT s.id, s.material_version, s.language, s.created_at, t.state, t.verdict, s.source_code
+		FROM submissions s JOIN judge_tasks t ON t.submission_id = s.id
+		WHERE s.id = $1 AND s.subject_id = $2 AND s.context_id = $3`, after.ID, owner, scope)
+	must(t, err)
+	defer detail.Close()
+	plan.Reset()
+	for detail.Next() {
+		var line string
+		must(t, detail.Scan(&line))
+		plan.WriteString(line + "\n")
+	}
+	must(t, detail.Err())
+	if !strings.Contains(plan.String(), "Index Scan using submissions_pkey") {
+		t.Fatalf("expected a primary-key lookup for detail:\n%s", plan.String())
+	}
+	t.Log(plan.String())
 }

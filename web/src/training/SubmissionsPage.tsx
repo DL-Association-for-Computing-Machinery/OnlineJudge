@@ -9,17 +9,38 @@ import './trainingHistory.css'
 const stateLabels = { queued: '排队中', running: '判题中', finished: '已判定', failed: '判题失败' }
 const formatDate = new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'medium' })
 
-function HistoryRow({ row }: { row: SubmissionSummary }) {
+function HistoryRow({ row, history, detail, accountBusy }: {
+  row: SubmissionSummary
+  history: HistoryController
+  detail: ReturnType<HistoryController['getSnapshot']>['detail']
+  accountBusy: boolean
+}) {
+  const expanded = detail?.id === row.id
+  const current = expanded && detail.value ? detail.value : row
+  const panelID = 'submission-detail-' + row.id
   return <li>
     <div className="history-row-heading">
       <h2>提交 <code>{row.id}</code></h2>
-      <span>{stateLabels[row.state]}{row.verdict ? ` · ${row.verdict}` : ''}</span>
+      <span>{stateLabels[current.state]}{current.verdict ? ` · ${current.verdict}` : ''}</span>
     </div>
     <dl>
       <div><dt>接收时间</dt><dd><time dateTime={row.created_at}>{formatDate.format(new Date(row.created_at))}</time></dd></div>
       <div><dt>语言</dt><dd>GNU++17</dd></div>
       <div><dt>题目材料版本</dt><dd><code>{row.material_version}</code></dd></div>
     </dl>
+    <button type="button" className="button button-outline" aria-expanded={expanded} aria-controls={expanded ? panelID : undefined}
+      disabled={accountBusy} onClick={() => expanded ? history.closeDetail() : void history.openDetail(row.id)}>
+      {expanded ? '收起提交详情' : '查看提交详情'}
+    </button>
+    {expanded ? <div id={panelID} className="history-detail">
+      <p role="status">{detail.notice || '已读取提交详情。'}</p>
+      <button type="button" className="button button-outline" disabled={detail.busy || accountBusy}
+        onClick={() => void history.openDetail(row.id)}>重新读取详情</button>
+      {detail.value ? <>
+        <h3 id={panelID + '-source'}>提交时的源码</h3>
+        <pre tabIndex={0} aria-labelledby={panelID + '-source'}><code>{detail.value.source}</code></pre>
+      </> : null}
+    </div> : null}
   </li>
 }
 
@@ -53,7 +74,8 @@ export function SubmissionsPage() {
       </div>
       <p role="status">{state.notice}</p>
       {state.page?.submissions.length ? <ol className="history-list" aria-label="训练提交记录">
-        {state.page.submissions.map(row => <HistoryRow key={row.id} row={row} />)}
+        {state.page.submissions.map(row => <HistoryRow key={row.id} row={row} history={history}
+          detail={state.detail?.id === row.id ? state.detail : null} accountBusy={account.busy} />)}
       </ol> : null}
     </> : <div className="empty-state">
       <h2>{account.status === 'anonymous' ? '登录后查看提交历史' : '当前会话未确认'}</h2>

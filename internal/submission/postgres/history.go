@@ -36,28 +36,57 @@ func ListTrainingHistory(ctx context.Context, pool *pgxpool.Pool, actor identity
 	if ctx == nil || pool == nil || !actor.Valid() || !validHistoryPosition(after) {
 		return submission.HistoryPage{}, submission.ErrInvalid
 	}
+	return readTraining(ctx, pool, actor, func(ctx context.Context, q *submissiondb.Queries) (submission.HistoryPage, error) {
+		return listHistory(ctx, q, actor.SubjectID, submission.PersonalTrainingScope, after)
+	})
+}
+
+// ReadTrainingDetail checks the current training account and reads only the
+// caller's fixed personal training scope within the same transaction.
+func ReadTrainingDetail(ctx context.Context, pool *pgxpool.Pool, actor identity.TrainingActor, id string) (submission.Detail, error) {
+	if ctx == nil || pool == nil || !actor.Valid() || !validHistoryID(id) {
+		return submission.Detail{}, submission.ErrInvalid
+	}
+	return readTraining(ctx, pool, actor, func(ctx context.Context, q *submissiondb.Queries) (submission.Detail, error) {
+		row, err := q.GetTrainingSubmissionDetail(ctx, submissiondb.GetTrainingSubmissionDetailParams{
+			ID: id, SubjectID: actor.SubjectID, ContextID: submission.PersonalTrainingScope,
+		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return submission.Detail{}, submission.ErrNotFound
+		}
+		if err != nil {
+			return submission.Detail{}, err
+		}
+		if !row.CreatedAt.Valid || row.CreatedAt.InfinityModifier != pgtype.Finite {
+			return submission.Detail{}, errors.New("invalid stored submission timestamp")
+		}
+		return submission.Detail{Receipt: receipt(submissiondb.GetReceiptRow{
+			ID: row.ID, MaterialVersion: row.MaterialVersion, Language: row.Language,
+			CreatedAt: row.CreatedAt, State: row.State, Verdict: row.Verdict,
+		}), Source: row.SourceCode}, nil
+	})
+}
+
+func readTraining[T any](ctx context.Context, pool *pgxpool.Pool, actor identity.TrainingActor, read func(context.Context, *submissiondb.Queries) (T, error)) (T, error) {
+	var zero T
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
-		return submission.HistoryPage{}, err
+		return zero, err
 	}
-	defer func() {
-		cleanup, stop := context.WithTimeout(context.Background(), time.Second)
-		defer stop()
-		_ = tx.Rollback(cleanup)
-	}()
+	defer rollback(tx)
 	if err := identitypg.LockTrainingAccount(ctx, tx, actor); err != nil {
-		return submission.HistoryPage{}, err
+		return zero, err
 	}
-	page, err := listHistory(ctx, submissiondb.New(tx), actor.SubjectID, submission.PersonalTrainingScope, after)
+	result, err := read(ctx, submissiondb.New(tx))
 	if err != nil {
-		return submission.HistoryPage{}, err
+		return zero, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return submission.HistoryPage{}, err
+		return zero, err
 	}
-	return page, nil
+	return result, nil
 }
 
 func validHistoryPosition(after *submission.HistoryPosition) bool {

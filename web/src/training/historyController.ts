@@ -1,8 +1,9 @@
 import type { AccountController } from '../account/controller'
-import { fetchTrainingHistory, HistoryError, type HistoryPage } from '../services/trainingHistory'
+import { fetchTrainingDetail, fetchTrainingHistory, HistoryError, type HistoryPage, type SubmissionDetail } from '../services/trainingHistory'
 
-interface HistoryState { page: HistoryPage | null; number: number; busy: boolean; notice: string }
-const initial: HistoryState = { page: null, number: 0, busy: false, notice: '检查会话后可读取本人的训练提交。' }
+interface DetailState { id: string; busy: boolean; notice: string; value: SubmissionDetail | null }
+interface HistoryState { page: HistoryPage | null; number: number; busy: boolean; notice: string; detail: DetailState | null }
+const initial: HistoryState = { page: null, number: 0, busy: false, notice: '检查会话后可读取本人的训练提交。', detail: null }
 const pageHidden = () => document.visibilityState === 'hidden'
 
 export class HistoryController {
@@ -10,6 +11,7 @@ export class HistoryController {
   private listeners = new Set<() => void>()
   private unsubscribe: (() => void) | null = null
   private request: AbortController | null = null
+  private detailRequest: AbortController | null = null
   private expiry: ReturnType<typeof setTimeout> | undefined
   private subject: string | null = null
 
@@ -28,9 +30,56 @@ export class HistoryController {
   clear = () => {
     this.request?.abort()
     this.request = null
+    this.cancelDetail()
     this.subject = null
     clearTimeout(this.expiry)
     this.publish(initial)
+  }
+
+  private cancelDetail() {
+    this.detailRequest?.abort()
+    this.detailRequest = null
+  }
+
+  closeDetail = () => {
+    this.cancelDetail()
+    this.publish({ ...this.state, detail: null })
+  }
+
+  openDetail = async (id: string) => {
+    const account = this.account.getSnapshot()
+    const session = account.session
+    if (!this.unsubscribe || account.busy || account.status !== 'authenticated' || !session ||
+      session.subject_id !== this.subject || pageHidden() || !this.state.page?.submissions.some(row => row.id === id)) return
+    const deadline = Math.min(Date.parse(session.idle_expires_at), Date.parse(session.absolute_deadline))
+    if (!Number.isFinite(deadline) || Date.now() >= deadline) { this.clear(); return }
+    this.cancelDetail()
+    const request = new AbortController()
+    this.detailRequest = request
+    this.publish({ ...this.state, detail: { id, busy: true, notice: '正在读取提交详情…', value: null } })
+    try {
+      const value = await fetchTrainingDetail(session.subject_id, id, request.signal)
+      if (request.signal.aborted) return
+      if (pageHidden() || Date.now() >= deadline) { this.clear(); return }
+      this.publish({ ...this.state, detail: { id, busy: false, notice: '', value } })
+    } catch (error) {
+      if (request.signal.aborted) return
+      const status = error instanceof HistoryError ? error.status : 0
+      if (status === 401 || status === 409) {
+        this.clear()
+        await this.account.run('check')
+        return
+      }
+      if (status === 403) {
+        this.clear()
+        this.publish({ ...initial, notice: '只有已验证邮箱的个人账号可以查看训练提交。' })
+        return
+      }
+      const notice = status === 404 ? '该提交详情不可用。' : '暂时无法读取提交详情，请重试。'
+      this.publish({ ...this.state, detail: { id, busy: false, notice, value: null } })
+    } finally {
+      if (this.detailRequest === request) this.detailRequest = null
+    }
   }
 
   first = () => this.load('', 1, null)
@@ -71,7 +120,7 @@ export class HistoryController {
         return
       }
       this.subject = session.subject_id
-      this.publish({ page, number, busy: false, notice: page.submissions.length ?
+      this.publish({ ...initial, page, number, notice: page.submissions.length ?
         `第 ${number} 页，共 ${page.submissions.length} 条。${page.next_cursor ? '' : '已到末页。'}` : '没有可显示的训练提交。' })
     } catch (error) {
       if (request.signal.aborted) return

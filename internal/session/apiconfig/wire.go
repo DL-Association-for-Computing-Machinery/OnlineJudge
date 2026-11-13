@@ -1,26 +1,27 @@
 package apiconfig
 
 type document struct {
-	Version           int                    `json:"version"`
-	Mode              string                 `json:"mode"`
-	Namespace         string                 `json:"namespace"`
-	SecretsFile       string                 `json:"secrets_file"`
-	Origin            string                 `json:"origin"`
-	LoginWindow       string                 `json:"login_window"`
-	StartupTimeout    string                 `json:"startup_timeout"`
-	HTTPTimeout       string                 `json:"http_timeout"`
-	Database          *databaseWire          `json:"database"`
-	Redis             *redisWire             `json:"redis"`
-	Password          *passwordWire          `json:"password"`
-	LoginLimits       *limitsWire            `json:"login_limits"`
-	EmailLimits       *emailLimitsWire       `json:"email_limits"`
-	EmailConfirmation *emailConfirmationWire `json:"email_confirmation"`
-	ProxyFingerprints []string               `json:"proxy_fingerprints"`
-	TLS               *Material              `json:"tls"`
-	Server            *serverWire            `json:"server"`
-	PasswordChange    *passwordChangeWire    `json:"password_change"`
-	PrivateDrafts     *privateDraftsWire     `json:"private_drafts"`
-	TrainingHistory   bool                   `json:"training_history"`
+	Version                  int                    `json:"version"`
+	Mode                     string                 `json:"mode"`
+	Namespace                string                 `json:"namespace"`
+	SecretsFile              string                 `json:"secrets_file"`
+	Origin                   string                 `json:"origin"`
+	LoginWindow              string                 `json:"login_window"`
+	StartupTimeout           string                 `json:"startup_timeout"`
+	HTTPTimeout              string                 `json:"http_timeout"`
+	Database                 *databaseWire          `json:"database"`
+	Redis                    *redisWire             `json:"redis"`
+	Password                 *passwordWire          `json:"password"`
+	LoginLimits              *limitsWire            `json:"login_limits"`
+	EmailLimits              *emailLimitsWire       `json:"email_limits"`
+	EmailConfirmation        *emailConfirmationWire `json:"email_confirmation"`
+	ProxyFingerprints        []string               `json:"proxy_fingerprints"`
+	TLS                      *Material              `json:"tls"`
+	Server                   *serverWire            `json:"server"`
+	PasswordChange           *passwordChangeWire    `json:"password_change"`
+	PrivateDrafts            *privateDraftsWire     `json:"private_drafts"`
+	TrainingHistory          bool                   `json:"training_history"`
+	TrainingSubmissionDetail bool                   `json:"training_submission_detail"`
 }
 
 type emailConfirmationWire struct {

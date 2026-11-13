@@ -1,9 +1,9 @@
 openapi: 3.1.0
 info:
   title: OnlineJudge Personal Training Submission History
-  version: 0.1.0
+  version: 0.2.0
   description: >-
-    普通会话 HTTPS 下的可选只读能力。显式设置 training_history: true 才启用；
+    普通会话 HTTPS 下的可选只读能力。列表和详情分别由 training_history 和 training_submission_detail 启用；
     沿用普通会话的固定 Host、直连 TLS 或单跳 mTLS 代理。响应不缓存、不设置 Cookie。
 security:
   - ordinarySession: []
@@ -61,12 +61,52 @@ paths:
               schema: { $ref: './session.openapi.yaml#/components/schemas/Problem' }
         '409': { description: TRAINING_SUBJECT_CHANGED，当前会话主体与请求头不符, $ref: '#/components/responses/Failure' }
         '503': { description: SESSION_UNAVAILABLE 或 TRAINING_HISTORY_UNAVAILABLE, $ref: '#/components/responses/Failure' }
+  /api/v1/training/submissions/{id}:
+    get:
+      operationId: readOwnTrainingSubmission
+      description: >-
+        每次从实际会话取得主体，在同一 PostgreSQL 事务中复核当前账号资格并按 ID、主体和固定
+        personal-training 范围读取源码及当前判定。不开启轮询，不接受请求体、查询参数或编码路径别名。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-f0-9]{32}$' }
+        - name: X-OJ-Expected-Subject
+          in: header
+          required: true
+          description: 客户端最后确认的会话主体；不作为身份来源。
+          schema: { type: string, pattern: '^[a-f0-9]{32}$' }
+      responses:
+        '200':
+          description: 本人提交的源码及当前判定；不含测试点或 Worker 内部证据。
+          headers:
+            Cache-Control: { $ref: './session.openapi.yaml#/components/headers/NoStore' }
+            X-Content-Type-Options: { $ref: './session.openapi.yaml#/components/headers/NoSniff' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubmissionDetail' }
+        '400': { description: INVALID_TRAINING_DETAIL_REQUEST, $ref: '#/components/responses/Failure' }
+        '401': { description: SESSION_REQUIRED, $ref: '#/components/responses/Failure' }
+        '403': { description: TRAINING_ACCOUNT_REQUIRED 或 ORIGIN_REJECTED, $ref: '#/components/responses/Failure' }
+        '404': { description: NOT_FOUND，未启用、提交不存在或不在本人个人训练范围, $ref: '#/components/responses/Failure' }
+        '405':
+          description: METHOD_NOT_ALLOWED
+          headers:
+            Allow: { schema: { type: string, const: GET } }
+            Cache-Control: { $ref: './session.openapi.yaml#/components/headers/NoStore' }
+            X-Content-Type-Options: { $ref: './session.openapi.yaml#/components/headers/NoSniff' }
+          content:
+            application/problem+json:
+              schema: { $ref: './session.openapi.yaml#/components/schemas/Problem' }
+        '409': { description: TRAINING_SUBJECT_CHANGED，当前会话主体与请求头不符, $ref: '#/components/responses/Failure' }
+        '503': { description: SESSION_UNAVAILABLE 或 TRAINING_DETAIL_UNAVAILABLE, $ref: '#/components/responses/Failure' }
 components:
   securitySchemes:
     ordinarySession: { type: apiKey, in: cookie, name: __Host-oj_session }
   responses:
     Failure:
-      description: 拒绝或暂不可用；不返回提交摘要。
+      description: 拒绝或暂不可用；不返回提交数据。
       headers:
         Cache-Control: { $ref: './session.openapi.yaml#/components/headers/NoStore' }
         X-Content-Type-Options: { $ref: './session.openapi.yaml#/components/headers/NoSniff' }
@@ -75,8 +115,22 @@ components:
           schema: { $ref: './session.openapi.yaml#/components/schemas/Problem' }
   schemas:
     SubmissionSummary:
+      $ref: '#/components/schemas/SubmissionReceiptFields'
+      unevaluatedProperties: false
+    SubmissionDetail:
+      allOf:
+        - $ref: '#/components/schemas/SubmissionReceiptFields'
+        - type: object
+          required: [source]
+          properties:
+            source:
+              type: string
+              minLength: 1
+              maxLength: 65536
+              description: 原始提交源码；服务端以 UTF-8 字节计，至多 65,536 字节。
+      unevaluatedProperties: false
+    SubmissionReceiptFields:
       type: object
-      additionalProperties: false
       required: [id, material_version, language, created_at, state, verdict]
       properties:
         id: { type: string, pattern: '^[a-f0-9]{32}$' }

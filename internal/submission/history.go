@@ -16,3 +16,9 @@ type HistoryPage struct {
 	Items []Receipt
 	Next  *HistoryPosition
 }
+
+// Detail is the owner's stored source and current task receipt.
+type Detail struct {
+	Receipt
+	Source string `json:"source"`
+}
