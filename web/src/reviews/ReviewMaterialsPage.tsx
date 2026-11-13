@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router'
 import { useCurrentAccount } from '../account/context'
 import { subscribePrivateInvalidation } from '../account/privateInvalidation'
 import { validDraftID } from '../services/privateDraft'
+import { reviewBlockerLabels } from '../services/reviewMaterials'
 import { Sample } from '../statement/Sample'
 import { StatementMarkdown } from '../statement/StatementMarkdown'
 import { ReviewMaterialsController } from './materialsController'
@@ -34,6 +35,17 @@ function AssignedMaterials({ id }: { id: string }) {
     <p role="status">{state.notice}</p>
     {accountState.status !== 'authenticated' && <p>{accountState.notice.text} <Link to="/login">前往登录</Link></p>}
     {data && <>
+      <section className="problem-statement" aria-labelledby="review-eligibility">
+        <h2 id="review-eligibility">批准准入状态</h2>
+        <p>查看当前冻结修订的阻断项。此处只读，不能批准或发布题目。</p>
+        <button type="button" className="button button-outline" disabled={state.busy || accountState.busy}
+          onClick={() => void controller.readEligibility()}>查看当前阻断项</button>
+        {state.eligibility && <>
+          <p>本次检查：尚不能批准。</p>
+          {state.eligibility.statementConfirmed && <p>当前分配已记录题意确认。</p>}
+          <ul>{state.eligibility.blockers.map(code => <li key={code}>{reviewBlockerLabels[code]}</li>)}</ul>
+        </>}
+      </section>
       <article className="problem-statement" aria-labelledby="review-title">
         <h2 id="review-title">{data.statement.title}</h2>
         <p>分配修订 {data.evidence.assignment_revision} · 正式参考结果 {data.evidence.formal_verdict}</p>

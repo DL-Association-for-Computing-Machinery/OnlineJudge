@@ -40,6 +40,41 @@ it('reads only after explicit session verification and binds the same-origin GET
   f.stop()
 })
 
+const eligibility = () => ({ evidence: material().evidence, policy_version: 'oj.review-approval.v14', eligible: false,
+  blockers: ['statement_quality_missing', 'target_runtime_missing'] })
+
+it('reads current blockers only on request and discards a response for another assignment revision', async () => {
+  const f = await setup()
+  try {
+    await f.controller.load()
+    expect(f.controller.getSnapshot().eligibility).toBeNull()
+    f.fetch.mockResolvedValueOnce(Response.json(eligibility()))
+    await f.controller.readEligibility()
+    const [url, options] = f.fetch.mock.calls.at(-1) ?? []
+    expect(url).toBe(`/api/v1/problem-review/${review}/eligibility`)
+    expect(new Headers(options?.headers).get('X-OJ-Expected-Subject')).toBe(owner)
+    expect(f.controller.getSnapshot().eligibility?.blockers).toEqual(eligibility().blockers)
+    f.fetch.mockResolvedValueOnce(Response.json({ ...eligibility(), evidence: { ...material().evidence, assignment_revision: 2 } }))
+    await f.controller.readEligibility()
+    expect(f.controller.getSnapshot()).toMatchObject({ data: null, eligibility: null, busy: false })
+  } finally { f.stop() }
+})
+
+it('does not revive eligibility after account invalidation', async () => {
+  const f = await setup()
+  try {
+    await f.controller.load()
+    let release!: (response: Response) => void
+    f.fetch.mockImplementationOnce(() => new Promise(resolve => { release = resolve }))
+    const pending = f.controller.readEligibility()
+    f.fetch.mockResolvedValueOnce(Response.json({ ...session(), subject_id: draft }))
+    await f.account.run('check')
+    release(Response.json(eligibility()))
+    await pending
+    expect(f.controller.getSnapshot()).toMatchObject({ data: null, eligibility: null })
+  } finally { f.stop() }
+})
+
 it('does not display partial material for a mismatched review, draft, version, or unknown dependency', () => {
   const m = material()
   const cases = [

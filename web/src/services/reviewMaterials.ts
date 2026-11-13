@@ -15,6 +15,26 @@ interface ReviewMaterials {
   standard_solution: { source: string; dependencies?: { name: string; source: string }[] }
 }
 
+export const reviewBlockerLabels = {
+  materials_returned: '同一修订的材料已被退回',
+  policy_unavailable: '来源或验证档位不符合当前策略',
+  formal_failed: '正式参考验证未通过',
+  comparison_missing: '缺少本站对拍结果',
+  comparison_mismatch: '本站对拍结果不一致',
+  independent_correctness_missing: '缺少独立正确性证据',
+  statement_quality_missing: '题意确认或可信渲染证据未齐备',
+  test_coverage_missing: '缺少正式数据覆盖证据',
+  input_validator_missing: '缺少输入校验证据',
+  checker_admission_missing: '缺少生产检查器准入证据',
+  target_runtime_missing: '缺少目标运行环境验收证据',
+  solution_confirmation_missing: '缺少作者标程确认',
+} as const
+
+export interface ReviewEligibility {
+  blockers: (keyof typeof reviewBlockerLabels)[]
+  statementConfirmed: boolean
+}
+
 function decodeEvidence(value: unknown, review: string): ReviewMaterials['evidence'] {
   if (!object(value)) throw invalid()
   const hashes = ['content_version', 'import_revision', 'source_lock_sha256', 'formal_plan_sha256', 'profile_sha256', 'evidence_sha256']
@@ -60,8 +80,27 @@ export function decodeReviewMaterials(value: unknown, review: string): ReviewMat
 }
 
 export async function fetchReviewMaterials(review: string, owner: string, signal: AbortSignal): Promise<ReviewMaterials> {
+  return decodeReviewMaterials(await readReviewJSON(review, owner, 'materials', bodyLimit, signal), review)
+}
+
+export async function fetchReviewEligibility(evidence: ReviewMaterials['evidence'], owner: string, signal: AbortSignal): Promise<ReviewEligibility> {
+  const value = await readReviewJSON(evidence.review_id, owner, 'eligibility', 32 * 1024, signal)
+  if (!object(value) || value.policy_version !== 'oj.review-approval.v14' || value.eligible !== false ||
+    ('statement_semantics_confirmed' in value && value.statement_semantics_confirmed !== true)) throw invalid()
+  const actual = decodeEvidence(value.evidence, evidence.review_id)
+  if (actual.draft_id !== evidence.draft_id || actual.content_version !== evidence.content_version ||
+    actual.import_revision !== evidence.import_revision || actual.assignment_revision !== evidence.assignment_revision ||
+    actual.evidence_sha256 !== evidence.evidence_sha256) throw invalid()
+  const blockers: unknown = value.blockers
+  if (!Array.isArray(blockers) || blockers.length === 0 || blockers.length > Object.keys(reviewBlockerLabels).length ||
+    new Set(blockers).size !== blockers.length || !blockers.every((code): code is keyof typeof reviewBlockerLabels =>
+      typeof code === 'string' && Object.hasOwn(reviewBlockerLabels, code))) throw invalid()
+  return { blockers, statementConfirmed: value.statement_semantics_confirmed === true }
+}
+
+async function readReviewJSON(review: string, owner: string, path: 'materials' | 'eligibility', limit: number, signal: AbortSignal): Promise<unknown> {
   if (!id(review) || !id(owner) || globalThis.location.protocol !== 'https:') throw invalid()
-  const response = await fetch(`/api/v1/problem-review/${review}/materials`, {
+  const response = await fetch(`/api/v1/problem-review/${review}/${path}`, {
     method: 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer',
     headers: { Accept: 'application/json', 'X-OJ-Expected-Subject': owner }, signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
   })
@@ -77,14 +116,14 @@ export async function fetchReviewMaterials(review: string, owner: string, signal
       const { done, value } = await reader.read()
       if (done) break
       size += value.byteLength
-      if (size > bodyLimit) throw invalid()
+      if (size > limit) throw invalid()
       chunks.push(value)
     }
   } finally { await reader.cancel().catch(() => undefined); reader.releaseLock() }
   const body = new Uint8Array(size)
   let offset = 0
   for (const chunk of chunks) { body.set(chunk, offset); offset += chunk.byteLength }
-  return decodeReviewMaterials(JSON.parse(decoder.decode(body)) as unknown, review)
+  return JSON.parse(decoder.decode(body)) as unknown
 }
 
 export type { ReviewMaterials }
