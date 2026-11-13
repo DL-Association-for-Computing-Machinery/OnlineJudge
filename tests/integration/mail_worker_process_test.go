@@ -83,8 +83,14 @@ func testMailWorkerProcessLoopback(t *testing.T, crash bool) {
 	if err := gate.WithPersonalCredentials(f.ctx, to, replacement, observe); !errors.Is(err, identity.ErrCredentials) || calls != 0 {
 		t.Fatal("registration unexpectedly accepted the future password")
 	}
-	_, err = f.a.Exec(f.ctx, "INSERT INTO account_mail_send_rate(spacing_ms) VALUES (100)")
+	var schema string
+	must(t, f.a.QueryRow(f.ctx, "SELECT current_schema()").Scan(&schema))
+	dsn := f.a.Config().ConnString() + " search_path=" + schema
+	migrate, err := filepath.Abs("../../.local/bin/migrate")
 	must(t, err)
+	configure := exec.CommandContext(f.ctx, migrate, "mail-send-rate", "100")
+	configure.Env = []string{"OJ_DATABASE_URL=" + dsn}
+	must(t, configure.Run())
 	fixture := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	tlsConfig := &tls.Config{Certificates: fixture.TLS.Certificates, MinVersion: tls.VersionTLS12}
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: fixture.Certificate().Raw})
@@ -121,14 +127,12 @@ func testMailWorkerProcessLoopback(t *testing.T, crash bool) {
 			}
 		}
 	}()
-	var schema string
-	must(t, f.a.QueryRow(f.ctx, "SELECT current_schema()").Scan(&schema))
 	path, err := filepath.Abs("../../.local/bin/mail-worker")
 	must(t, err)
 	process, cancel := context.WithCancel(f.ctx)
 	defer cancel()
 	env := []string{
-		"OJ_DATABASE_URL=" + f.a.Config().ConnString() + " search_path=" + schema,
+		"OJ_DATABASE_URL=" + dsn,
 		"OJ_EMAIL_PAYLOAD_KEYS_FILE=" + keyFile, "SSL_CERT_FILE=" + certFile,
 		"OJ_ACCOUNT_PUBLIC_ORIGIN=https://oj.example.invalid",
 		"OJ_SMTP_HOST=127.0.0.1", "OJ_SMTP_TLS=implicit", "OJ_SMTP_FROM=sender@example.invalid",
