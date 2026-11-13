@@ -53,6 +53,7 @@ type handler struct {
 	statementConfirmations StatementConfirmations
 	trainingHistory        TrainingHistory
 	trainingDetail         TrainingDetail
+	trainingStatus         TrainingStatus
 }
 
 // New builds three explicit endpoints without registering any application route:

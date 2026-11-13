@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OnlineJudge Personal Training Submission History
-  version: 0.2.0
+  version: 0.3.0
   description: >-
     普通会话 HTTPS 下的可选只读能力。列表和详情分别由 training_history 和 training_submission_detail 启用；
     沿用普通会话的固定 Host、直连 TLS 或单跳 mTLS 代理。响应不缓存、不设置 Cookie。
@@ -66,12 +66,17 @@ paths:
       operationId: readOwnTrainingSubmission
       description: >-
         每次从实际会话取得主体，在同一 PostgreSQL 事务中复核当前账号资格并按 ID、主体和固定
-        personal-training 范围读取源码及当前判定。不开启轮询，不接受请求体、查询参数或编码路径别名。
+        personal-training 范围读取源码及当前判定。自动刷新使用只返回当前摘要的 view=status。
+        不接受请求体、其他查询字段或编码路径别名。
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string, pattern: '^[a-f0-9]{32}$' }
+        - name: view
+          in: query
+          description: 省略时显式读取详情；传入原文 view=status 时仅返回摘要，不读取或传输源码。
+          schema: { type: string, const: status }
         - name: X-OJ-Expected-Subject
           in: header
           required: true
@@ -79,13 +84,16 @@ paths:
           schema: { type: string, pattern: '^[a-f0-9]{32}$' }
       responses:
         '200':
-          description: 本人提交的源码及当前判定；不含测试点或 Worker 内部证据。
+          description: 本人提交的当前判定；仅省略 view 时含源码。两种响应均不含测试点或 Worker 内部证据。
           headers:
             Cache-Control: { $ref: './session.openapi.yaml#/components/headers/NoStore' }
             X-Content-Type-Options: { $ref: './session.openapi.yaml#/components/headers/NoSniff' }
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/SubmissionDetail' }
+              schema:
+                oneOf:
+                  - { $ref: '#/components/schemas/SubmissionSummary' }
+                  - { $ref: '#/components/schemas/SubmissionDetail' }
         '400': { description: INVALID_TRAINING_DETAIL_REQUEST, $ref: '#/components/responses/Failure' }
         '401': { description: SESSION_REQUIRED, $ref: '#/components/responses/Failure' }
         '403': { description: TRAINING_ACCOUNT_REQUIRED 或 ORIGIN_REJECTED, $ref: '#/components/responses/Failure' }
