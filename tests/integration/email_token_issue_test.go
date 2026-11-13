@@ -180,6 +180,14 @@ func TestEmailTokenIssue(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "cannot discard issued email tokens") {
 		t.Fatalf("nonempty downgrade did not refuse: %v", err)
 	}
+	var versionAfterRefusal int64
+	must(t, f.a.QueryRow(f.ctx, "SELECT version_id FROM goose_db_version ORDER BY id DESC LIMIT 1").Scan(&versionAfterRefusal))
+	if versionAfterRefusal != 21 {
+		t.Fatalf("partial downgrade left schema %d, want 21", versionAfterRefusal)
+	}
+	check(5)
+	_, err = f.provider.Up(f.ctx)
+	must(t, err)
 	must(t, db.CheckSchema(f.ctx, f.a))
 	check(5)
 	testEmailIssuePlans(t, f, subject, epoch)
