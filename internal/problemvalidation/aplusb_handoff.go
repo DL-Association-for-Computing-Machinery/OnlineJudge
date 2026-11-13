@@ -27,6 +27,12 @@ const handoffManifest = "handoff.json"
 const handoffTransport = "manifest.json"
 const transportPin = "d896b91d12727acc290e98f6cd8b0944d590efa905efaa1c84ef7cbe4a2f4a13"
 
+const (
+	ubuntuHandoffRuntime   = "8cf3b8386627d1a92b7566521c78dd030bf00fdd2acd5485dcc9bc4357e492b8"
+	ubuntuHandoffJudge     = "a2aac16ff12078b51106b6a26ed374aa89dbe386152742d6c1aeee2f189983bb"
+	ubuntuHandoffTransport = "337c7a52705e4a8ff77c8d8ee03388563c3b54e80ed1b34b1d2a72e0863e4640"
+)
+
 var errHandoff = errors.New("A+B handoff is incomplete or does not match the trusted binding")
 var handoffLabel = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
 var handoffRevision = regexp.MustCompile(`^[a-f0-9]{40}$`)
@@ -51,22 +57,35 @@ type APlusBHandoff struct {
 }
 
 func handoffFor(target APlusBHandoffTarget) (APlusBHandoff, error) {
-	if !handoffLabel.MatchString(target.Node) ||
-		!handoffRevision.MatchString(target.Revision) || target.Runtime != reviewedAPlusBRuntime ||
-		target.Slot != "oj-reference-sandbox" {
+	if !handoffLabel.MatchString(target.Node) || !handoffRevision.MatchString(target.Revision) {
 		return APlusBHandoff{}, errHandoff
 	}
-	return APlusBHandoff{handoffSchema, target, ReviewedAPlusBPlan, ReviewedAPlusBCandidate, reviewedAPlusBManifest, transportPin}, nil
+	h := APlusBHandoff{Schema: handoffSchema, Target: target, Plan: ReviewedAPlusBPlan, Candidate: ReviewedAPlusBCandidate}
+	switch {
+	case target.Runtime == reviewedAPlusBRuntime && target.Slot == "oj-reference-sandbox":
+		h.Judge, h.Transport = reviewedAPlusBManifest, transportPin
+	case target.Runtime == ubuntuHandoffRuntime && target.Slot == "oj-aplusb-ubuntu-sandbox":
+		h.Judge, h.Transport = ubuntuHandoffJudge, ubuntuHandoffTransport
+	default:
+		return APlusBHandoff{}, errHandoff
+	}
+	return h, nil
 }
 
-func readTransport(path string) ([]byte, []string, error) {
+type handoffMaterials struct {
+	raw     []byte
+	points  []materials.APlusBPoint
+	objects []string
+}
+
+func readTransport(path string, h APlusBHandoff) (handoffMaterials, error) {
 	raw, err := checkedfile.ReadSecret(filepath.Join(path, handoffTransport), 16384)
 	if err != nil {
-		return nil, nil, errHandoff
+		return handoffMaterials{}, errHandoff
 	}
-	m, err := materials.ParseAPlusB(raw, transportPin)
-	if err != nil {
-		return nil, nil, errHandoff
+	m, err := materials.ParseAPlusB(raw, h.Transport)
+	if err != nil || m.JudgeSHA256 != h.Judge {
+		return handoffMaterials{}, errHandoff
 	}
 	seen := make(map[string]bool)
 	var objects []string
@@ -79,7 +98,7 @@ func readTransport(path string) ([]byte, []string, error) {
 		}
 	}
 	sort.Strings(objects)
-	return raw, objects, nil
+	return handoffMaterials{raw, m.Tests, objects}, nil
 }
 
 // PackAPlusBHandoff copies only the independently pinned transport and its
@@ -89,7 +108,7 @@ func PackAPlusBHandoff(ctx context.Context, source, destination string, target A
 	if err != nil {
 		return "", err
 	}
-	raw, objects, err := readTransport(source)
+	material, err := readTransport(source, h)
 	if err != nil {
 		return "", err
 	}
@@ -106,7 +125,7 @@ func PackAPlusBHandoff(ctx context.Context, source, destination string, target A
 		return "", errHandoff
 	}
 	defer func() { _ = root.Close() }()
-	for _, hash := range objects {
+	for _, hash := range material.objects {
 		if err := writeHandoffFile(root, hash, func(out io.Writer) error {
 			_, err := reader.CopyVerified(ctx, hash, out)
 			return err
@@ -114,7 +133,7 @@ func PackAPlusBHandoff(ctx context.Context, source, destination string, target A
 			return "", errHandoff
 		}
 	}
-	if err := writeHandoffFile(root, handoffTransport, func(out io.Writer) error { _, err := out.Write(raw); return err }); err != nil {
+	if err := writeHandoffFile(root, handoffTransport, func(out io.Writer) error { _, err := out.Write(material.raw); return err }); err != nil {
 		return "", errHandoff
 	}
 	if err := errors.Join(syncHandoffRoot(root), ctx.Err()); err != nil {
@@ -156,56 +175,65 @@ func syncHandoffRoot(root *os.Root) error {
 // VerifyAPlusBHandoff checks a stationary received copy against an independent
 // manifest pin and the expected target. It does not execute or authorize it.
 func VerifyAPlusBHandoff(ctx context.Context, path, pin string, target APlusBHandoffTarget) (APlusBHandoff, error) {
+	h, _, err := verifyAPlusBHandoff(ctx, path, pin, target)
+	return h, err
+}
+
+func verifyAPlusBHandoff(ctx context.Context, path, pin string, target APlusBHandoffTarget) (APlusBHandoff, []materials.APlusBPoint, error) {
 	var zero APlusBHandoff
 	want, err := handoffFor(target)
 	if err != nil {
-		return zero, err
+		return zero, nil, err
 	}
 	raw, err := checkedfile.ReadSecret(filepath.Join(path, handoffManifest), 4096)
 	expected, _ := json.Marshal(want)
 	if err != nil || handoffDigest(raw) != pin || !bytes.Equal(raw, expected) {
-		return zero, errHandoff
+		return zero, nil, errHandoff
 	}
-	_, objects, err := readTransport(path)
+	material, err := readTransport(path, want)
 	if err != nil {
-		return zero, err
+		return zero, nil, err
 	}
 	root, err := os.OpenRoot(path)
 	if err != nil {
-		return zero, errHandoff
+		return zero, nil, errHandoff
 	}
 	defer func() { _ = root.Close() }()
 	dir, err := root.Open(".")
 	if err != nil {
-		return zero, errHandoff
+		return zero, nil, errHandoff
 	}
+	objects := material.objects
 	names, err := dir.Readdirnames(len(objects) + 3)
 	if closeErr := dir.Close(); (err != nil && !errors.Is(err, io.EOF)) || closeErr != nil {
-		return zero, errHandoff
+		return zero, nil, errHandoff
 	}
 	allowed := append(append([]string(nil), objects...), handoffManifest, handoffTransport)
 	sort.Strings(names)
 	sort.Strings(allowed)
 	if len(names) != len(allowed) {
-		return zero, errHandoff
+		return zero, nil, errHandoff
 	}
 	for i, name := range names {
 		info, err := root.Lstat(name)
 		if name != allowed[i] || err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0600 {
-			return zero, errHandoff
+			return zero, nil, errHandoff
 		}
 	}
 	reader, err := materials.OpenLocal(path)
 	if err != nil {
-		return zero, errHandoff
+		return zero, nil, errHandoff
 	}
 	defer func() { _ = reader.Close() }()
 	for _, hash := range objects {
 		if err := reader.Verify(ctx, hash); err != nil {
-			return zero, errHandoff
+			return zero, nil, errHandoff
 		}
 	}
-	return want, ctx.Err()
+	if err := ctx.Err(); err != nil {
+		return zero, nil, err
+	}
+	return want, material.points, nil
 }
 
 // APlusBHandoffReadback records a byte and report-shape check. The report
@@ -222,29 +250,48 @@ type APlusBHandoffReadback struct {
 // pinned reports. No signature, node attestation or approval is inferred.
 func VerifyAPlusBHandoffReports(ctx context.Context, path, pin string, target APlusBHandoffTarget, reports [3][]byte, digests [3]string) (APlusBHandoffReadback, error) {
 	var zero APlusBHandoffReadback
-	h, err := VerifyAPlusBHandoff(ctx, path, pin, target)
+	h, points, err := verifyAPlusBHandoff(ctx, path, pin, target)
 	if err != nil {
 		return zero, err
-	}
-	raw, _, err := readTransport(path)
-	if err != nil {
-		return zero, err
-	}
-	m, err := materials.ParseAPlusB(raw, h.Transport)
-	if err != nil {
-		return zero, errHandoff
 	}
 	for i, raw := range reports {
 		p := reviewedAPlusBReports[i]
-		if p.report == digests[i] {
+		if knownAPlusBLocalReport(digests[i]) {
 			return zero, errHandoff
 		}
 		p.report = digests[i]
-		if !matchesHandoffReport(raw, p, h, m.Tests) {
+		if !matchesHandoffReport(raw, p, h, points) {
 			return zero, errHandoff
 		}
 	}
-	return APlusBHandoffReadback{"report-readback-only", pin, target, digests, len(m.Tests)}, ctx.Err()
+	return APlusBHandoffReadback{"report-readback-only", pin, target, digests, len(points)}, ctx.Err()
+}
+
+// Known local runs are excluded; an independent operator pin is still required
+// since a report contains neither node identity nor a proof of when it was run.
+func knownAPlusBLocalReport(digest string) bool {
+	for _, p := range reviewedAPlusBReports {
+		if digest == p.report {
+			return true
+		}
+	}
+	switch digest {
+	// Desktop handoff rehearsal.
+	case "b5911a1ddbe56f9af2b54637a31bc5adaf58f79ea704dc7bcb0c4391f0f9a813",
+		"2a98e4b7342ae82731688f824f12c16c93109a1d5c0ec5fd05108c4a8d3a3007",
+		"b305c0b2f7045efc36c8c14c2516c47c633c12e03ff893ec971578671ad43d03":
+		return true
+	// Original Ubuntu trial and repeat from the final reviewed head.
+	case "2ba03e32c76500ff8b9186098a529107993d458723dd28463dd3091abffb30d0",
+		"f0a22987537b3e7715b3c12672aede16bc0e07f3aac3c14051329259d4d2a7af",
+		"69746d200ea2845b04993199e8194a0f69d36e0255a8563f952087b0208901e5",
+		"bbf58cfe552c7da6616681f8fcc231a58f8df490093133bdd3f2891c1505acd1",
+		"79cda165f4e2687f9e733ee1f5b7f8549411ddc20a194f69bc725cca4b35845d",
+		"e601560a16b15a9c3ed56291811e55ce450d730691e9c844aadcee8d9b6577b5":
+		return true
+	default:
+		return false
+	}
 }
 
 func matchesHandoffReport(raw []byte, pin aplusbTrialPin, h APlusBHandoff, points []materials.APlusBPoint) bool {
