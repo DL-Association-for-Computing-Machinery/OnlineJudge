@@ -18,6 +18,8 @@ var leaseToken = regexp.MustCompile(`^[0-9a-f]{64}$`)
 // value and original token for retries: rerunning code produces different evidence.
 func (r *LeasedRunner) JudgeReport(ctx context.Context, lease submission.Lease, d materials.Descriptor, blobs map[string][]byte) (submission.Result, error) {
 	if !leaseToken.MatchString(lease.Token) || lease.SubmissionID == "" || lease.SubmissionID != d.SubmissionID ||
+		lease.MaterialVersion == "" || lease.MaterialVersion != d.Version ||
+		lease.ManifestSHA256 == "" || lease.ManifestSHA256 != d.ManifestSHA256 ||
 		lease.JudgeGeneration < 1 || lease.RecoveryGeneration < 1 || lease.AttemptNumber < 1 {
 		return submission.Result{}, errors.New("invalid attempt attribution")
 	}

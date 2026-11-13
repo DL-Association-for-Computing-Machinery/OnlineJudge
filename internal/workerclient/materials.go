@@ -30,6 +30,9 @@ func (a *Acquirer) Fetch(ctx context.Context, lease submission.Lease) (materials
 	if !validLease(lease) {
 		return materials.Descriptor{}, nil, submission.ErrLease
 	}
+	if !a.supportsMaterials(lease) {
+		return materials.Descriptor{}, nil, ErrMaterials
+	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	d, err := a.describe(ctx, lease)
@@ -87,7 +90,7 @@ func (a *Acquirer) describe(ctx context.Context, lease submission.Lease) (materi
 	if readJSON(resp, 6*submission.MaxSourceBytes+32768, &d) != nil {
 		return materials.Descriptor{}, ErrMaterials
 	}
-	if d.SubmissionID != lease.SubmissionID || d.Version != a.fixture.Version() ||
+	if d.SubmissionID != lease.SubmissionID || d.Version != lease.MaterialVersion || d.ManifestSHA256 != lease.ManifestSHA256 ||
 		d.Language != "gnu++17" || !bytes.Equal(d.Manifest, a.fixture.Manifest()) || checksum(d.Manifest) != d.ManifestSHA256 ||
 		len(d.Source) == 0 || len(d.Source) > submission.MaxSourceBytes || !utf8.ValidString(d.Source) || checksum([]byte(d.Source)) != d.SourceSHA256 {
 		return materials.Descriptor{}, ErrMaterials

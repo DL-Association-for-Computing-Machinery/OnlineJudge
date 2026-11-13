@@ -627,6 +627,8 @@ PR #1 审查修复（2026-10-25，验证时为基于 `a31e021` 的未提交工�
 
 ## 领取与材料客户端
 
+下文保留首次交付的历史记录。当前领取协议、兼容顺序和失败行为见 [API 与 Worker 设计](architecture/api-worker-design.md#4-调度与过载)；当前可执行配置为固定 Desktop 或 Ubuntu 档位，领取回执必须带材料版本及清单摘要。
+
 2026-10-28，基于 PR #8 合并提交 `64b9992` 的独立 `codex/claim-material-client` 分支，完成 P2、AC22/28/29 的单一子项。`workerclient.NewAcquirer(endpoint, roots, certificate)` 提供 `Claim(ctx)` 与 `Fetch(ctx, lease)`，复用既有专用 CA、TLS 1.3、禁止重定向的传输配置；独立单连接预算，不阻塞已有续租/回报客户端。不新增依赖、SQL、迁移、HTTP 接口或运行配置。
 
 `Claim` 每次只发一个 POST，校验 32 位十六进制提交 ID、64 位租约令牌、正整数双代次/尝试及有效时间格式。204 返回 `ErrNoTask`，401/403 返回 `ErrNode`；断连、超时、非预期响应或不完整回执返回 `ErrClaimUnknown`，不自动重领。未知结果可能已占节点容量，须由后续受信任恢复机制处理，不能断言事务失败。截止时间只作记录，实际执行仍依赖 `LeasedRunner` 前置续租和单调时限。
