@@ -114,6 +114,27 @@ checker-candidate verify-trial \
 
 路径须是绝对路径；报告摘要须通过独立可信的记录获得，不从待复核的副本现算并自证。成功仅输出报告、候选、计划、档位摘要和通过点数。命令不运行程序、不查当前槽状态，也不授予生产准入。
 
+### A+B 固定材料隔离判题
+
+使用上述同一私有 A+B 题包、可信计划和候选摘要及限额，先通过 `checker-candidate aplusb-judge-manifest` 核对有序材料和固定运行档位。确认输出与可信的材料计划一致后，固定其 `sha256`；Worker 会从私有题包重新生成同一清单，摘要不一致时不会启动参考槽。
+
+```sh
+checker-candidate aplusb-judge-manifest \
+  --bundle "$PRIVATE_BUNDLE" --source-lock "$PWD/config/problem-sources/library-checker.json" \
+  --expected-plan "$TRUSTED_FORMAL_PLAN_SHA256" --expected-candidate "$TRUSTED_CANDIDATE_SHA256" \
+  --bytes "$CANDIDATE_BYTES" --token-bytes "$CANDIDATE_TOKEN_BYTES"
+
+env -u OJ_WORKER_M0_SLOT -u OJ_WORKER_M0_DUAL_EXPERIMENT OJ_SANDBOX_EXPERIMENT=1 \
+  .local/validation-host/worker judge-aplusb-isolated --start-stopped-slot \
+  --bundle "$PRIVATE_BUNDLE" --source-lock "$PWD/config/problem-sources/library-checker.json" \
+  --expected-plan "$TRUSTED_FORMAL_PLAN_SHA256" --expected-candidate "$TRUSTED_CANDIDATE_SHA256" \
+  --expected-manifest "$TRUSTED_JUDGE_MANIFEST_SHA256" \
+  --submission "$PRIVATE_CPP_FILE" --expected-submission "$TRUSTED_SUBMISSION_SHA256" \
+  --bytes "$CANDIDATE_BYTES" --token-bytes "$CANDIDATE_TOKEN_BYTES" --output "$NEW_JUDGE_REPORT"
+```
+
+路径使用绝对路径。源码须是权限 0400 或 0600 的私有普通文件，最多 64 KiB，且为不含 NUL 的 UTF-8；摘要固定原字节。只用现有停止的断网小型参考槽，输出目录须新建且在题包外。退出码 0 表示已产生确定判定并完成清理，实际 AC、WA、CE 等查看私有报告。详见[隔离判题契约](docs/checker-admission.md#ab-固定材料隔离判题)。
+
 ### 私有草稿参考验证
 
 [#151 新题包](docs/delivery-log.md#2026-11-11新版题包十题参考复验与卷积报告接纳)的十题254点均通过固定环境维护参考验证并确认停止。最初批次因素性测试宿主超时中止，受控恢复后以新报告完成余下六题；[原失败](docs/delivery-log.md#2026-11-11新版题包维护参考复验中止)仍保留，根因未知。维护入口不写数据库验证状态或发布。需要已配置且停止的专用槽、已有固定镜像与 Docker Desktop、macOS arm64；命令不会自动创建、替换或恢复槽。使用已有 Go 1.26.11 工具链镜像构建独立宿主产物（不与 Linux 检查共用输出）：
