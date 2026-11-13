@@ -16,11 +16,16 @@ afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
 
 async function setup() {
   vi.stubGlobal('location', { protocol: 'https:' }); vi.stubGlobal('document', { visibilityState: 'visible' })
+  const journal = new Map<string, string>()
+  vi.stubGlobal('sessionStorage', {
+    getItem: (slot: string) => journal.get(slot) ?? null,
+    setItem: (slot: string, key: string) => { journal.set(slot, key) },
+  })
   const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(url => Promise.resolve(Response.json(url === '/api/v1/session' ? session() : material())))
   vi.stubGlobal('fetch', fetch)
   const account = new AccountController(); account.connect(); await vi.waitFor(() => expect(account.getSnapshot().busy).toBe(false))
   const controller = new ReviewMaterialsController(account, review); controller.connect()
-  return { fetch, account, controller, stop: () => { controller.disconnect(); account.disconnect() } }
+  return { fetch, account, controller, journal, stop: () => { controller.disconnect(); account.disconnect() } }
 }
 
 it('reads only after explicit session verification and binds the same-origin GET to that reviewer', async () => {
@@ -107,5 +112,70 @@ it.each(['invalidation', 'account change', 'route disposal', 'deadline'])('ignor
   if (event === 'deadline') { vi.useFakeTimers(); vi.setSystemTime(Date.now() + 61_000) }
   release(Response.json(material())); await pending
   expect(f.controller.getSnapshot().data).toBeNull()
+  f.stop()
+})
+
+const confirmationPath = `/api/v1/problem-review/${review}/statement-confirmation`
+const confirmationReceipt = (intent: object) => ({ ...intent, review_id: review, confirmed_at: new Date().toISOString() })
+
+it('does not resend a confirmation after a lost response, absent receipt, or mismatched receipt', async () => {
+  const f = await setup()
+  await f.controller.load()
+  await f.controller.confirm('confirm', false)
+  expect(f.journal.size).toBe(0)
+  expect(f.fetch.mock.calls.some(([url]) => url === confirmationPath)).toBe(false)
+  f.fetch.mockRejectedValueOnce(new TypeError('response lost'))
+  await f.controller.confirm('confirm', true)
+  const [url, write] = f.fetch.mock.calls.at(-1) ?? []
+  expect(url).toBe(confirmationPath)
+  expect(write).toMatchObject({ method: 'POST', referrerPolicy: 'origin', mode: 'same-origin', redirect: 'error' })
+  expect(new Headers(write?.headers).get('X-OJ-Expected-Subject')).toBe(owner)
+  if (typeof write?.body !== 'string') throw new Error('Expected a JSON request body')
+  const intent = JSON.parse(write.body) as { request_key: string }
+  expect([...f.journal.values()]).toEqual([intent.request_key])
+  expect(intent).toMatchObject({ assignment_revision: 1, import_revision: hash, evidence_sha256: hash, checklist_version: 'oj.statement-semantics.v1' })
+  const receipt = confirmationReceipt(intent)
+  f.fetch.mockResolvedValueOnce(new Response(null, { status: 404 }))
+    .mockResolvedValueOnce(Response.json({ ...receipt, assignment_revision: 2 }))
+    .mockResolvedValueOnce(Response.json(receipt))
+  const start = f.fetch.mock.calls.length
+  await f.controller.confirm('read')
+  expect(f.controller.getSnapshot().confirmation).toBe('pending')
+  await f.controller.confirm('confirm', true)
+  await f.controller.confirm('read')
+  expect(f.controller.getSnapshot().confirmation).toBe('pending')
+  await f.controller.confirm('read')
+  expect(f.controller.getSnapshot().confirmation).toBe('recorded')
+  expect(f.fetch.mock.calls.slice(start).map(([target, options]) => [target, options?.method]))
+    .toEqual(Array.from({ length: 3 }, () => [`${confirmationPath}/${intent.request_key}`, 'GET']))
+  f.stop()
+})
+
+it('fails closed when the browser cannot save the original confirmation key', async () => {
+  const f = await setup()
+  await f.controller.load()
+  vi.stubGlobal('sessionStorage', { getItem: () => null, setItem: () => { throw new Error('storage blocked') } })
+  await f.controller.confirm('confirm', true)
+  expect(f.controller.getSnapshot().confirmation).toBe('unavailable')
+  expect(f.fetch.mock.calls.some(([url]) => url === confirmationPath)).toBe(false)
+  f.stop()
+})
+
+it('drops a confirmation receipt that arrives after private invalidation', async () => {
+  const f = await setup()
+  await f.controller.load()
+  let release!: () => void
+  f.fetch.mockImplementationOnce((_, options) => new Promise(resolve => {
+    if (typeof options?.body !== 'string') throw new Error('Expected a JSON request body')
+    const intent = JSON.parse(options.body) as object
+    release = () => resolve(Response.json(confirmationReceipt(intent)))
+  }))
+  const pending = f.controller.confirm('confirm', true)
+  expect(f.controller.getSnapshot().busy).toBe(true)
+  f.controller.clear()
+  release()
+  await pending
+  expect(f.controller.getSnapshot()).toMatchObject({ data: null, busy: false, confirmation: 'unavailable' })
+  expect(f.journal.size).toBe(1)
   f.stop()
 })

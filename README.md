@@ -720,7 +720,7 @@ python3 scripts/test-browser-account.py \
 
 可选 `--chromium-executable /absolute/path/to/existing/chromium` 指定已有浏览器；`--statement-corpus /absolute/path/to/prepared-bundle/statements` 增加至多10份只读Markdown的浏览器渲染耗时/节点测量（响应替换，不冒充十题真实HTTP授权验收）；`--toolchain-image`、`--module-cache`、`--build-cache-volume` 和 `--context` 的约束沿用现有专项。驱动只发布随机回环 HTTPS/HTTP 对照端口，建立隔离的合成账号/存储；真实 race API 使用固定 pin 的 mTLS，外层临时证书只在新测试 context 忽略。控制端点仅供本夹具，不能对外开放或接入真实数据。
 
-加 `--review-materials` 运行独立审核材料专项。夹具仅在临时库准备一项合成送审和非作者分配。验证 `/review/materials` 的桌面选择与 390px 直接入口、冻结题面和原始样例／标程、刷新清除，以及有审核资格的作者仍无法读取自己的送审材料。浏览器只发送绑定当前账号的审核 GET。该模式不执行参考 Worker，不与其他专项模式同时使用。
+加 `--review-materials` 运行独立审核材料专项。夹具仅在临时库准备一项合成送审和非作者分配。验证 `/review/materials` 的桌面选择与 390px 直接入口、冻结题面和原始样例／标程、刷新清除，以及有审核资格的作者仍无法读取自己的送审材料。另验证四项都勾选后才可确认，以及真实确认写入后浏览器丢失响应、刷新和原键只读回执。该模式不执行参考 Worker，不与其他专项模式同时使用。
 
 要验证保留正常证书检查的冷启动，添加 `--cold-firefox /absolute/path/to/existing/playwright/firefox`，使用匹配的已有 Playwright Firefox；不同时使用 Chromium、语料或十题私有草稿包模式。先用不信任夹具 CA 的全新浏览器确认连接被拒绝，再在另一个临时浏览器配置导入公开测试 CA，不修改系统信任库。验证桌面和 390px 窄屏从同源加载题库与登录页；桌面完成真实登录、导入合成草稿，并创建、查询、准备和取消同一参考申请。刷新草稿后可用原键查到材料已准备，刷新与查询不会再次发出参考申请写请求。测试限制浏览器访问回环夹具，并记录页面资源来源；不代表整机断网、校园 DNS 或现场入口验收。
 
