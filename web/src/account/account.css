@@ -33,6 +33,10 @@
 .connection-check { margin-top: 20px; }
 .email-confirmation-page { flex: 0 0 auto; }
 .email-confirmation-login { text-decoration: underline; }
+.login-page > nav.login-destinations { margin-top: 20px; }
+.email-request-page > .account-notice { margin-bottom: 16px; }
+.email-request-return { margin-top: 22px; text-align: center; }
+.email-request-return a { text-decoration: underline; }
 @media (max-width: 600px) {
   .account-page { padding-block: 28px 40px; }
   .account-page > section, .account-page > .account-form, .account-page > .session-summary, .account-page > .password-form, .account-page > .connection-check { padding: 18px 16px; }
