@@ -38,7 +38,7 @@ func (tr browserReviewTransport) RoundTrip(request *http.Request) (*http.Respons
 // seedBrowserReview creates an assigned item only in the disposable browser
 // fixture. Reference-result seeding is synthetic; real Worker execution is a
 // separate test. Browser reads still cross the real HTTPS API and stores.
-func seedBrowserReview(t *testing.T, f *fixture, origin *url.URL, roots *x509.CertPool, author, reviewer identity.Personal, access *identitypg.ProblemAccess) string {
+func seedBrowserReview(t *testing.T, f *fixture, origin *url.URL, roots *x509.CertPool, author, reviewer identity.Personal, access *identitypg.ProblemAccess) (string, string) {
 	t.Helper()
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots},
@@ -76,5 +76,5 @@ func seedBrowserReview(t *testing.T, f *fixture, origin *url.URL, roots *x509.Ce
 	_, err = store.SetAssignment(f.ctx, problemreference.ReviewAssignmentChange{ReviewID: review.ID, ReviewerSubjectID: reviewer.ID,
 		ExpectedReviewerRevision: 1, Operator: "browser-fixture", Reason: "assign synthetic browser review"})
 	must(t, err)
-	return review.ID
+	return review.ID, draft.DraftID
 }

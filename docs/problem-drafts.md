@@ -87,7 +87,9 @@
 
 ### 作者送审回执
 
-已登录且当前有出题权限的作者，可以把自己草稿的一份已接纳参考报告提交送审。此入口默认关闭，须启用 `private_drafts.reference_requests` 和 `private_drafts.review_intake`。目前只有 [HTTP 接口](../api/problem-draft-management.openapi.yaml)，没有页面按钮。维护分配另见[审核人分配与证据摘要](#审核人分配与证据摘要)。
+已登录且当前有出题权限的作者，可以把自己草稿的一份已接纳参考报告提交送审。此入口默认关闭，须启用 `private_drafts.reference_requests` 和 `private_drafts.review_intake`。在本人草稿页打开参考报告后，可点「送审此报告」。送审 ID 交给维护者分配。维护分配另见[审核人分配与证据摘要](#审核人分配与证据摘要)。
+
+浏览器从本人报告取得完整修订，按账号、草稿和报告在本机保留送审记录。再次打开同一报告可查原回执；更换当前参考申请后，也可在该草稿的「本机送审记录」里查旧回执。查询不会重发；暂时查不到时应保留原记录，供维护者核对。清除浏览器数据或换设备后，本机记录不可用；服务端仍按原键去重。
 
 - `POST /api/v1/problem-draft-management/review-submissions` 接受 `request_key`、`draft_id`、`import_revision`、`reference_request_id` 四个字段。完整修订从本人列表或导入回执取得；报告 ID 是[本人报告](reference-requests.md#作者申请入口)的 `request_id`。请求须同源，带普通会话和 `X-OJ-Expected-Subject`；请求头只约束实际会话主体。
 - 服务端在持有当前作者权限和本人草稿锁的事务中核对修订、已接纳报告和冻结计划，自行保存来源锁、正式 Plan、Profile、报告证据的摘要和结论。有对拍时也固定对应计划和结论。失败报告和没有对拍的历史报告可以留档。草稿仍为 `private-draft / not-run`。

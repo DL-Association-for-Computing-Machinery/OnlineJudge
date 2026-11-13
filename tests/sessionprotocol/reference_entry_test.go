@@ -171,8 +171,8 @@ func testEntryReferenceResult(t *testing.T, f *fixture, x, y *loginEndpoint, coo
 
 	got := authorReferenceCall(y, "GET", path+"/report", "", cookies, owner)
 	loginStatus(t, got, 200)
-	want := fmt.Sprintf(`{"request_id":%q,"request_key":%q,"draft_id":%q,"content_version":%q,"formal":{"verdict":"AC","passed":%d,"total":%d},"comparison":null}`,
-		request.ID, key, draft, plan.Version, len(plan.Cases), len(plan.Cases))
+	want := fmt.Sprintf(`{"request_id":%q,"request_key":%q,"draft_id":%q,"content_version":%q,"import_revision":%q,"formal":{"verdict":"AC","passed":%d,"total":%d},"comparison":null}`,
+		request.ID, key, draft, plan.Version, plan.ImportRevision, len(plan.Cases), len(plan.Cases))
 	if string(got.body) != want {
 		t.Fatal("terminal author response did not match its exact public shape")
 	}

@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { decodeReceipt, decodeSources, decodeOwnDraftPage, fetchImportSources, fetchOwnDraftPage, postImport } from './draftManagement'
+import { decodeReceipt, decodeSources, decodeOwnDraftPage, fetchImportSources, fetchOwnDraftPage, postImport, requestReviewIntake } from './draftManagement'
 const tuple = { owner: 'a'.repeat(32), key: 'request_key_1234567', source: 'library-checker:aplusb', revision: 'b'.repeat(64) }
 const source = { source_id: tuple.source, title: 'A + B', version: 'c'.repeat(64), import_revision: tuple.revision }
 const receipt = { draft_id: 'd'.repeat(32), request_key: tuple.key, source_id: tuple.source, version: source.version, import_revision: tuple.revision, state: 'private-draft', validation_state: 'not-run', created_at: '2026-11-03T00:00:00Z' }
@@ -41,4 +41,22 @@ it('accepts bounded owner metadata without rebuilding opaque microsecond cursors
   expect(fetch.mock.calls[0][0]).toBe('/api/v1/problem-draft-management/drafts?cursor=' + page.next_cursor)
   expect(fetch.mock.calls[0][1]).toMatchObject({ method: 'GET', referrerPolicy: 'no-referrer' })
   expect(fetch).toHaveBeenCalledOnce()
+})
+
+it('binds a readback to the original report and full frozen revision', async () => {
+  const intent = { request_key: tuple.key, draft_id: receipt.draft_id, reference_request_id: 'e'.repeat(32), import_revision: tuple.revision }
+  const accepted = { ...intent, id: 'f'.repeat(32), content_version: receipt.version, created_at: receipt.created_at }
+  vi.stubGlobal('location', { protocol: 'https:' })
+  const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(Response.json({ ...accepted, import_revision: 'e'.repeat(64) }))
+    .mockResolvedValueOnce(Response.json(accepted))
+  vi.stubGlobal('fetch', fetch)
+  const signal = new AbortController().signal
+  await expect(requestReviewIntake('read', tuple.owner, intent, receipt.version, signal)).rejects.toThrow()
+  await expect(requestReviewIntake('read', tuple.owner, intent, receipt.version, signal)).resolves.toBe(accepted.id)
+  for (const [url, init] of fetch.mock.calls) {
+    expect(url).toBe('/api/v1/problem-draft-management/review-submissions/' + tuple.key)
+    expect(init).toMatchObject({ method: 'GET', referrerPolicy: 'no-referrer' })
+    expect(init?.body).toBeUndefined()
+    expect(new Headers(init?.headers).get('X-OJ-Expected-Subject')).toBe(tuple.owner)
+  }
 })

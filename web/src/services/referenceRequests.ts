@@ -1,4 +1,4 @@
-import { object, validKey } from './draftManagement'
+import { object, validKey, validRevision } from './draftManagement'
 import { validDraftID } from './privateDraft'
 
 export type ReferenceAction = 'create' | 'read' | 'cancel'
@@ -16,6 +16,7 @@ export interface ReferenceReport {
   request_key: string
   draft_id: string
   content_version: string
+  import_revision?: string
   formal: { verdict: 'AC' | 'CE' | 'WA' | 'RE' | 'TLE' | 'MLE' | 'OLE'; passed: number; total: number }
   comparison: {
     status: 'passed' | 'mismatch'
@@ -63,9 +64,9 @@ const coefficientVector = (value: unknown): value is number[] =>
   Array.isArray(value) && value.length >= 1 && value.length <= 31 && value.every(x => integer(x, 0, 998244352))
 
 export function decodeReferenceReport(value: unknown, receipt: ReferenceReceipt): ReferenceReport {
-  if (!object(value) || Object.keys(value).length !== 6 || value.request_id !== receipt.id ||
+  if (!object(value) || Object.keys(value).length !== ('import_revision' in value ? 7 : 6) || value.request_id !== receipt.id ||
     value.request_key !== receipt.request_key || value.draft_id !== receipt.draft_id || receipt.state !== 'reported' ||
-    typeof value.content_version !== 'string' || !/^[0-9a-f]{64}$/.test(value.content_version)) throw new ReferenceRequestError()
+    !validRevision(value.content_version) || ('import_revision' in value && !validRevision(value.import_revision))) throw new ReferenceRequestError()
   const formal = value.formal
   if (!object(formal) || Object.keys(formal).length !== 3 || !integer(formal.total, 1, 64) || !integer(formal.passed, 0, formal.total) ||
     typeof formal.verdict !== 'string' || !['AC', 'CE', 'WA', 'RE', 'TLE', 'MLE', 'OLE'].includes(formal.verdict) ||

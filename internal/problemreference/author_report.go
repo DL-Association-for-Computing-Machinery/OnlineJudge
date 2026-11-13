@@ -21,6 +21,7 @@ type AuthorReport struct {
 	RequestKey string                  `json:"request_key"`
 	DraftID    string                  `json:"draft_id"`
 	Version    string                  `json:"content_version"`
+	Revision   string                  `json:"import_revision"`
 	Formal     AuthorFormalResult      `json:"formal"`
 	Comparison *AuthorComparisonResult `json:"comparison"`
 }
@@ -68,7 +69,8 @@ func ProjectAuthorReport(r Request, expected ExpectedPlan, formalSHA, evidenceSH
 		return zero, ErrInvalid
 	}
 	view := AuthorReport{Owner: r.Owner, RequestID: r.ID, RequestKey: r.RequestKey, DraftID: r.DraftID, Version: formal.Version,
-		Formal: AuthorFormalResult{Verdict: e.Verdict, Total: len(formal.Cases)}}
+		Revision: r.Specification.Identity.ImportRevision,
+		Formal:   AuthorFormalResult{Verdict: e.Verdict, Total: len(formal.Cases)}}
 	for _, p := range e.Points {
 		if p.Verdict == "AC" {
 			view.Formal.Passed++

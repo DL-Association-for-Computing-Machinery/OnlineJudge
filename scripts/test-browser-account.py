@@ -236,7 +236,7 @@ def main():
         if args.cold_firefox:
             script_name, check_count = "cold-https-qa.mjs", 5
         if args.review_materials:
-            script_name, check_count = "review-materials-qa.mjs", 4
+            script_name, check_count = "review-materials-qa.mjs", 5
         qa_script = ROOT / "tests/browser" / script_name
         expected_checks = re.findall(r"^\s+passed\('([^'\n]+)'\)", qa_script.read_text(), re.M)
         if len(expected_checks) != check_count or len(set(expected_checks)) != check_count:

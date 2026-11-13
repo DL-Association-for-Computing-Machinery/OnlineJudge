@@ -171,12 +171,13 @@ components:
           schema:
             type: object
             additionalProperties: false
-            required: [request_id, request_key, draft_id, content_version, formal, comparison]
+            required: [request_id, request_key, draft_id, content_version, import_revision, formal, comparison]
             properties:
               request_id: {$ref: '#/components/schemas/ID'}
               request_key: {$ref: '#/components/schemas/Key'}
               draft_id: {$ref: '#/components/schemas/ID'}
               content_version: {type: string, pattern: '^[a-f0-9]{64}$'}
+              import_revision: {type: string, pattern: '^[a-f0-9]{64}$'}
               formal:
                 type: object
                 additionalProperties: false
