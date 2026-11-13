@@ -38,6 +38,17 @@ func (s *Store) InitializePersonal(ctx context.Context, id string, email identit
 		_ = tx.Rollback(cleanup)
 	}()
 	q := s.q.WithTx(tx)
+	personal, err := s.initializePersonal(ctx, q, id, email, enabled, record)
+	if err != nil {
+		return identity.Personal{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return identity.Personal{}, storageError{err}
+	}
+	return personal, nil
+}
+
+func (s *Store) initializePersonal(ctx context.Context, q *identitydb.Queries, id string, email identity.Email, enabled bool, record password.Record) (identity.Personal, error) {
 	row, err := q.Initialize(ctx, initializeParams(id, enabled, record))
 	snapshot, err := s.writeResult(row, err)
 	if err != nil {
@@ -54,9 +65,6 @@ func (s *Store) InitializePersonal(ctx context.Context, id string, email identit
 	}
 	if mapping.SubjectID != id || mapping.EmailKey != email.Key() || mapping.OriginalEmail != email.Original() || mapping.EmailVerified {
 		return identity.Personal{}, storageError{identity.ErrInvalid}
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return identity.Personal{}, storageError{err}
 	}
 	return identity.Personal{State: snapshot.State, Email: email}, nil
 }
