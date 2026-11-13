@@ -130,28 +130,53 @@ func TestRestoreJudgeLoop(t *testing.T) {
 type restoreLoopDatabase struct {
 	container, name, dsn string
 	pool                 *pgxpool.Pool
+	engine               restoreEngine
 }
 
 func restoreLoopDatabases(t *testing.T, ctx context.Context) (restoreLoopDatabase, restoreLoopDatabase) {
+	t.Helper()
+	return restoreDatabases(t, ctx, false)
+}
+
+func restoreDatabases(t *testing.T, ctx context.Context, engine restoreEngine) (restoreLoopDatabase, restoreLoopDatabase) {
 	t.Helper()
 	name, from, to := os.Getenv("OJ_RESTORE_DATABASE"), os.Getenv("OJ_RESTORE_SOURCE_CONTAINER"), os.Getenv("OJ_RESTORE_TARGET_CONTAINER")
 	if from == to {
 		t.Fatal("two distinct disposable database containers are required")
 	}
-	return openDesktopTestDatabase(t, ctx, from, name), openDesktopTestDatabase(t, ctx, to, name)
+	return openRestoreDatabase(t, ctx, from, name, engine), openRestoreDatabase(t, ctx, to, name, engine)
 }
 
 func openDesktopTestDatabase(t *testing.T, ctx context.Context, container, name string) restoreLoopDatabase {
 	t.Helper()
+	return openRestoreDatabase(t, ctx, container, name, false)
+}
+
+func openRestoreDatabase(t *testing.T, ctx context.Context, container, name string, engine restoreEngine) restoreLoopDatabase {
+	t.Helper()
 	containerName := regexp.MustCompile(`^oj-worker-db-[a-f0-9]{12}$`)
+	owner := "onlinejudge.desktop-test"
+	if engine {
+		containerName = regexp.MustCompile(`^oj-ubuntu-rejudge-db-[a-f0-9]{12}$`)
+		owner = "onlinejudge.ubuntu-rejudge-test"
+	}
 	if !containerName.MatchString(container) || !regexp.MustCompile(`^test_[0-9]+$`).MatchString(name) {
 		t.Fatal("an owned disposable database container is required")
 	}
 	endpoint := regexp.MustCompile(`^127\.0\.0\.1:([0-9]+)$`)
-	if dualDocker(t, "inspect", "--format", `{{index .Config.Labels "owner"}}`, container) != "onlinejudge.desktop-test" {
+	if engine.docker(t, "inspect", "--format", `{{index .Config.Labels "owner"}}`, container) != owner {
 		t.Fatal("refusing to use an unowned database container")
 	}
-	address := endpoint.FindStringSubmatch(dualDocker(t, "port", container, "5432"))
+	if engine {
+		// Use the immutable ID for transfer, stop and restore after admitting the fixture.
+		identity := engine.docker(t, "inspect", "--format", "{{.Id}} {{.Image}} {{.State.Running}}", container)
+		fields := regexp.MustCompile(`^([a-f0-9]{64}) sha256:4ea9e5ed06591da7ea23eb65465e8d3187fe79f4d5ec3ae976d29a33b013e77a true$`).FindStringSubmatch(identity)
+		if len(fields) != 2 || engine.docker(t, "inspect", "--format", `{{index .Config.Labels "owner"}}`, fields[1]) != owner {
+			t.Fatal("Ubuntu restore requires the pinned disposable database image and identity")
+		}
+		container = fields[1]
+	}
+	address := endpoint.FindStringSubmatch(engine.docker(t, "port", container, "5432"))
 	if len(address) != 2 {
 		t.Fatal("disposable database is not loopback only")
 	}
@@ -165,7 +190,7 @@ func openDesktopTestDatabase(t *testing.T, ctx context.Context, container, name 
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM information_schema.tables WHERE table_schema='public'`).Scan(&tables); err != nil || tables != 0 {
 		t.Fatal("disposable database must start empty")
 	}
-	return restoreLoopDatabase{container: container, name: name, dsn: dsn, pool: pool}
+	return restoreLoopDatabase{container: container, name: name, dsn: dsn, pool: pool, engine: engine}
 }
 
 type restoredAttempt struct{ fingerprint, payload string }

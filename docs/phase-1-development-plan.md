@@ -225,9 +225,11 @@ M0 先做存储与并发实验；M1 交付公开邮箱注册、验证和找回�
 
 [A+B 租约链路联验](checker-admission.md#ab-租约链路联验)在临时 PostgreSQL 和固定断网参考槽接通材料登记、领取、逐次授权下载、执行与结果回报。运行配置及材料均显式固定；生产部署、正式身份提交、目标节点和实际终审仍待验收。
 
-[本地 Ubuntu 租约联验](delivery-evidence/aplusb-leased-judging.md#ubuntu-arm64-专用客体)复用固定 17 点材料，核对版本与完整清单后才领取，三组真实结果和原槽停止已验证。Ubuntu 历史重判仍待接入。
+[本地 Ubuntu 租约联验](delivery-evidence/aplusb-leased-judging.md#ubuntu-arm64-专用客体)复用固定 17 点材料，核对版本与完整清单后才领取，三组真实结果和原槽停止已验证。
 
 [A+B 历史重判联验](delivery-evidence/aplusb-restored-rejudge.md)验证固定 17 点提交随备份转运和恢复，同一提交以原材料清单进入第二个判题代次，第一次结果仍可读。[受控重判](rejudge.md)为已完成的个人训练提交提供受信维护命令和审计回执。现场独立故障域、比赛重判及榜单联动仍待验收。
+
+[本地 Ubuntu 历史重判](delivery-evidence/aplusb-restored-rejudge.md#ubuntu-arm64-专用客体)通过同样的封存、接收和恢复检查；错档位和错清单不改变状态，同一提交保留第一次 AC 并生成第二次 AC。
 
 完成条件：
 
