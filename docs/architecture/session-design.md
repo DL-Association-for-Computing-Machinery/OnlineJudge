@@ -480,7 +480,9 @@ AC25 覆盖上述流程、跨 API 并发单次消费、邮件失败与真正断�
 
 验收前核验发信域名及 DNS 权限、供应商要求的 SPF/DKIM/DMARC 等记录、强制 TLS 与证书验证、配额/预算、退信和实际收件表现；邮件服务受理不等于进入收件箱。开发测试收件器与真实邮箱联调分别记录结果。供应商仍待确认，River 开源核心优先验证、专用任务表备选，无采购、DNS 修改或实际发送。
 
-AC25 的组件准入细化：测试适配器替换不改变账号业务结果，模拟认证失败、证书错误、超时/取消、临时和永久拒绝、服务受理后连接中断；错误区分可重试、永久失败及结果未知，不把受理当收件成功。验证多 API 总连接/并发预算、凭据与正文/令牌日志脱敏；失败时不能无界重试或降级到明文连接。go-mail 不承担持久化任务、全局限流或账号状态事务，需分别验证。当前均未运行。
+内部 SMTP 适配器固定使用 [go-mail v0.8.2](https://github.com/wneessen/go-mail/releases/tag/v0.8.2)，支持隐式 TLS 或强制 STARTTLS，均验证服务端证书且不降级到明文。单次尝试受调用方期限和配置上限共同约束。收到最终 DATA 受理响应后，即使连接随后中断也返回已受理；未收到最终响应时返回结果未知。明确的 SMTP 4xx 与 5xx 分别归临时失败与永久拒绝。队列只接收结果类别，不接收 SMTP 原始错误、凭据或正文。
+
+本地 TLS 收件器验证受理、临时及永久拒绝、断连、证书拒绝、认证拒绝和超时。真实 SMTP、供应商预算、队列重试及恢复仍待验收；服务器受理不等于进入收件箱。
 
 参考（2026-10-25）：[阿里云 SMTP](https://www.alibabacloud.com/help/en/direct-mail/smtp-endpoints)、[发信域名配置](https://help.aliyun.com/zh/direct-mail/user-guide/how-to-configure-sending-domain-names)、[Resend SMTP](https://resend.com/docs/send-with-smtp)、[go-mail](https://github.com/wneessen/go-mail)、[安全公告](https://github.com/wneessen/go-mail/security)、[net/smtp](https://pkg.go.dev/net/smtp)。
 
