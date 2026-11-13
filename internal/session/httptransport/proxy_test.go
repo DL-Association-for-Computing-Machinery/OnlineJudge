@@ -1,15 +1,19 @@
 package httptransport
 
 import (
+	"context"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/emailtoken"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/testpki"
 )
 
@@ -25,7 +29,8 @@ func TestProxyTrust(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := &handler{host: "oj.example.invalid", proxy: &proxyTrust{certificates: map[[32]byte]struct{}{sha256.Sum256(leaf.Raw): {}}}}
+	h := &handler{config: Config{Origin: "https://oj.example.invalid", Timeout: time.Second},
+		host: "oj.example.invalid", proxy: &proxyTrust{certificates: map[[32]byte]struct{}{sha256.Sum256(leaf.Raw): {}}}}
 	request := func() *http.Request {
 		r := httptest.NewRequest("GET", "https://oj.example.invalid/api/v1/session", nil)
 		// Synthetic TLS state is solely a unit boundary fixture. Integration tests
@@ -100,6 +105,36 @@ func TestProxyTrust(t *testing.T) {
 			}
 		})
 	}
+	t.Run("email confirmation uses verified forwarded source", func(t *testing.T) {
+		calls := 0
+		enabled, err := WithEmailConfirmation(h, func(_ context.Context, source netip.Addr, _ emailtoken.Purpose, _ string, _ []byte) EmailConfirmationResult {
+			calls++
+			if source != netip.MustParseAddr("192.0.2.1") {
+				t.Error("confirmation used the proxy socket address")
+			}
+			return EmailConfirmationCommitted
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, trusted := range []bool{false, true} {
+			r := request()
+			r.URL.Path, r.Method = emailResetPath, http.MethodPost
+			r.Header.Set("Origin", h.config.Origin)
+			r.Header.Set("Content-Type", "application/json")
+			r.Body = io.NopCloser(strings.NewReader(`{"token":"fixture","new_password":"fixture"}`))
+			wantStatus, wantCalls := 204, 1
+			if !trusted {
+				r.TLS.VerifiedChains = nil
+				wantStatus, wantCalls = 403, 0
+			}
+			w := httptest.NewRecorder()
+			enabled.ServeHTTP(w, r)
+			if w.Code != wantStatus || calls != wantCalls {
+				t.Fatalf("confirmation status %d, service calls %d", w.Code, calls)
+			}
+		}
+	})
 }
 
 func TestProxyConstructorRejectsMissingManager(t *testing.T) {
