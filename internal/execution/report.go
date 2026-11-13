@@ -37,6 +37,10 @@ func (r *LeasedRunner) JudgeReport(ctx context.Context, lease submission.Lease, 
 // keep credentials, source, answers, raw output and ephemeral artifact IDs out of
 // evidence. The manifest digest binds environment, checker and ordered tests.
 func freezeReport(lease submission.Lease, d materials.Descriptor, result Result) submission.Result {
+	schema := "m0-execution-evidence-v1"
+	if _, err := materials.ParseAPlusB(d.Manifest, d.ManifestSHA256); err == nil {
+		schema = "isolated-aplusb-execution-evidence-v1"
+	}
 	type compilation struct {
 		Status          string
 		Exit            int
@@ -53,7 +57,7 @@ func freezeReport(lease submission.Lease, d materials.Descriptor, result Result)
 		Compile                                                 compilation
 		Points                                                  []Point
 		Max                                                     *Usage
-	}{Schema: "m0-execution-evidence-v1", SubmissionID: lease.SubmissionID,
+	}{Schema: schema, SubmissionID: lease.SubmissionID,
 		JudgeGeneration: lease.JudgeGeneration, RecoveryGeneration: lease.RecoveryGeneration,
 		AttemptNumber: lease.AttemptNumber, MaterialVersion: d.Version, Language: d.Language,
 		ManifestSHA256: d.ManifestSHA256, SourceSHA256: d.SourceSHA256,

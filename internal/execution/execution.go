@@ -57,6 +57,7 @@ type Result struct {
 // Runner owns one execution slot. Use one instance per sandbox of capacity one.
 type Runner struct {
 	sandbox   Sandbox
+	newCached func() *CachedGoJudge
 	fixture   experiment.WorkerFixture
 	busy      atomic.Bool
 	unhealthy atomic.Bool
@@ -77,21 +78,33 @@ func (r *Runner) Judge(ctx context.Context, d materials.Descriptor, blobs map[st
 	if r.unhealthy.Load() {
 		return result, errors.New("sandbox requires recovery")
 	}
-	p, err := prepare(d, blobs, r.fixture)
+	p, err := prepare(ctx, d, blobs, r.fixture)
 	if err != nil {
 		return result, err
 	}
 	for _, t := range p.Tests {
 		result.Points = append(result.Points, Point{ID: t.ID, Verdict: "NOT_RUN"})
 	}
-	if r.sandbox == nil {
+	sandbox := r.sandbox
+	if p.tokenBytes != 0 && r.newCached != nil {
+		sandbox = r.newCached()
+	}
+	if sandbox == nil {
 		return result, errors.New("sandbox unavailable")
+	}
+	run := sandbox.Run
+	if p.tokenBytes != 0 {
+		strict, ok := sandbox.(*CachedGoJudge)
+		if !ok || strict == nil {
+			return result, errors.New("A+B strict cached execution required")
+		}
+		run = strict.RunCheckerTrial
 	}
 	if err := ctx.Err(); err != nil {
 		return result, err
 	}
 	verifyCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	err = r.sandbox.Verify(verifyCtx, p.Environment)
+	err = sandbox.Verify(verifyCtx, p.Environment)
 	cancel()
 	if err != nil {
 		return result, err
@@ -104,14 +117,14 @@ func (r *Runner) Judge(ctx context.Context, d materials.Descriptor, blobs map[st
 		}
 	}()
 	compileCtx, cancel := context.WithTimeout(ctx, time.Duration(p.Environment.Compile.Wall)+5*time.Second)
-	compiled, err := r.sandbox.Compile(compileCtx, p.Environment, d.Source)
+	compiled, err := sandbox.Compile(compileCtx, p.Environment, d.Source)
 	cancel()
 	// An artifact can accompany a failed response; clean it on every exit path.
 	if compiled.Artifact != "" {
 		defer func() {
 			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			if cleanupErr := r.sandbox.Remove(cleanupCtx, compiled.Artifact); cleanupErr != nil {
+			if cleanupErr := sandbox.Remove(cleanupCtx, compiled.Artifact); cleanupErr != nil {
 				result.Verdict = "SE"
 				err = errors.Join(err, cleanupErr)
 			}
@@ -140,7 +153,7 @@ func (r *Runner) Judge(ctx context.Context, d materials.Descriptor, blobs map[st
 			return result, err
 		}
 		runCtx, cancel := context.WithTimeout(ctx, time.Duration(p.Environment.Run.Wall)+5*time.Second)
-		observed, runErr := r.sandbox.Run(runCtx, p.Environment, compiled.Artifact, blobs[t.Input])
+		observed, runErr := run(runCtx, p.Environment, compiled.Artifact, blobs[t.Input])
 		cancel()
 		result.Points[i].Verdict = "SE"
 		if runErr != nil {
@@ -161,11 +174,12 @@ func (r *Runner) Judge(ctx context.Context, d materials.Descriptor, blobs map[st
 		result.Max.CPU = max(result.Max.CPU, observed.CPU)
 		result.Max.Memory = max(result.Max.Memory, observed.Memory)
 		if verdict == "AC" {
-			ok, compareErr := judging.CompareText(blobs[t.Answer], observed.Stdout, p.CaseSensitive)
-			if compareErr != nil {
+			ok, compareErr := p.compare(blobs[t.Answer], observed.Stdout)
+			if p.tokenBytes != 0 && errors.Is(compareErr, judging.ErrOutput) && len(observed.Stdout) <= materials.APlusBOutputBytes {
+				verdict = "OLE"
+			} else if compareErr != nil {
 				return result, compareErr
-			}
-			if !ok {
+			} else if !ok {
 				verdict = "WA"
 			}
 		}
@@ -177,6 +191,14 @@ func (r *Runner) Judge(ctx context.Context, d materials.Descriptor, blobs map[st
 	}
 	result.Verdict = "AC"
 	return result, nil
+}
+
+func (m manifest) compare(answer, output []byte) (bool, error) {
+	if m.tokenBytes == 0 {
+		return judging.CompareText(answer, output, m.CaseSensitive)
+	}
+	return judging.CompareLibraryCheckerText(answer, output,
+		judging.TextLimits{Bytes: materials.APlusBOutputBytes, TokenBytes: m.tokenBytes})
 }
 
 func classify(o Observation, compile bool) (string, error) {

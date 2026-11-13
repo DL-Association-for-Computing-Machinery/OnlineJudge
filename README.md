@@ -135,6 +135,12 @@ env -u OJ_WORKER_M0_SLOT -u OJ_WORKER_M0_DUAL_EXPERIMENT OJ_SANDBOX_EXPERIMENT=1
 
 路径使用绝对路径。源码须是权限 0400 或 0600 的私有普通文件，最多 64 KiB，且为不含 NUL 的 UTF-8；摘要固定原字节。只用现有停止的断网小型参考槽，输出目录须新建且在题包外。退出码 0 表示已产生确定判定并完成清理，实际 AC、WA、CE 等查看私有报告。详见[隔离判题契约](docs/checker-admission.md#ab-固定材料隔离判题)。
 
+### A+B 租约链路联验
+
+在上一节清单命令上加 `--expected-manifest "$TRUSTED_JUDGE_MANIFEST_SHA256" --export "$NEW_PRIVATE_DIRECTORY"`，导出 `manifest.json` 及私有对象。核对后固定该运输清单的原始字节 SHA-256。隔离链路的登记、控制端和 Worker 都设置 `OJ_SANDBOX_EXPERIMENT=1`、`OJ_APLUSB_MANIFEST_FILE`（绝对路径）、`OJ_APLUSB_MANIFEST_SHA256`；不同时设置 `OJ_EXPERIMENT_MATERIAL_VERSION`、M0 槽或双槽配置。
+
+登记进程和控制端另设 `OJ_MATERIAL_ROOT` 为该导出目录。在已迁移的临时 PostgreSQL 上执行 `migrate fixture` 和显式的积压策略配置，再按现有私有 mTLS 方式启动 `worker-api`。使用已启动、固定、断网的小型参考槽运行同配置的 Desktop arm64 `worker`。普通 API 不启用此版本。真实联验使用 sandbox 标签的 `TestAPlusBLeasedLoop`，须显式设置 `OJ_SANDBOX_APLUSB=1`、空的临时 `OJ_TEST_DATABASE_URL` 并准备同一 worktree 的 `.local/bin/{migrate,worker,worker-api}` 宿主构建产物；测试自行登记、排入固定合成源码和生成临时 mTLS 身份。不得指向试用库或正在使用的参考槽。见[判题契约](docs/checker-admission.md#ab-租约链路联验)。
+
 ### 私有草稿参考验证
 
 [#151 新题包](docs/delivery-log.md#2026-11-11新版题包十题参考复验与卷积报告接纳)的十题254点均通过固定环境维护参考验证并确认停止。最初批次因素性测试宿主超时中止，受控恢复后以新报告完成余下六题；[原失败](docs/delivery-log.md#2026-11-11新版题包维护参考复验中止)仍保留，根因未知。维护入口不写数据库验证状态或发布。需要已配置且停止的专用槽、已有固定镜像与 Docker Desktop、macOS arm64；命令不会自动创建、替换或恢复槽。使用已有 Go 1.26.11 工具链镜像构建独立宿主产物（不与 Linux 检查共用输出）：
