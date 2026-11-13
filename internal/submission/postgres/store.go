@@ -91,6 +91,11 @@ func (s *Store) checkMaterial(ctx context.Context, q *submissiondb.Queries) erro
 	return nil
 }
 
+// CheckRegisteredMaterial confirms the configured immutable version without writing.
+func (s *Store) CheckRegisteredMaterial(ctx context.Context) error {
+	return s.checkMaterial(ctx, submissiondb.New(s.pool))
+}
+
 // Accept atomically persists source and task, or returns the original receipt.
 // A commit error remains ambiguous: callers must query/retry with the same key.
 func (s *Store) Accept(ctx context.Context, subject, scope, key string, req submission.Request) (submission.Receipt, bool, error) {

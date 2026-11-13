@@ -12,6 +12,7 @@ import (
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/db"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materials"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
 	referencepg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference/postgres"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
@@ -161,6 +162,36 @@ func run() error {
 		version, manifest, err := experiment.SelectFixture(os.Getenv("OJ_EXPERIMENT_MATERIAL_VERSION"))
 		if err != nil {
 			return err
+		}
+		aplusb, raw, enabled, err := materials.ConfiguredAPlusB()
+		if err != nil {
+			return err
+		}
+		if enabled {
+			if _, err := experiment.APlusBFixture(raw, os.Getenv("OJ_APLUSB_MANIFEST_SHA256")); err != nil {
+				return err
+			}
+			reader, err := materials.OpenLocal(os.Getenv("OJ_MATERIAL_ROOT"))
+			if err != nil {
+				return err
+			}
+			defer func() { _ = reader.Close() }()
+			for _, point := range aplusb.Tests {
+				for _, hash := range []string{point.Input, point.Answer} {
+					if err := reader.Verify(ctx, hash); err != nil {
+						return err
+					}
+				}
+			}
+			store, err := postgres.New(pool, aplusb.Version, raw)
+			if err != nil {
+				return err
+			}
+			if err := store.RegisterFixture(ctx); err != nil {
+				return err
+			}
+			fmt.Println("A+B isolated materials registered:", aplusb.Version)
+			return nil
 		}
 		store, err := postgres.New(pool, version, manifest)
 		if err != nil {
