@@ -22,6 +22,10 @@ func TestEmailLimitsConfiguration(t *testing.T) {
 	if c, err := parse(); err != nil || c.Runtime.EmailLimits != nil {
 		t.Fatal("email limits must be optional")
 	}
+	doc["email_confirmation"] = map[string]any{"minimum_characters": 15, "blocklist_file": "/config/weak-passwords.json"}
+	if _, err := parse(); err != ErrConfig {
+		t.Fatal("confirmation without email limits was accepted")
+	}
 	names := []string{"request_global", "request_source", "request_mailbox", "confirm_global", "confirm_source", "confirm_token"}
 	limits := make(map[string]any)
 	doc["email_limits"] = limits
@@ -29,7 +33,7 @@ func TestEmailLimitsConfiguration(t *testing.T) {
 		limits[name] = map[string]any{"count": i + 1, "window": "1m"}
 	}
 	c, err := parse()
-	if err != nil || c.Runtime.EmailLimits == nil {
+	if err != nil || c.Runtime.EmailLimits == nil || c.EmailMinimumCharacters != 15 || c.EmailBlocklistFile != "/config/weak-passwords.json" {
 		t.Fatal("complete email limits were rejected")
 	}
 	e := c.Runtime.EmailLimits

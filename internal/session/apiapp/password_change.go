@@ -7,18 +7,32 @@ import (
 )
 
 func loadPasswordAcceptance(c *apiconfig.Config) error {
-	if c.Runtime.PasswordChange == nil {
-		return nil
+	if c.Runtime.PasswordChange != nil {
+		rules, err := readPasswordAcceptance(c.PasswordBlocklistFile, c.MinimumPasswordCharacters, c.Runtime.PasswordLimits.MaxPasswordBytes)
+		if err != nil {
+			return err
+		}
+		c.Runtime.PasswordChange.Acceptance = rules
 	}
-	body, err := checkedfile.ReadPublic(c.PasswordBlocklistFile, 1<<20)
+	if c.EmailBlocklistFile != "" {
+		rules, err := readPasswordAcceptance(c.EmailBlocklistFile, c.EmailMinimumCharacters, c.Runtime.PasswordLimits.MaxPasswordBytes)
+		if err != nil {
+			return err
+		}
+		c.Runtime.EmailConfirmation = rules
+	}
+	return nil
+}
+
+func readPasswordAcceptance(path string, minimum int, maxBytes uint32) (*passwordpolicy.Acceptance, error) {
+	body, err := checkedfile.ReadPublic(path, 1<<20)
 	if err != nil {
-		return ErrConfiguration
+		return nil, ErrConfiguration
 	}
 	defer clear(body)
-	rules, err := passwordpolicy.ParseAcceptance(body, c.MinimumPasswordCharacters, c.Runtime.PasswordLimits.MaxPasswordBytes)
+	rules, err := passwordpolicy.ParseAcceptance(body, minimum, maxBytes)
 	if err != nil {
-		return ErrConfiguration
+		return nil, ErrConfiguration
 	}
-	c.Runtime.PasswordChange.Acceptance = rules
-	return nil
+	return rules, nil
 }

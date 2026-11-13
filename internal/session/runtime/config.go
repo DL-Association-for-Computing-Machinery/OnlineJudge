@@ -83,6 +83,8 @@ type Config struct {
 	// EmailLimits optionally provisions the email marker during isolated
 	// recovery. This alone does not enable any public account route.
 	EmailLimits *redisstore.EmailLimits
+	// EmailConfirmation explicitly enables both link confirmation routes.
+	EmailConfirmation *password.Acceptance
 }
 
 // PasswordChangeConfig explicitly enables authenticated changes. Nil preserves
@@ -125,6 +127,10 @@ func cloneTLS(mode Security, config *tls.Config) (*tls.Config, error) {
 
 func (c Config) validate() (*password.Hasher, *password.BoundedHasher, error) {
 	if c.EmailLimits != nil && c.EmailLimits.Validate() != nil {
+		return nil, nil, ErrConfig
+	}
+	if rules := c.EmailConfirmation; rules != nil && (c.EmailLimits == nil ||
+		rules.MinimumCharacters() < password.MinimumNewPasswordCharacters || rules.MaxBytes() != c.PasswordLimits.MaxPasswordBytes) {
 		return nil, nil, ErrConfig
 	}
 	if c.PrivateDrafts != nil && c.PrivateDrafts.Validate() != nil {

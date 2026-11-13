@@ -59,6 +59,12 @@ func (w document) config() (Config, error) {
 	if w.EmailLimits != nil && w.EmailLimits.apply(r) != nil {
 		return Config{}, ErrConfig
 	}
+	if confirm := w.EmailConfirmation; confirm != nil {
+		if r.EmailLimits == nil || !validNewPasswordConfig(confirm.MinimumCharacters, confirm.BlocklistFile, r.PasswordLimits.MaxPasswordBytes) {
+			return Config{}, ErrConfig
+		}
+		c.EmailMinimumCharacters, c.EmailBlocklistFile = confirm.MinimumCharacters, confirm.BlocklistFile
+	}
 	if w.PrivateDrafts != nil && w.PrivateDrafts.apply(&c) != nil {
 		return Config{}, ErrConfig
 	}
@@ -101,7 +107,7 @@ func (w privateDraftsWire) apply(c *Config) error {
 }
 
 func (w passwordChangeWire) apply(c *Config) error {
-	if w.MinimumCharacters < redisstore.MinimumNewPasswordCharacters || w.MinimumCharacters > 64 || uint64(c.Runtime.PasswordLimits.MaxPasswordBytes) < 4*uint64(w.MinimumCharacters) || w.BlocklistFile == "" || !validPath(w.BlocklistFile, false) {
+	if !validNewPasswordConfig(w.MinimumCharacters, w.BlocklistFile, c.Runtime.PasswordLimits.MaxPasswordBytes) {
 		return ErrConfig
 	}
 	change := &sessionruntime.PasswordChangeConfig{}
@@ -121,6 +127,11 @@ func (w passwordChangeWire) apply(c *Config) error {
 	c.Runtime.PasswordChange = change
 	c.PasswordBlocklistFile, c.MinimumPasswordCharacters = w.BlocklistFile, w.MinimumCharacters
 	return nil
+}
+
+func validNewPasswordConfig(minimum int, file string, maxBytes uint32) bool {
+	return minimum >= password.MinimumNewPasswordCharacters && minimum <= 64 &&
+		uint64(maxBytes) >= 4*uint64(minimum) && file != "" && validPath(file, false)
 }
 
 type durationField struct {

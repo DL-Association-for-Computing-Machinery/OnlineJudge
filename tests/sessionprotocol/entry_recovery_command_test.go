@@ -81,6 +81,8 @@ func testRecoveryCommand(t *testing.T, f *fixture, api, command string, c sessio
 	bucket := protocol.LoginBucket{Count: 10, Window: time.Hour}
 	c.EmailLimits = &protocol.EmailLimits{RequestGlobal: bucket, RequestSource: bucket, RequestMailbox: bucket,
 		ConfirmGlobal: bucket, ConfirmSource: bucket, ConfirmToken: bucket}
+	c.EmailLimits.ConfirmToken.Count = 2
+	c.EmailConfirmation = c.PasswordChange.Acceptance
 	interrupted := c
 	interrupted.Redis.Addr = interruptedAddr
 	interruptedPath := entryConfig(t, interrupted, ca, 3*time.Second, blocklist)
@@ -129,6 +131,9 @@ func testRecoveryCommand(t *testing.T, f *fixture, api, command string, c sessio
 	var endpoints []*loginEndpoint
 	for _, name := range []string{"_recovery_a", "_recovery_b"} {
 		replica := c
+		if name == "_recovery_b" {
+			replica.PasswordChange = nil
+		}
 		replica.Database.ApplicationName += name
 		child := entryStart(t, api, entryConfig(t, replica, ca, 3*time.Second, blocklist), "127.0.0.1:0")
 		endpoint := entryClient(t, child, ca)
@@ -147,6 +152,7 @@ func testRecoveryCommand(t *testing.T, f *fixture, api, command string, c sessio
 	fresh := entryCredential(t, endpoints[0], owner, "synthetic protocol password")
 	loginStatus(t, loginCall(endpoints[1], "/api/v1/session", "", credentialCookies(fresh), get), 200)
 	checkReferenceQueue(endpoints[0], endpoints[1], fresh, opened.Generation)
+	checkPublicEmailConfirmation(t, ctx, pool, authority, endpoints, owner.ID, opened.Generation)
 	for _, child := range children {
 		child.signal(t)
 		child.wait(t, true)
