@@ -53,7 +53,8 @@ func (t *CheckerTrial) VerifyPassingReport(raw []byte, expectedSHA256, expectedS
 		return zero, ErrCheckerTrialEvidence
 	}
 	profile := t.profile.Digest()
-	if report.Schema != "oj.checker-trial.v1" || !report.Complete || !report.StopConfirmed || report.Verdict != "AC" ||
+	if report.Schema != "oj.checker-trial.v1" || report.JudgeManifestSHA256 != "" || report.SubmissionSHA256 != "" ||
+		!report.Complete || !report.StopConfirmed || report.Verdict != "AC" ||
 		report.Diagnostic != nil || report.StopDiagnostic != nil || report.Slot != expectedSlot ||
 		report.CandidateSHA256 != t.candidateSHA || report.FormalPlanSHA != t.plan.Digest() ||
 		report.RuntimeSHA256 != profile || report.RuntimeProfile.Digest() != profile ||

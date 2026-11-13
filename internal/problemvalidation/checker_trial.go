@@ -2,42 +2,54 @@ package problemvalidation
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"strings"
 	"sync/atomic"
+	"unicode/utf8"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/execution"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/judging"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
 )
+
+const aplusbJudgeReportSchema = "oj.aplusb-isolated-judge-report.v1"
 
 // CheckerTrial is a single use trial. It holds the same verified snapshot for
 // preflight and execution. Call Close even when no run was started.
 type CheckerTrial struct {
-	used         atomic.Bool
-	profile      Profile
-	tier         experiment.ReferenceTier
-	plan         problem.ReferencePlan
-	materials    referenceReader
-	candidateSHA string
+	used             atomic.Bool
+	profile          Profile
+	tier             experiment.ReferenceTier
+	plan             problem.ReferencePlan
+	materials        referenceReader
+	candidateSHA     string
+	manifestSHA      string
+	submissionSHA    string
+	submissionSource []byte
 }
 
 // CheckerTrialReport is private maintenance evidence, separate from accepted
 // reference reports and production judge results. It contains no source or I/O.
 type CheckerTrialReport struct {
-	Schema          string               `json:"schema"`
-	CandidateSHA256 string               `json:"candidate_sha256"`
-	FormalPlanSHA   string               `json:"formal_plan_sha256"`
-	RuntimeProfile  Profile              `json:"runtime_profile"`
-	RuntimeSHA256   string               `json:"runtime_profile_sha256"`
-	Verdict         string               `json:"verdict"`
-	Points          []Point              `json:"points"`
-	CompileUsage    *execution.Usage     `json:"compile_usage,omitempty"`
-	Diagnostic      *ExecutionDiagnostic `json:"execution_diagnostic,omitempty"`
-	StopDiagnostic  *StopDiagnostic      `json:"stop_diagnostic,omitempty"`
-	Slot            string               `json:"slot"`
-	StopConfirmed   bool                 `json:"stop_confirmed"`
-	Complete        bool                 `json:"complete"`
+	Schema              string               `json:"schema"`
+	CandidateSHA256     string               `json:"candidate_sha256"`
+	FormalPlanSHA       string               `json:"formal_plan_sha256"`
+	RuntimeProfile      Profile              `json:"runtime_profile"`
+	RuntimeSHA256       string               `json:"runtime_profile_sha256"`
+	Verdict             string               `json:"verdict"`
+	Points              []Point              `json:"points"`
+	CompileUsage        *execution.Usage     `json:"compile_usage,omitempty"`
+	Diagnostic          *ExecutionDiagnostic `json:"execution_diagnostic,omitempty"`
+	StopDiagnostic      *StopDiagnostic      `json:"stop_diagnostic,omitempty"`
+	Slot                string               `json:"slot"`
+	StopConfirmed       bool                 `json:"stop_confirmed"`
+	Complete            bool                 `json:"complete"`
+	JudgeManifestSHA256 string               `json:"judge_manifest_sha256,omitempty"`
+	SubmissionSHA256    string               `json:"submission_sha256,omitempty"`
 }
 
 // PrepareCheckerTrial rederives the candidate from trusted bundle material and
@@ -141,14 +153,22 @@ func (t *CheckerTrial) Run(ctx context.Context, g *execution.CachedGoJudge) (Che
 	for _, c := range t.plan.Cases {
 		r.Points = append(r.Points, Point{ID: c.ID, Verdict: "NOT_RUN"})
 	}
-	r, err := New(g).runPrepared(ctx, r, t.profile, t.plan, t.materials, nil, g)
+	var err error
+	schema := "oj.checker-trial.v1"
+	runner := New(g)
+	if t.manifestSHA == "" {
+		r, err = runner.runPrepared(ctx, r, t.profile, t.plan, t.materials, nil, g)
+	} else {
+		schema = aplusbJudgeReportSchema
+		r, err = runner.runPreparedSource(ctx, r, t.profile, t.plan, t.materials, nil, g, t.submissionSource)
+	}
 	if err = errors.Join(err, ctx.Err()); err != nil {
 		r.Verdict = "SE"
 	}
 	return CheckerTrialReport{
-		Schema: "oj.checker-trial.v1", CandidateSHA256: t.candidateSHA, FormalPlanSHA: t.plan.Digest(),
+		Schema: schema, CandidateSHA256: t.candidateSHA, FormalPlanSHA: t.plan.Digest(),
 		RuntimeProfile: t.profile, RuntimeSHA256: t.profile.Digest(), Verdict: r.Verdict, Points: r.Points,
-		CompileUsage: r.CompileUsage, Diagnostic: r.ExecutionDiagnostic,
+		CompileUsage: r.CompileUsage, Diagnostic: r.ExecutionDiagnostic, JudgeManifestSHA256: t.manifestSHA, SubmissionSHA256: t.submissionSHA,
 	}, err
 }
 
@@ -156,7 +176,9 @@ func (t *CheckerTrial) Run(ctx context.Context, g *execution.CachedGoJudge) (Che
 func (r *CheckerTrialReport) Finalize(runErr, stopErr, cleanErr error) error {
 	r.StopConfirmed = stopErr == nil
 	err := errors.Join(runErr, stopErr, cleanErr)
-	r.Complete = err == nil && r.Schema == "oj.checker-trial.v1" && r.Verdict != "SE"
+	validSchema := r.Schema == "oj.checker-trial.v1" && r.JudgeManifestSHA256 == "" && r.SubmissionSHA256 == "" ||
+		r.Schema == aplusbJudgeReportSchema && problem.ValidImportRevision(r.JudgeManifestSHA256) && problem.ValidImportRevision(r.SubmissionSHA256)
+	r.Complete = err == nil && validSchema && r.Verdict != "SE"
 	if !r.Complete {
 		r.Verdict = "SE"
 		if err == nil {
@@ -164,4 +186,26 @@ func (r *CheckerTrialReport) Finalize(runErr, stopErr, cleanErr error) error {
 		}
 	}
 	return err
+}
+
+// PrepareAPlusBJudge checks the same fixed materials before the host can start.
+// The compiled bytes come from the pinned submission rather than the reference.
+func PrepareAPlusBJudge(ctx context.Context, prepared *problem.Prepared, plan, candidate, manifest, sourceSHA, source string, limits judging.TextLimits) (*CheckerTrial, error) {
+	if !problem.ValidImportRevision(manifest) || !problem.ValidImportRevision(sourceSHA) ||
+		len(source) == 0 || len(source) > submission.MaxSourceBytes || !utf8.ValidString(source) || strings.ContainsRune(source, 0) {
+		return nil, ErrCheckerCandidateBinding
+	}
+	h := sha256.Sum256([]byte(source))
+	if hex.EncodeToString(h[:]) != sourceSHA {
+		return nil, ErrCheckerCandidateBinding
+	}
+	trial, err := prepareAPlusBJudgeTrial(ctx, prepared, plan, candidate, limits)
+	if err != nil {
+		return nil, err
+	}
+	if trial.aplusbManifest().Digest() != manifest || ctx.Err() != nil {
+		return nil, errors.Join(ErrCheckerCandidateBinding, trial.Close(), ctx.Err())
+	}
+	trial.manifestSHA, trial.submissionSHA, trial.submissionSource = manifest, sourceSHA, []byte(source)
+	return trial, nil
 }
