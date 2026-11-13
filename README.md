@@ -89,7 +89,7 @@ go run ./cmd/checker-candidate --bundle "$PRIVATE_BUNDLE" \
 
 ### 候选检查器原始输出试跑
 
-在已配置且停止的专用参考槽上，可用上一步生成、另行核验的候选摘要试跑 A+B。沿用下节构建的宿主 `worker`，将来源锁、题包和输出目录写成绝对路径；输出目录必须新建且在题包之外。此固定槽的采集上限是 262144 字节，候选必须明确指定同一上限和自己的 token 限额；这些不是生产默认值。
+在已配置且停止的专用参考槽上，可用上一步生成、另行核验的候选摘要试跑 A+B 或并查集。A+B 是默认来源；并查集须在试跑和离线复核时同时指定 `--source-id library-checker:unionfind`。沿用下节构建的宿主 `worker`，将来源锁、题包和输出目录写成绝对路径；输出目录必须新建且在题包之外。此固定槽的采集上限是 262144 字节，候选必须明确指定同一上限和自己的 token 限额；这些不是生产默认值。
 
 ```sh
 env -u OJ_WORKER_M0_SLOT -u OJ_WORKER_M0_DUAL_EXPERIMENT OJ_SANDBOX_EXPERIMENT=1 \
