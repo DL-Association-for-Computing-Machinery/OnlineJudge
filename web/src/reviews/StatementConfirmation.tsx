@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ReviewMaterialsController } from './materialsController'
+import './statementConfirmation.css'
 
 const checks = ['题意与任务目标', '数据范围与约束', '输入和输出定义', '样例及其解释']
 
@@ -13,7 +14,7 @@ export function StatementConfirmation({ controller, state }: {
     <h2 id="statement-confirmation-title">题意确认</h2>
     {state.confirmation === 'ready' && <>
       <p>请根据上方冻结题面和样例逐项人工核对。确认只记录对这份题面的核对结果。</p>
-      <fieldset>
+      <fieldset className="statement-checklist">
         <legend>人工核对清单</legend>
         {checks.map((label, i) => <div key={label}><label>
           <input type="checkbox" checked={checked[i]} onChange={event => {
