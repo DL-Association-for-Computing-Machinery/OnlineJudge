@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/judging"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materials"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materialstore"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 )
@@ -22,6 +24,44 @@ type APlusBJudgeManifest struct {
 	CandidateSHA256 string            `json:"candidate_sha256"`
 	RuntimeSHA256   string            `json:"runtime_profile_sha256"`
 	Tests           []APlusBJudgeTest `json:"tests"`
+}
+
+// ExportAPlusBMaterials emits only the verified input and answer objects. The
+// caller must stage them privately and publish metadata only after success.
+func ExportAPlusBMaterials(ctx context.Context, prepared *problem.Prepared, plan, candidate, expected string, limits judging.TextLimits,
+	put func(string, []byte) error) (manifest materials.APlusBManifest, err error) {
+	trial, err := prepareAPlusBJudgeTrial(ctx, prepared, plan, candidate, limits)
+	if err != nil {
+		return manifest, err
+	}
+	defer func() { err = errors.Join(err, trial.Close()) }()
+	if trial.aplusbManifest().Digest() != expected || len(trial.plan.Cases) != 17 || put == nil {
+		return manifest, ErrCheckerCandidateBinding
+	}
+	manifest = materials.APlusBManifest{Version: "aplusb-" + expected, Origin: materials.APlusBOrigin,
+		Language: "gnu++17", JudgeSHA256: expected, TokenBytes: limits.TokenBytes,
+		Checker: judging.LibraryCheckerTextVersion, RuntimeSHA256: experiment.APlusBRuntimeSHA256()}
+	seen := make(map[string]bool)
+	for _, point := range trial.plan.Cases {
+		for _, obj := range []struct {
+			hash string
+			data []byte
+		}{
+			{point.Input.SHA256, point.InputData}, {point.Answer.SHA256, point.AnswerData},
+		} {
+			if err := ctx.Err(); err != nil {
+				return materials.APlusBManifest{}, err
+			}
+			if !seen[obj.hash] {
+				if err := put(obj.hash, obj.data); err != nil {
+					return materials.APlusBManifest{}, err
+				}
+				seen[obj.hash] = true
+			}
+		}
+		manifest.Tests = append(manifest.Tests, materials.APlusBPoint{ID: point.ID, Input: point.Input.SHA256, Answer: point.Answer.SHA256})
+	}
+	return manifest, ctx.Err()
 }
 
 // APlusBJudgeTest records the identities and sizes of the point's two objects.
