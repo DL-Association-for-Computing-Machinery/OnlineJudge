@@ -85,6 +85,9 @@ type Config struct {
 	EmailLimits *redisstore.EmailLimits
 	// EmailConfirmation explicitly enables both link confirmation routes.
 	EmailConfirmation *password.Acceptance
+	// IsolatedEmailIntake is available only to typed local integration callers.
+	// The API's file configuration cannot enable it.
+	IsolatedEmailIntake *IsolatedEmailIntakeConfig
 }
 
 // PasswordChangeConfig explicitly enables authenticated changes. Nil preserves
