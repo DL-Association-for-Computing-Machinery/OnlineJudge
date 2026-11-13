@@ -27,6 +27,17 @@ func run(ctx context.Context, logger *slog.Logger, drain <-chan struct{}) error 
 	if err != nil {
 		return err
 	}
+	if c.fixture.IsAPlusB() {
+		slot := workerhost.ReferenceSlot{}
+		lock, err := lockSlotMode(slot.LockName(), false)
+		if err != nil {
+			return err
+		}
+		defer lock.Close()
+		return runSlot(ctx, c, logger, lock, func(ctx context.Context) (sandboxHost, error) {
+			return workerhost.OpenReference(ctx)
+		}, drain)
+	}
 	ubuntu := c.fixture.Version() == experiment.UbuntuVersion
 	lock, err := lockM0Runtime(c.slot, false, os.Getenv(dualModeEnv), ubuntu)
 	if err != nil {
@@ -86,15 +97,36 @@ func runSlot(ctx context.Context, c config, logger *slog.Logger, lock *slotLock,
 		return err
 	}
 	sandbox := execution.NewGoJudge(host, host.Verify)
-	if err := sandbox.Verify(startup, c.fixture.Profile()); err != nil {
-		return errors.New("M0 sandbox protocol preflight failed; no task claimed")
+	var runner *execution.LeasedRunner
+	if c.fixture.IsAPlusB() {
+		files, ok := host.(execution.FileTransport)
+		if !ok {
+			return errors.New("A+B cached transport required")
+		}
+		factory := func() *execution.CachedGoJudge { return execution.NewReferenceGoJudge(host, host.Verify, files) }
+		if err := factory().Verify(startup, c.fixture.Profile()); err != nil {
+			return errors.New("A+B sandbox protocol preflight failed; no task claimed")
+		}
+		runner, err = execution.NewLeasedAPlusB(factory, renewer.Renew, stop, c.fixture)
+		if err != nil {
+			return err
+		}
+	} else {
+		if err := sandbox.Verify(startup, c.fixture.Profile()); err != nil {
+			return errors.New("M0 sandbox protocol preflight failed; no task claimed")
+		}
+		runner = execution.NewLeasedForFixture(sandbox, renewer.Renew, stop, c.fixture)
 	}
 	cancel()
-	w, err := worker.New(acquirer, acquirer, execution.NewLeasedForFixture(sandbox, renewer.Renew, stop, c.fixture), reporter)
+	w, err := worker.New(acquirer, acquirer, runner, reporter)
 	if err != nil {
 		return err
 	}
-	logger.Info("Worker 已就绪", "mode", "m0-single-slot")
+	mode := "m0-single-slot"
+	if c.fixture.IsAPlusB() {
+		mode = "isolated-aplusb-single-slot"
+	}
+	logger.Info("Worker 已就绪", "mode", mode)
 	err = w.RunWithDrain(ctx, drain)
 	if errors.Is(err, execution.ErrStopUnconfirmed) {
 		return errors.New("sandbox stop unconfirmed")

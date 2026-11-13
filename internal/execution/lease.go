@@ -55,6 +55,17 @@ func NewLeasedForFixture(s Sandbox, renew RenewLease, stop StopSandbox, fixture 
 		requestTimeout: 3 * time.Second, stopTimeout: 10 * time.Second}
 }
 
+// NewLeasedAPlusB retains lease supervision across attempts, with a fresh
+// single-attempt cache ledger on the same exclusively owned sandbox each time.
+func NewLeasedAPlusB(factory func() *CachedGoJudge, renew RenewLease, stop StopSandbox, fixture experiment.WorkerFixture) (*LeasedRunner, error) {
+	if factory == nil || !fixture.IsAPlusB() {
+		return nil, errors.New("A+B execution requires the isolated profile and cache factory")
+	}
+	r := NewLeasedForFixture(nil, renew, stop, fixture)
+	r.runner.newCached = factory
+	return r, nil
+}
+
 // Judge renews before and during execution. Any loss of authority cancels work,
 // confirms host-side termination using an independent bounded context, and drains
 // execution/cleanup before releasing capacity. It never reports to the controller.

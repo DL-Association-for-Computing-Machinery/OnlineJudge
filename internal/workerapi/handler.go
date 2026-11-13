@@ -29,6 +29,12 @@ func NewUbuntuFixtureHandler(store submission.LeaseStore, roots *x509.CertPool, 
 	return newFixtureHandler(store, roots, time.Now, experiment.UbuntuVersion, materialService)
 }
 
+// NewAPlusBHandler requires an explicit version assertion before acquiring a
+// task from the isolated A+B queue.
+func NewAPlusBHandler(store submission.LeaseStore, roots *x509.CertPool, materialService *materials.Service, m materials.APlusBManifest) http.Handler {
+	return newFixtureHandler(store, roots, time.Now, m.Version, materialService)
+}
+
 func newHandler(store submission.LeaseStore, roots *x509.CertPool, now func() time.Time, materialService ...*materials.Service) http.Handler {
 	return newFixtureHandler(store, roots, now, "", materialService...)
 }

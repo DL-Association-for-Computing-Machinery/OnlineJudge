@@ -10,6 +10,7 @@ import (
 	"runtime"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materials"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/workerhost"
 )
 
@@ -35,6 +36,19 @@ func loadConfig(getenv func(string) string) (config, error) {
 	c.fixture, err = m0Fixture(getenv, c.slot)
 	if err != nil {
 		return c, err
+	}
+	_, raw, enabled, err := materials.LoadAPlusB(getenv)
+	if err != nil {
+		return c, err
+	}
+	if enabled {
+		if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" || getenv("OJ_WORKER_M0_SLOT") != "" || getenv(dualModeEnv) != "" {
+			return c, errors.New("A+B requires the isolated Desktop reference slot")
+		}
+		c.fixture, err = experiment.APlusBFixture(raw, getenv("OJ_APLUSB_MANIFEST_SHA256"))
+		if err != nil {
+			return c, err
+		}
 	}
 	c.endpoint = getenv("OJ_WORKER_CONTROLLER_URL")
 	u, err := url.Parse(c.endpoint)
