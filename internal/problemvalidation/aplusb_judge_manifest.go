@@ -30,7 +30,13 @@ type APlusBJudgeManifest struct {
 // caller must stage them privately and publish metadata only after success.
 func ExportAPlusBMaterials(ctx context.Context, prepared *problem.Prepared, plan, candidate, expected string, limits judging.TextLimits,
 	put func(string, []byte) error) (manifest materials.APlusBManifest, err error) {
-	trial, err := prepareAPlusBJudgeTrial(ctx, prepared, plan, candidate, limits, experiment.ReferenceSmall)
+	return ExportAPlusBMaterialsForTier(ctx, prepared, plan, candidate, expected, limits, experiment.ReferenceSmall, put)
+}
+
+// ExportAPlusBMaterialsForTier binds private transport objects to one exact A+B runtime.
+func ExportAPlusBMaterialsForTier(ctx context.Context, prepared *problem.Prepared, plan, candidate, expected string, limits judging.TextLimits,
+	tier experiment.ReferenceTier, put func(string, []byte) error) (manifest materials.APlusBManifest, err error) {
+	trial, err := prepareAPlusBJudgeTrial(ctx, prepared, plan, candidate, limits, tier)
 	if err != nil {
 		return manifest, err
 	}
@@ -40,7 +46,7 @@ func ExportAPlusBMaterials(ctx context.Context, prepared *problem.Prepared, plan
 	}
 	manifest = materials.APlusBManifest{Version: "aplusb-" + expected, Origin: materials.APlusBOrigin,
 		Language: "gnu++17", JudgeSHA256: expected, TokenBytes: limits.TokenBytes,
-		Checker: judging.LibraryCheckerTextVersion, RuntimeSHA256: experiment.APlusBRuntimeSHA256()}
+		Checker: judging.LibraryCheckerTextVersion, RuntimeSHA256: experiment.APlusBRuntimeSHA256ForTier(tier)}
 	seen := make(map[string]bool)
 	for _, point := range trial.plan.Cases {
 		for _, obj := range []struct {
