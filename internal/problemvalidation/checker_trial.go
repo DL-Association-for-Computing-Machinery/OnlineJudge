@@ -11,12 +11,13 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 )
 
-// CheckerTrial is a single use, fully preflighted A+B trial. It owns the
-// same bounded memory snapshot for preflight and execution.
+// CheckerTrial is a single use trial. It holds the same verified snapshot for
+// preflight and execution. Call Close even when no run was started.
 type CheckerTrial struct {
 	used         atomic.Bool
 	profile      Profile
 	plan         problem.ReferencePlan
+	materials    referenceReader
 	candidateSHA string
 }
 
@@ -41,30 +42,75 @@ type CheckerTrialReport struct {
 // PrepareCheckerTrial rederives the candidate from trusted bundle material and
 // independently pinned digests. A trial cannot be opened with unequal caps.
 func PrepareCheckerTrial(ctx context.Context, prepared *problem.Prepared, expectedPlan, expectedCandidate string, limits judging.TextLimits) (*CheckerTrial, error) {
-	profile := PinnedProfile()
-	profile.ID = "p4-checker-candidate-aplusb-reference-v1"
-	profile.Runtime = experiment.PinnedReferenceEnvironment()
-	profile.Diagnostics = experiment.ReferenceDiagnosticBytes
-	profile.Text = limits
-	if ctx == nil || !limits.Valid() || limits.Bytes != profile.Runtime.OutputBytes ||
-		!problem.ValidImportRevision(expectedPlan) || !problem.ValidImportRevision(expectedCandidate) {
+	return PrepareCheckerTrialWithLifetime(ctx, ctx, prepared, expectedPlan, expectedCandidate, limits)
+}
+
+// PrepareCheckerTrialWithLifetime bounds the initial freeze independently of
+// later execution against it. The lifetime must remain live until Close.
+func PrepareCheckerTrialWithLifetime(ctx, lifetime context.Context, prepared *problem.Prepared, expectedPlan, expectedCandidate string, limits judging.TextLimits) (_ *CheckerTrial, err error) {
+	if ctx == nil || lifetime == nil || ctx.Err() != nil || lifetime.Err() != nil {
 		return nil, ErrCheckerCandidateBinding
 	}
-	plan, err := prepared.PrepareReference(ctx, profile.Materials)
+	id, err := prepared.ImportIdentity()
 	if err != nil {
 		return nil, err
 	}
+	var profile Profile
+	switch id.SourceID {
+	case "library-checker:aplusb":
+		profile = PinnedProfile()
+		profile.ID = "p4-checker-candidate-aplusb-reference-v1"
+		profile.Runtime = experiment.PinnedReferenceEnvironment()
+		profile.Diagnostics = experiment.ReferenceDiagnosticBytes
+	case "library-checker:unionfind":
+		profile = UnionFindProfile()
+		profile.ID = "p4-checker-candidate-unionfind-reference-v1"
+	default:
+		return nil, ErrCheckerCandidateBinding
+	}
+	profile.Text = limits
+	if !limits.Valid() || limits.Bytes != profile.Runtime.OutputBytes ||
+		!problem.ValidImportRevision(expectedPlan) || !problem.ValidImportRevision(expectedCandidate) {
+		return nil, ErrCheckerCandidateBinding
+	}
+	var plan problem.ReferencePlan
+	var reader referenceReader
+	if id.SourceID == "library-checker:unionfind" {
+		snapshot, err := prepared.PrepareDiskReferenceWithLifetime(ctx, lifetime)
+		if err != nil {
+			return nil, err
+		}
+		plan, reader = snapshot.Plan(), snapshot
+	} else {
+		plan, reader, err = freezeReferences(ctx, prepared, profile.Materials, false)
+		if err != nil {
+			return nil, err
+		}
+	}
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, reader.Close())
+		}
+	}()
 	c := checkerCandidateFor(plan, expectedPlan, judging.LibraryCheckerTextVersion, limits)
 	if c.Digest() != expectedCandidate {
 		return nil, ErrCheckerCandidateBinding
 	}
-	if err := checkCandidateAnswers(ctx, plan, memoryReference{plan}, expectedPlan, limits); err != nil {
+	if err := checkCandidateAnswers(ctx, plan, reader, expectedPlan, limits); err != nil {
 		return nil, err
 	}
-	if err := ctx.Err(); err != nil {
+	if err := errors.Join(ctx.Err(), lifetime.Err()); err != nil {
 		return nil, err
 	}
-	return &CheckerTrial{plan: plan, profile: profile, candidateSHA: expectedCandidate}, nil
+	return &CheckerTrial{plan: plan, materials: reader, profile: profile, candidateSHA: expectedCandidate}, nil
+}
+
+// Close releases the snapshot. The owner must not call it during Run.
+func (t *CheckerTrial) Close() error {
+	if t == nil || t.materials == nil {
+		return nil
+	}
+	return t.materials.Close()
 }
 
 // Run uses only the verified reference cache and returns provisional evidence.
@@ -79,7 +125,7 @@ func (t *CheckerTrial) Run(ctx context.Context, g *execution.CachedGoJudge) (Che
 	for _, c := range t.plan.Cases {
 		r.Points = append(r.Points, Point{ID: c.ID, Verdict: "NOT_RUN"})
 	}
-	r, err := New(g).runPrepared(ctx, r, t.profile, t.plan, memoryReference{t.plan}, nil, g)
+	r, err := New(g).runPrepared(ctx, r, t.profile, t.plan, t.materials, nil, g)
 	if err = errors.Join(err, ctx.Err()); err != nil {
 		r.Verdict = "SE"
 	}

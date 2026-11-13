@@ -1,6 +1,7 @@
 package problemvalidation_test
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -10,7 +11,57 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/judging"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/tests/problemfixture"
 )
+
+func TestUnionFindCheckerTrialOwnsFrozenSnapshot(t *testing.T) {
+	b := problemfixture.NewUnionFind(t)
+	b.AddOriginal(t, "data_structure/unionfind/sol/correct.cpp", []byte("int main(){}"))
+	b.BindReferenceCases(t)
+	b.Write(t)
+	p, err := problem.LoadBundle(b.Directory, "library-checker:unionfind", b.Lock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = p.Close() })
+	snapshot, err := p.PrepareDiskReference(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan := snapshot.Plan().Digest()
+	if err := snapshot.Close(); err != nil {
+		t.Fatal(err)
+	}
+	limits := judging.TextLimits{Bytes: experiment.PinnedReferenceEnvironment().OutputBytes, TokenBytes: 4096}
+	c, err := problemvalidation.PreflightCheckerCandidate(t.Context(), p, plan, judging.LibraryCheckerTextVersion, limits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := problemvalidation.PrepareCheckerTrial(t.Context(), p, plan, strings.Repeat("1", 64), limits); !errors.Is(err, problemvalidation.ErrCheckerCandidateBinding) {
+		t.Fatalf("unexpected wrong candidate result: %v", err)
+	}
+	prepare, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	trial, err := problemvalidation.PrepareCheckerTrialWithLifetime(prepare, t.Context(), p, plan, c.Digest(), limits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = trial.Close() })
+	cancel()
+	if !errors.Is(p.Close(), problem.ErrBusy) {
+		t.Fatal("trial released its materials before execution")
+	}
+	// Reaching the runtime verification diagnostic proves the source can still
+	// be read after the preflight context has been canceled.
+	report, err := trial.Run(t.Context(), execution.NewCachedGoJudge(nil, nil, nil))
+	if err == nil || report.Diagnostic == nil || report.RuntimeProfile.ID != "p4-checker-candidate-unionfind-reference-v1" ||
+		report.FormalPlanSHA != plan || report.CandidateSHA256 != c.Digest() {
+		t.Fatalf("trial did not reach the pinned runtime check: %+v, %v", report, err)
+	}
+	if err := errors.Join(trial.Close(), p.Close()); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestCheckerTrialBindsCandidateAndRejectsOtherRuntime(t *testing.T) {
 	_, p := fixture(t)
