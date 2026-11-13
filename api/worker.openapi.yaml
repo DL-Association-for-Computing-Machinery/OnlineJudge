@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OnlineJudge Private Worker API
-  version: 0.8.0
+  version: 0.9.0
   description: >-
     独立 loopback HTTPS 控制端，TLS 1.3 双向认证。判题客户端证书唯一 URI SAN 为
     spiffe://onlinejudge/worker/{node_id}/{credential_version}，不接受请求自报身份。
@@ -300,16 +300,18 @@ paths:
                 fixture_version: {type: string, const: m0-sum-ubuntu-arm64-v1}
       responses:
         '200':
-          description: 原子认领一个任务；不含源码、答案或运行环境承诺
+          description: 原子认领一个任务，返回任务已固定的材料版本和清单摘要；不含源码、答案或运行环境承诺
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: false
-                required: [lease_token, submission_id, judge_generation, recovery_generation, attempt_number, lease_until]
+                required: [lease_token, submission_id, judge_generation, recovery_generation, attempt_number, lease_until, material_version, manifest_sha256]
                 properties:
                   lease_token: {$ref: '#/components/schemas/Digest'}
                   submission_id: {type: string}
+                  material_version: {type: string, minLength: 1, maxLength: 128}
+                  manifest_sha256: {$ref: '#/components/schemas/Digest'}
                   judge_generation: {type: integer, format: int64}
                   recovery_generation: {type: integer, format: int64}
                   attempt_number: {type: integer}

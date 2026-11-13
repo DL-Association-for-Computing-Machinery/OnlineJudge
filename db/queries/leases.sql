@@ -5,7 +5,7 @@ SELECT * FROM worker_nodes WHERE id=$1 FOR UPDATE;
 SELECT count(*) FROM judge_attempts WHERE node_id=$1 AND state='leased' AND lease_until>clock_timestamp();
 
 -- name: ClaimCandidate :one
-SELECT t.submission_id, t.virtual_finish::bigint AS virtual_finish
+SELECT t.submission_id, t.virtual_finish::bigint AS virtual_finish, s.material_version, s.manifest_sha256
 FROM judge_tasks t JOIN submissions s ON s.id = t.submission_id
 WHERE t.state = 'queued' AND t.queue_version = sqlc.arg(version_id)::text AND s.material_version = sqlc.arg(version_id)::text
 ORDER BY t.virtual_finish, t.enqueue_order, t.submission_id LIMIT 1 FOR UPDATE OF t;
