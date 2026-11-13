@@ -154,7 +154,19 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 			return nil, startupFailure(startup)
 		}
 	}
+	closeIntake := func() {}
+	if c.IsolatedEmailIntake != nil {
+		handler, closeIntake, err = withIsolatedEmailIntake(startup, handler, authority, store, work, secrets, pool, c)
+		if err != nil {
+			return nil, startupFailure(startup)
+		}
+	}
+	if err := startup.Err(); err != nil {
+		closeIntake()
+		return nil, err
+	}
 	result := newRuntime(handler, func() error {
+		closeIntake()
 		draftErr := closeDrafts()
 		err := client.Close()
 		pool.Close()

@@ -38,7 +38,7 @@ func checkPublicEmailConfirmation(t *testing.T, ctx context.Context, pool *pgxpo
 	issue := func(p emailtoken.Purpose, gen int64) string {
 		t.Helper()
 		payload, err := authority.IssueEmailToken(ctx, id, identity.SessionVersion{RecoveryID: epoch, AuthGeneration: gen}, p, keys,
-			func(context.Context, string) error { return nil }, func(ctx context.Context, tx pgx.Tx, id string) error {
+			func(context.Context, *emailtoken.Protector) error { return nil }, func(ctx context.Context, tx pgx.Tx, id string) error {
 				_, err := tx.Exec(ctx, "INSERT INTO fixture_http_confirm_mail VALUES ($1)", id)
 				return err
 			})
