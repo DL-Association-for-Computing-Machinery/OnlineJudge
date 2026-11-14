@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -14,7 +13,6 @@ import (
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/db"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
-	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materials"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
 )
@@ -77,75 +75,48 @@ func verifyRejudgeMaterial(ctx context.Context, version, digest string, manifest
 }
 
 func verifyRejudgeMaterialWithEnv(ctx context.Context, version, digest string, manifest []byte, getenv func(string) string) error {
-	if version == experiment.PinnedVersion || version == experiment.UbuntuVersion {
-		_, raw, err := experiment.SelectFixture(version)
-		_, hash, hashErr := postgres.CanonicalManifest(raw)
-		if err != nil || hashErr != nil || hash != digest {
-			return submission.ErrMaterial
-		}
-	}
-	open := materials.OpenLocal
-	if version != experiment.PinnedVersion && version != experiment.UbuntuVersion {
-		if getenv("OJ_LOCAL_TEXT_MANIFEST_FILE") != "" || getenv("OJ_LOCAL_TEXT_MANIFEST_SHA256") != "" {
-			_, f, err := experiment.LoadCachedFixture(getenv)
-			if err != nil || !f.IsLocalText() || getenv("OJ_LOCAL_TEXT_MANIFEST_SHA256") != digest ||
-				f.Version() != version || !bytes.Equal(f.Manifest(), manifest) {
-				return submission.ErrMaterial
-			}
-			if f.UsesSPJ() {
-				f, err = f.WithPython3()
-				if err == nil {
-					_, err = f.WithCheckerArtifact(getenv("OJ_LOCAL_SPJ_CHECKER_FILE"))
-				}
-				if err != nil {
-					return submission.ErrMaterial
-				}
-			} else if getenv("OJ_LOCAL_SPJ_CHECKER_FILE") != "" {
-				return submission.ErrMaterial
-			}
-			open = materials.OpenLocalText
-		} else if !matchesAPlusBRejudgeMaterial(version, digest, manifest, getenv) {
-			return submission.ErrMaterial
-		}
+	fixture, err := rejudgeFixture(version, digest, manifest, getenv)
+	if err != nil {
+		return submission.ErrMaterial
 	}
 	path := getenv("OJ_MATERIAL_ROOT")
 	if !filepath.IsAbs(path) {
 		return submission.ErrMaterial
 	}
-	objects, err := materials.ManifestDigests(version, digest, manifest)
-	if err != nil {
-		return err
-	}
-	reader, err := open(path)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = reader.Close() }()
-	seen := make(map[string]bool)
-	for _, object := range objects {
-		if seen[object] {
-			continue
-		}
-		if err := reader.Verify(ctx, object); err != nil {
-			return err
-		}
-		seen[object] = true
-	}
-	return nil
+	return fixture.VerifyMaterials(ctx, path)
 }
 
-func matchesAPlusBRejudgeMaterial(version, digest string, manifest []byte, getenv func(string) string) bool {
-	if getenv("OJ_APLUSB_RUNTIME") == "" {
-		// Preserve the Desktop maintenance contract for a registered historical manifest.
-		f, err := experiment.APlusBFixture(manifest, digest)
-		return err == nil && f.Version() == version
+func rejudgeFixture(version, digest string, manifest []byte, getenv func(string) string) (experiment.WorkerFixture, error) {
+	_, f, err := experiment.LoadCachedFixture(getenv)
+	if err != nil {
+		return experiment.WorkerFixture{}, submission.ErrMaterial
 	}
-	if getenv("OJ_APLUSB_RUNTIME") != "ubuntu-arm64" || getenv("OJ_APLUSB_MANIFEST_SHA256") != digest {
-		return false
+	if !f.UsesCachedText() {
+		switch configured := getenv("OJ_EXPERIMENT_MATERIAL_VERSION"); {
+		case configured != "":
+			f, err = experiment.ParseWorkerFixture(configured)
+		case version == experiment.PinnedVersion || version == experiment.UbuntuVersion:
+			f, err = experiment.ParseWorkerFixture(version)
+		default:
+			// Preserve the original Desktop maintenance contract. Ubuntu A+B
+			// and local text always require independent operator configuration.
+			f, err = experiment.APlusBFixture(manifest, digest)
+		}
 	}
-	// Do not select the executing runtime from a database record. The operator
-	// must pin the same canonical bytes as the restored, registered version.
-	_, fixture, err := experiment.LoadAPlusBFixture(getenv)
-	return err == nil && fixture.APlusBTier() == experiment.ReferenceAPlusBUbuntu &&
-		fixture.Version() == version && bytes.Equal(fixture.Manifest(), manifest)
+	if err != nil || !f.MatchesMaterial(version, digest, manifest) {
+		return experiment.WorkerFixture{}, submission.ErrMaterial
+	}
+	checker := getenv("OJ_LOCAL_SPJ_CHECKER_FILE")
+	if f.UsesSPJ() {
+		f, err = f.WithPython3()
+		if err == nil {
+			f, err = f.WithCheckerArtifact(checker)
+		}
+		if err != nil {
+			return experiment.WorkerFixture{}, submission.ErrMaterial
+		}
+	} else if checker != "" {
+		return experiment.WorkerFixture{}, submission.ErrMaterial
+	}
+	return f, nil
 }

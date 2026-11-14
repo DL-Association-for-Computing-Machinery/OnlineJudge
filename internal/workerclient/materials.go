@@ -51,13 +51,9 @@ func (a *Acquirer) Fetch(ctx context.Context, lease submission.Lease) (materials
 	}
 	blobs := map[string][]byte{}
 	total := 0
-	fileLimit, totalLimit := a.fixture.MaterialLimits()
 	for _, test := range m.Tests {
 		for _, item := range []struct{ kind, hash string }{{"input", test.Input}, {"answer", test.Answer}} {
-			limit := min(fileLimit, totalLimit-total)
-			if a.fixture.IsLocalText() && item.kind == "answer" {
-				limit = min(limit, materials.APlusBOutputBytes)
-			}
+			limit := a.fixture.MaterialFileBudget(item.kind, total)
 			data, err := a.download(ctx, lease.Token, test.ID, item.kind, item.hash, limit)
 			if err != nil {
 				return materials.Descriptor{}, nil, err
