@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"image/png"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -107,6 +108,10 @@ func VerifySealedPublicationMaterials(ctx context.Context, store ReferenceObject
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	// Freeze the metadata before opening the display; its storage adapter
+	// must not be able to change the private references we just authenticated.
+	plan.Cases = slices.Clone(plan.Cases)
+	plan.Dependencies = slices.Clone(plan.Dependencies)
 	bound := ImportIdentity{SourceID: plan.SourceID, SourceLockSHA256: plan.SourceLockSHA256,
 		Version: plan.Version, ImportRevision: plan.ImportRevision}
 	if bound != expected.Import || plan.ValidateMaterials() != nil || plan.Digest() != expected.FormalPlan {

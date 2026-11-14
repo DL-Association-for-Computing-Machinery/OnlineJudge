@@ -119,3 +119,27 @@ func TestVerifySealedPublicationMaterialsRequiresBothObjectSets(t *testing.T) {
 		})
 	}
 }
+
+func TestVerifySealedPublicationMaterialsKeepsPlanAcrossDisplayIO(t *testing.T) {
+	f, d, binding, plan := publicationFixture(t, false)
+	prepared, err := d.PlanPublicationMaterials(publicationFixtureID, d.ID, d.Owner, binding, plan, plan.Digest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sealed, err := prepared.Seal(t.Context(), f.local)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Change the caller's slice after the expected digest is checked but
+	// before the verifier opens the private objects.
+	didMutate := false
+	f.materials.onOpen = func() {
+		if !didMutate {
+			didMutate = true
+			plan.Cases[1].Answer = plan.Cases[0].Answer
+		}
+	}
+	if err := VerifySealedPublicationMaterials(t.Context(), f.materials, sealed, plan); err != nil || !didMutate || plan.Digest() == sealed.FormalPlan {
+		t.Fatalf("display I/O changed the verifier's pinned plan: %v", err)
+	}
+}
