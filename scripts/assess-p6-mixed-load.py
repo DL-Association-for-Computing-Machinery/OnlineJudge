@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 
 from p6_evidence import SHA, exact, label, number, read, timings
+from p6_training_acceptance import acceptance_rows
 
 
 WINDOW = 900_000
@@ -15,7 +16,7 @@ TIERS = {"small", "medium", "heaviest"}
 READ_KINDS = {"statement", "result", "history"}
 
 
-def assess_round(record, versions):
+def assess_round(record, versions, independent=None):
     exact(record, "id run_started_utc_ms reads submissions observed_submissions peaks")
     label(record["id"])
     number(record["run_started_utc_ms"], 1, 10**14)
@@ -49,7 +50,7 @@ def assess_round(record, versions):
         failures.append("read_schedule")
 
     bursts = [set(), set(), set()]
-    requests, ids, accepted = set(), set(), {}
+    requests, accepted_versions, accepted = set(), {}, {}
     terminal_ms, queue_ms, confirmation_ms = [], [], []
     counts = {tier: 0 for tier in sorted(TIERS)}
     by_version = dict.fromkeys(versions, 0)
@@ -72,9 +73,9 @@ def assess_round(record, versions):
                 raise ValueError("unaccepted submission has a verdict")
             continue
         ident = label(row["id"])
-        if ident in ids:
+        if ident in accepted_versions:
             failures.append("duplicate_submission")
-        ids.add(ident)
+        accepted_versions[ident] = version
         accepted[key] = ident
         confirmation_ms.append(elapsed)
         if row["terminal_ms"] is None:
@@ -98,6 +99,19 @@ def assess_round(record, versions):
         ledger[key] = ident
     if ledger != accepted:
         failures.append("submission_reconciliation")
+    evidence = None
+    if independent is not None:
+        database, digest = independent
+        evidence = {
+            "sha256": digest,
+            "accepted": len(database),
+            "unreconciled_database_receipts": len(database.keys() - accepted_versions.keys()),
+            "client_receipts_missing_from_database": len(accepted_versions.keys() - database.keys()),
+            "material_mismatches": sum(accepted_versions[ident] != database[ident]
+                                      for ident in accepted_versions.keys() & database.keys()),
+        }
+        if database != accepted_versions:
+            failures.append("independent_acceptance_reconciliation")
     if any(len(burst) != 30 for burst in bursts) or not all(counts.values()):
         failures.append("submission_schedule_or_material_mix")
 
@@ -116,16 +130,18 @@ def assess_round(record, versions):
             failures.append(name + "_error_rate")
     if len(terminal_ms) != len(confirmation_ms) or max(terminal_ms, default=0) > 180_000:
         failures.append("missing_or_late_terminal")
-    return {"id": record["id"], "actors": len(actors), "measures": measures,
+    return {"id": record["id"], "actors": len(actors), "measures": measures, "independent_acceptance": evidence,
             "reads_by_kind": {kind: timings(values, read_counts[kind]) for kind, values in read_ms.items()},
             "longest_queue_ms": max(queue_ms, default=None), "peaks": record["peaks"],
             "materials_by_tier": counts, "materials_by_version": by_version, "failures": sorted(set(failures))}
 
 
-def assess(doc):
+def assess(doc, independent=()):
     exact(doc, "schema release_sha256 topology_sha256 origin_scope versions rounds")
     if doc["schema"] != "oj.p6-mixed-load.v1" or doc["origin_scope"] not in ("local", "trial"):
         raise ValueError("unsupported report scope")
+    if len(independent) not in (0, 3) or (doc["origin_scope"] == "trial" and len(independent) != 3):
+        raise ValueError("expected three independent observations for trial")
     for key in ("release_sha256", "topology_sha256"):
         label(doc[key], SHA)
     versions, rounds = doc["versions"], doc["rounds"]
@@ -135,7 +151,19 @@ def assess(doc):
         raise ValueError("expected three rounds and a fixed material inventory")
     for version in versions:
         label(version)
-    reports = [assess_round(record, versions) for record in rounds]
+    reports, observed_ids = [], set()
+    for index, record in enumerate(rounds):
+        evidence = None
+        if independent:
+            exact(record, "id run_started_utc_ms reads submissions observed_submissions peaks")
+            start = number(record["run_started_utc_ms"], 1, 10**14)
+            observation, digest = independent[index]
+            database = acceptance_rows(observation, start, start + WINDOW)
+            if not observed_ids.isdisjoint(database):
+                raise ValueError("receipt appears in more than one acceptance window")
+            observed_ids.update(database)
+            evidence = database, digest
+        reports.append(assess_round(record, versions, evidence))
     if len({item["id"] for item in reports}) != 3:
         raise ValueError("round IDs must be distinct")
     starts = sorted(row["run_started_utc_ms"] for row in rounds)
@@ -149,10 +177,12 @@ def assess(doc):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("record", type=Path)
+    parser.add_argument("--acceptance", type=Path, nargs=3, metavar="OBSERVATION",
+                        help="three raw training-acceptance exports in record order; required for trial")
     args = parser.parse_args()
     try:
         doc, digest = read(args.record)
-        result = assess(doc)
+        result = assess(doc, [read(path) for path in args.acceptance or ()])
     except (OSError, ValueError, RecursionError):
         print("P6 mixed-load assessment refused: invalid or incomplete record", file=sys.stderr)
         return 2

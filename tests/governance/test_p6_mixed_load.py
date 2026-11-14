@@ -1,4 +1,6 @@
 import copy
+from datetime import datetime, timedelta, timezone
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -20,19 +22,39 @@ def record():
               "id": f"id-{i}", "queue_ms": 20, "terminal_ms": 60_000, "verdict": "WA"}
              for i in range(90)]
     rounds = [dict(id=f"round-{i}", run_started_utc_ms=1 + i * 900_000, reads=copy.deepcopy(reads),
-                   submissions=copy.deepcopy(posts), observed_submissions=[{"key": p["key"], "id": p["id"]} for p in posts],
+                   submissions=[dict(p, id=f"{i}-{p['id']}") for p in posts],
+                   observed_submissions=[{"key": p["key"], "id": f"{i}-{p['id']}"} for p in posts],
                    peaks=dict(cpu_millicores=1000, memory_bytes=4096, disk_bytes=4096, connections=8))
               for i in range(3)]
     return dict(schema="oj.p6-mixed-load.v1", origin_scope="local", release_sha256="a" * 64,
                 topology_sha256="b" * 64, versions=versions, rounds=rounds)
 
 
+def utc(ms):
+    return (datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(milliseconds=ms)).isoformat(
+        timespec="milliseconds").replace("+00:00", "Z")
+
+
+def acceptance(round_):
+    start = round_["run_started_utc_ms"]
+    end = utc(start + 900_000)
+    return {"schema": "oj.p6-training-acceptance.v1", "from": utc(start), "until": end,
+            "observed_at": end, "accepted": [
+                {"id": p["id"], "accepted_at": utc(start + p["start_ms"]), "material_version": p["version"]}
+                for p in round_["submissions"] if p["id"] is not None]}
+
+
 class MixedLoadTests(unittest.TestCase):
-    def assess(self, doc):
+    def assess(self, doc, observations=()):
         with tempfile.TemporaryDirectory() as path:
             source = Path(path) / "observations.json"
             source.write_text(json.dumps(doc))
-            return subprocess.run([sys.executable, "-B", str(SCRIPT), str(source)],
+            args = []
+            for i, raw in enumerate(observations):
+                target = Path(path) / f"raw-{i}.json"
+                target.write_text(json.dumps(raw))
+                args.append(str(target))
+            return subprocess.run([sys.executable, "-B", str(SCRIPT), str(source), *(["--acceptance", *args] if args else [])],
                                   capture_output=True, text=True, timeout=10)
 
     def test_exact_thresholds_pass_without_claiming_trial_acceptance(self):
@@ -43,6 +65,7 @@ class MixedLoadTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         report = json.loads(result.stdout)
         self.assertEqual(report["origin_scope"], "local")
+        self.assertIsNone(report["rounds"][0]["independent_acceptance"])
         self.assertEqual(report["rounds"][0]["measures"]["read"],
                          dict(attempts=9000, samples=8910, p50_ms=1000, p95_ms=1000, p99_ms=1000,
                               errors=90, error_rate=.01))
@@ -87,3 +110,50 @@ class MixedLoadTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertEqual([row["failures"] for row in json.loads(result.stdout)["rounds"]],
                          [["confirmation_p95"], ["terminal_p95"], ["confirmation_error_rate"]])
+
+    def test_trial_requires_and_binds_three_raw_exports(self):
+        doc = record()
+        doc["origin_scope"] = "trial"
+        self.assertEqual(self.assess(doc).returncode, 2)
+        exports = [acceptance(round_) for round_ in doc["rounds"]]
+        result = self.assess(doc, exports)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        first = json.loads(result.stdout)["rounds"][0]["independent_acceptance"]
+        self.assertEqual(first, dict(sha256=hashlib.sha256(json.dumps(exports[0]).encode()).hexdigest(),
+                                     accepted=90, unreconciled_database_receipts=0,
+                                     client_receipts_missing_from_database=0, material_mismatches=0))
+        result = self.assess(doc, exports[::-1])
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(result.stdout, "")
+
+    def test_extra_missing_and_wrong_material_receipts_fail_reconciliation(self):
+        doc = record()
+        exports = [acceptance(round_) for round_ in doc["rounds"]]
+        exports[0]["accepted"].append(dict(exports[0]["accepted"][0], id="committed-without-client-reply"))
+        exports[1]["accepted"].pop()
+        exports[2]["accepted"][0]["material_version"] = "unregistered-version"
+        result = self.assess(doc, exports)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        for index, field in enumerate(("unreconciled_database_receipts", "client_receipts_missing_from_database", "material_mismatches")):
+            row = json.loads(result.stdout)["rounds"][index]
+            self.assertEqual(row["failures"], ["independent_acceptance_reconciliation"])
+            self.assertEqual(row["independent_acceptance"][field], 1)
+        self.assertNotIn("committed-without-client-reply", result.stdout)
+
+    def test_exact_window_and_duplicate_receipt_are_checked(self):
+        doc = record()
+        for fault in ("outside", "duplicate", "cross-round", "premature"):
+            with self.subTest(fault=fault):
+                exports = [acceptance(round_) for round_ in doc["rounds"]]
+                first = exports[0]
+                if fault == "outside":
+                    first["accepted"][0]["accepted_at"] = first["until"]
+                elif fault == "duplicate":
+                    first["accepted"].append(first["accepted"][0])
+                elif fault == "cross-round":
+                    exports[1]["accepted"][0]["id"] = first["accepted"][0]["id"]
+                else:
+                    first["observed_at"] = "1970-01-01T00:15:00.000999999Z"
+                result = self.assess(doc, exports)
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(result.stdout, "")

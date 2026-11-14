@@ -813,10 +813,11 @@ P6 格式要求七份观察，增加异地副本核验和复判结束后源端�
 将三轮脱敏逐请求观测按[混合训练记录约定](docs/delivery-evidence/p6-trial-acceptance.md#混合训练记录核对)保存后运行：
 
 ```sh
-python3 -B scripts/assess-p6-mixed-load.py "$MIXED_LOAD_RECORD"
+python3 -B scripts/assess-p6-mixed-load.py "$MIXED_LOAD_RECORD" \
+  --acceptance "$ROUND_1_ACCEPTANCE" "$ROUND_2_ACCEPTANCE" "$ROUND_3_ACCEPTANCE"
 ```
 
-命令只读核对已记录的负载、时延和接收对账，不发请求；本地合成记录通过不代表试用容量达标。
+命令只读核对已记录的负载、时延和接收对账，不发请求。现场记录必须按轮次顺序提供三份原始主库清单；报告保留各清单摘要和对账差异数。本地旧记录可省略清单，报告显示 `independent_acceptance: null`。本地合成记录通过不代表试用容量达标。
 
 ### 核对 P6 过载恢复记录
 
