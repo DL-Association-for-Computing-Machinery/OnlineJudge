@@ -8,11 +8,11 @@
 
 ### Go
 
-golangci-lint 固定 v2.15.0，配置位于 `.golangci.yml`，仅启用 staticcheck、errcheck、ineffassign、unused。既有 gofmt、vet、race 和构建继续保留；不全量开启风格检查，不使用仅检查新增告警或全局排除来隐藏基线。
+golangci-lint 固定 v2.15.0，配置位于 `.golangci.yml`，启用 staticcheck、errcheck、ineffassign、unused 和 [Depguard](https://golangci-lint.run/docs/linters/configuration/#depguard)。身份、题目、题目参考与验证、提交模块及其子包不能导入会话 API 的 `runtime`、`apiconfig` 或 `apiapp`；应用入口继续负责装配。既有 gofmt、vet、race 和构建继续保留。
 
 `scripts/check-go.sh` 依次检查主模块、sandbox 标签测试源码、`tests/sessionexperiment` 独立模块。主模块 `./...` 不会自动进入嵌套模块；sandbox 静态分析不运行判题程序。当前平台是容器 Linux，不宣称覆盖所有 OS/build tags。
 
-每次执行先用临时独立模块运行真实检测器：正确代码必须成功，四类错误必须返回告警退出码且分别出现对应规则；工具错误不能冒充成功拒绝。测试仅使用标准库，不执行样例代码。告警数量不截断，模块只读检查避免悄悄修改依赖。
+每次执行先用临时独立模块运行真实检测器：正确代码和 API 装配必须成功，四类错误及业务包（含子包）越界导入必须返回告警退出码且分别出现对应规则；工具错误不能冒充成功拒绝。测试不引入外部依赖，不执行样例代码。告警数量不截断，模块只读检查避免悄悄修改依赖。
 
 已有资源清理保留原有行为，并明确忽略理由；影响行为的返回值应检查，不能为了 lint 机械添加空白赋值。文件写入/同步、租约与授权错误继续由行为测试验证。测试故障注入中客户端主动中断的响应写入允许显式忽略返回值。
 
@@ -20,9 +20,9 @@ golangci-lint 固定 v2.15.0，配置位于 `.golangci.yml`，仅启用 staticch
 
 前端沿用已有锁定的 ESLint/typescript-eslint，无新增依赖。`src/**/*.{ts,tsx}` 和 `vite.config.ts` 使用 `recommendedTypeChecked`、`projectService` 及固定配置目录，包含未处理 Promise、Promise 回调误用与不安全 any 数据流检查；JS 配置/工具脚本沿用普通 lint，不要求加入 TypeScript 项目。保留 React Hooks、refresh、零警告及原有 typecheck/Vitest/build。
 
-`pnpm lint` 先扫描真实源码，再通过 Node 测试运行器使用实际 ESLint 配置进行六项正反例。内存样例使用已有 tsconfig 成员路径，不落盘、不进入构建；覆盖 TS、TSX 事件回调和 Vite 配置，解析错误不能冒充目标规则拒绝。自测脚本命名 `lint-selftest.mjs`，避免被 Vitest 的 `*.test.*` 自动发现而混用测试运行器。
+`pnpm lint` 先扫描真实源码，再用同一 ESLint 配置跑正反例。题库和训练使用 [no-restricted-imports](https://eslint.org/docs/latest/rules/no-restricted-imports) 拒绝从私有草稿服务静态导入：通用请求选项和限长 JSON 读取归 `src/transport/json.ts`，题面载荷校验归 `src/statement/payload.ts`。端点继续各自决定响应上限、错误含义、凭据与重试策略。内存样例使用已有 tsconfig 成员路径，不落盘、不进入构建；解析错误不能冒充目标规则拒绝。自测脚本命名 `lint-selftest.mjs`，避免被 Vitest 当作应用测试。
 
-类型感知分析增加 TypeScript 项目分析成本，不能替代运行时外部数据校验。`void promise` 只表示显式放弃等待，不处理拒绝；业务入口仍需 catch/错误状态。前端现有健康检查已将响应作为 unknown 并校验契约，事件处理器已有 try/catch，本次不改 UI 或业务源码。官方依据：[typed linting](https://typescript-eslint.io/getting-started/typed-linting/)。
+类型感知分析增加 TypeScript 项目分析成本，不能替代运行时外部数据校验。`void promise` 只表示显式放弃等待，不处理拒绝；业务入口仍需 catch/错误状态。官方依据：[typed linting](https://typescript-eslint.io/getting-started/typed-linting/)。
 
 ### Go 工具准入
 
