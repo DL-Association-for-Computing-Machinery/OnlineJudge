@@ -103,7 +103,8 @@ func (g *CachedGoJudge) Verify(ctx context.Context, p experiment.ExecutionProfil
 		return tagFailure(err, "verify", "environment", "")
 	}
 	defer func() { err = g.finish(ctx, err) }()
-	if g.verified || g.files == nil || !(reflect.DeepEqual(p, g.runtime) || g.c17 && reflect.DeepEqual(p, experiment.C17Profile(g.runtime))) {
+	supported := reflect.DeepEqual(p, g.runtime) || g.c17 && reflect.DeepEqual(p, experiment.C17Profile(g.runtime))
+	if g.verified || g.files == nil || !supported {
 		return failureError("verify", "environment", "invalid_evidence", "unsupported cached sandbox profile")
 	}
 	if err = g.step(0, false); err != nil {
