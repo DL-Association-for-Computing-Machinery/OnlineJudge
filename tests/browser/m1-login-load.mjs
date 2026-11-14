@@ -17,9 +17,10 @@ let browser, deny
 function passed(check) { checks.push(check) }
 
 async function login(index, target) {
-  let context, started
+  let context, started, clicked
   const sample = { index, startLagMs: null, loginMs: null, statuses: [], outcome: 'client_error' }
   if (info.trial_nginx) sample.loginPhases = []
+  if (strict) sample.dispatchLagMs = null
   try {
     context = await browser.newContext({ ignoreHTTPSErrors: !strict, serviceWorkers: 'block' })
     const page = await context.newPage()
@@ -59,14 +60,44 @@ async function login(index, target) {
     await page.getByLabel('邮箱', { exact: true }).fill(email, { timeout: 5_000 })
     await page.getByLabel('密码', { exact: true }).fill('synthetic protocol password', { timeout: 5_000 })
     const submit = page.getByRole('button', { name: '登录', exact: true })
-    // Wait for startup session discovery before measuring the click.
-    await submit.waitFor({ state: 'visible', timeout: 5_000 })
+    let point
+    if (strict) {
+      // Keep locator actionability checks outside the measured interaction.
+      await submit.click({ trial: true, timeout: 5_000 })
+      const box = await submit.boundingBox({ timeout: 5_000 })
+      assert(box)
+      point = [box.x + box.width / 2, box.y + box.height / 2]
+      page.on('console', message => {
+        if (clicked !== undefined || started === undefined || message.type() !== 'debug') return
+        const match = /^OJ_FIXTURE_TRUSTED_CLICK ([0-9]+(?:\.[0-9]+)?)$/.exec(message.text())
+        if (!match) return
+        const time = Number(match[1]) - performance.timeOrigin
+        // Firefox may quantize its clock; reject values outside the interaction.
+        if (time < started - 2 || time > performance.now() + 2) return
+        clicked = Math.max(started, time)
+        sample.startLagMs = Math.round(clicked - target)
+      })
+      await submit.evaluate(button => {
+        button.addEventListener('click', event => {
+          if (event.isTrusted) console.debug('OJ_FIXTURE_TRUSTED_CLICK', performance.timeOrigin + performance.now())
+        }, { capture: true, once: true })
+      })
+    } else {
+      await submit.waitFor({ state: 'visible', timeout: 5_000 })
+    }
     await delay(Math.max(0, target - performance.now()))
     started = performance.now()
-    sample.startLagMs = Math.round(started - target)
-    await submit.click({ timeout: 5_000 })
+    if (strict) {
+      sample.dispatchLagMs = Math.round(started - target)
+      await page.mouse.click(...point)
+    } else {
+      sample.startLagMs = Math.round(started - target)
+      await submit.click({ timeout: 5_000 })
+    }
     await page.getByText('登录成功，当前会话已核验。', { exact: true }).waitFor({ timeout: 10_000 })
-    sample.loginMs = Math.round(performance.now() - started)
+    const confirmed = performance.now()
+    if (strict) assert(clicked !== undefined && clicked <= confirmed)
+    sample.loginMs = Math.round(confirmed - (strict ? clicked : started))
     assert(sample.statuses.some(([method, url, status]) => method === 'POST' && url.endsWith('/begin') && status === 202))
     assert(sample.statuses.some(([method, url, status]) => method === 'POST' && url.endsWith('/complete') && status === 204))
     assert(sample.statuses.some(([method, url, status]) => method === 'GET' && url === '/api/v1/session' && status === 200))
@@ -144,6 +175,7 @@ try {
   await writeFile(path.join(output, 'browser-qa.json'), JSON.stringify({
     success: checks.length === (strict ? 3 : 2), checks, fixture: 'local TLS with disposable CA, PostgreSQL and Redis',
     browserTLS: strict ? 'strict-firefox' : 'loopback-exception',
+    clickClock: strict ? 'trusted-page-event' : 'driver-dispatch',
     edge: info.trial_nginx ? 'trial-nginx' : 'go-fixture',
     attempted: samples.length, verified: samples.filter(s => s.outcome === 'verified').length,
     within10s: times.filter(ms => ms <= 10_000).length,
