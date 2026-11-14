@@ -3,6 +3,7 @@
 package sandbox_test
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -13,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -23,9 +25,11 @@ import (
 )
 
 const (
-	rollbackNode    = "rollback-loop-node"
-	rollbackVersion = experiment.PinnedVersion
-	rollbackCurrent = "../../.local/bin"
+	rollbackNode          = "rollback-loop-node"
+	rollbackVersion       = experiment.PinnedVersion
+	rollbackCurrent       = "../../.local/bin"
+	rollbackBaseSchema    = 20
+	rollbackCurrentSchema = 25
 )
 
 type rollbackFixture struct {
@@ -63,7 +67,7 @@ func TestCompatibleRollbackLoop(t *testing.T) {
 	f := newRollbackFixture(t, ctx, oldDir)
 	slot := dualDocker(t, "inspect", "--format", "{{.Id}}", container)
 	var migrationRows, schema int
-	if err := f.database.pool.QueryRow(ctx, `SELECT count(*), max(version_id) FROM goose_db_version`).Scan(&migrationRows, &schema); err != nil || schema != 20 {
+	if err := f.database.pool.QueryRow(ctx, `SELECT count(*), max(version_id) FROM goose_db_version`).Scan(&migrationRows, &schema); err != nil || schema != rollbackBaseSchema {
 		t.Fatal("expected the fixed compatible schema before switching releases")
 	}
 
@@ -80,6 +84,8 @@ func TestCompatibleRollbackLoop(t *testing.T) {
 
 	// Upgrade while the old processes are stopped, on the same database.
 	runFixtureMigration(t, ctx, rollbackCurrent, f.database.dsn, f.root, rollbackVersion, []string{"up"})
+	f.checkDiscoveryIndex(t, ctx, true)
+	f.checkIncompatibleAPI(t, ctx, oldDir)
 	restartDrainedSandbox(t, slot)
 	verifyEnvironment(t)
 	newAPI, newController, newWorker := f.start(t, ctx, rollbackCurrent)
@@ -93,15 +99,17 @@ func TestCompatibleRollbackLoop(t *testing.T) {
 	if t.Failed() {
 		t.FailNow()
 	}
-	f.counts(t, ctx, 2, migrationRows+4, 24)
+	f.counts(t, ctx, 2, migrationRows+rollbackCurrentSchema-rollbackBaseSchema, rollbackCurrentSchema)
 
 	start := time.Now()
-	// Down24 accepts only an empty rejudge audit. Down23 drops the history index; Down22 drops only the rate gate.
-	// Down21 requires an empty email ledger. Preserve accepted judging work.
-	runFixtureMigration(t, ctx, rollbackCurrent, f.database.dsn, f.root, rollbackVersion, []string{"down"})
-	runFixtureMigration(t, ctx, rollbackCurrent, f.database.dsn, f.root, rollbackVersion, []string{"down"})
-	runFixtureMigration(t, ctx, rollbackCurrent, f.database.dsn, f.root, rollbackVersion, []string{"down"})
-	runFixtureMigration(t, ctx, rollbackCurrent, f.database.dsn, f.root, rollbackVersion, []string{"down"})
+	// Check each boundary before going further. Down25 only removes the
+	// discovery index; Down24 and Down21 retain their empty-ledger guards.
+	for next := rollbackCurrentSchema - 1; next >= rollbackBaseSchema; next-- {
+		runFixtureMigration(t, ctx, rollbackCurrent, f.database.dsn, f.root, rollbackVersion, []string{"down"})
+		f.counts(t, ctx, 2, migrationRows+next-rollbackBaseSchema, next)
+		f.checkDiscoveryIndex(t, ctx, false)
+	}
+	f.checkIncompatibleAPI(t, ctx, rollbackCurrent)
 	restartDrainedSandbox(t, slot)
 	verifyEnvironment(t)
 	reverted := startHTTPLoopAPIFrom(t, ctx, oldDir, f.client, f.database.dsn, f.tokenFile)
@@ -112,7 +120,7 @@ func TestCompatibleRollbackLoop(t *testing.T) {
 	// Replay before the old Worker starts. A second POST may only read back the
 	// accepted ID, never create a replacement submission or another attempt.
 	f.checkReceipt(t, ctx, reverted, queued, "queued", http.MethodPost)
-	f.counts(t, ctx, 2, migrationRows, 20)
+	f.counts(t, ctx, 2, migrationRows, rollbackBaseSchema)
 	controller, worker := f.startWorker(t, oldDir)
 	f.await(t, ctx, reverted, worker, queued)
 	f.checkReceipt(t, ctx, reverted, queued, "finished", http.MethodPost)
@@ -120,11 +128,37 @@ func TestCompatibleRollbackLoop(t *testing.T) {
 		t.Fatal("reverting the application changed a completed attempt")
 	}
 	f.result(t, ctx, queued)
-	f.counts(t, ctx, 3, migrationRows, 20)
+	f.counts(t, ctx, 3, migrationRows, rollbackBaseSchema)
 	reverted.process.stop(t)
 	f.stopWorker(t, worker)
 	controller.stop(t)
-	t.Logf("same database after empty-token downgrade: old AC and new WA unchanged; prior release finished the queued new submission as AC; 3 submissions/3 attempts; revert and drain=%s", time.Since(start))
+	t.Logf("same database after schema %d to %d downgrade (empty guarded ledgers): old AC and new WA unchanged; prior release finished the queued new submission as AC; 3 submissions/3 attempts; revert and drain=%s", rollbackCurrentSchema, rollbackBaseSchema, time.Since(start))
+}
+
+func (f rollbackFixture) checkIncompatibleAPI(t *testing.T, parent context.Context, directory string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(parent, 5*time.Second)
+	defer cancel()
+	binary, err := filepath.Abs(filepath.Join(directory, "api"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.CommandContext(ctx, binary)
+	cmd.Env = httpLoopEnvironment("OJ_API_ADDR=127.0.0.1:0", "OJ_DATABASE_URL="+f.database.dsn,
+		"OJ_EXPERIMENT_TOKEN_FILE="+f.tokenFile, "OJ_EXPERIMENT_MATERIAL_VERSION="+rollbackVersion)
+	out, err := cmd.CombinedOutput()
+	if ctx.Err() != nil || err == nil || !bytes.Contains(out, []byte("incompatible database schema")) {
+		t.Fatal("incompatible API did not exit with the expected schema refusal")
+	}
+}
+
+func (f rollbackFixture) checkDiscoveryIndex(t *testing.T, ctx context.Context, want bool) {
+	t.Helper()
+	var exists bool
+	if err := f.database.pool.QueryRow(ctx,
+		`SELECT to_regclass('problem_review_assignment_discovery') IS NOT NULL`).Scan(&exists); err != nil || exists != want {
+		t.Fatalf("review assignment discovery index present=%t, expected %t: %v", exists, want, err)
+	}
 }
 
 const rollbackSum = "#include <cstdio>\nint main(){int a,b;if(std::scanf(\"%d%d\",&a,&b)!=2)return 1;std::printf(\"%d\\n\",a+b);}\n"

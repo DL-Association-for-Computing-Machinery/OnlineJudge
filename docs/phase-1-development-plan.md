@@ -282,7 +282,7 @@ M0 先做存储与并发实验；M1 交付公开邮箱注册、验证和找回�
 
 [捕获逻辑备份](architecture/storage-design.md#捕获逻辑备份)用同一快照封存数据库归档和材料，实测排除快照后的写入；[接收核验](architecture/storage-design.md#核验收到的逻辑备份)在还原前确认转运后的归档和材料与受信清单一致。[数据库与材料恢复回归](architecture/storage-design.md#7-备份与验收)覆盖固定合成夹具的历史源码、终态、排队任务和材料读回；本地离线专项已串联封存、接收核验、源库停止与还原，并由真实 Worker 重判同一提交。[恢复材料核验](architecture/storage-design.md#恢复材料核验)检查判题、草稿和冻结计划引用及哈希。[恢复提交租约](architecture/operations-design.md#恢复提交租约)验证真实归档恢复后旧在途租约失效及原任务重新领取；[恢复普通会话](architecture/operations-design.md#恢复普通会话)以维护命令重建 Redis 限流空间，并用真实双 API 验证拒旧、保留补回的封禁及新登录。[参考验证恢复回归](architecture/operations-design.md#回档后的旧参考验证授权)验证旧预留失效、原作者新会话取消并重新申请；[积压维护](architecture/operations-design.md#恢复参考验证积压)验证关闭代次中逐笔取消无法由本人处理的旧申请并保留证据。独立故障域、生产重判入口、试用环境恢复演练和邮件令牌仍待验收。
 
-[兼容回退专项](architecture/operations-design.md#兼容回退专项)在同一个临时库切回旧版本后保留新版本完成的判题结果，并由旧 Worker 处理新版已接收的排队提交。该版本对的迁移无变更；离线发布包、含迁移的版本切换和现场验收仍待验证。
+[兼容回退专项](architecture/operations-design.md#兼容回退专项)在同一个临时库切回旧版本后保留新版本完成的判题结果，并由旧 Worker 处理新版已接收的排队提交。同库实测从 schema 20 升至 25 再逐级回退，两版 API 分别拒绝不匹配的 schema。正式离线发布包及现场验收仍待验证。
 
 [实验判题离线包](architecture/operations-design.md#实验判题离线包)在专用 Ubuntu VM 通过独立清单摘要核验，并在全新 Docker 与 containerd 存储中导入两份固定镜像、禁拉取判题。[本地冷 HTTPS 浏览器](../README.md#浏览器账号专项)已验证证书负对照、同源资源和真实账号登录。完整试用离线包、从空白系统安装运行时、校内 DNS／HTTPS／时间及现场断网流程仍待验证。
 
