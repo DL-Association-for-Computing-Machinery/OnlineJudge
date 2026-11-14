@@ -119,18 +119,31 @@ func (h *handler) serveLogin(w http.ResponseWriter, r *http.Request, source neti
 	if !h.canLogin(w, r, ctx, fail) {
 		return
 	}
-	credential, err := h.login.Complete(ctx, c)
+	if IsPendingDevicePath(r.URL.Path) {
+		h.servePendingDevices(w, r, ctx, c, fail)
+		return
+	}
+	grant, err := h.login.CompleteGrant(ctx, c)
+	finishLogin(w, ctx, grant, err, func(err error) { fail("complete", err) })
+}
+
+func finishLogin(w http.ResponseWriter, ctx context.Context, grant redisstore.LoginGrant, err error, fail func(error)) {
 	if err == nil {
 		err = ctx.Err()
 	}
 	if err != nil {
-		fail("complete", err)
+		fail(err)
 		return
 	}
-	// Both headers occur only after Retry and a separate successful Check.
-	http.SetCookie(w, &http.Cookie{Name: CookieName, Value: credential.Value(), Path: "/", Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	// Only a verified remembered candidate gives the cookie an absolute expiry.
+	setSessionCookie(w, grant)
 	http.SetCookie(w, clearAttemptCookie())
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func setSessionCookie(w http.ResponseWriter, grant redisstore.LoginGrant) {
+	http.SetCookie(w, &http.Cookie{Name: CookieName, Value: grant.Credential.Value(), Path: "/", Secure: true,
+		HttpOnly: true, SameSite: http.SameSiteLaxMode, Expires: grant.PersistentUntil})
 }
 
 func (h *handler) canLogin(w http.ResponseWriter, r *http.Request, ctx context.Context, fail func(string, error)) bool {
@@ -160,7 +173,7 @@ func (h *handler) canLogin(w http.ResponseWriter, r *http.Request, ctx context.C
 }
 
 func (h *handler) beginLogin(w http.ResponseWriter, r *http.Request, ctx context.Context, source netip.Addr, fail func(string, error)) {
-	email, secret, err := loginBody(w, r)
+	email, secret, remember, err := loginBody(w, r)
 	if err != nil {
 		return
 	}
@@ -171,7 +184,7 @@ func (h *handler) beginLogin(w http.ResponseWriter, r *http.Request, ctx context
 	if !h.canLogin(w, r, ctx, fail) {
 		return
 	}
-	c, err := h.login.Prepare(ctx, email, secret)
+	c, err := h.login.PrepareWithPersistence(ctx, email, secret, remember)
 	if err == nil {
 		err = ctx.Err()
 	}

@@ -3,10 +3,14 @@
 set -eu
 case "$#:${1:-ordinary}" in
     0:ordinary|1:ordinary) oj_pattern='^TestOrdinaryProtocol$' ;;
-    1:training-overload) oj_pattern='^TestTrainingOverloadRecovery$' ;;
+    1:archive-recovery) oj_pattern='^TestOrdinaryProtocol$/^real_API_process_entry$/^database_archive_restore_fences_old_cookies$' ;;
     1:email-lifecycle)
         export OJ_ISOLATED_EMAIL_LIFECYCLE=1
         oj_pattern='^TestIsolatedEmailLifecycle$' ;;
+    1:email-archive-recovery)
+        export OJ_ISOLATED_EMAIL_ARCHIVE_RECOVERY=1
+        oj_pattern='^TestIsolatedEmailArchiveRecovery$' ;;
+    1:training-overload) oj_pattern='^TestTrainingOverloadRecovery$' ;;
     1:trial-edge)
         export OJ_TRIAL_EDGE_FIXTURE=1
         oj_pattern='^TestTrialEdge$' ;;
@@ -41,7 +45,7 @@ mkdir "$oj_protocol_dir/workspace"
 cp /workspace/go.mod /workspace/go.sum "$oj_protocol_dir/workspace/"
 cp -R /workspace/db /workspace/internal /workspace/tests "$oj_protocol_dir/workspace/"
 mkdir "$oj_protocol_dir/workspace/cmd"
-cp -R /workspace/cmd/api /workspace/cmd/migrate "$oj_protocol_dir/workspace/cmd/"
+cp -R /workspace/cmd/api /workspace/cmd/migrate /workspace/cmd/mail-worker "$oj_protocol_dir/workspace/cmd/"
 cd "$oj_protocol_dir/workspace"
 if [ -d /verified-module-cache ]; then
     # The image cache may be read-only to the fixture user.
@@ -56,4 +60,12 @@ if [ -d /verified-module-cache ]; then
 fi
 go mod verify
 golangci-lint run --config /workspace/.golangci.yml --build-tags=integration ./tests/sessionprotocol/...
+# Cold compilation is already bounded by the Docker driver. Keep it outside
+# the Go test timer so the integration budget measures the running fixtures.
+export OJ_PROTOCOL_ENTRY_BIN_DIR="$oj_protocol_dir/bin"
+mkdir "$OJ_PROTOCOL_ENTRY_BIN_DIR"
+go build -mod=readonly -race -o "$OJ_PROTOCOL_ENTRY_BIN_DIR/" ./cmd/api ./cmd/migrate
+if [ "${1:-ordinary}" = email-lifecycle ] || [ "${1:-ordinary}" = email-archive-recovery ]; then
+    go build -mod=readonly -race -o "$OJ_PROTOCOL_ENTRY_BIN_DIR/mail-worker" ./cmd/mail-worker
+fi
 go test -mod=readonly -race -count=1 -timeout=120s -tags=integration ./tests/sessionprotocol -run "$oj_pattern" -v

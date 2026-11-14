@@ -8,11 +8,12 @@ export function LoginForm({ controller, disabled }: { controller: AccountControl
     const fields = new FormData(form)
     const email = fields.get('email')
     const password = fields.get('password')
+    const remember = fields.has('remember')
     if (typeof email !== 'string' || typeof password !== 'string') return
     // Passwords stay out of React state and browser storage. Reset immediately;
     // the browser/password manager still owns its own autofill behavior.
     form.reset()
-    void controller.run('login', { email, password })
+    void controller.run('login', { email, password, ...(remember ? { remember: true } : {}) })
   }
   return (
     <form onSubmit={submit} className="account-form">
@@ -22,6 +23,7 @@ export function LoginForm({ controller, disabled }: { controller: AccountControl
         <input id="login-email" name="email" type="email" autoComplete="username" required spellCheck={false} />
         <label htmlFor="login-password">密码</label>
         <input id="login-password" name="password" type="password" autoComplete="current-password" required />
+        <label><input type="checkbox" name="remember" /> 在此设备上保持登录（最长 7 天）</label>
         <button type="submit">登录</button>
       </fieldset>
     </form>

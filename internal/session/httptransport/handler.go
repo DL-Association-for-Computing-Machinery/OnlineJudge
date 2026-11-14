@@ -58,6 +58,10 @@ type handler struct {
 	reviewDiscovery        ReviewDiscoveryReader
 	trainingDetail         TrainingDetail
 	trainingStatus         TrainingStatus
+	devices                DeviceSessions
+	rotate                 rotateSession
+	management             ManagementSessions
+	managementRoles        ManagementRoleChanges
 }
 
 // New builds three explicit endpoints without registering any application route:
@@ -93,6 +97,14 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		problem(w, http.StatusForbidden, "ORIGIN_REJECTED", "请求来源不允许")
 		return
 	}
+	if IsManagementSessionPath(r.URL.Path) {
+		h.serveManagement(w, r, source)
+		return
+	}
+	if r.URL.Path == ManagementRolePath {
+		h.serveManagementRole(w, r, source)
+		return
+	}
 	method := ""
 	isDraft := IsPrivateDraftPath(r.URL.Path)
 	refMethod, refKey := referenceRequestRoute(r.URL.Path)
@@ -102,6 +114,30 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	statementID, statementKey, statementMethod := reviewActionRoute(r.URL.Path, statementConfirmationAction)
 	trainingID := trainingDetailID(r.URL.Path)
 	switch r.URL.Path {
+	case RotateSessionPath:
+		if h.rotate == nil {
+			problem(w, http.StatusNotFound, "NOT_FOUND", "接口不存在")
+			return
+		}
+		method = http.MethodPost
+	case PendingDevicesPath, ReplaceDevicePath:
+		if h.login == nil || h.devices == nil {
+			problem(w, http.StatusNotFound, "NOT_FOUND", "接口不存在")
+			return
+		}
+		method = http.MethodPost
+	case RevokeDevicePath, RevokeOtherDevicesPath:
+		if h.devices == nil {
+			problem(w, http.StatusNotFound, "NOT_FOUND", "接口不存在")
+			return
+		}
+		method = http.MethodPost
+	case DevicesPath:
+		if h.devices == nil {
+			problem(w, http.StatusNotFound, "NOT_FOUND", "接口不存在")
+			return
+		}
+		method = http.MethodGet
 	case "/api/v1/session":
 		method = http.MethodGet
 	case "/api/v1/session/activity", "/api/v1/session/logout":
@@ -280,7 +316,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.serveTrainingDetail(w, r, trainingID)
 		return
 	}
-	if h.login != nil && (r.URL.Path == "/api/v1/session/login/begin" || r.URL.Path == "/api/v1/session/login/complete" || r.URL.Path == "/api/v1/session/login/abandon") {
+	if h.login != nil && (IsPendingDevicePath(r.URL.Path) || r.URL.Path == "/api/v1/session/login/begin" || r.URL.Path == "/api/v1/session/login/complete" || r.URL.Path == "/api/v1/session/login/abandon") {
 		h.serveLogin(w, r, source)
 		return
 	}
@@ -291,6 +327,14 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), h.config.Timeout)
 	defer cancel()
+	if r.URL.Path == RotateSessionPath {
+		h.serveRotate(w, r, ctx, credential, source)
+		return
+	}
+	if IsDevicePath(r.URL.Path) {
+		h.serveDevices(w, r, ctx, credential)
+		return
+	}
 	var view redisstore.View
 	switch r.URL.Path {
 	case "/api/v1/session":

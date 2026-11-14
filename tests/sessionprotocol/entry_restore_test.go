@@ -28,6 +28,9 @@ func testEntryDatabaseRestore(t *testing.T, f *fixture, binary string) {
 	config := runtimeConfig(t, f, namespace(t), true)
 	owner, candidate := f.subject(t, false), f.subject(t, false)
 	configureReferenceRestore(t, f, &config, owner.ID, candidate.ID)
+	config.ManagementSessions, config.ManagementRoleChanges = true, true
+	management := prepareManagementRestore(t, f)
+	mail := prepareArchivedRecoveryLink(t, f)
 	ca := testpki.New(t)
 	start := func(c sessionruntime.Config) *entryProcess {
 		return entryStart(t, binary, entryConfig(t, c, ca, 3*time.Second), "127.0.0.1:0")
@@ -46,6 +49,7 @@ func testEntryDatabaseRestore(t *testing.T, f *fixture, binary string) {
 	}
 	source := start(config)
 	before := entryClient(t, source, ca)
+	management.signIn(t, before)
 	old := entryCredential(t, before, owner, "synthetic protocol password")
 	other := entryCredential(t, before, candidate, "synthetic protocol password")
 	ownerRequest := queueReferenceForRestore(t, before, owner.ID, old)
@@ -59,6 +63,8 @@ func testEntryDatabaseRestore(t *testing.T, f *fixture, binary string) {
 	}
 	archive := filepath.Join(t.TempDir(), "postgres.dump")
 	dumpEntryDatabase(t, ctx, config.Database, archive)
+	management.revokeAtSource(t)
+	mail.consumeAtSource(t, f)
 	// Drain the source fixture by its ordinary API. The isolated target must
 	// still have the queued requests from the archive, not these cancellations.
 	ownerRequest.cancel(t, before, old)
@@ -98,17 +104,22 @@ func testEntryDatabaseRestore(t *testing.T, f *fixture, binary string) {
 	if view.SubjectID != owner.ID || view.RecoveryID != saved.Generation {
 		t.Fatal("old cookie did not match the restored authority before fencing")
 	}
+	management.checkArchivedAuthority(t, ctx, pool, probe)
+	mail.checkArchivedAuthority(t, ctx, pool)
 	fresh, err := authority.BeginRecovery(ctx)
 	must(t, err)
 	if fresh == saved.Generation || fresh == retired {
 		t.Fatal("recovery reused an earlier authority")
 	}
+	mail.checkDeliveryFenced(t, ctx, pool)
 	wantError(t, authority.FinishRecovery(ctx, saved.Generation), identity.ErrConflict)
 	closed := start(config)
 	closed.wait(t, false)
 	if _, ok := closed.event("API starting"); ok {
 		t.Fatal("closed restore advertised an API listener")
 	}
+	management.reconcile(t, ctx, pool)
+	mail.reconcile(t, ctx, f, authority)
 	must(t, authority.FinishRecovery(ctx, fresh))
 
 	a := start(config)
@@ -125,6 +136,7 @@ func testEntryDatabaseRestore(t *testing.T, f *fixture, binary string) {
 		read(endpoint, old, 401)
 		loginStatus(t, loginCall(endpoint, "/api/v1/session/login/complete", "", []*http.Cookie{pending}, nil), 401)
 	}
+	management.checkReopened(t, x, y)
 	// Same restored account, Redis namespace and secret files: a new login must
 	// succeed while the archived cookie still cannot be used.
 	current := entryCredential(t, x, owner, "synthetic protocol password")
@@ -136,6 +148,8 @@ func testEntryDatabaseRestore(t *testing.T, f *fixture, binary string) {
 	t.Log("archive restored an old live cookie at storage boundary; closed target refused startup, both reopened APIs rejected it and accepted fresh login")
 	t.Run("operator recovery on empty replacement Redis", func(t *testing.T) {
 		testRecoveryCommand(t, f, binary, command, config, ca, pool, owner, candidate, current, pendingBeforeMaintenance, func(x, y *loginEndpoint, fresh protocol.Credential, epoch string) {
+			management.checkReopened(t, x, y)
+			mail.checkReopened(t, ctx, pool, x, y)
 			testRecoveredReferenceQueue(t, pool, x, y, current, fresh, saved.Generation, epoch, ownerRequest, disabledRequest)
 		})
 	})

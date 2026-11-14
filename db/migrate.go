@@ -21,7 +21,7 @@ var migrations embed.FS
 const MigrationLockID int64 = 2026102501
 
 // RuntimeSchemaVersion is the exact version this release expects.
-const RuntimeSchemaVersion int64 = 25
+const RuntimeSchemaVersion int64 = 26
 
 // Provider creates a Goose provider with a bounded PostgreSQL advisory lock.
 // The caller owns and closes conn after migrations finish.

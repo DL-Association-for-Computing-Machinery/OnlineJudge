@@ -16,8 +16,9 @@ import (
 	submissionpg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
 )
 
-// Open owns one bounded pool, Redis client, identity authority and shared KDF
-// admission. It only checks existing schema/recovery/limit metadata; it never
+// Open owns the application pool, Redis client, identity authority and shared
+// KDF admission, plus a separate budget pool when email intake is enabled.
+// It only checks existing schema/recovery/limit metadata; it never
 // migrates, provisions limits, rotates/opens recovery, starts a server or retries.
 // On failure all created clients are closed. Error text contains no driver cause,
 // credential, path or key; production parameters and TLS listener remain caller-owned.
@@ -151,6 +152,42 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 			}
 		}
 	}
+	if c.SessionRotation {
+		handler, err = httptransport.WithRotation(handler, store.Rotate)
+		if err != nil {
+			return nil, ErrConfig
+		}
+	}
+	if c.ManagementSessions {
+		roles, err := identitypg.NewPlatformAdmins(pool)
+		if err != nil {
+			return nil, ErrConfig
+		}
+		management, err := redisstore.NewManagement(store, roles)
+		if err != nil {
+			return nil, ErrConfig
+		}
+		handler, err = httptransport.WithManagementSessions(handler, management)
+		if err != nil {
+			return nil, ErrConfig
+		}
+		if c.ManagementRoleChanges {
+			changes, err := redisstore.NewManagementRoleChanges(management, login, roles)
+			if err != nil {
+				return nil, ErrConfig
+			}
+			handler, err = httptransport.WithManagementRoleChanges(handler, changes)
+			if err != nil {
+				return nil, ErrConfig
+			}
+		}
+	}
+	if c.SessionDevices {
+		handler, err = httptransport.WithDevices(handler, store)
+		if err != nil {
+			return nil, ErrConfig
+		}
+	}
 	if err := startup.Err(); err != nil {
 		return nil, err
 	}
@@ -179,8 +216,8 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 		}
 	}
 	closeIntake := func() {}
-	if c.IsolatedEmailIntake != nil {
-		handler, closeIntake, err = withIsolatedEmailIntake(startup, handler, authority, store, work, secrets, pool, c)
+	if c.EmailIntake != nil {
+		handler, closeIntake, err = withEmailIntake(startup, handler, authority, store, work, secrets, pool, c)
 		if err != nil {
 			return nil, startupFailure(startup)
 		}

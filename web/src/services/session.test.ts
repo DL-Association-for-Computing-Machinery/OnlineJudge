@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AccountError, accountRequest } from './session'
+import { AccountError, accountRequest, sessionDevicesRequest } from './session'
 import type { AccountOperation } from './session'
 
 const view = { subject_id: 'a'.repeat(32), created_at: '2026-11-01T00:00:00Z', idle_expires_at: '2026-11-01T02:00:00Z', absolute_deadline: '2026-11-01T12:00:00Z' }
@@ -8,6 +8,32 @@ const problem = (status: number, code: string) => Response.json({ type: 'about:b
 
 beforeEach(() => vi.stubGlobal('location', { protocol: 'https:' }))
 afterEach(() => vi.unstubAllGlobals())
+
+describe('device management transport', () => {
+  const { subject_id, ...times } = view
+  const current = 'b'.repeat(64)
+  const row = { id: current, current: true, ...times }
+
+  it('refuses malformed lists and ambiguous current sessions', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ subject_id, devices: [row, { ...row, id: 'd'.repeat(64) }] }))
+      .mockResolvedValueOnce(Response.json({ subject_id, devices: [{ ...row, digest: 'unexpected' }] }))
+      .mockResolvedValueOnce(Response.json({ subject_id, devices: [row] }))
+    vi.stubGlobal('fetch', fetch)
+    for (let i = 0; i < 2; i++) await expect(sessionDevicesRequest(signal())).rejects.toMatchObject({ kind: 'unknown' })
+    await expect(sessionDevicesRequest(signal())).resolves.toEqual({ subject_id, devices: [row] })
+  })
+
+  it('binds bulk revocation to the observed cookie and refuses a changed session', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(problem(409, 'DEVICE_SESSION_CHANGED'))
+    vi.stubGlobal('fetch', fetch)
+    await expect(sessionDevicesRequest(signal(), { current })).rejects.toMatchObject({ code: 'DEVICE_SESSION_CHANGED' })
+    expect(fetch).toHaveBeenCalledExactlyOnceWith('/api/v1/session/devices/revoke-others', expect.objectContaining({
+      method: 'POST', redirect: 'error', referrerPolicy: 'origin', body: undefined,
+    }))
+    expect(fetch.mock.calls[0][1]?.headers).toHaveProperty('X-OJ-Session-Device', current)
+  })
+})
 
 describe('same-origin account transport', () => {
   it('accepts a fresh session observation without touching or exposing internal versions', async () => {

@@ -1,8 +1,8 @@
-import { AccountError, accountRequest } from '../services/session'
-import type { AccountInput, SessionView } from '../services/session'
+import { AccountError, accountRequest, pendingDevicesRequest } from '../services/session'
+import type { AccountInput, SessionDevice, SessionView } from '../services/session'
 import { invalidatePrivateContent } from './privateInvalidation'
 
-export type AccountAction = 'check' | 'login' | 'local-login' | 'complete' | 'abandon' | 'activity' | 'logout' | 'password'
+export type AccountAction = 'check' | 'login' | 'local-login' | 'complete' | 'abandon' | 'activity' | 'logout' | 'password' | 'pending-devices' | 'replace-device'
 type SessionStatus = 'checking' | 'authenticated' | 'anonymous' | 'unknown' | 'unavailable' | 'insecure'
 export interface AccountState {
   status: SessionStatus
@@ -11,6 +11,8 @@ export interface AccountState {
   notice: { tone: 'neutral' | 'success' | 'error' | 'uncertain'; text: string }
   passwordUnknown: boolean
   passwordAvailable: boolean
+  pendingFull?: boolean
+  pendingDevices?: SessionDevice[]
   draftCleanup?: 'complete' | 'unknown'
 }
 
@@ -30,7 +32,10 @@ export class AccountController {
   private action: AccountAction | null = null
   private privateGeneration = 0
 
-  revokePrivateGeneration = () => { ++this.privateGeneration }
+  revokePrivateGeneration = () => {
+    ++this.privateGeneration
+    if (this.state.pendingDevices) this.publish({ pendingDevices: undefined })
+  }
   readPrivateGeneration = () => this.privateGeneration
 
   getSnapshot = (): AccountState => this.state
@@ -50,7 +55,7 @@ export class AccountController {
     this.abort?.abort()
     this.abort = null
     this.running = false
-    this.state = { ...this.state, busy: false,
+    this.state = { ...this.state, busy: false, pendingFull: undefined, pendingDevices: undefined,
       ...(this.action && this.action !== 'check' ? {
         status: 'unknown' as const,
         notice: { tone: 'uncertain' as const, text: '上次操作已中断，结果未确认。请检查当前会话，勿重复提交。' },
@@ -78,6 +83,9 @@ export class AccountController {
 
   async run(action: AccountAction, input?: AccountInput, clearDrafts = false): Promise<void> {
     if (!this.connected || this.running || (action === 'password' && this.state.passwordUnknown)) return
+    if ((action === 'pending-devices' || action === 'replace-device') && !this.state.pendingFull) return
+    if (action === 'replace-device' && (!input || !('device' in input) ||
+        !this.state.pendingDevices?.some(device => device.id === input.device))) return
     this.running = true
     const generation = ++this.generation
     const abort = new AbortController()
@@ -85,8 +93,10 @@ export class AccountController {
     this.action = action
     const departing = action === 'logout' && this.state.status === 'authenticated' ? this.state.session?.subject_id : undefined
     const current = () => this.connected && this.generation === generation
-    this.publish({ busy: true, draftCleanup: undefined, notice: { tone: 'neutral', text: '正在处理，请稍候…' } })
-    const changesCredentials = !['check', 'activity'].includes(action)
+    this.publish({ busy: true, draftCleanup: undefined, pendingDevices: undefined,
+      pendingFull: action === 'pending-devices' ? this.state.pendingFull : undefined,
+      notice: { tone: 'neutral', text: '正在处理，请稍候…' } })
+    const changesCredentials = !['check', 'activity', 'pending-devices'].includes(action)
     if (changesCredentials) invalidatePrivateContent()
     const privateGeneration = this.readPrivateGeneration()
     let issued = false
@@ -101,8 +111,16 @@ export class AccountController {
           if (!current()) return
           this.acceptSession(await accountRequest('read', abort.signal), current, true)
           break
+        case 'pending-devices': {
+          const devices = await pendingDevicesRequest(abort.signal)
+          if (current() && this.readPrivateGeneration() === privateGeneration) {
+            this.publish({ pendingDevices: devices, notice: { tone: 'neutral', text: '选择需要退出的旧会话，再确认继续登录。' } })
+          }
+          break
+        }
         case 'complete':
-          await accountRequest('complete', abort.signal)
+        case 'replace-device':
+          await accountRequest(action, abort.signal, input)
           issued = true
           if (!current()) return
           this.acceptSession(await accountRequest('read', abort.signal), current, true)
@@ -161,10 +179,13 @@ export class AccountController {
       else if (unknown && action === 'password') text = '改密结果无法确认，密码可能已经修改。请退出并重新登录核验，勿重复提交改密。'
       else if (unknown && action === 'logout') text = '退出结果无法确认。请检查当前会话，暂不能视为已退出。'
       else if (action === 'logout' && error.code === 'SESSION_REQUIRED') text = '当前没有可用会话，但这不确认之前的退出操作。可检查后重新登录。'
+      else if (unknown && action === 'replace-device') text = '登录结果无法确认。请检查当前会话，或继续确认原尝试；勿重复撤销。'
       else if (unknown && (action === 'login' || action === 'local-login' || action === 'complete')) text = '登录结果无法确认。请检查当前会话，或继续确认原尝试；勿重新提交密码。'
+      else if (action === 'pending-devices') text = '暂时无法读取旧会话。可继续确认原尝试，或从已登录设备退出后再试。'
       else if (action === 'abandon' && error.code === 'LOGIN_ATTEMPT_INVALID') text = '原尝试未能确认清理，可能已过期或不存在。浏览器中的受保护凭据不能由页面代为删除。'
       else if (anonymousObservation) text = '尚未登录。请使用已有账号，或继续确认原尝试。'
       this.publish({ status, session, notice: { tone: unknown ? 'uncertain' : anonymousObservation ? 'neutral' : 'error', text },
+        ...(error.code === 'SESSION_LIMIT' ? { pendingFull: true } : {}),
         ...(action === 'password' && unknown ? { passwordUnknown: true } : {}),
         ...(action === 'password' && error.code === 'NOT_FOUND' ? { passwordAvailable: false } : {}),
       })

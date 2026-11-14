@@ -151,7 +151,7 @@ def main():
     parser.add_argument("--redis-image", default="redis:7.2.17@sha256:0312984fbfeb2ff1d4382ecef45b50e7d65478a6a58cf12ce28d6de7a4142e45", help="Existing local Redis image; never pulled")
     parser.add_argument("--build-cache-volume", default="onlinejudge_toolchain-cache", help="Existing Go build cache volume; empty string uses container /tmp")
     parser.add_argument("--module-cache", type=Path, help="Optional existing checksum-verified Go module cache; mounted read-only")
-    parser.add_argument("--suite", choices=("ordinary", "email-lifecycle", "trial-edge", "training-overload"), default="ordinary",
+    parser.add_argument("--suite", choices=("ordinary", "email-lifecycle", "archive-recovery", "email-archive-recovery", "trial-edge", "training-overload"), default="ordinary",
                         help="Select one suite per fresh PostgreSQL and Redis fixture")
     parser.add_argument("--nginx-image", help="Existing local non-root Nginx image for trial-edge")
     parser.add_argument("--trial-site", type=Path, help="Exported production frontend site directory for trial-edge")
@@ -182,7 +182,7 @@ def main():
         if args.build_cache_volume:
             docker.run("volume", "inspect", args.build_cache_volume)
         network = docker.network(prefix)
-        aliases = ("redis", "redis-recovery", "redis-recovery-interrupted") if args.suite == "ordinary" else ("redis",)
+        aliases = ("redis",) if args.suite.startswith("email-") else ("redis", "redis-recovery", "redis-recovery-interrupted")
         for alias in aliases:
             start_redis(docker, prefix, network, redis_image, alias, redis)
         options = ["--name", prefix + "-test", "--network", network, "--cpus", "2", "--memory", "2g",
