@@ -87,6 +87,8 @@ type Config struct {
 	SessionDevices bool
 	// SessionRotation enables replacing the caller's personal credential.
 	SessionRotation bool
+	// ManagementSessions enables the separate platform administrator login.
+	ManagementSessions bool
 
 	// EmailLimits optionally provisions the email marker during isolated
 	// recovery. This alone does not enable any public account route.

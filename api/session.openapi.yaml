@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: OnlineJudge Ordinary Session and Login
+  title: OnlineJudge Session and Login
   version: 0.1.0
   description: >-
     描述显式会话 HTTPS 入口；默认 bootstrap/Compose 不启用会话。本人会话列表和撤销需配置 session_devices。
@@ -14,7 +14,7 @@ info:
     所有 POST 至少提供一个正向同源字段 Origin 或 Sec-Fetch-Site；出现的每个字段
     都须单值且正确，任一错误/重复字段不能由另一个正确字段抵消。GET 不要求这些同源字段。
     OPTIONS/HEAD 等不替代规定方法，不提供预检放行；精确路径之外不提供别名或重定向。
-    两种 Cookie 都是 Secure、HttpOnly、SameSite=Lax、Path=/、无 Domain 的 host-only Cookie，
+    普通会话与登录候选 Cookie 都是 Secure、HttpOnly、SameSite=Lax、Path=/、无 Domain 的 host-only Cookie，
     不接受请求体、查询参数或 Authorization 中的替代凭据；重复目标 Cookie 或坏 Cookie 语法拒绝。
     业务错误不设置或清除 Cookie。未知存储/恢复/取消/提交结果优先返回 503，即使同时包含拒绝原因，
     也不等于事务回滚或会话不存在。所有 POST 不自动重试；已有登录候选只显式确认或放弃原候选，
@@ -22,6 +22,65 @@ info:
 security:
   - ordinarySession: []
 paths:
+  /api/v1/platform-admin/session/login:
+    post:
+      operationId: loginPlatformAdministrator
+      security: []
+      description: 仅在 management_sessions 启用时接受同源请求。使用共享登录限流和本人密码；要求当前启用的管理员角色及已验证邮箱。成功只发管理 Cookie；无保持登录或可恢复登录候选。已有有效管理会话时须先退出。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              additionalProperties: false
+              properties:
+                email: {type: string}
+                password: {type: string, writeOnly: true}
+      responses:
+        '204': {description: 已发放独立管理 Cookie，无响应体。}
+        '400': {description: 请求格式无效。}
+        '401': {description: 凭据或管理资格无效。}
+        '403': {$ref: '#/components/responses/OriginRejected'}
+        '404': {$ref: '#/components/responses/EntryNotEnabled'}
+        '409': {description: 当前浏览器已持有有效管理会话。}
+        '413': {description: 请求过大。}
+        '415': {description: 需要 JSON 请求。}
+        '429': {description: 共享登录限流已达上限。}
+        '503': {description: 会话服务不可用或发放结果未知；不设置 Cookie，勿自动重试。}
+  /api/v1/platform-admin/session:
+    get:
+      operationId: readManagementSession
+      security: [{managementSession: []}]
+      description: 读取当前管理主体及两项截止时间，不续期。普通 Cookie 无效。
+      responses:
+        '200': {$ref: '#/components/responses/ManagementSessionView'}
+        '401': {description: 管理会话无效、过期或资格已撤销。}
+        '404': {$ref: '#/components/responses/EntryNotEnabled'}
+        '503': {$ref: '#/components/responses/SessionUnavailable'}
+  /api/v1/platform-admin/session/activity:
+    post:
+      operationId: touchManagementSession
+      security: [{managementSession: []}]
+      description: 显式同源活动续期至多 30 分钟，不得突破原登录起 8 小时的截止时间。
+      responses:
+        '200': {$ref: '#/components/responses/ManagementSessionView'}
+        '401': {description: 管理会话无效、过期或资格已撤销。}
+        '403': {$ref: '#/components/responses/OriginRejected'}
+        '404': {$ref: '#/components/responses/EntryNotEnabled'}
+        '503': {$ref: '#/components/responses/SessionUnavailable'}
+  /api/v1/platform-admin/session/logout:
+    post:
+      operationId: logoutManagementSession
+      security: [{managementSession: []}]
+      description: 同源退出，仅撤销当前管理会话。结果未知时使用只读查询核验。
+      responses:
+        '204': {description: 已确认退出并清除管理 Cookie。}
+        '401': {description: 管理会话无效、过期或资格已撤销。}
+        '403': {$ref: '#/components/responses/OriginRejected'}
+        '404': {$ref: '#/components/responses/EntryNotEnabled'}
+        '503': {$ref: '#/components/responses/SessionUnavailable'}
   /api/v1/session/rotate:
     post:
       operationId: rotateOrdinarySession
@@ -428,6 +487,11 @@ paths:
           $ref: '#/components/responses/LoginUnavailable'
 components:
   securitySchemes:
+    managementSession:
+      type: apiKey
+      in: cookie
+      name: __Host-oj_management
+      description: 独立不透明凭据，Secure、HttpOnly、SameSite=Strict、Path=/、无 Domain，成功登录无持久 Cookie 期限。
     ordinarySession:
       type: apiKey
       in: cookie
@@ -506,6 +570,18 @@ components:
         status: {type: integer}
         code: {type: string}
   responses:
+    ManagementSessionView:
+      description: 当前管理主体和有效期限，不返回角色修订、认证代次或令牌。
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [subject_id, idle_expires_at, absolute_deadline]
+            additionalProperties: false
+            properties:
+              subject_id: {type: string, pattern: '^[0-9a-f]{32}$'}
+              idle_expires_at: {type: string, format: date-time}
+              absolute_deadline: {type: string, format: date-time}
     SessionView:
       description: 恰好四个公开会话字段；不设置 Cookie。
       headers:

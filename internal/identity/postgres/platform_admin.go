@@ -116,34 +116,96 @@ func LockPlatformAdmin(ctx context.Context, tx pgx.Tx, actor identity.PlatformAd
 	if isolation != "read committed" {
 		return identity.ErrInvalid
 	}
-	q := identitydb.New(tx)
-	if err := lockRecovery(ctx, q, actor.RecoveryID); err != nil {
-		return err
+	_, err := lockPlatformAdmin(ctx, identitydb.New(tx), actor.SubjectID, actor.SessionVersion, 0, actor.RoleRevision)
+	return err
+}
+
+// WithAdminSession coordinates a trusted short storage callback under the
+// current role and identity locks. It never verifies a password or a token.
+func (s *PlatformAdmins) WithAdminSession(ctx context.Context, actor identity.PlatformAdminActor, operation func(context.Context) error) error {
+	if !actor.Valid() || operation == nil {
+		return identity.ErrInvalid
 	}
-	state, err := q.GetStateForShare(ctx, actor.SubjectID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return identity.ErrConflict
+	return s.withSession(ctx, actor.SubjectID, actor.SessionVersion, 0, actor.RoleRevision, func(call context.Context, _ identity.PlatformAdminActor) error {
+		return operation(call)
+	})
+}
+
+// WithAdminAdmission rechecks the exact password verification and the role
+// observed before verification. The callback must not run password work or
+// publish a cookie. It may have written externally even if this returns error.
+func (s *PlatformAdmins) WithAdminAdmission(ctx context.Context, checked identity.SessionState, roleRevision int64, operation func(context.Context, identity.PlatformAdminActor) error) error {
+	if !identity.ValidID(checked.ID) || !checked.Valid() || !checked.Enabled ||
+		!identity.ValidRecoveryID(checked.RecoveryID) || roleRevision <= 0 || operation == nil {
+		return identity.ErrInvalid
 	}
+	return s.withSession(ctx, checked.ID, identity.SessionVersion{AuthGeneration: checked.AuthGeneration, RecoveryID: checked.RecoveryID}, checked.CredentialVersion, roleRevision, operation)
+}
+
+func (s *PlatformAdmins) withSession(ctx context.Context, subject string, version identity.SessionVersion, credentialVersion, roleRevision int64, operation func(context.Context, identity.PlatformAdminActor) error) error {
+	if s == nil || s.pool == nil || ctx == nil {
+		return identity.ErrInvalid
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
 		return storageError{err}
 	}
-	if state.ID != actor.SubjectID || !state.Enabled || state.AuthGeneration != actor.AuthGeneration {
-		return identity.ErrConflict
-	}
-	if err := requireVerifiedAdminEmail(ctx, q, actor.SubjectID); err != nil {
-		return err
-	}
-	role, err := readPlatformAdmin(ctx, q, actor.SubjectID)
-	if errors.Is(err, identity.ErrNotFound) {
-		return identity.ErrPlatformAdminRequired
-	}
+	defer func() {
+		cleanup, stop := context.WithTimeout(context.Background(), time.Second)
+		defer stop()
+		_ = tx.Rollback(cleanup)
+	}()
+	actor, err := lockPlatformAdmin(ctx, identitydb.New(tx), subject, version, credentialVersion, roleRevision)
 	if err != nil {
 		return err
 	}
-	if !role.Enabled || role.Revision != actor.RoleRevision {
-		return identity.ErrPlatformAdminRequired
+	if err := operation(ctx, actor); err != nil {
+		return guardedError{err}
 	}
-	return ctx.Err()
+	if err := ctx.Err(); err != nil {
+		return guardedError{err}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return guardedError{storageError{err}}
+	}
+	return nil
+}
+
+func lockPlatformAdmin(ctx context.Context, q *identitydb.Queries, subject string, version identity.SessionVersion, credentialVersion, roleRevision int64) (identity.PlatformAdminActor, error) {
+	var zero identity.PlatformAdminActor
+	if err := lockRecovery(ctx, q, version.RecoveryID); err != nil {
+		return zero, err
+	}
+	state, err := q.GetStateForShare(ctx, subject)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return zero, identity.ErrConflict
+	}
+	if err != nil {
+		return zero, storageError{err}
+	}
+	if state.ID != subject || !state.Enabled || state.AuthGeneration != version.AuthGeneration ||
+		(credentialVersion > 0 && state.CredentialVersion != credentialVersion) {
+		return zero, identity.ErrConflict
+	}
+	if err := requireVerifiedAdminEmail(ctx, q, subject); err != nil {
+		return zero, err
+	}
+	role, err := readPlatformAdmin(ctx, q, subject)
+	if errors.Is(err, identity.ErrNotFound) {
+		return zero, identity.ErrPlatformAdminRequired
+	}
+	if err != nil {
+		return zero, err
+	}
+	if !role.Enabled || role.Revision != roleRevision {
+		return zero, identity.ErrPlatformAdminRequired
+	}
+	if err := ctx.Err(); err != nil {
+		return zero, err
+	}
+	return identity.PlatformAdminActor{SubjectID: subject, SessionVersion: version, RoleRevision: role.Revision}, nil
 }
 
 func requireVerifiedAdminEmail(ctx context.Context, q *identitydb.Queries, subject string) error {

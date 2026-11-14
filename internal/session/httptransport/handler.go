@@ -57,6 +57,7 @@ type handler struct {
 	trainingStatus         TrainingStatus
 	devices                DeviceSessions
 	rotate                 rotateSession
+	management             ManagementSessions
 }
 
 // New builds three explicit endpoints without registering any application route:
@@ -90,6 +91,10 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	source, trusted := h.requestSource(r)
 	if !trusted {
 		problem(w, http.StatusForbidden, "ORIGIN_REJECTED", "请求来源不允许")
+		return
+	}
+	if IsManagementSessionPath(r.URL.Path) {
+		h.serveManagement(w, r, source)
 		return
 	}
 	method := ""

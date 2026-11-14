@@ -158,6 +158,20 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 			return nil, ErrConfig
 		}
 	}
+	if c.ManagementSessions {
+		roles, err := identitypg.NewPlatformAdmins(pool)
+		if err != nil {
+			return nil, ErrConfig
+		}
+		management, err := redisstore.NewManagement(store, roles)
+		if err != nil {
+			return nil, ErrConfig
+		}
+		handler, err = httptransport.WithManagementSessions(handler, management)
+		if err != nil {
+			return nil, ErrConfig
+		}
+	}
 	if c.SessionDevices {
 		handler, err = httptransport.WithDevices(handler, store)
 		if err != nil {

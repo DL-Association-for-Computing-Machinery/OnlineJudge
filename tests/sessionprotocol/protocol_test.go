@@ -15,6 +15,8 @@ import (
 
 func TestOrdinaryProtocol(t *testing.T) {
 	f := setup(t)
+	t.Run("independent management sessions", func(t *testing.T) { testManagement(t, f) })
+	t.Run("lost management issue and late touch", func(t *testing.T) { testManagementLostIssueAndLateTouch(t, f) })
 	t.Run("rotation lost response cannot publish or recover successor", func(t *testing.T) { testRotationLostReply(t, f) })
 	t.Run("device revoke checks exact active snapshot", func(t *testing.T) { testRevokeDevices(t, f) })
 	t.Run("parallel admission has exactly three slots", func(t *testing.T) {

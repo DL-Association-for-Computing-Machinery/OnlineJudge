@@ -38,6 +38,9 @@ func TestFullConfigurationPreservesNativeValues(t *testing.T) {
 		t.Fatal("valid configuration rejected")
 	}
 	r := c.Runtime
+	if r.ManagementSessions {
+		t.Fatal("omitted management configuration enabled privileged routes")
+	}
 	if r.Mode != sessionruntime.DirectTLS || r.Database.Security != sessionruntime.PrivateTransport ||
 		r.RedisSecurity != sessionruntime.PrivateTransport || r.Namespace != "api-test" ||
 		r.SecretsFile != "/config/login.json" || r.Database.Host != "db.invalid" || r.Database.Port != 5432 ||
@@ -63,6 +66,18 @@ func TestFullConfigurationPreservesNativeValues(t *testing.T) {
 		c.Server.ShutdownTimeout != 3*time.Second || c.Server.MaxHeaderBytes != 8192 {
 		t.Fatal("API transport settings changed")
 	}
+}
+
+func TestManagementSessionsOptIn(t *testing.T) {
+	with := func(value string) []byte {
+		return []byte(strings.Replace(validDocument, `"version":1,`, `"version":1,"management_sessions":`+value+`,`, 1))
+	}
+	c, err := Parse(with("true"))
+	if err != nil || !c.Runtime.ManagementSessions {
+		t.Fatal("explicit management configuration was not preserved")
+	}
+	reject(t, with(`"true"`))
+	reject(t, with(`null`))
 }
 
 func reject(t *testing.T, body []byte) {

@@ -25,6 +25,7 @@ type document struct {
 	TrainingSubmissionDetail bool                   `json:"training_submission_detail"`
 	SessionDevices           bool                   `json:"session_devices"`
 	SessionRotation          bool                   `json:"session_rotation"`
+	ManagementSessions       bool                   `json:"management_sessions"`
 }
 
 type emailIntakeWire struct {

@@ -13,6 +13,10 @@ import (
 )
 
 func loginBody(w http.ResponseWriter, r *http.Request) (identity.Email, []byte, bool, error) {
+	return readLoginBody(w, r, true)
+}
+
+func readLoginBody(w http.ResponseWriter, r *http.Request, allowRemember bool) (identity.Email, []byte, bool, error) {
 	bad := errors.New("invalid login body")
 	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || media != "application/json" {
@@ -52,7 +56,7 @@ func loginBody(w http.ResponseWriter, r *http.Request) (identity.Email, []byte, 
 			return invalidLoginBody(w, bad)
 		}
 		if name == "remember" {
-			if remember != nil || dec.Decode(&remember) != nil || remember == nil {
+			if !allowRemember || remember != nil || dec.Decode(&remember) != nil || remember == nil {
 				return invalidLoginBody(w, bad)
 			}
 			continue
