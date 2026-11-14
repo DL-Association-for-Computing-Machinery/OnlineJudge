@@ -1,5 +1,11 @@
 # 工程交付记录
 
+## 2026-11-14：P3 协会邮件域名预检
+
+飞书客户端显示协会域名下有默认邮箱。公开 DNS 查询确认 `ecutcs.cn` 的 MX 指向 `mx1.feishu.cn`、`mx2.feishu.cn`、`mx3.feishu.cn`，SPF 包含飞书发件网络；两个公开解析器均返回 `_dmarc.ecutcs.cn` 不存在，未核对 DKIM。由本机向飞书官方 `smtp.feishu.cn:465` 进行证书校验和不带认证的 NOOP，返回 250。邮件进程已有隐式 TLS 支持，暂不需要改代码。
+
+以上是发件候选预检；没有登录 SMTP、发送邮件、修改 DNS 或改动候选试用机。目标环境验收仍须核对管理员授权的专用测试发件身份、实际 SMTP 连通与收件、额度及失败恢复。配置方式见[飞书业务系统 SMTP 指南](https://www.feishu.cn/hc/en-US/articles/221905160046-update-the-smtp-server-settings-in-business-systems-during-the-email-migration-process)。
+
 ## 2026-11-14：P3 目标环境只读盘点
 
 以 `guest` 公钥登录候选试用机，只读确认 Ubuntu 24.04 x86_64、4 vCPU、约 3.6 GiB 总内存、约 2.9 GiB 当时可用内存和约 31 GiB 可用磁盘。常用 Web、PostgreSQL 和 Redis 端口未观察到监听；`guest` 无法读取系统 Docker 的容器列表，不能据此认定主机没有其他工作负载。当前未发现 guest 专用 Docker socket，`newuidmap`、`newgidmap` 和 rootless 网络辅助工具不在可执行路径。现有权限下尚不能直接运行仓库的 Docker 验收夹具。
