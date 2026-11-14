@@ -8,6 +8,7 @@ import { Sample } from '../statement/Sample'
 import { StatementMarkdown } from '../statement/StatementMarkdown'
 import { ReviewMaterialsController } from './materialsController'
 import { ReviewAssignments } from './ReviewAssignments'
+import { ReviewReturn } from './ReviewReturn'
 import { StatementConfirmation } from './StatementConfirmation'
 
 function AssignedMaterials({ id }: { id: string }) {
@@ -62,7 +63,10 @@ function AssignedMaterials({ id }: { id: string }) {
           <summary>{dep.name}</summary><pre><code>{dep.source}</code></pre>
         </details>)}
       </section>
-      <StatementConfirmation controller={controller} state={state} />
+      {state.returnStatus !== 'recorded' && state.returnStatus !== 'pending' &&
+        !state.eligibility?.blockers.includes('materials_returned') &&
+        <StatementConfirmation controller={controller} state={state} />}
+      <ReviewReturn controller={controller} state={state} />
     </>}
   </>
 }

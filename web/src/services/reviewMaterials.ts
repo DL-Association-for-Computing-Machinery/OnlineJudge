@@ -129,11 +129,13 @@ export async function fetchReviewAssignments(owner: string, cursor: string, sign
   return data as unknown as ReviewAssignmentPage
 }
 
-async function readReviewJSON(path: string, owner: string, limit: number, signal: AbortSignal): Promise<unknown> {
+export async function readReviewJSON(path: string, owner: string, limit: number, signal: AbortSignal, intent?: object): Promise<unknown> {
   if (!id(owner) || globalThis.location.protocol !== 'https:') throw invalid()
   const response = await fetch(path, {
-    method: 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer',
-    headers: { Accept: 'application/json', 'X-OJ-Expected-Subject': owner }, signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
+    method: intent ? 'POST' : 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error',
+    referrerPolicy: intent ? 'origin' : 'no-referrer',
+    headers: { Accept: 'application/json', 'X-OJ-Expected-Subject': owner, ...(intent ? { 'Content-Type': 'application/json' } : {}) },
+    ...(intent ? { body: JSON.stringify(intent) } : {}), signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
   })
   if (response.status !== 200 || response.headers.get('Content-Type')?.split(';')[0].trim() !== 'application/json' || !response.body) {
     await response.body?.cancel().catch(() => undefined)
