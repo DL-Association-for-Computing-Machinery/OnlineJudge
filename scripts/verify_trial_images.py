@@ -55,8 +55,9 @@ def verify(path, archive_sha, platform, roles):
             raise ValueError("archive digest mismatch")
         stream.seek(0)
         with tarfile.open(fileobj=stream, mode="r:") as archive:
-            check_archive(archive, platform, expected)
-    return {"platform": platform, "archive_sha256": archive_sha, "configuration_digests": roles}
+            manifests = check_archive(archive, platform, expected)
+    return {"platform": platform, "archive_sha256": archive_sha, "configuration_digests": roles,
+            "manifest_digests": manifests}
 
 
 def check_archive(archive, platform, expected):
@@ -141,6 +142,7 @@ def check_archive(archive, platform, expected):
         raise ValueError("Docker import inventory mismatch")
     if {name for name in items if BLOB.fullmatch(name)} != seen:
         raise ValueError("unreferenced archive blobs")
+    return {role: "sha256:" + runtime[path][0].rsplit("/", 1)[1] for path, role in expected.items()}
 
 
 def main():

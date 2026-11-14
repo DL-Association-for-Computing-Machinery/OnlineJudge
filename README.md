@@ -914,6 +914,16 @@ python3 -B scripts/verify_trial_images.py "$RUNTIME_ARCHIVE" --sha256 "$TRUSTED_
 
 命令只读核对归档、每个引用 blob、目标平台和可导入镜像集合，不解包、不调用 Docker。通过后仍需在受控的空镜像库验证导入、回读身份和禁拉取启动。可选判题镜像仍须单独满足目标节点的运行准入。
 
+在专用实验 VM 内，先准备无外网路由的网络空间、独立 Docker Unix socket、全新的 Docker 和 containerd 数据目录，并确认 containerd 内容库为空。保持归档和其父目录由操作员控制，验证、导入期间不替换文件。使用相同的信任参数运行：
+
+```sh
+python3 -B scripts/cold_trial_images.py "$RUNTIME_ARCHIVE" --sha256 "$TRUSTED_ARCHIVE_SHA256" \
+  --socket "$COLD_DOCKER_SOCKET" --data-root "$COLD_DOCKER_ROOT" --platform linux/arm64 \
+  --nginx "$NGINX_CONFIG_DIGEST" --postgres "$POSTGRES_CONFIG_DIGEST" --redis "$REDIS_CONFIG_DIGEST"
+```
+
+接收命令拒绝常用系统 socket、数据目录不匹配或已有镜像、容器、卷的引擎；不清空镜像库。导入后核对完整镜像集合，禁止拉取并验证 Nginx 程序、临时 PostgreSQL 查询及临时 Redis 写读。脚本不创建或停止 Docker 引擎，结束后由实验操作者停止自建引擎；镜像保留在该实验数据目录。此步骤不验证应用与镜像的联合冷启动，也不运行判题镜像。
+
 ### 试用同源 HTTPS 入口
 
 用[独立 Nginx 模板](deploy/trial/nginx.conf.example)准备试用入口。将 `oj.example.invalid` 的所有出现处替换为同一个公开域名；本模板对应公开端口 443，映射至 Nginx 的 8443。把已核验应用制品的 `site/` 以只读方式挂载至 `/srv/oj/site`；应让 Nginx 运行账号读取安装后的文件，同时保持原接收包不变。

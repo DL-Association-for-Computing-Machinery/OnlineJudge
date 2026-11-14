@@ -1,6 +1,7 @@
 """The receiving verifier must not trust a matching tar digest alone."""
 
 import hashlib
+import importlib.util
 import io
 import json
 from pathlib import Path
@@ -9,6 +10,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts/verify_trial_images.py"
@@ -79,3 +81,21 @@ class TrialImagesTests(unittest.TestCase):
                 result = self.verify(roles)
                 self.assertEqual(result.returncode, 1)
                 self.assertEqual(result.stdout, "")
+
+    def test_cold_receiver_refuses_warm_engine_before_import(self):
+        with patch.object(sys, "path", [str(SCRIPT.parent), *sys.path]):
+            spec = importlib.util.spec_from_file_location("cold_trial_images", SCRIPT.with_name("cold_trial_images.py"))
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+        roles = self.export()
+        root = self.archive.parent / "engine"
+        socket = self.archive.parent / "engine.sock"
+        digest = hashlib.sha256(self.archive.read_bytes()).hexdigest()
+        with (patch.object(Path, "lstat") as lstat, patch.object(module.subprocess, "run") as run):
+            lstat.return_value.st_mode = 0o140000
+            run.side_effect = [subprocess.CompletedProcess([], 0, str(root), ""),
+                               subprocess.CompletedProcess([], 0, roles["nginx"], "")]
+            with self.assertRaisesRegex(ValueError, "must start with empty"):
+                module.receiver(socket, root, self.archive, digest, "linux/arm64", roles)
+            self.assertEqual([call.args[0][3:5] for call in run.call_args_list],
+                             [("info", "--format"), ("image", "ls")])
