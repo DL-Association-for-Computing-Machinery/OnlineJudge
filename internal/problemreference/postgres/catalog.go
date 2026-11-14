@@ -32,7 +32,8 @@ func (s *ReviewStore) ListPublished(ctx context.Context, after, query string) ([
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	rows, err := referencedb.New(s.pool).CatalogProblems(ctx, referencedb.CatalogProblemsParams{AfterID: after, TitleQuery: strings.TrimSpace(query)})
+	rows, err := referencedb.New(s.pool).CatalogProblems(ctx, referencedb.CatalogProblemsParams{
+		AfterID: after, TitleQuery: strings.TrimSpace(query), LocalOnly: s.policy() == problemreference.LocalReviewPolicyVersion})
 	if err != nil {
 		return nil, "", storageError{err}
 	}
@@ -62,7 +63,8 @@ func (s *ReviewStore) ReadPublished(ctx context.Context, objects problem.Referen
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	q := referencedb.New(s.pool)
-	row, err := q.CatalogProblem(ctx, id)
+	lookup := referencedb.CatalogProblemParams{ProblemID: id, LocalOnly: s.policy() == problemreference.LocalReviewPolicyVersion}
+	row, err := q.CatalogProblem(ctx, lookup)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return zero, problemreference.ErrNotFound
 	}
@@ -76,7 +78,7 @@ func (s *ReviewStore) ReadPublished(ctx context.Context, objects problem.Referen
 	if err != nil || display.Title != row.Title {
 		return zero, storageError{errors.Join(problemreference.ErrInvalid, err)}
 	}
-	current, err := q.CatalogProblem(ctx, id)
+	current, err := q.CatalogProblem(ctx, lookup)
 	if err != nil || current != row {
 		return zero, storageError{errors.Join(problemreference.ErrReviewChanged, err)}
 	}

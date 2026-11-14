@@ -16,6 +16,7 @@ import (
 	problempg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem/postgres"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
 	referencepg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference/postgres"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/httptransport"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/redisstore"
 )
@@ -36,6 +37,7 @@ type PrivateDraftsConfig struct {
 	ReviewApprovals                               bool
 	PublicCatalog                                 bool
 	StatementConfirmations                        bool
+	LocalExecution                                *problemvalidation.APlusBLocalAdmissionInput
 }
 
 // Validate checks bounded lexical configuration without accessing files.
@@ -44,6 +46,9 @@ func (c PrivateDraftsConfig) Validate() error {
 		return ErrConfig
 	}
 	if (c.ReviewReturns || c.ReviewApprovals || c.StatementConfirmations) && !c.ReviewAccess {
+		return ErrConfig
+	}
+	if c.LocalExecution != nil && (!c.ReviewApprovals || !c.PublicCatalog || len(c.SourceIDs) != 1 || c.SourceIDs[0] != "library-checker:aplusb") {
 		return ErrConfig
 	}
 	for _, path := range []string{c.MaterialRoot, c.BundleDirectory, c.SourceLockFile} {
@@ -150,14 +155,24 @@ func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore
 		return nil, nil, ErrStartup
 	}
 	result := &draftCapabilities{importer: importer}
-	if c.PublicCatalog {
-		reader, err := referencepg.NewReviewStore(pool, access)
+	reviewer, err := referencepg.NewReviewStore(pool, access)
+	if err != nil {
+		return nil, nil, ErrStartup
+	}
+	if c.LocalExecution != nil {
+		admission, err := problemvalidation.ReadAPlusBLocalAdmission(ctx, *c.LocalExecution)
 		if err != nil {
 			return nil, nil, ErrStartup
 		}
+		reviewer, err = reviewer.WithLocalExecution(admission)
+		if err != nil {
+			return nil, nil, ErrStartup
+		}
+	}
+	if c.PublicCatalog {
 		result.catalog = &httptransport.CatalogReader{
 			List: func(ctx context.Context, after, query string) ([]httptransport.CatalogEntry, string, error) {
-				entries, next, err := reader.ListPublished(ctx, after, query)
+				entries, next, err := reviewer.ListPublished(ctx, after, query)
 				if err != nil {
 					return nil, "", err
 				}
@@ -173,15 +188,11 @@ func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore
 					return problem.PublicationStatement{}, err
 				}
 				defer release()
-				return reader.ReadPublished(ctx, materials, id)
+				return reviewer.ReadPublished(ctx, materials, id)
 			},
 		}
 	}
 	if c.ReviewAccess {
-		reviewer, err := referencepg.NewReviewStore(pool, access)
-		if err != nil {
-			return nil, nil, ErrStartup
-		}
 		result.evidence, err = problemreference.NewReviewAccess(sessions, reviewer)
 		if err != nil {
 			return nil, nil, ErrStartup

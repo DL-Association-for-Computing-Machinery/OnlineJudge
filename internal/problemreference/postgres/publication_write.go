@@ -46,6 +46,9 @@ func (s *ReviewStore) PublishProblem(ctx context.Context, authority PublisherAut
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	m := i.Materials
+	if proof, version, execution := s.local.Binding(); proof != "" && (i.ExecutionVersion != version || i.ExecutionSHA256 != execution) {
+		return zero, problemreference.ErrReviewChanged
+	}
 	if err := problem.VerifySealedPublicationMaterials(ctx, objects, m, plan); err != nil {
 		return zero, err
 	}
@@ -72,6 +75,9 @@ func (s *ReviewStore) PublishProblem(ctx context.Context, authority PublisherAut
 	}
 	old, err := q.PublicationByPublisherKey(ctx, key)
 	if err == nil {
+		if err := s.checkPublicationScope(ctx, q, old.ReviewID, old.AssignmentRevision); err != nil {
+			return zero, err
+		}
 		return finishPublication(ctx, tx, old, params, false)
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
@@ -98,7 +104,8 @@ func (s *ReviewStore) PublishProblem(ctx context.Context, authority PublisherAut
 		return zero, problemreference.ErrConflict
 	}
 	if current.Revision > 0 {
-		previous, err := q.CatalogProblem(ctx, m.ProblemID)
+		previous, err := q.CatalogProblem(ctx, referencedb.CatalogProblemParams{
+			ProblemID: m.ProblemID, LocalOnly: s.policy() == problemreference.LocalReviewPolicyVersion})
 		if err != nil {
 			return zero, storageError{err}
 		}
@@ -117,6 +124,9 @@ func (s *ReviewStore) PublishProblem(ctx context.Context, authority PublisherAut
 			return zero, problemreference.ErrConflict
 		}
 		if err == nil {
+			if err := s.checkPublicationScope(ctx, q, row.ReviewID, row.AssignmentRevision); err != nil {
+				return zero, err
+			}
 			return finishPublication(ctx, tx, row, params, false)
 		}
 	}
@@ -124,6 +134,17 @@ func (s *ReviewStore) PublishProblem(ctx context.Context, authority PublisherAut
 		return zero, storageError{err}
 	}
 	return finishPublication(ctx, tx, row, params, true)
+}
+
+func (s *ReviewStore) checkPublicationScope(ctx context.Context, q *referencedb.Queries, review string, revision int64) error {
+	a, err := q.ReviewApprovalByAssignment(ctx, referencedb.ReviewApprovalByAssignmentParams{ReviewID: review, AssignmentRevision: revision})
+	if err != nil {
+		return storageError{err}
+	}
+	if (a.PolicyVersion == problemreference.LocalReviewPolicyVersion) != (s.policy() == problemreference.LocalReviewPolicyVersion) {
+		return problemreference.ErrNotFound
+	}
+	return nil
 }
 
 func finishPublication(ctx context.Context, tx pgx.Tx, row referencedb.ProblemPublication, i referencedb.InsertProblemPublicationParams, wrote bool) (CatalogEntry, error) {

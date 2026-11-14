@@ -80,6 +80,9 @@ func parse(args []string) (command, error) {
 }
 
 func run(parent context.Context, args []string, out io.Writer) error {
+	if len(args) > 0 && args[0] == "publish-aplusb-local" {
+		return publishAPlusBLocal(parent, args[1:], out)
+	}
 	c, err := parse(args)
 	if err != nil || os.Getenv("OJ_DATABASE_URL") == "" {
 		return identity.ErrInvalid
@@ -134,6 +137,10 @@ func main() {
 			_, _ = fmt.Fprintln(os.Stderr, "explicit active non-author reviewer required")
 		case errors.Is(err, identity.ErrPublisherRequired):
 			_, _ = fmt.Fprintln(os.Stderr, "active account required for a publisher grant")
+		case errors.Is(err, problemreference.ErrNotFound):
+			_, _ = fmt.Fprintln(os.Stderr, "matching review, approval or publication receipt not found")
+		case errors.Is(err, problemreference.ErrReviewApprovalBlocked), errors.Is(err, problemreference.ErrReviewChanged):
+			_, _ = fmt.Fprintln(os.Stderr, "current review or execution evidence does not authorize publication")
 		default:
 			_, _ = fmt.Fprintln(os.Stderr, "review operation not confirmed; inspect the stored revision before any further change")
 		}

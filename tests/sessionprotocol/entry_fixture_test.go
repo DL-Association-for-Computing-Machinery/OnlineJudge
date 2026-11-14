@@ -282,6 +282,9 @@ func entryConfigWithWriteTimeout(t *testing.T, c sessionruntime.Config, ca *test
 			"reference_requests": d.ReferenceRequests, "review_intake": d.ReviewIntake, "review_access": d.ReviewAccess,
 			"review_returns": d.ReviewReturns, "review_approvals": d.ReviewApprovals, "statement_confirmations": d.StatementConfirmations,
 			"public_catalog": d.PublicCatalog}
+		if d.LocalExecution != nil {
+			doc["private_drafts"].(map[string]any)["aplusb_local_execution"] = d.LocalExecution
+		}
 	}
 	if c.TrainingHistory {
 		doc["training_history"] = true

@@ -166,6 +166,19 @@ func TestPublicationCatalogLocalChain(t *testing.T) {
 		t.Fatal("history row did not enter catalog HTTP")
 	}
 	readHTTP("/"+e.DraftID, 404)
+	// A restored local-authorized row remains hidden in ordinary mode.
+	_, err = f.a.Exec(f.ctx, `UPDATE problem_review_approvals SET policy_version=$1
+		WHERE review_id=$2 AND assignment_revision=$3`, problemreference.LocalReviewPolicyVersion, e.ReviewID, e.AssignmentRevision)
+	must(t, err)
+	if readHTTP("", 200) != `{"problems":[],"next":""}` {
+		t.Fatal("ordinary catalog exposed a local publication")
+	}
+	readHTTP("/"+publicID, 404)
+	_, err = f.reviews.PublishProblem(f.ctx, f.access, f.actor, f.materials, plan, intent)
+	requireReviewError(t, err, problemreference.ErrNotFound)
+	_, err = f.a.Exec(f.ctx, `UPDATE problem_review_approvals SET policy_version=$1
+		WHERE review_id=$2 AND assignment_revision=$3`, problemreference.ReviewPolicyVersion, e.ReviewID, e.AssignmentRevision)
+	must(t, err)
 	missing, err := f.reviews.ReadPublished(f.ctx, missingPublicationObjects{}, publicID)
 	requireReviewError(t, err, problemreference.ErrStore)
 	if missing.ProblemID != "" || missing.Markdown != "" {

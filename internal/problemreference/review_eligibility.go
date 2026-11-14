@@ -12,6 +12,10 @@ import (
 // ReviewPolicyVersion identifies the current requirements for ordinary approval.
 const ReviewPolicyVersion = "oj.review-approval.v14"
 
+// LocalReviewPolicyVersion reserves a distinct policy for explicitly scoped
+// functional acceptance. Its approvals cannot authorize ordinary publication.
+const LocalReviewPolicyVersion = "oj.review-approval.aplusb-local.v1"
+
 // ReviewEligibilitySnapshot is the trusted read of an assigned item's verified
 // historical evidence and whether the same material has already been returned.
 type ReviewEligibilitySnapshot struct {
@@ -19,6 +23,7 @@ type ReviewEligibilitySnapshot struct {
 	Returned           bool
 	SolutionConfirmed  bool
 	StatementConfirmed bool
+	LocalExecution     problemvalidation.APlusBLocalAdmission
 }
 
 // ReviewEligibility explains what blocks approval at the time of the read.
@@ -36,11 +41,12 @@ type ReviewEligibility struct {
 	StatementRendering          *problemvalidation.StatementRenderingEvidence     `json:"statement_rendering_evidence,omitempty"`
 	LocalChecker                *problemvalidation.LocalCheckerEvidence           `json:"local_checker_evidence,omitempty"`
 	StatementSemanticsConfirmed bool                                              `json:"statement_semantics_confirmed,omitempty"`
+	LocalExecutionSHA256        string                                            `json:"local_execution_sha256,omitempty"`
 }
 
 func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
 	e := s.Evidence
-	var blockers []string
+	blockers := make([]string, 0)
 	if s.Returned {
 		blockers = append(blockers, "materials_returned")
 	}
@@ -118,7 +124,14 @@ func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
 	if validator == nil {
 		blockers = append(blockers, "input_validator_missing")
 	}
-	blockers = append(blockers, "checker_admission_missing", "target_runtime_missing")
+	policyVersion := ReviewPolicyVersion
+	var localExecution string
+	if policyCurrent && formalOnly && e.FormalVerdict == "AC" && !s.Returned && s.LocalExecution.Match(id, e.FormalPlanSHA256, e.ProfileSHA256) {
+		policyVersion = LocalReviewPolicyVersion
+		localExecution, _, _ = s.LocalExecution.Binding()
+	} else {
+		blockers = append(blockers, "checker_admission_missing", "target_runtime_missing")
+	}
 	var localChecker *problemvalidation.LocalCheckerEvidence
 	if policyCurrent && formalOnly && !s.Returned && e.FormalVerdict == "AC" {
 		if local, ok := problemvalidation.APlusBLocalCheckerEvidence(id, e.FormalPlanSHA256, e.ProfileSHA256); ok {
@@ -128,10 +141,10 @@ func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
 	if !s.SolutionConfirmed {
 		blockers = append(blockers, "solution_confirmation_missing")
 	}
-	return ReviewEligibility{Evidence: e, PolicyVersion: ReviewPolicyVersion, Eligible: len(blockers) == 0,
+	return ReviewEligibility{Evidence: e, PolicyVersion: policyVersion, Eligible: len(blockers) == 0,
 		Blockers: blockers, InputValidator: validator, IndependentCorrectness: independent,
 		WrongSolution: wrongSolution, TestCoverage: coverage, StatementRendering: statementRendering, LocalChecker: localChecker,
-		StatementSemanticsConfirmed: semanticsConfirmed}
+		StatementSemanticsConfirmed: semanticsConfirmed, LocalExecutionSHA256: localExecution}
 }
 
 // EligibilityForSubject returns the current policy's blockers for one assignment.

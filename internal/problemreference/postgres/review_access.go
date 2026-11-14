@@ -8,6 +8,7 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference/postgres/referencedb"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -21,8 +22,9 @@ type ReviewerAuthority interface {
 
 // ReviewStore owns assignment changes and the assigned review projection.
 type ReviewStore struct {
-	pool *pgxpool.Pool
-	auth ReviewerAuthority
+	pool  *pgxpool.Pool
+	auth  ReviewerAuthority
+	local problemvalidation.APlusBLocalAdmission
 }
 
 // NewReviewStore binds review authorization to a caller-owned pool.

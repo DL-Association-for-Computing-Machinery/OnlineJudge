@@ -75,9 +75,11 @@ export async function fetchReviewMaterials(review: string, owner: string, signal
 export async function fetchReviewEligibility(evidence: ReviewMaterials['evidence'], owner: string, signal: AbortSignal): Promise<ReviewEligibility> {
   if (!id(evidence.review_id)) throw invalid()
   const value = await readReviewJSON(`/api/v1/problem-review/${evidence.review_id}/eligibility`, owner, 32 * 1024, signal)
-  if (!object(value) || value.policy_version !== 'oj.review-approval.v14' || typeof value.eligible !== 'boolean' ||
+  if (!object(value) || typeof value.eligible !== 'boolean' ||
     !digest(value.snapshot_sha256) || ('approval_enabled' in value && value.approval_enabled !== true) ||
     ('statement_semantics_confirmed' in value && value.statement_semantics_confirmed !== true)) throw invalid()
+  if (!((value.policy_version === 'oj.review-approval.v14' && !('local_execution_sha256' in value)) ||
+    (value.policy_version === 'oj.review-approval.aplusb-local.v1' && digest(value.local_execution_sha256)))) throw invalid()
   const actual = decodeEvidence(value.evidence, evidence.review_id)
   if (evidenceFields.some(field => actual[field] !== evidence[field])) throw invalid()
   const blockers: unknown = value.blockers

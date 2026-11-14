@@ -80,6 +80,10 @@ func TestBrowserFixture(t *testing.T) {
 		browserDrafts(t, f, &c, subject.ID)
 	}
 	reviewMode := os.Getenv("OJ_BROWSER_REVIEW_MATERIALS") == "1"
+	localExecution := os.Getenv("OJ_BROWSER_LOCAL_EXECUTION") == "1"
+	if localExecution && (!reviewMode || historyMode || trialNginx) {
+		t.Fatal("local execution requires an isolated review fixture")
+	}
 	if reviewMode {
 		if c.PrivateDrafts == nil || !c.PrivateDrafts.ReferenceRequests {
 			t.Fatal("browser review requires the synthetic reference fixture")
@@ -90,6 +94,9 @@ func TestBrowserFixture(t *testing.T) {
 		c.PrivateDrafts.ReviewApprovals = true
 		c.PrivateDrafts.StatementConfirmations = true
 		c.PrivateDrafts.PublicCatalog = true
+		if localExecution {
+			browserLocalExecution(t, f, &c)
+		}
 	}
 	access, err := identitypg.NewProblemAccess(f.pools[0])
 	must(t, err)
@@ -233,8 +240,13 @@ func TestBrowserFixture(t *testing.T) {
 		info["login_accounts"] = string(raw)
 	}
 	if reviewMode {
-		info["review_id"], info["review_draft_id"], info["catalog_fixture_id"] = seedBrowserReview(t, f, origin, ca.Roots, subject, otherAuthor, access, c.PrivateDrafts.MaterialRoot)
+		info["review_id"], info["review_draft_id"], info["catalog_fixture_id"] = seedBrowserReview(t, f, origin, ca.Roots, subject, otherAuthor, access, c.PrivateDrafts.MaterialRoot, localExecution)
 		info["review_reference_key"] = entryTerminalReferenceKey
+		if localExecution {
+			info["publisher_id"] = browserLocalPublisher(t, f, access)
+			info["database_directory"] = c.Database.Host
+			info["material_directory"] = c.PrivateDrafts.MaterialRoot
+		}
 	}
 	if os.Getenv("OJ_BROWSER_COLD_TLS") == "1" {
 		publicCA, err := os.ReadFile(ca.CAFile)
@@ -282,7 +294,7 @@ func TestBrowserFixture(t *testing.T) {
 	}
 	noRuntimeConnections(t, f, c.Database.ApplicationName)
 	sameRedisConnections(t, f, connections)
-	if expired {
+	if expired && !localExecution {
 		t.Fatal("browser fixture stopped without explicit completion")
 	}
 }

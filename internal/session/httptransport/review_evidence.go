@@ -103,7 +103,9 @@ func (h *handler) serveReviewRead(w http.ResponseWriter, r *http.Request, id, le
 			problemreference.ReviewEligibility
 			ApprovalEnabled bool `json:"approval_enabled,omitempty"`
 		}{status, h.reviewApprovals != nil}, status.Evidence
-		valid = e.Valid() && status.PolicyVersion == problemreference.ReviewPolicyVersion &&
+		validPolicy := (status.PolicyVersion == problemreference.ReviewPolicyVersion && status.LocalExecutionSHA256 == "") ||
+			(status.PolicyVersion == problemreference.LocalReviewPolicyVersion && problemdomain.ValidImportRevision(status.LocalExecutionSHA256))
+		valid = e.Valid() && validPolicy &&
 			problemdomain.ValidImportRevision(status.SnapshotSHA256) && status.Eligible == (len(status.Blockers) == 0)
 	case "evidence":
 		e, err = h.reviewEvidence.EvidenceForSubject(ctx, credential, expected, id)

@@ -43,7 +43,7 @@ func (tr browserReviewTransport) RoundTrip(request *http.Request) (*http.Respons
 // fixture. Reference-result seeding is synthetic; real Worker execution is a
 // separate test. Browser reads still cross the real HTTPS API and stores.
 func seedBrowserReview(t *testing.T, f *fixture, origin *url.URL, roots *x509.CertPool,
-	author, reviewer identity.Personal, access *identitypg.ProblemAccess, root string) (string, string, string) {
+	author, reviewer identity.Personal, access *identitypg.ProblemAccess, root string, localExecution bool) (string, string, string) {
 	t.Helper()
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots},
@@ -56,7 +56,12 @@ func seedBrowserReview(t *testing.T, f *fixture, origin *url.URL, roots *x509.Ce
 	pending := beginLogin(t, endpoint, author)
 	credential := completedCredential(t, loginCall(endpoint, "/api/v1/session/login/complete", "", []*http.Cookie{pending}, nil))
 	cookies := []*http.Cookie{{Name: transport.CookieName, Value: credential.Value()}}
-	source := entrySources(t, endpoint, cookies)[0]
+	var source problem.ImportSource
+	if localExecution {
+		source = browserLocalSource(t, endpoint, cookies)
+	} else {
+		source = entrySources(t, endpoint, cookies)[0]
+	}
 	imported := loginCall(endpoint, entryImportsPath, pinnedBody(t, "browser-review-materials-fixture", source.SourceID, source.ImportRevision), cookies, nil)
 	loginStatus(t, imported, 200)
 	var draft problem.ImportReceipt
@@ -81,6 +86,10 @@ func seedBrowserReview(t *testing.T, f *fixture, origin *url.URL, roots *x509.Ce
 	_, err = store.SetAssignment(f.ctx, problemreference.ReviewAssignmentChange{ReviewID: review.ID, ReviewerSubjectID: reviewer.ID,
 		ExpectedReviewerRevision: 1, Operator: "browser-fixture", Reason: "assign synthetic browser review"})
 	must(t, err)
+	if localExecution {
+		confirmBrowserLocalSolution(t, endpoint, cookies, author.ID, review)
+		return review.ID, draft.DraftID, ""
+	}
 	// Keep the real review fixture unapproved. The catalog fixture is a
 	// historical row with a different assignment, and cannot satisfy one
 	// of the ordinary review's authorization or execution predicates.

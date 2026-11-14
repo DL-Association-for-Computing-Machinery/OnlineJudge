@@ -59,14 +59,15 @@ func (s *ReviewStore) approval(ctx context.Context, actor identity.ProblemActor,
 		if intent.AssignmentRevision != item.evidence.AssignmentRevision {
 			return zero, problemreference.ErrReviewChanged
 		}
-		snapshot, snapshotErr := loadReviewEligibilitySnapshot(ctx, q, item)
+		snapshot, snapshotErr := s.loadReviewEligibilitySnapshot(ctx, tx, q, item)
 		if snapshotErr != nil {
 			return zero, snapshotErr
 		}
 		if err := problemreference.CheckReviewApprovalSnapshot(actor, snapshot, intent.SnapshotSHA256); err != nil {
 			return zero, err
 		}
-		approved, approvalErr := hasCurrentReviewApproval(ctx, q, material)
+		policy := s.policy()
+		approved, approvalErr := hasCurrentReviewApproval(ctx, q, material, policy)
 		if approvalErr != nil {
 			return zero, approvalErr
 		}
@@ -76,7 +77,7 @@ func (s *ReviewStore) approval(ctx context.Context, actor identity.ProblemActor,
 		row, err = q.InsertReviewApproval(ctx, referencedb.InsertReviewApprovalParams{
 			ReviewID: id, AssignmentRevision: intent.AssignmentRevision, ReviewerSubjectID: actor.SubjectID,
 			ReviewerRevision: item.roleRevision, RequestKey: key, MaterialSha256: material, SnapshotSha256: intent.SnapshotSHA256,
-			PolicyVersion: problemreference.ReviewPolicyVersion, Reason: intent.Reason, AuthGeneration: actor.AuthGeneration, RecoveryID: actor.RecoveryID,
+			PolicyVersion: policy, Reason: intent.Reason, AuthGeneration: actor.AuthGeneration, RecoveryID: actor.RecoveryID,
 		})
 		wrote = err == nil
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -119,9 +120,9 @@ func (s *ReviewStore) approval(ctx context.Context, actor identity.ProblemActor,
 
 // Call under the material lock shared by approve and return. A historical
 // approval cannot prevent a newly assigned reviewer from making a decision.
-func hasCurrentReviewApproval(ctx context.Context, q *referencedb.Queries, material string) (bool, error) {
+func hasCurrentReviewApproval(ctx context.Context, q *referencedb.Queries, material, policy string) (bool, error) {
 	approved, err := q.HasReviewApprovalForMaterial(ctx, referencedb.HasReviewApprovalForMaterialParams{
-		MaterialSha256: material, PolicyVersion: problemreference.ReviewPolicyVersion,
+		MaterialSha256: material, PolicyVersion: policy,
 	})
 	if err != nil {
 		return false, storageError{err}
