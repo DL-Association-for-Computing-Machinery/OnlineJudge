@@ -75,10 +75,12 @@ def arguments():
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--statement-corpus", type=Path, help="optional prepared bundle statements directory, renderer-only checks")
     mode.add_argument("--authorized-draft-bundle", type=Path, help="run real authorized previews for the pinned ten-problem private bundle")
-    mode.add_argument("--cold-firefox", type=Path, help="existing Playwright Firefox executable for strict cold HTTPS")
+    parser.add_argument("--cold-firefox", type=Path, help="existing Playwright Firefox for strict cold HTTPS, optionally with --session-devices")
     mode.add_argument("--review-materials", action="store_true", help="verify assigned reviewer material reads with the synthetic fixture")
     mode.add_argument("--m1-login-load", action="store_true", help="measure 100 complete browser logins over 60 seconds on the isolated fixture")
     mode.add_argument("--training-history", action="store_true", help="verify personal training history through ordinary HTTPS sessions")
+    mode.add_argument("--remembered-session", action="store_true", help="verify the account UI across Chromium profile restarts")
+    mode.add_argument("--session-devices", action="store_true", help="verify session replacement and revocation through the account UI")
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
     if args.trial_nginx_image and not args.m1_login_load:
@@ -122,8 +124,10 @@ def arguments():
     if args.chromium_executable:
         args.chromium_executable = local_path(args.chromium_executable, executable=True)
     if args.cold_firefox:
-        if args.chromium_executable:
-            raise ValueError("cold HTTPS requires Firefox only")
+        if args.chromium_executable or any((args.statement_corpus, args.authorized_draft_bundle,
+                                           args.review_materials, args.m1_login_load, args.training_history,
+                                           args.remembered_session)):
+            raise ValueError("cold Firefox is a standalone check or may be combined with --session-devices")
         args.cold_firefox = local_path(args.cold_firefox, executable=True)
     node = shutil.which("node")
     if not node:
@@ -285,6 +289,10 @@ def main():
             script_name, check_count = "m1-login-load.mjs", 2
         if args.training_history:
             script_name, check_count = "training-history-qa.mjs", 5
+        if args.remembered_session:
+            script_name, check_count = "remembered-session-qa.mjs", 3
+        if args.session_devices:
+            script_name, check_count = "session-devices-qa.mjs", 3
         qa_script = ROOT / "tests/browser" / script_name
         expected_checks = re.findall(r"^\s+passed\('([^'\n]+)'\)", qa_script.read_text(), re.M)
         if args.trial_firefox:
@@ -292,6 +300,8 @@ def main():
             check_count += 1
         if len(expected_checks) != check_count or len(set(expected_checks)) != check_count:
             raise ValueError("browser driver check contract changed")
+        if args.cold_firefox and args.session_devices:
+            expected_checks.insert(0, "fresh browser rejects the untrusted issuer")
         phase = "FRONTEND"
         print("Building assets with cached dependencies", flush=True)
         assets = out / "assets"
@@ -387,6 +397,8 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
             cold += ["-e", "OJ_BROWSER_TRIAL_NGINX=1"]
         if args.training_history:
             cold += ["-e", "OJ_BROWSER_TRAINING_HISTORY=1"]
+        if args.session_devices:
+            cold += ["-e", "OJ_BROWSER_SESSION_DEVICES=1"]
         process = subprocess.Popen([*docker.command, "exec", "-e", "OJ_BROWSER_ORIGIN=" + origin, "-e", "OJ_BROWSER_UI_DIR=/browser-assets", *cold, containers["test"], "sh", "/browser-fixture.sh"], stdout=handles[-1], stderr=subprocess.STDOUT)
         ready = wait_ready(process, fixture_log, origin, args.fixture_start_seconds)
         if args.trial_nginx_image:

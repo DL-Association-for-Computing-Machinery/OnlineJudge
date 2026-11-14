@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 logs=$(mktemp -d)
-trap 'rm -f "$logs/ordinary" "$logs/email-lifecycle"; rmdir "$logs"' EXIT
+trap 'rm -f "$logs/ordinary" "$logs/email-lifecycle" "$logs/email-archive-recovery"; rmdir "$logs"' EXIT
 
 python3 -B scripts/test-session-protocol.py "$@" --suite ordinary >"$logs/ordinary" 2>&1 &
 ordinary=$!
@@ -20,6 +20,9 @@ report() {
         result=1
     fi
 }
-report ordinary "$ordinary"
 report email-lifecycle "$email"
+python3 -B scripts/test-session-protocol.py "$@" --suite email-archive-recovery >"$logs/email-archive-recovery" 2>&1 &
+archive=$!
+report ordinary "$ordinary"
+report email-archive-recovery "$archive"
 exit "$result"

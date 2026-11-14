@@ -19,6 +19,10 @@ func loginOperation(path string) string {
 		return "complete"
 	case "/api/v1/session/login/abandon":
 		return "abandon"
+	case PendingDevicesPath:
+		return "devices"
+	case ReplaceDevicePath:
+		return "replace_device"
 	default:
 		return "unknown"
 	}

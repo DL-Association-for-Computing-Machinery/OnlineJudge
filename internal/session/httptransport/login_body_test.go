@@ -14,7 +14,7 @@ func TestLoginBodyPreservesAndBoundsStrings(t *testing.T) {
 	}{
 		{"valid", `{"email":"Person@example.invalid","password":"密\\码😀"}`, "application/json", 200, "密\\码😀"},
 		{"duplicate", `{"email":"a@example.invalid","password":"a","password":"b"}`, "application/json", 400, ""},
-		{"unknown", `{"email":"a@example.invalid","password":"a","remember":true}`, "application/json", 400, ""},
+		{"unknown", `{"email":"a@example.invalid","password":"a","extra":true}`, "application/json", 400, ""},
 		{"missing", `{"email":"a@example.invalid"}`, "application/json", 400, ""},
 		{"null", `{"email":"a@example.invalid","password":null}`, "application/json", 400, ""},
 		{"array", `[]`, "application/json", 400, ""},
@@ -30,9 +30,9 @@ func TestLoginBodyPreservesAndBoundsStrings(t *testing.T) {
 			r := httptest.NewRequest("POST", "https://example.invalid", strings.NewReader(tc.body))
 			r.Header.Set("Content-Type", tc.media)
 			w := httptest.NewRecorder()
-			email, secret, err := loginBody(w, r)
+			email, secret, remember, err := loginBody(w, r)
 			if tc.status == 200 {
-				if err != nil || email.Key() != "person@example.invalid" || string(secret) != tc.secret {
+				if err != nil || remember || email.Key() != "person@example.invalid" || string(secret) != tc.secret {
 					t.Fatal("decoded credential strings changed")
 				}
 			} else if err == nil || w.Code != tc.status || len(secret) != 0 || email.Valid() {

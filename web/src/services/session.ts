@@ -5,8 +5,8 @@ export interface SessionView {
   absolute_deadline: string
 }
 
-export type AccountOperation = 'read' | 'activity' | 'logout' | 'begin' | 'local-begin' | 'complete' | 'abandon' | 'password'
-export type AccountInput = { email: string; password: string } | { current_password: string; new_password: string }
+export type AccountOperation = 'read' | 'activity' | 'logout' | 'begin' | 'local-begin' | 'complete' | 'abandon' | 'password' | 'replace-device'
+export type AccountInput = { email: string; password: string; remember?: boolean } | { current_password: string; new_password: string } | { device: string }
 
 const endpoints: Record<AccountOperation, { path: string; method: 'GET' | 'POST'; status: number }> = {
   read: { path: '/api/v1/session', method: 'GET', status: 200 },
@@ -17,6 +17,7 @@ const endpoints: Record<AccountOperation, { path: string; method: 'GET' | 'POST'
   complete: { path: '/api/v1/session/login/complete', method: 'POST', status: 204 },
   abandon: { path: '/api/v1/session/login/abandon', method: 'POST', status: 204 },
   password: { path: '/api/v1/account/password', method: 'POST', status: 204 },
+  'replace-device': { path: '/api/v1/session/login/replace-device', method: 'POST', status: 204 },
 }
 
 // Messages are local constants. Never render response titles, HTML or caught
@@ -51,6 +52,7 @@ const codes: Record<AccountOperation, readonly string[]> = {
   begin: ['INVALID_LOGIN', 'LOGIN_ATTEMPT_INVALID', 'LOGIN_PENDING', 'ALREADY_AUTHENTICATED', 'LOGIN_REJECTED', 'LOGIN_RATE_LIMITED', 'BODY_TOO_LARGE', 'UNSUPPORTED_MEDIA_TYPE'],
   'local-begin': ['INVALID_LOGIN', 'LOGIN_ATTEMPT_INVALID', 'LOGIN_PENDING', 'ALREADY_AUTHENTICATED', 'LOGIN_REJECTED', 'LOGIN_RATE_LIMITED', 'BODY_TOO_LARGE', 'UNSUPPORTED_MEDIA_TYPE'],
   complete: ['LOGIN_ATTEMPT_INVALID', 'ALREADY_AUTHENTICATED', 'SESSION_LIMIT', 'LOGIN_ATTEMPT_CONFLICT', 'LOGIN_REJECTED', 'LOGIN_RATE_LIMITED'],
+  'replace-device': ['LOGIN_ATTEMPT_INVALID', 'ALREADY_AUTHENTICATED', 'SESSION_LIMIT', 'LOGIN_ATTEMPT_CONFLICT', 'LOGIN_REJECTED', 'LOGIN_RATE_LIMITED'],
   abandon: ['LOGIN_ATTEMPT_INVALID', 'LOGIN_ATTEMPT_CONFLICT', 'LOGIN_REJECTED', 'LOGIN_RATE_LIMITED'],
   password: ['WEAK_PASSWORD', 'INVALID_NEW_PASSWORD', 'INVALID_PASSWORD_INPUT', 'PASSWORD_UNCHANGED', 'INVALID_PASSWORD_CHANGE', 'PASSWORD_CHANGE_CONFLICT', 'PASSWORD_CHANGE_REJECTED', 'PASSWORD_CHANGE_RATE_LIMITED', 'BODY_TOO_LARGE', 'UNSUPPORTED_MEDIA_TYPE'],
 }
@@ -98,6 +100,116 @@ function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+export interface SessionDevice extends Omit<SessionView, 'subject_id'> {
+  id: string
+  current: boolean
+}
+
+export interface SessionDevices {
+  subject_id: string
+  devices: SessionDevice[]
+}
+
+const deviceID = /^[a-f0-9]{64}$/
+const devicesPath = '/api/v1/session/devices'
+
+function deviceList(value: unknown): SessionDevices {
+  if (!record(value) || Object.keys(value).length !== 2 || typeof value.subject_id !== 'string' ||
+      !Array.isArray(value.devices) || value.devices.length < 1 || value.devices.length > 3) throw unknownResult()
+  return { subject_id: value.subject_id, devices: deviceRows(value.devices, value.subject_id, 1) }
+}
+
+function deviceRows(rows: unknown[], subject: string, currentCount: number): SessionDevice[] {
+  const ids = new Set<string>()
+  let current = 0
+  const devices = rows.map(row => {
+    if (!record(row) || Object.keys(row).length !== 5 || typeof row.id !== 'string' ||
+        !deviceID.test(row.id) || ids.has(row.id) || typeof row.current !== 'boolean') throw unknownResult()
+    ids.add(row.id)
+    if (row.current) current++
+    const { created_at, idle_expires_at, absolute_deadline } = sessionView({
+      subject_id: subject, created_at: row.created_at,
+      idle_expires_at: row.idle_expires_at, absolute_deadline: row.absolute_deadline,
+    })
+    return { id: row.id, current: row.current, created_at, idle_expires_at, absolute_deadline }
+  })
+  if (current !== currentCount) throw unknownResult()
+  return devices
+}
+
+export async function pendingDevicesRequest(signal: AbortSignal): Promise<SessionDevice[]> {
+  requireHTTPS()
+  try {
+    const res = await fetch('/api/v1/session/login/devices', accountFetchOptions('POST', signal))
+    if (res.status !== 200 || res.headers.get('Content-Type')?.split(';')[0].trim() !== 'application/json') {
+      await res.body?.cancel().catch(() => undefined)
+      throw unknownResult()
+    }
+    const result = await boundedJSON(res)
+    if (!record(result) || Object.keys(result).length !== 1 || !Array.isArray(result.devices) || result.devices.length !== 3) throw unknownResult()
+    return deviceRows(result.devices, '0'.repeat(32), 0)
+  } catch {
+    throw unknownResult()
+  }
+}
+
+type DeviceRevocation = { current: string; target?: string }
+
+export function sessionDevicesRequest(signal: AbortSignal): Promise<SessionDevices>
+export function sessionDevicesRequest(signal: AbortSignal, revoke: DeviceRevocation): Promise<void>
+export async function sessionDevicesRequest(signal: AbortSignal, revoke?: DeviceRevocation): Promise<SessionDevices | void> {
+  requireHTTPS()
+  const headers: Record<string, string> = { Accept: 'application/json, application/problem+json' }
+  if (revoke) {
+    if (!deviceID.test(revoke.current) || (revoke.target !== undefined && !deviceID.test(revoke.target))) throw unknownResult()
+    headers['X-OJ-Session-Device'] = revoke.current
+    if (revoke.target !== undefined) headers['Content-Type'] = 'text/plain'
+  }
+  try {
+    const res = await fetch(devicesPath + (revoke ? (revoke.target ? '/revoke' : '/revoke-others') : ''), {
+      ...accountFetchOptions(revoke ? 'POST' : 'GET', signal), headers, body: revoke?.target,
+    })
+    if (revoke && res.status === 204) {
+      await boundedBytes(res, 0)
+      return
+    }
+    const type = res.headers.get('Content-Type')?.split(';')[0].trim()
+    if (!revoke && res.status === 200 && type === 'application/json') return deviceList(await boundedJSON(res))
+    if (type === 'application/problem+json' && [401, 404, 409].includes(res.status)) {
+      const body = await boundedJSON(res)
+      if (record(body) && body.type === 'about:blank' && body.status === res.status) {
+        if (res.status === 401 && body.code === 'SESSION_REQUIRED') throw new AccountError('refused', body.code, refusals.SESSION_REQUIRED[1])
+        if (res.status === 404 && body.code === 'NOT_FOUND') throw new AccountError('refused', body.code, '此入口尚未启用管理其他会话。')
+        if (revoke && ((res.status === 409 && body.code === 'DEVICE_SESSION_CHANGED') ||
+            (res.status === 404 && body.code === 'DEVICE_NOT_FOUND'))) {
+          throw new AccountError('refused', body.code, '会话已变化，请重新读取列表。')
+        }
+      }
+    } else {
+      await res.body?.cancel().catch(() => undefined)
+    }
+    throw unknownResult()
+  } catch (error) {
+    if (error instanceof AccountError) throw error
+    throw unknownResult()
+  }
+}
+
+function requireHTTPS() {
+  if (globalThis.location.protocol !== 'https:') {
+    throw new AccountError('insecure', 'HTTPS_REQUIRED', '账号操作需要 HTTPS，请通过安全入口访问。')
+  }
+}
+
+function accountFetchOptions(method: 'GET' | 'POST', signal: AbortSignal): RequestInit {
+  return {
+    method, mode: 'same-origin', credentials: 'same-origin', cache: 'no-store', redirect: 'error',
+    // Firefox needs origin policy for a non-null Origin on same-origin POST.
+    referrerPolicy: method === 'POST' ? 'origin' : 'no-referrer',
+    signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
+  }
+}
+
 function sessionView(value: unknown): SessionView {
   if (!record(value) || Object.keys(value).length !== 4 ||
       typeof value.subject_id !== 'string' || !/^[a-f0-9]{32}$/.test(value.subject_id)) throw unknownResult()
@@ -118,23 +230,16 @@ export async function accountRequest(operation: Exclude<AccountOperation, 'read'
 export async function accountRequest(operation: AccountOperation, signal: AbortSignal, input?: AccountInput): Promise<SessionView | void> {
   // A localhost exception for Secure cookies is not permission to send passwords
   // over HTTP. Gate before constructing or submitting a body.
-  if (globalThis.location.protocol !== 'https:') {
-    throw new AccountError('insecure', 'HTTPS_REQUIRED', '账号操作需要 HTTPS，请通过安全入口访问。')
-  }
+  requireHTTPS()
   const endpoint = endpoints[operation]
+  const replacement = operation === 'replace-device'
+  const device = input && 'device' in input ? input.device : undefined
+  if (replacement && (!device || !deviceID.test(device))) throw unknownResult()
   try {
     const response = await fetch(endpoint.path, {
-      method: endpoint.method,
-      mode: 'same-origin',
-      credentials: 'same-origin',
-      cache: 'no-store',
-      redirect: 'error',
-      // Firefox serializes the Origin as null for POST with no-referrer.
-      // Keep the origin needed by the server without sending a page path.
-      referrerPolicy: endpoint.method === 'POST' ? 'origin' : 'no-referrer',
-      signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
-      headers: input ? { 'Content-Type': 'application/json', Accept: 'application/json, application/problem+json' } : { Accept: 'application/json, application/problem+json' },
-      ...(input ? { body: JSON.stringify(input) } : {}),
+      ...accountFetchOptions(endpoint.method, signal),
+      headers: input ? { 'Content-Type': replacement ? 'text/plain' : 'application/json', Accept: 'application/json, application/problem+json' } : { Accept: 'application/json, application/problem+json' },
+      ...(input ? { body: replacement ? device : JSON.stringify(input) } : {}),
     })
     if (response.status === endpoint.status) {
       if (operation !== 'read' && operation !== 'activity') {

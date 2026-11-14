@@ -25,7 +25,7 @@ func (missingPublicationObjects) Open(context.Context, materialstore.Object) (*m
 
 func TestPublicationCatalogLocalChain(t *testing.T) {
 	f, e := publicationApprovalFixture(t)
-	_, err := f.provider.DownTo(f.ctx, 27)
+	_, err := f.provider.DownTo(f.ctx, 28)
 	must(t, err)
 	_, err = f.provider.Up(f.ctx)
 	must(t, err)
@@ -185,7 +185,7 @@ func TestPublicationCatalogLocalChain(t *testing.T) {
 	if !strings.Contains(lookupPlan, "problem_publications_pkey") {
 		t.Fatalf("latest revision lookup did not use the composite primary key: %s", lookupPlan)
 	}
-	_, err = f.provider.DownTo(f.ctx, 27)
+	_, err = f.provider.DownTo(f.ctx, 28)
 	if err == nil || !strings.Contains(err.Error(), "cannot discard publication history") {
 		t.Fatalf("rollback did not preserve publication history: %v", err)
 	}

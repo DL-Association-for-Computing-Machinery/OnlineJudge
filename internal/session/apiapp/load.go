@@ -20,7 +20,7 @@ var (
 	ErrShutdown      = errors.New("session API shutdown incomplete")
 )
 
-// Lookup supplies only the two fixed password environment names, never arbitrary
+// Lookup supplies only fixed password environment names, never arbitrary
 // names from JSON. An explicit none mode rejects leftover nonempty credentials.
 type Lookup func(string) (string, bool)
 
@@ -39,6 +39,12 @@ func loadConfig(ctx context.Context, path string, lookup Lookup) (apiconfig.Conf
 	c.Runtime.Redis.Password, err = password(c.RedisAuth, "OJ_SESSION_REDIS_PASSWORD", lookup)
 	if err != nil {
 		return apiconfig.Config{}, err
+	}
+	if intake := c.Runtime.EmailIntake; intake != nil {
+		intake.BudgetDatabase.Password, err = password(c.EmailBudgetAuth, "OJ_SESSION_EMAIL_BUDGET_DATABASE_PASSWORD", lookup)
+		if err != nil {
+			return apiconfig.Config{}, err
+		}
 	}
 	return c, nil
 }
@@ -97,6 +103,12 @@ func loadTLS(c *apiconfig.Config) (*tls.Config, error) {
 	c.Runtime.Redis.TLS, err = storageTLS(c.Runtime.RedisSecurity, c.RedisTLS)
 	if err != nil {
 		return nil, err
+	}
+	if intake := c.Runtime.EmailIntake; intake != nil {
+		intake.BudgetDatabase.TLS, err = storageTLS(intake.BudgetDatabase.Security, c.EmailBudgetTLS)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return server, nil
 }

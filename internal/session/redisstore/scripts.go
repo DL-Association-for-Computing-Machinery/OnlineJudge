@@ -23,8 +23,29 @@ var checkLua string
 //go:embed lua/read.lua
 var readLua string
 
+//go:embed lua/devices.lua
+var devicesLua string
+
+//go:embed lua/device_snapshot.lua
+var deviceSnapshotLua string
+
+//go:embed lua/device_selection.lua
+var deviceSelectionLua string
+
+//go:embed lua/pending_devices.lua
+var pendingDevicesLua string
+
+//go:embed lua/replace_device.lua
+var replaceDeviceLua string
+
+//go:embed lua/revoke_devices.lua
+var revokeDevicesLua string
+
 //go:embed lua/touch.lua
 var touchLua string
+
+//go:embed lua/rotate.lua
+var rotateLua string
 
 //go:embed lua/abandon.lua
 var abandonLua string
@@ -38,15 +59,27 @@ func luaScript(op string) string {
 		flags, body = "no-writes,no-cluster", checkLua
 	case "read":
 		flags, body = "no-writes,no-cluster", readLua
+	case "devices":
+		flags, body = "no-writes,no-cluster", devicesLua+deviceSnapshotLua+"\nreturn {1,unpack(records)}"
+	case "revoke-devices":
+		body = devicesLua + deviceSnapshotLua + deviceSelectionLua + revokeDevicesLua
+	case "pending-devices":
+		flags, body = "no-writes,no-cluster", pendingDevicesLua+deviceSnapshotLua+pendingFullLua+"return {1,unpack(records)}"
+	case "replace-device":
+		body = pendingDevicesLua + deviceSnapshotLua + pendingFullLua + deviceSelectionLua + replaceDeviceLua
 	case "retry":
 		body = retryLua
 	case "touch":
 		body = touchLua
+	case "rotate":
+		body = rotateLua
 	case "abandon":
 		body = abandonLua
 	}
 	return "#!lua flags=" + flags + "\n-- session-protocol:" + op + "\n" + commonLua + "\n" + body
 }
+
+const pendingFullLua = "if #records ~= 3 then return {3} end\nif redis.call('PEXPIRETIME',KEYS[2]) < tonumber(records[3][10]) then return {3} end\n"
 
 func (s *Store) keys(a *Attempt) []string {
 	group := a.state.ID + ":" + strconv.FormatInt(a.state.AuthGeneration, 10) + ":" + a.state.RecoveryID
@@ -62,8 +95,12 @@ func (s *Store) args(a *Attempt) []any {
 // binding detects field drift, not malicious Redis writes or rollback. Fixed
 // order plus standard-library length prefixes keeps the digest input unambiguous.
 func binding(a *Attempt) string {
+	return recordBinding(a, digest(a.credential.token))
+}
+
+func recordBinding(a *Attempt, tokenDigest string) string {
 	var data []byte
-	for _, field := range []string{"ordinary-v1", a.namespace, digest(a.credential.token), a.state.ID,
+	for _, field := range []string{"ordinary-v1", a.namespace, tokenDigest, a.state.ID,
 		strconv.FormatInt(a.state.CredentialVersion, 10), strconv.FormatInt(a.state.AuthGeneration, 10), a.state.RecoveryID,
 		strconv.FormatInt(a.created, 10), strconv.FormatInt(a.absolute, 10), strconv.FormatInt(a.initial, 10)} {
 		data = binary.AppendUvarint(data, uint64(len(field)))

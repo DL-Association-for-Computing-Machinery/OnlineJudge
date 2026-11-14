@@ -137,7 +137,7 @@ func TestPublisherAndReviewGatesShareCallerLocks(t *testing.T) {
 
 func TestPublisherMigrationProtectsAuditAndLookupUsesPrimaryKey(t *testing.T) {
 	f := newDraftFixture(t)
-	_, err := f.provider.DownTo(f.ctx, 26)
+	_, err := f.provider.DownTo(f.ctx, 27)
 	must(t, err)
 	if db.CheckSchema(f.ctx, f.a) == nil {
 		t.Fatal("startup accepted previous schema")
@@ -146,11 +146,11 @@ func TestPublisherMigrationProtectsAuditAndLookupUsesPrimaryKey(t *testing.T) {
 	must(t, err)
 	_, err = f.access.SetPublisherRole(f.ctx, publisherChange(f.actor.SubjectID, 0, true))
 	must(t, err)
-	_, err = f.provider.DownTo(f.ctx, 26)
+	_, err = f.provider.DownTo(f.ctx, 27)
 	if err == nil || !strings.Contains(err.Error(), "cannot discard publisher history") {
 		t.Fatalf("rollback did not protect publisher audit: %v", err)
 	}
-	// Empty newer migrations can be removed before Down27 refuses.
+	// Empty newer migrations can be removed before Down28 refuses.
 	_, err = f.provider.Up(f.ctx)
 	must(t, err)
 	must(t, db.CheckSchema(f.ctx, f.a))

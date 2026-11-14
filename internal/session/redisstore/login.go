@@ -61,10 +61,15 @@ func (l *Login) Origin() string {
 // A dropped response therefore consumes no session slot. Any gate/seal failure
 // returns no continuation, although a password upgrade may already have committed.
 func (l *Login) Prepare(ctx context.Context, email identity.Email, secret []byte) (Continuation, error) {
+	return l.PrepareWithPersistence(ctx, email, secret, false)
+}
+
+// PrepareWithPersistence freezes the selected profile in the sealed candidate.
+func (l *Login) PrepareWithPersistence(ctx context.Context, email identity.Email, secret []byte, remember bool) (Continuation, error) {
 	if l == nil || l.store == nil {
 		return Continuation{}, ErrInvalid
 	}
-	a, err := l.store.prepare(ctx, email, secret, l.window, false)
+	a, err := l.store.prepare(ctx, email, secret, l.window, false, remember)
 	if err != nil {
 		return Continuation{}, err
 	}
@@ -85,14 +90,34 @@ func (l *Login) Prepare(ctx context.Context, email identity.Email, secret []byte
 // and current authorities. An error never publishes a credential. Concurrent or
 // repeated calls can return the same token, not an exactly-once HTTP response.
 func (l *Login) Complete(ctx context.Context, c Continuation) (Credential, error) {
+	result, err := l.CompleteGrant(ctx, c)
+	return result.Credential, err
+}
+
+// LoginGrant is returned only after independently checking admission.
+// A nonzero PersistentUntil is the original deadline for a persistent cookie.
+type LoginGrant struct {
+	Credential      Credential
+	PersistentUntil time.Time
+}
+
+// CompleteGrant confirms the original admission and returns its cookie policy.
+func (l *Login) CompleteGrant(ctx context.Context, c Continuation) (LoginGrant, error) {
 	a, err := l.open(c)
 	if err != nil {
-		return Credential{}, err
+		return LoginGrant{}, err
 	}
 	if err = l.store.Retry(ctx, a); err != nil {
-		return Credential{}, err
+		return LoginGrant{}, err
 	}
-	return l.store.Check(ctx, a)
+	return l.checkGrant(ctx, a)
+}
+
+func (l *Login) checkGrant(ctx context.Context, a *Attempt) (LoginGrant, error) {
+	if _, err := l.store.Check(ctx, a); err != nil {
+		return LoginGrant{}, err
+	}
+	return grantFor(a), nil
 }
 
 // Abandon tombstones only this candidate, including after its login window.

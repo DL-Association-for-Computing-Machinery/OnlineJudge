@@ -23,6 +23,8 @@ type Config struct {
 	MinimumPasswordCharacters  int
 	EmailBlocklistFile         string
 	EmailMinimumCharacters     int
+	EmailBudgetAuth            string
+	EmailBudgetTLS             Material
 }
 
 // Material names explicit TLS files; Parse validates only their lexical paths.

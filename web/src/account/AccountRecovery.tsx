@@ -1,7 +1,20 @@
+import { useEffect } from 'react'
 import { useCurrentAccount } from './context'
+import { PendingDeviceChoice } from './PendingDeviceChoice'
 
 export function AccountRecovery({ compact = false }: { compact?: boolean }) {
   const { state, controller } = useCurrentAccount()
+  useEffect(() => {
+    const clear = controller.revokePrivateGeneration
+    const visibility = () => { if (document.visibilityState === 'hidden') clear() }
+    document.addEventListener('visibilitychange', visibility)
+    window.addEventListener('pagehide', clear)
+    return () => {
+      document.removeEventListener('visibilitychange', visibility)
+      window.removeEventListener('pagehide', clear)
+      clear()
+    }
+  }, [controller])
   const secure = state.status !== 'insecure'
   const disabled = state.busy || !secure || state.status === 'unavailable'
   const controls = <>
@@ -13,6 +26,13 @@ export function AccountRecovery({ compact = false }: { compact?: boolean }) {
     </div>
   </>
   return <div className="account-recovery">
+    {state.pendingFull && <>
+      <p>会话已满。可读取有效会话，选择退出其中一条后继续本次登录。</p>
+      <button type="button" className="button-neutral" disabled={disabled}
+        onClick={() => void controller.run('pending-devices')}>读取可替换会话</button>
+      {state.pendingDevices && <PendingDeviceChoice devices={state.pendingDevices} disabled={disabled}
+        replace={id => void controller.run('replace-device', { device: id })} />}
+    </>}
     {compact && state.status !== 'unknown' ? <details><summary>登录中断？</summary><div className="disclosure-content">{controls}</div></details> : <>
       <button type="button" className="button-neutral" disabled={state.busy || !secure} onClick={() => void controller.run('check')}>检查当前会话</button>
       {state.status === 'unknown' ? <button type="button" className="button-neutral" disabled={disabled} onClick={() => void controller.run('logout')}>确认退出当前会话</button> : null}

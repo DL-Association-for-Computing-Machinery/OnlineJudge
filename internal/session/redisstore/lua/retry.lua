@@ -8,14 +8,13 @@ if code == 1 then
 end
 if code ~= 0 then return {code} end
 local created,absolute,initial = stamp(ARGV[6]),stamp(ARGV[7]),stamp(ARGV[8])
-if not created or not absolute or not initial or created > now or absolute-created ~= absoluteLimit
-  or initial-created ~= idleLimit then return {3} end
+if not validProfile(created,absolute,initial) then return {3} end
 if absolute <= now or initial <= now then return {2} end
 if not indexType() then return {3} end
 if kind(KEYS[2]) == 'zset' then
   if redis.call('ZCARD',KEYS[2]) > 3 then return {3} end
   local latest = redis.call('ZREVRANGE',KEYS[2],0,0,'WITHSCORES')
-  if #latest == 2 and tonumber(latest[2]) > now+idleLimit then return {3} end
+  if #latest == 2 and tonumber(latest[2]) > now and not latestIndexValid(latest) then return {3} end
 end
 redis.call('ZREMRANGEBYSCORE',KEYS[2],'-inf',now)
 if redis.call('ZCARD',KEYS[2]) >= 3 then return {4} end

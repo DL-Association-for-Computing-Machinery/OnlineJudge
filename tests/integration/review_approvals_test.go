@@ -81,7 +81,7 @@ func TestReviewApprovalRejectsBlockedSnapshotAndRecoversOriginalKey(t *testing.T
 func TestReviewApprovalLedgerBindsAssignmentAndRetainsAudit(t *testing.T) {
 	f := newReviewFixture(t)
 	must(t, db.CheckSchema(f.ctx, f.a))
-	_, err := f.provider.DownTo(f.ctx, 25)
+	_, err := f.provider.DownTo(f.ctx, 26)
 	must(t, err)
 	if db.CheckSchema(f.ctx, f.a) == nil {
 		t.Fatal("startup accepted schema without the approval ledger")
@@ -111,7 +111,7 @@ func TestReviewApprovalLedgerBindsAssignmentAndRetainsAudit(t *testing.T) {
 	assertCode(write(2, "approval-original-key"), "23503")
 	must(t, write(1, "approval-original-key"))
 	assertCode(write(1, "approval-different-key"), "23505")
-	_, err = f.provider.DownTo(f.ctx, 25)
+	_, err = f.provider.DownTo(f.ctx, 26)
 	assertCode(err, "P0001")
 	// The empty publisher ledger can roll back before the protected approval
 	// migration refuses. Restore the current schema before testing startup.

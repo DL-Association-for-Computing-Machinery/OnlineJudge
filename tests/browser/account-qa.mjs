@@ -126,6 +126,8 @@ const problem = (status, code) => ({ status, contentType: 'application/problem+j
     await page.keyboard.press('Tab')
     assert(await page.getByLabel('密码', { exact: true }).evaluate(el => el === document.activeElement), 'Keyboard reaches password')
     await page.keyboard.press('Tab')
+    assert(await page.getByRole('checkbox', { name: /在此设备上保持登录/ }).evaluate(el => el === document.activeElement && !el.checked), 'Keyboard reaches the unchecked remember option')
+    await page.keyboard.press('Tab')
     assert(await page.getByRole('button', { name: '登录', exact: true }).evaluate(el => el === document.activeElement), 'Keyboard reaches login')
     passed('page identity, meaningful screen, no overlay, keyboard flow, mount read only')
 

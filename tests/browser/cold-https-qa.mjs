@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
-import net from 'node:net'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { setTimeout as delay } from 'node:timers/promises'
+import { firefoxTrust } from './firefox-trust.mjs'
 
 const require = createRequire(import.meta.url)
 const { firefox } = require(process.env.OJ_PLAYWRIGHT_MODULE)
@@ -105,29 +105,12 @@ async function verifyAuthorWrites(page) {
   report.screenshots.push(screenshot)
 }
 
-// The fixture is the sole direct origin. This local proxy never forwards any
-// traffic; page events detect foreign resources without intercepting requests
-// or changing the browser's native Origin and Fetch Metadata behavior.
-const deny = net.createServer(socket => socket.destroy())
-await new Promise((resolve, reject) => { deny.once('error', reject); deny.listen(0, '127.0.0.1', resolve) })
-const proxy = { server: `http://127.0.0.1:${deny.address().port}`, bypass: '127.0.0.1' }
-const policy = path.join(output, 'firefox-policy.json')
-await fs.writeFile(policy, JSON.stringify({ policies: { Certificates: {
-  ImportEnterpriseRoots: false, Install: [process.env.OJ_BROWSER_CA_FILE],
-} } }), { flag: 'wx' })
-
-function launch(trusted) {
-  const env = { ...process.env }
-  delete env.PLAYWRIGHT_FIREFOX_POLICIES_JSON
-  if (trusted) env.PLAYWRIGHT_FIREFOX_POLICIES_JSON = policy
-  return firefox.launch({ executablePath: process.env.OJ_FIREFOX_EXECUTABLE, headless: true, proxy,
-    env, firefoxUserPrefs: { 'security.enterprise_roots.enabled': false } })
-}
+const trust = await firefoxTrust(firefox, output)
 
 let browser
 let phase = 'untrusted issuer control'
 try {
-  browser = await launch(false)
+  browser = await trust.launch(false)
   const control = await browser.newContext({ ignoreHTTPSErrors: false })
   const negative = await control.newPage()
   // Firefox can reject navigation without exposing its internal error page.
@@ -138,7 +121,7 @@ try {
   passed('fresh browser rejects the untrusted issuer')
 
   phase = 'launch trusted browser'
-  browser = await launch(true)
+  browser = await trust.launch(true)
   for (const [name, viewport] of [['desktop', { width: 1280, height: 960 }], ['mobile', { width: 390, height: 844 }]]) {
     phase = `${name} cold load`
     const context = await browser.newContext({ viewport, ignoreHTTPSErrors: false, serviceWorkers: 'block' })
@@ -199,6 +182,6 @@ try {
   process.exitCode = 1
 } finally {
   if (browser) await browser.close()
-  await new Promise(resolve => deny.close(resolve))
+  await trust.close()
   await fs.writeFile(path.join(output, 'browser-qa.json'), JSON.stringify(report))
 }

@@ -16,6 +16,10 @@ import (
 
 func testEntry(t *testing.T, f *fixture) {
 	binary := entryBinary(t)
+	t.Run("rotate personal session across replicas", func(t *testing.T) { testRotationEntry(t, f, binary) })
+	t.Run("remembered login shares ordinary quota", func(t *testing.T) { testRememberedEntry(t, f, binary) })
+	t.Run("replace one full login device", func(t *testing.T) { testPendingDeviceReplacement(t, f, binary) })
+	t.Run("own active devices over HTTPS", func(t *testing.T) { testEntryDevices(t, f, binary) })
 	t.Run("private draft HTTP", func(t *testing.T) { testEntryPrivateDrafts(t, f, binary) })
 	t.Run("personal training history HTTP", func(t *testing.T) { testEntryTrainingHistory(t, f, binary) })
 	t.Run("training intake from an ordinary session", func(t *testing.T) { testTrainingIntake(t, f, binary) })

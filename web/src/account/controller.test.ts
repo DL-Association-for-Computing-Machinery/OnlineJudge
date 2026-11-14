@@ -27,6 +27,29 @@ beforeEach(() => vi.stubGlobal('location', { protocol: 'https:' }))
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
 describe('browser account lifecycle', () => {
+  it('selects one pending session explicitly and never repeats an uncertain exchange', async () => {
+    const { controller, fetch } = await ready(problem(401, 'SESSION_REQUIRED'))
+    fetch.mockResolvedValueOnce(empty(202)).mockResolvedValueOnce(problem(409, 'SESSION_LIMIT'))
+    await controller.run('login', input)
+    expect(controller.getSnapshot()).toMatchObject({ status: 'unknown', pendingFull: true })
+    const device = 'b'.repeat(64)
+    await controller.run('replace-device', { device })
+    expect(fetch).toHaveBeenCalledTimes(3)
+    const { created_at, idle_expires_at, absolute_deadline } = view
+    fetch.mockResolvedValueOnce(Response.json({ devices: [device, 'c'.repeat(64), 'd'.repeat(64)].map(id => ({
+      id, current: false, created_at, idle_expires_at, absolute_deadline,
+    })) })).mockResolvedValueOnce(problem(503, 'LOGIN_UNAVAILABLE'))
+    await controller.run('pending-devices')
+    await controller.run('replace-device', { device })
+    await controller.run('replace-device', { device })
+    expect(fetch.mock.calls.at(-1)).toEqual(['/api/v1/session/login/replace-device', expect.objectContaining({ method: 'POST', body: device })])
+    expect(fetch).toHaveBeenCalledTimes(5)
+    expect(controller.getSnapshot()).toMatchObject({ status: 'unknown', notice: { tone: 'uncertain' } })
+    expect(controller.getSnapshot().pendingDevices).toBeUndefined()
+    fetch.mockResolvedValueOnce(empty()).mockResolvedValueOnce(Response.json(view))
+    await controller.run('complete')
+    expect(controller.getSnapshot().status).toBe('authenticated')
+  })
   it('invalidates before a credential write and again after an unknown result; reads never broadcast', async () => {
     const notify = vi.spyOn(privateInvalidation, 'invalidatePrivateContent')
     const { controller, fetch } = await ready(Response.json(view))
