@@ -26,6 +26,18 @@ var readLua string
 //go:embed lua/devices.lua
 var devicesLua string
 
+//go:embed lua/device_snapshot.lua
+var deviceSnapshotLua string
+
+//go:embed lua/device_selection.lua
+var deviceSelectionLua string
+
+//go:embed lua/pending_devices.lua
+var pendingDevicesLua string
+
+//go:embed lua/replace_device.lua
+var replaceDeviceLua string
+
 //go:embed lua/revoke_devices.lua
 var revokeDevicesLua string
 
@@ -45,9 +57,13 @@ func luaScript(op string) string {
 	case "read":
 		flags, body = "no-writes,no-cluster", readLua
 	case "devices":
-		flags, body = "no-writes,no-cluster", devicesLua+"\nreturn {1,unpack(records)}"
+		flags, body = "no-writes,no-cluster", devicesLua+deviceSnapshotLua+"\nreturn {1,unpack(records)}"
 	case "revoke-devices":
-		body = devicesLua + "\n" + revokeDevicesLua
+		body = devicesLua + deviceSnapshotLua + deviceSelectionLua + revokeDevicesLua
+	case "pending-devices":
+		flags, body = "no-writes,no-cluster", pendingDevicesLua+deviceSnapshotLua+pendingFullLua+"return {1,unpack(records)}"
+	case "replace-device":
+		body = pendingDevicesLua + deviceSnapshotLua + pendingFullLua + deviceSelectionLua + replaceDeviceLua
 	case "retry":
 		body = retryLua
 	case "touch":
@@ -57,6 +73,8 @@ func luaScript(op string) string {
 	}
 	return "#!lua flags=" + flags + "\n-- session-protocol:" + op + "\n" + commonLua + "\n" + body
 }
+
+const pendingFullLua = "if #records ~= 3 then return {3} end\nif redis.call('PEXPIRETIME',KEYS[2]) < tonumber(records[3][10]) then return {3} end\n"
 
 func (s *Store) keys(a *Attempt) []string {
 	group := a.state.ID + ":" + strconv.FormatInt(a.state.AuthGeneration, 10) + ":" + a.state.RecoveryID

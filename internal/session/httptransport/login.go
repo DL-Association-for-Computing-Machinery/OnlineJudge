@@ -113,7 +113,15 @@ func (h *handler) serveLogin(w http.ResponseWriter, r *http.Request, source neti
 	if !h.canLogin(w, r, ctx) {
 		return
 	}
+	if IsPendingDevicePath(r.URL.Path) {
+		h.servePendingDevices(w, r, ctx, c)
+		return
+	}
 	credential, err := h.login.Complete(ctx, c)
+	finishLogin(w, ctx, credential, err)
+}
+
+func finishLogin(w http.ResponseWriter, ctx context.Context, credential redisstore.Credential, err error) {
 	if err == nil {
 		err = ctx.Err()
 	}

@@ -22,6 +22,51 @@ info:
 security:
   - ordinarySession: []
 paths:
+  /api/v1/session/login/devices:
+    post:
+      operationId: listPendingLoginDevices
+      security:
+        - loginAttempt: []
+      description: 配置 session_devices 后，在三个普通名额均有效时读取当前待确认登录的三个候选会话。使用原登录 Cookie、同源校验和恢复限流。返回 devices，current 均为 false；标识仅供本次待确认登录使用，无 Cookie 或业务权限。
+      responses:
+        '200': {description: 三条可替换会话的标识、当前标志和时间。}
+        '400': {description: 登录尝试无效。}
+        '401': {description: 登录尝试已失效。}
+        '403':
+          $ref: '#/components/responses/OriginRejected'
+        '404':
+          $ref: '#/components/responses/EntryNotEnabled'
+        '405':
+          $ref: '#/components/responses/PostOnly'
+        '409': {description: 名额或尝试已变化，或浏览器已有有效会话。}
+        '429': {description: 恢复操作限流。}
+        '503':
+          $ref: '#/components/responses/SessionUnavailable'
+  /api/v1/session/login/replace-device:
+    post:
+      operationId: replacePendingLoginDevice
+      security:
+        - loginAttempt: []
+      description: 显式确认替换一条旧会话，接纳原尝试。成功后发放原候选 Cookie 并清除待确认 Cookie。结果未知时只继续确认原尝试，勿重复替换。
+      requestBody:
+        required: true
+        content:
+          text/plain:
+            schema: {type: string, pattern: '^[0-9a-f]{64}$'}
+      responses:
+        '204': {description: 原登录尝试已获准，无响应体。}
+        '400': {description: 登录尝试或请求格式无效。}
+        '401': {description: 登录尝试已失效。}
+        '403':
+          $ref: '#/components/responses/OriginRejected'
+        '404':
+          $ref: '#/components/responses/EntryNotEnabled'
+        '405':
+          $ref: '#/components/responses/PostOnly'
+        '409': {description: 标识或尝试已变化，或浏览器已有有效会话。}
+        '429': {description: 恢复操作限流。}
+        '503':
+          $ref: '#/components/responses/SessionUnavailable'
   /api/v1/session/devices/revoke:
     post:
       operationId: revokeOrdinarySessionDevice
@@ -363,7 +408,7 @@ components:
       type: apiKey
       in: cookie
       name: __Host-oj_login
-      description: 有界的加密冻结候选，不是已认证会话；仅用于确认/放弃，不写入 URL、日志或 JS 存储。
+      description: 有界的加密冻结候选，不是已认证会话；仅用于登录确认、满额选择或放弃，不写入 URL、日志或 JS 存储。
   parameters:
     DevicePrecondition:
       name: X-OJ-Session-Device

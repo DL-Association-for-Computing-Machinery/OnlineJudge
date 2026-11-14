@@ -16,6 +16,7 @@ import (
 
 func testEntry(t *testing.T, f *fixture) {
 	binary := entryBinary(t)
+	t.Run("replace one full login device", func(t *testing.T) { testPendingDeviceReplacement(t, f, binary) })
 	t.Run("own active devices over HTTPS", func(t *testing.T) { testEntryDevices(t, f, binary) })
 	t.Run("private draft HTTP", func(t *testing.T) { testEntryPrivateDrafts(t, f, binary) })
 	t.Run("personal training history HTTP", func(t *testing.T) { testEntryTrainingHistory(t, f, binary) })

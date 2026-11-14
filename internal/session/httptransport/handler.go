@@ -100,6 +100,12 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	statementID, statementKey, statementMethod := reviewActionRoute(r.URL.Path, statementConfirmationAction)
 	trainingID := trainingDetailID(r.URL.Path)
 	switch r.URL.Path {
+	case PendingDevicesPath, ReplaceDevicePath:
+		if h.login == nil || h.devices == nil {
+			problem(w, http.StatusNotFound, "NOT_FOUND", "接口不存在")
+			return
+		}
+		method = http.MethodPost
 	case RevokeDevicePath, RevokeOtherDevicesPath:
 		if h.devices == nil {
 			problem(w, http.StatusNotFound, "NOT_FOUND", "接口不存在")
@@ -290,7 +296,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.serveTrainingDetail(w, r, trainingID)
 		return
 	}
-	if h.login != nil && (r.URL.Path == "/api/v1/session/login/begin" || r.URL.Path == "/api/v1/session/login/complete" || r.URL.Path == "/api/v1/session/login/abandon") {
+	if h.login != nil && (IsPendingDevicePath(r.URL.Path) || r.URL.Path == "/api/v1/session/login/begin" || r.URL.Path == "/api/v1/session/login/complete" || r.URL.Path == "/api/v1/session/login/abandon") {
 		h.serveLogin(w, r, source)
 		return
 	}

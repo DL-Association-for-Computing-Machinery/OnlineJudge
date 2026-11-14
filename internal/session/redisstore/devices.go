@@ -122,7 +122,7 @@ func (s *Store) withDevices(ctx context.Context, c Credential, action func(conte
 		if err != nil {
 			return err
 		}
-		devices, err = decodeDevices(a, rows)
+		devices, err = decodeDevices(a, rows, true)
 		if err == nil && action != nil {
 			return action(call, a, devices)
 		}
@@ -134,7 +134,7 @@ func (s *Store) withDevices(ctx context.Context, c Credential, action func(conte
 	return devices, nil
 }
 
-func decodeDevices(owner *Attempt, rows []any) ([]deviceRecord, error) {
+func decodeDevices(owner *Attempt, rows []any, requireCurrent bool) ([]deviceRecord, error) {
 	if len(rows) < 1 || len(rows) > 3 {
 		return nil, ErrConflict
 	}
@@ -159,7 +159,7 @@ func decodeDevices(owner *Attempt, rows []any) ([]deviceRecord, error) {
 		seenCurrent = seenCurrent || device.Current
 		devices = append(devices, deviceRecord{Device: device, fields: fields})
 	}
-	if !seenCurrent {
+	if seenCurrent != requireCurrent {
 		return nil, ErrConflict
 	}
 	return devices, nil

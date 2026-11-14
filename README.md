@@ -669,7 +669,7 @@ API 镜像的 `/usr/local/bin/oj-api` 在非空 `OJ_SESSION_CONFIG_FILE` 下切�
 
 direct 模式要求客户端直接 TLS；proxy 模式要求同一监听器的已验证客户端证书和允许的叶证书指纹，健康检查也须经 mTLS。现有 Compose/Nginx 的明文 backend 和浏览器页面尚未配置该入口；部署、生产阈值、真实证书/存储 TLS 和完整账号权限另行验收。回退先停服务并移除显式配置环境，不把旧明文路径接到会话 Handler。
 
-可选 `session_devices: true` 启用 [本人会话列表及远程撤销](api/session.openapi.yaml)。当前 Cookie 必须有效；读取不续期，撤销指定或全部其他会话时保留当前会话，不改 Cookie。移除该配置并重启即可关闭，不改变会话数据。
+可选 `session_devices: true` 启用 [会话管理及满额登录选择](api/session.openapi.yaml)。已登录用户读取不续期，撤销其他会话保留当前 Cookie。已验密的待确认登录在满额时可选择一个旧会话，确认后用原候选替换。移除配置并重启即可关闭，不改变会话数据。
 
 可选的 `password_change` 对象另行启用 `POST /api/v1/account/password`，省略时保持 404。必须显式给定 `minimum_characters`、`blocklist_file` 及 `global`/`source`/`subject` 三个 `{count, window}` 额度；用户已确认至少 15 个 Unicode code point、允许空格、不强制字符组合、拒绝常见弱密码，保留原始字节且不 trim/归一化/截断。最低字符数可配置更高值，KDF 最大密码字节预算至少为最低字符数的四倍。规则文件是至多 1 MiB 的版本 1 JSON 整串 SHA-256 弱密码摘要表，采用与公开证书相同的受控文件读取约束；格式及边界见上述设计。生产字典仍须验证来源、许可与覆盖，不能将合成测试词条当作生产覆盖证明。
 

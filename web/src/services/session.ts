@@ -5,8 +5,8 @@ export interface SessionView {
   absolute_deadline: string
 }
 
-export type AccountOperation = 'read' | 'activity' | 'logout' | 'begin' | 'local-begin' | 'complete' | 'abandon' | 'password'
-export type AccountInput = { email: string; password: string } | { current_password: string; new_password: string }
+export type AccountOperation = 'read' | 'activity' | 'logout' | 'begin' | 'local-begin' | 'complete' | 'abandon' | 'password' | 'replace-device'
+export type AccountInput = { email: string; password: string } | { current_password: string; new_password: string } | { device: string }
 
 const endpoints: Record<AccountOperation, { path: string; method: 'GET' | 'POST'; status: number }> = {
   read: { path: '/api/v1/session', method: 'GET', status: 200 },
@@ -17,6 +17,7 @@ const endpoints: Record<AccountOperation, { path: string; method: 'GET' | 'POST'
   complete: { path: '/api/v1/session/login/complete', method: 'POST', status: 204 },
   abandon: { path: '/api/v1/session/login/abandon', method: 'POST', status: 204 },
   password: { path: '/api/v1/account/password', method: 'POST', status: 204 },
+  'replace-device': { path: '/api/v1/session/login/replace-device', method: 'POST', status: 204 },
 }
 
 // Messages are local constants. Never render response titles, HTML or caught
@@ -51,6 +52,7 @@ const codes: Record<AccountOperation, readonly string[]> = {
   begin: ['INVALID_LOGIN', 'LOGIN_ATTEMPT_INVALID', 'LOGIN_PENDING', 'ALREADY_AUTHENTICATED', 'LOGIN_REJECTED', 'LOGIN_RATE_LIMITED', 'BODY_TOO_LARGE', 'UNSUPPORTED_MEDIA_TYPE'],
   'local-begin': ['INVALID_LOGIN', 'LOGIN_ATTEMPT_INVALID', 'LOGIN_PENDING', 'ALREADY_AUTHENTICATED', 'LOGIN_REJECTED', 'LOGIN_RATE_LIMITED', 'BODY_TOO_LARGE', 'UNSUPPORTED_MEDIA_TYPE'],
   complete: ['LOGIN_ATTEMPT_INVALID', 'ALREADY_AUTHENTICATED', 'SESSION_LIMIT', 'LOGIN_ATTEMPT_CONFLICT', 'LOGIN_REJECTED', 'LOGIN_RATE_LIMITED'],
+  'replace-device': ['LOGIN_ATTEMPT_INVALID', 'ALREADY_AUTHENTICATED', 'SESSION_LIMIT', 'LOGIN_ATTEMPT_CONFLICT', 'LOGIN_REJECTED', 'LOGIN_RATE_LIMITED'],
   abandon: ['LOGIN_ATTEMPT_INVALID', 'LOGIN_ATTEMPT_CONFLICT', 'LOGIN_REJECTED', 'LOGIN_RATE_LIMITED'],
   password: ['WEAK_PASSWORD', 'INVALID_NEW_PASSWORD', 'INVALID_PASSWORD_INPUT', 'PASSWORD_UNCHANGED', 'INVALID_PASSWORD_CHANGE', 'PASSWORD_CHANGE_CONFLICT', 'PASSWORD_CHANGE_REJECTED', 'PASSWORD_CHANGE_RATE_LIMITED', 'BODY_TOO_LARGE', 'UNSUPPORTED_MEDIA_TYPE'],
 }
@@ -114,21 +116,41 @@ const devicesPath = '/api/v1/session/devices'
 function deviceList(value: unknown): SessionDevices {
   if (!record(value) || Object.keys(value).length !== 2 || typeof value.subject_id !== 'string' ||
       !Array.isArray(value.devices) || value.devices.length < 1 || value.devices.length > 3) throw unknownResult()
+  return { subject_id: value.subject_id, devices: deviceRows(value.devices, value.subject_id, 1) }
+}
+
+function deviceRows(rows: unknown[], subject: string, currentCount: number): SessionDevice[] {
   const ids = new Set<string>()
   let current = 0
-  const devices = (value.devices as unknown[]).map(row => {
+  const devices = rows.map(row => {
     if (!record(row) || Object.keys(row).length !== 5 || typeof row.id !== 'string' ||
         !deviceID.test(row.id) || ids.has(row.id) || typeof row.current !== 'boolean') throw unknownResult()
     ids.add(row.id)
     if (row.current) current++
     const { created_at, idle_expires_at, absolute_deadline } = sessionView({
-      subject_id: value.subject_id, created_at: row.created_at,
+      subject_id: subject, created_at: row.created_at,
       idle_expires_at: row.idle_expires_at, absolute_deadline: row.absolute_deadline,
     })
     return { id: row.id, current: row.current, created_at, idle_expires_at, absolute_deadline }
   })
-  if (current !== 1) throw unknownResult()
-  return { subject_id: value.subject_id, devices }
+  if (current !== currentCount) throw unknownResult()
+  return devices
+}
+
+export async function pendingDevicesRequest(signal: AbortSignal): Promise<SessionDevice[]> {
+  requireHTTPS()
+  try {
+    const res = await fetch('/api/v1/session/login/devices', accountFetchOptions('POST', signal))
+    if (res.status !== 200 || res.headers.get('Content-Type')?.split(';')[0].trim() !== 'application/json') {
+      await res.body?.cancel().catch(() => undefined)
+      throw unknownResult()
+    }
+    const result = await boundedJSON(res)
+    if (!record(result) || Object.keys(result).length !== 1 || !Array.isArray(result.devices) || result.devices.length !== 3) throw unknownResult()
+    return deviceRows(result.devices, '0'.repeat(32), 0)
+  } catch {
+    throw unknownResult()
+  }
 }
 
 type DeviceRevocation = { current: string; target?: string }
@@ -210,11 +232,14 @@ export async function accountRequest(operation: AccountOperation, signal: AbortS
   // over HTTP. Gate before constructing or submitting a body.
   requireHTTPS()
   const endpoint = endpoints[operation]
+  const replacement = operation === 'replace-device'
+  const device = input && 'device' in input ? input.device : undefined
+  if (replacement && (!device || !deviceID.test(device))) throw unknownResult()
   try {
     const response = await fetch(endpoint.path, {
       ...accountFetchOptions(endpoint.method, signal),
-      headers: input ? { 'Content-Type': 'application/json', Accept: 'application/json, application/problem+json' } : { Accept: 'application/json, application/problem+json' },
-      ...(input ? { body: JSON.stringify(input) } : {}),
+      headers: input ? { 'Content-Type': replacement ? 'text/plain' : 'application/json', Accept: 'application/json, application/problem+json' } : { Accept: 'application/json, application/problem+json' },
+      ...(input ? { body: replacement ? device : JSON.stringify(input) } : {}),
     })
     if (response.status === endpoint.status) {
       if (operation !== 'read' && operation !== 'activity') {
