@@ -55,8 +55,19 @@ func TestAPlusBConfigurationRejectsCrossRuntimeManifests(t *testing.T) {
 	}{
 		{"", ReferenceSmall, "7.0.14-linuxkit"},
 		{"ubuntu-arm64", ReferenceAPlusBUbuntu, "6.8.0-106-generic"},
+		{"", ReferenceAPlusBTrialAMD64, ""},
 	} {
 		manifest.RuntimeSHA256 = APlusBRuntimeSHA256ForTier(target.tier)
+		candidate := target.tier == ReferenceAPlusBTrialAMD64
+		if candidate {
+			if manifest.RuntimeSHA256 != "" {
+				t.Fatal("offline candidate exposed by executable runtime lookup")
+			}
+			if _, err := ResolveReferenceTier(target.tier); err == nil {
+				t.Fatal("offline candidate admitted for execution")
+			}
+			manifest.RuntimeSHA256 = APlusBTrialAMD64CandidateSHA256()
+		}
 		raw := manifest.Canonical()
 		hash := sha256.Sum256(raw)
 		path := filepath.Join(t.TempDir(), "manifest.json")
@@ -67,10 +78,10 @@ func TestAPlusBConfigurationRejectsCrossRuntimeManifests(t *testing.T) {
 			"OJ_SANDBOX_EXPERIMENT": "1", "OJ_APLUSB_MANIFEST_FILE": path,
 			"OJ_APLUSB_MANIFEST_SHA256": hex.EncodeToString(hash[:]),
 		}
-		for _, setup := range []string{"", "ubuntu-arm64", "unsupported"} {
+		for _, setup := range []string{"", "ubuntu-arm64", "trial-amd64-candidate", "unsupported"} {
 			env["OJ_APLUSB_RUNTIME"] = setup
 			_, f, err := LoadAPlusBFixture(func(k string) string { return env[k] })
-			if setup != target.setting {
+			if candidate || setup != target.setting {
 				if err == nil || f.IsAPlusB() {
 					t.Fatal("incorrect runtime admitted a manifest")
 				}

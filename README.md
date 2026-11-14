@@ -118,6 +118,8 @@ checker-candidate verify-trial \
 
 使用上述同一私有 A+B 题包、可信计划和候选摘要及限额，先通过 `checker-candidate aplusb-judge-manifest` 核对有序材料和固定运行档位。确认输出与可信的材料计划一致后，固定其 `sha256`；Worker 会从私有题包重新生成同一清单，摘要不一致时不会启动参考槽。
 
+试用机 amd64 的离线准备可为此命令加 `--trial-amd64-candidate`；它仅支持已审核的 A+B 17 点修订，不能与 `--ubuntu-aplusb` 同时使用。该清单只用于候选材料准备，当前 Worker 不接受。见 [P4 候选材料记录](docs/delivery-evidence/p4-trial-publication.md#ab-amd64-候选材料)。
+
 ```sh
 checker-candidate aplusb-judge-manifest \
   --bundle "$PRIVATE_BUNDLE" --source-lock "$PWD/config/problem-sources/library-checker.json" \

@@ -26,6 +26,7 @@ func aplusbJudgeManifest(parent context.Context, args []string, out, diagnostics
 	output := f.String("export", "", "new private directory for transport materials")
 	expected := f.String("expected-manifest", "", "independently reviewed judge manifest SHA-256")
 	ubuntu := f.Bool("ubuntu-aplusb", false, "select the fixed Ubuntu guest runtime")
+	trialAMD64 := f.Bool("trial-amd64-candidate", false, "prepare offline materials for the unadmitted amd64 trial profile")
 	var limits judging.TextLimits
 	f.IntVar(&limits.Bytes, "bytes", 0, "explicit checker byte cap")
 	f.IntVar(&limits.TokenBytes, "token-bytes", 0, "explicit checker token cap")
@@ -35,13 +36,15 @@ func aplusbJudgeManifest(parent context.Context, args []string, out, diagnostics
 		}
 		return errors.New("invalid judge manifest arguments")
 	}
-	if f.NArg() != 0 || !absoluteClean(*bundle) || !absoluteClean(*lock) || !limits.Valid() ||
+	if f.NArg() != 0 || (*ubuntu && *trialAMD64) || !absoluteClean(*bundle) || !absoluteClean(*lock) || !limits.Valid() ||
 		!problem.ValidImportRevision(*plan) || !problem.ValidImportRevision(*candidate) {
 		return errors.New("explicit limits, paths and trusted digests required")
 	}
 	tier := experiment.ReferenceSmall
 	if *ubuntu {
 		tier = experiment.ReferenceAPlusBUbuntu
+	} else if *trialAMD64 {
+		tier = experiment.ReferenceAPlusBTrialAMD64
 	}
 	raw, err := readPinnedLock(*lock)
 	if err != nil {

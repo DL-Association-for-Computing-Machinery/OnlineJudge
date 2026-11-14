@@ -7,10 +7,23 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/judging"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
 )
+
+func TestAPlusBAMD64CandidateCannotPrepareExecution(t *testing.T) {
+	const source = "int main() { return 0; }"
+	h := sha256.Sum256([]byte(source))
+	trial, err := problemvalidation.PrepareAPlusBJudgeForTier(t.Context(), nil,
+		problemvalidation.ReviewedAPlusBPlan, problemvalidation.ReviewedAPlusBCandidate,
+		strings.Repeat("a", 64), hex.EncodeToString(h[:]), source, problemvalidation.ReviewedAPlusBLimits(),
+		experiment.ReferenceAPlusBTrialAMD64)
+	if trial != nil || !errors.Is(err, problemvalidation.ErrCheckerCandidateBinding) {
+		t.Fatalf("offline profile must be refused before even reading a bundle: %v", err)
+	}
+}
 
 func TestAPlusBJudgeManifestAndSubmissionBinding(t *testing.T) {
 	// Synthetic bundle locks are intentionally not admitted by this entry point.

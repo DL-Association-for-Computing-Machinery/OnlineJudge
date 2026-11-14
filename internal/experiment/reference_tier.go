@@ -28,7 +28,22 @@ const (
 	ReferenceConvolution ReferenceTier = 8
 	// ReferenceAPlusBUbuntu admits only the standalone A+B guest experiment.
 	ReferenceAPlusBUbuntu ReferenceTier = 9
+	// ReferenceAPlusBTrialAMD64 is for offline material preparation only.
+	// ResolveReferenceTier deliberately does not admit it for execution.
+	ReferenceAPlusBTrialAMD64 ReferenceTier = 10
 )
+
+// APlusBTrialAMD64Candidate returns the proposed trial binding. This does not
+// assert that the target kernel, Engine or slot has passed admission.
+func APlusBTrialAMD64Candidate() ReferenceConfiguration {
+	p := PinnedReferenceEnvironment()
+	p.ID = "p4-aplusb-gnu17-trial-amd64-v1"
+	p.Platform = "linux/amd64"
+	p.KernelRelease = "6.8.0-124-generic"
+	p.ImageID = "sha256:bfb42a2daf3f86c8636e3db883179852f385df1a31fd2b9f4a42d01e7e9f502c"
+	p.DockerfileSHA256 = "4ed13710221459edc73bad8a52d84369dcfb4da17c5848b5f52ed1509bf20f2d"
+	return ReferenceConfiguration{Runtime: p, Files: PinnedReferenceFiles()}
+}
 
 // ReferenceConfiguration binds runtime and both file-transport budget ledgers.
 // ResolveReferenceTier always returns fresh slices, safe to detach for reports.

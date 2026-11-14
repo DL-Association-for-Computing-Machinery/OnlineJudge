@@ -196,7 +196,8 @@ func PrepareAPlusBJudge(ctx context.Context, prepared *problem.Prepared, plan, c
 
 // PrepareAPlusBJudgeForTier requires a manifest matching the explicitly selected standalone runtime.
 func PrepareAPlusBJudgeForTier(ctx context.Context, prepared *problem.Prepared, plan, candidate, manifest, sourceSHA, source string, limits judging.TextLimits, tier experiment.ReferenceTier) (*CheckerTrial, error) {
-	if !problem.ValidImportRevision(manifest) || !problem.ValidImportRevision(sourceSHA) ||
+	if (tier != experiment.ReferenceSmall && tier != experiment.ReferenceAPlusBUbuntu) ||
+		!problem.ValidImportRevision(manifest) || !problem.ValidImportRevision(sourceSHA) ||
 		len(source) == 0 || len(source) > submission.MaxSourceBytes || !utf8.ValidString(source) || strings.ContainsRune(source, 0) {
 		return nil, ErrCheckerCandidateBinding
 	}
