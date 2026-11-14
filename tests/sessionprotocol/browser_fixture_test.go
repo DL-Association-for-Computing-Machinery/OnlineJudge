@@ -64,6 +64,7 @@ func TestBrowserFixture(t *testing.T) {
 	subject := f.subject(t, false)
 	otherAuthor := f.subject(t, false)
 	historyMode := os.Getenv("OJ_BROWSER_TRAINING_HISTORY") == "1"
+	publishedMode := os.Getenv("OJ_BROWSER_PUBLISHED_TRAINING_ROOT")
 	var unverified string
 	if historyMode {
 		c.TrainingHistory = true
@@ -77,29 +78,37 @@ func TestBrowserFixture(t *testing.T) {
 				virtual_finish=1, enqueue_order=nextval('training_enqueue_order')
 			WHERE submission_id=lpad('22', 32, '0')`)
 		must(t, err)
-	} else {
+	} else if publishedMode == "" {
 		browserDrafts(t, f, &c, subject.ID)
 	}
 	reviewMode := os.Getenv("OJ_BROWSER_REVIEW_MATERIALS") == "1"
 	packageMode := os.Getenv("OJ_BROWSER_PACKAGE") == "1"
 	localExecution := os.Getenv("OJ_BROWSER_LOCAL_EXECUTION") == "1"
-	trainingIntake := os.Getenv("OJ_BROWSER_LOCAL_TRAINING_INTAKE") == "1"
+	trainingIntake := os.Getenv("OJ_BROWSER_LOCAL_TRAINING_INTAKE") == "1" || publishedMode != ""
 	var trainee identity.Personal
 	var trainingObserver identity.Personal
 	if localExecution && (!reviewMode || historyMode || trialNginx) {
 		t.Fatal("local execution requires an isolated review fixture")
 	}
 	if trainingIntake {
-		if !localExecution {
+		if !localExecution && publishedMode == "" {
 			t.Fatal("training intake requires the admitted local review fixture")
 		}
-		c.LocalTrainingIntake, c.TrainingHistory, c.TrainingSubmissionDetail = true, true, true
+		c.LocalTrainingIntake, c.TrainingHistory, c.TrainingSubmissionDetail = publishedMode == "", true, true
 		trainee = f.subject(t, false)
 		trainingObserver = f.subject(t, false)
 		setHistoryEmailVerified(t, f, trainee.ID, true)
 		setHistoryEmailVerified(t, f, trainingObserver.ID, true)
 		unverified = f.subject(t, false).Email.Original()
 		must(t, submissionpg.ConfigureBacklog(f.ctx, f.pools[0], submissionpg.BacklogLimits{Global: 8, Subject: 4}))
+	}
+	if publishedMode != "" {
+		if historyMode || reviewMode || packageMode || localExecution || trialNginx {
+			t.Fatal("published training fixture requires standalone local intake")
+		}
+		c.PublishedTraining = browserPublishedTraining(t, publishedMode)
+		must(t, os.Mkdir(publishedMode, 0700))
+		publishBrowserTrainingFixtures(t, f, publishedMode)
 	}
 	if reviewMode {
 		if c.PrivateDrafts == nil || !c.PrivateDrafts.ReferenceRequests {
@@ -233,11 +242,15 @@ func TestBrowserFixture(t *testing.T) {
 		if trainingIntake {
 			listen = "127.0.0.1"
 		}
-		edge := browserServer(t, listen+":9443", edgeHandler)
+		edgePort, plainPort := "9443", "9444"
+		if publishedMode != "" {
+			edgePort, plainPort = "19944", "19945"
+		}
+		edge := browserServer(t, listen+":"+edgePort, edgeHandler)
 		edgeCert, _, _ := ca.Issue(t, "", x509.ExtKeyUsageServerAuth, time.Now().Add(time.Hour))
 		edge.TLS = &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{edgeCert}}
 		edge.StartTLS()
-		plain := browserServer(t, listen+":9444", static)
+		plain := browserServer(t, listen+":"+plainPort, static)
 		plain.Start()
 		servers = append(servers, edge, plain)
 	}
@@ -250,6 +263,10 @@ func TestBrowserFixture(t *testing.T) {
 		info["training_subject_id"] = trainee.ID
 		info["training_observer_email"] = trainingObserver.Email.Original()
 		info["training_observer_id"] = trainingObserver.ID
+	}
+	if publishedMode != "" {
+		info["database_directory"] = c.Database.Host
+		info["api_pid"] = strconv.Itoa(process.cmd.Process.Pid)
 	}
 	if loginLoad {
 		hasher, err := password.New(c.PasswordPolicy, c.PasswordLimits)

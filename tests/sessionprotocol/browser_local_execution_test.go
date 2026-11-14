@@ -39,7 +39,11 @@ func browserLocalSource(t *testing.T, endpoint *loginEndpoint, cookies []*http.C
 
 func browserLocalText(t *testing.T, f *fixture, c *sessionruntime.Config) {
 	t.Helper()
-	dir := "/local-evidence"
+	browserLocalTextAt(t, f, c, "/local-evidence")
+}
+
+func browserLocalTextAt(t *testing.T, f *fixture, c *sessionruntime.Config, dir string) {
+	t.Helper()
 	raw, err := os.ReadFile(filepath.Join(dir, "admission.json"))
 	must(t, err)
 	var in problemvalidation.LocalTextAdmissionInput

@@ -26,6 +26,8 @@ type CatalogEntry struct {
 type CatalogReader struct {
 	List   func(context.Context, string, string) ([]CatalogEntry, string, error)
 	Detail func(context.Context, string) (problemdomain.PublicationStatement, error)
+	// CanSubmit advertises intake for this displayed version only.
+	CanSubmit func(context.Context, string, string) (bool, error)
 }
 
 // IsCatalogPath identifies the public read route family.
@@ -60,6 +62,7 @@ func (h *handler) serveCatalog(w http.ResponseWriter, r *http.Request) {
 	}
 	var result any
 	var err error
+	canSubmit := false
 	if r.URL.Path == catalogPath {
 		values, queryErr := url.ParseQuery(r.URL.RawQuery)
 		for key, parts := range values {
@@ -86,7 +89,12 @@ func (h *handler) serveCatalog(w http.ResponseWriter, r *http.Request) {
 			problemResponseCatalog(w, http.StatusBadRequest)
 			return
 		}
-		result, err = h.catalog.Detail(r.Context(), id)
+		var detail problemdomain.PublicationStatement
+		detail, err = h.catalog.Detail(r.Context(), id)
+		if err == nil && h.trainingSubmit != nil && h.catalog.CanSubmit != nil {
+			canSubmit, err = h.catalog.CanSubmit(r.Context(), id, detail.Version)
+		}
+		result = detail
 	}
 	if err != nil {
 		switch {
@@ -102,7 +110,7 @@ func (h *handler) serveCatalog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if h.trainingSubmit != nil && r.URL.Path != catalogPath {
+	if canSubmit {
 		w.Header().Set("X-OJ-Training-Intake", "enabled")
 	}
 	_ = json.NewEncoder(w).Encode(result)

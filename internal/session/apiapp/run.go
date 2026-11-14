@@ -31,7 +31,8 @@ func Run(ctx context.Context, logger *slog.Logger, address, path string, lookup 
 	if err != nil {
 		return err
 	}
-	if c.Runtime.PrivateDrafts != nil && c.Runtime.PrivateDrafts.LocalExecution != nil {
+	if c.Runtime.PublishedTraining != nil || (c.Runtime.PrivateDrafts != nil &&
+		(c.Runtime.PrivateDrafts.LocalExecution != nil || c.Runtime.PrivateDrafts.LocalTextExecution != nil)) {
 		host, _, _ := net.SplitHostPort(address)
 		if !net.ParseIP(host).IsLoopback() {
 			return ErrConfiguration

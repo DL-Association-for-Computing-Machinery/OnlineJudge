@@ -53,8 +53,10 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 	}
 	keep := false
 	closeDrafts := func() error { return nil }
+	closePublished := func() error { return nil }
 	defer func() {
 		if !keep {
+			_ = closePublished()
 			_ = closeDrafts()
 			_ = client.Close()
 		}
@@ -112,7 +114,7 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 		return nil, ErrConfig
 	}
 	var catalog *httptransport.CatalogReader
-	var localTraining httptransport.TrainingSubmit
+	var localScope publicationScope
 	if c.PrivateDrafts != nil {
 		drafts, cleanup, err := openDrafts(startup, *c.PrivateDrafts, store, pool, secrets, c.LocalTrainingIntake)
 		if err != nil {
@@ -120,7 +122,7 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 		}
 		closeDrafts = cleanup
 		catalog = drafts.catalog
-		localTraining = drafts.localIntake
+		localScope = drafts.localScope
 		handler, err = httptransport.WithPrivateDrafts(handler, drafts.importer, c.PrivateDrafts.Timeout)
 		if err != nil {
 			return nil, ErrConfig
@@ -225,26 +227,24 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 			return nil, ErrConfig
 		}
 	}
+	if catalog != nil {
+		handler, err = withPublishedTraining(handler, pool, *catalog, localScope)
+		if err != nil {
+			return nil, ErrConfig
+		}
+	}
+	if c.PublishedTraining != nil {
+		handler, closePublished, err = openPublishedTraining(handler, pool, *c.PublishedTraining)
+		if err != nil {
+			closePublished = func() error { return nil }
+			return nil, err
+		}
+	}
 	closeIntake := func() {}
 	if c.EmailIntake != nil {
 		handler, closeIntake, err = withEmailIntake(startup, handler, authority, store, work, secrets, pool, c)
 		if err != nil {
 			return nil, startupFailure(startup)
-		}
-	}
-	if catalog != nil {
-		handler, err = httptransport.WithCatalog(handler, *catalog)
-		if err != nil {
-			return nil, ErrConfig
-		}
-	}
-	if localTraining != nil {
-		handler, err = httptransport.WithTrainingIntake(handler, localTraining, func(ctx context.Context, actor identity.TrainingActor, key string) (submission.Receipt, error) {
-			return submissionpg.ReadTrainingReceipt(ctx, pool, actor, key)
-		})
-		if err != nil {
-			closeIntake()
-			return nil, ErrConfig
 		}
 	}
 	if err := startup.Err(); err != nil {
@@ -254,9 +254,10 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 	result := newRuntime(handler, func() error {
 		closeIntake()
 		draftErr := closeDrafts()
+		publicationErr := closePublished()
 		err := client.Close()
 		pool.Close()
-		if err != nil || draftErr != nil {
+		if err != nil || draftErr != nil || publicationErr != nil {
 			return ErrClose
 		}
 		return nil

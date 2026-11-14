@@ -55,7 +55,8 @@ func entryBinary(t *testing.T) string {
 func entryProgram(t *testing.T, name string) string {
 	t.Helper()
 	if dir := os.Getenv("OJ_PROTOCOL_ENTRY_BIN_DIR"); dir != "" {
-		if os.Getenv("OJ_PROTOCOL_FIXTURE") != "1" || !filepath.IsAbs(dir) || (name != "api" && name != "migrate" && name != "mail-worker") {
+		if os.Getenv("OJ_PROTOCOL_FIXTURE") != "1" || !filepath.IsAbs(dir) ||
+			(name != "api" && name != "migrate" && name != "mail-worker" && name != "problem-review") {
 			t.Fatal("invalid prebuilt entry fixture")
 		}
 		path := filepath.Join(dir, name)
@@ -297,6 +298,9 @@ func entryConfigWithWriteTimeout(t *testing.T, c sessionruntime.Config, ca *test
 	}
 	if c.LocalTrainingIntake {
 		doc["local_training_intake"] = true
+	}
+	if c.PublishedTraining != nil {
+		doc["published_training"] = c.PublishedTraining
 	}
 	if c.SessionDevices {
 		doc["session_devices"] = true

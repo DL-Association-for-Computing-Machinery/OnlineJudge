@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"path/filepath"
 	"time"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
@@ -81,6 +82,8 @@ type Config struct {
 	Proxy                       httptransport.ProxyConfig
 	PasswordChange              *PasswordChangeConfig
 	PrivateDrafts               *PrivateDraftsConfig
+	// PublishedTraining enables a standalone local catalog and submission intake.
+	PublishedTraining *PublishedTrainingConfig
 	// TrainingHistory enables only the read-only personal history route.
 	TrainingHistory bool
 	// TrainingSubmissionDetail independently enables owner-only source and verdict reads.
@@ -148,6 +151,10 @@ func (c Config) validate() (*password.Hasher, *password.BoundedHasher, error) {
 		c.PrivateDrafts == nil || !c.PrivateDrafts.PublicCatalog || !c.PrivateDrafts.hasLocalExecution()) {
 		return nil, nil, ErrConfig
 	}
+	if c.PublishedTraining != nil && (c.PublishedTraining.Validate() != nil || c.PrivateDrafts != nil || c.LocalTrainingIntake ||
+		!c.TrainingHistory || !c.TrainingSubmissionDetail) {
+		return nil, nil, ErrConfig
+	}
 	if c.ManagementRoleChanges && !c.ManagementSessions {
 		return nil, nil, ErrConfig
 	}
@@ -161,10 +168,10 @@ func (c Config) validate() (*password.Hasher, *password.BoundedHasher, error) {
 	if c.PrivateDrafts != nil && c.PrivateDrafts.Validate() != nil {
 		return nil, nil, ErrConfig
 	}
-	if c.PrivateDrafts != nil && c.PrivateDrafts.hasLocalExecution() {
+	if c.PublishedTraining != nil || (c.PrivateDrafts != nil && c.PrivateDrafts.hasLocalExecution()) {
 		origin, err := url.Parse(c.HTTP.Origin)
-		if err != nil || !net.ParseIP(origin.Hostname()).IsLoopback() ||
-			(c.PrivateDrafts.LocalExecution != nil && !c.PrivateDrafts.LocalExecution.Valid()) || c.Database.Host == "" || c.Database.Host[0] != '/' {
+		if err != nil || !net.ParseIP(origin.Hostname()).IsLoopback() || !filepath.IsAbs(c.Database.Host) ||
+			(c.PrivateDrafts != nil && c.PrivateDrafts.LocalExecution != nil && !c.PrivateDrafts.LocalExecution.Valid()) {
 			return nil, nil, ErrConfig
 		}
 	}
