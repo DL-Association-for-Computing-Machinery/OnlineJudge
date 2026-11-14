@@ -14,16 +14,16 @@ local function stamp(value)
   if n > 9007199254740991 or math.floor(n) ~= n then return nil end
   return n
 end
-local function load()
-  local t = kind(KEYS[1])
+local function loadRecord(key, digest)
+  local t = kind(key)
   if t == 'none' then return 0 end
-  if t ~= 'hash' or redis.call('HLEN',KEYS[1]) ~= #names then return 3 end
+  if t ~= 'hash' or redis.call('HLEN',key) ~= #names then return 3 end
   for _,name in ipairs(names) do
-    if redis.call('HSTRLEN',KEYS[1],name) > 64 then return 3 end
+    if redis.call('HSTRLEN',key,name) > 64 then return 3 end
   end
-  local c = redis.call('HMGET',KEYS[1],unpack(names))
+  local c = redis.call('HMGET',key,unpack(names))
   for _,value in ipairs(c) do if type(value) ~= 'string' then return 3 end end
-  if c[1] ~= '1' or c[2] ~= ARGV[1] or not hex(c[2],64) or not hex(c[3],32)
+  if c[1] ~= '1' or c[2] ~= digest or not hex(c[2],64) or not hex(c[3],32)
     or not version(c[4]) or not version(c[5]) or not hex(c[6],32) or not hex(c[12],64)
     or (c[11] ~= 'live' and c[11] ~= 'dead') then return 3 end
   local created, absolute, initial, idle = stamp(c[7]),stamp(c[8]),stamp(c[9]),stamp(c[10])
@@ -31,9 +31,10 @@ local function load()
   if absolute-created ~= absoluteLimit or initial-created ~= idleLimit or created > now
     or idle < initial or idle > absolute or idle > now+idleLimit then return 3 end
   if absolute <= now then return 2 end
-  if redis.call('PEXPIRETIME',KEYS[1]) ~= absolute then return 3 end
+  if redis.call('PEXPIRETIME',key) ~= absolute then return 3 end
   return 1,c
 end
+local function load() return loadRecord(KEYS[1],ARGV[1]) end
 local function matches(c)
   return c[3] == ARGV[2] and c[4] == ARGV[3] and c[5] == ARGV[4]
     and c[6] == ARGV[5] and c[7] == ARGV[6] and c[8] == ARGV[7] and c[9] == ARGV[8] and c[12] == ARGV[11]

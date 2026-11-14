@@ -23,6 +23,7 @@ type document struct {
 	PrivateDrafts            *privateDraftsWire     `json:"private_drafts"`
 	TrainingHistory          bool                   `json:"training_history"`
 	TrainingSubmissionDetail bool                   `json:"training_submission_detail"`
+	SessionDevices           bool                   `json:"session_devices"`
 }
 
 type emailIntakeWire struct {

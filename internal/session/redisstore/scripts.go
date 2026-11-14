@@ -23,6 +23,9 @@ var checkLua string
 //go:embed lua/read.lua
 var readLua string
 
+//go:embed lua/devices.lua
+var devicesLua string
+
 //go:embed lua/touch.lua
 var touchLua string
 
@@ -38,6 +41,8 @@ func luaScript(op string) string {
 		flags, body = "no-writes,no-cluster", checkLua
 	case "read":
 		flags, body = "no-writes,no-cluster", readLua
+	case "devices":
+		flags, body = "no-writes,no-cluster", devicesLua
 	case "retry":
 		body = retryLua
 	case "touch":
@@ -62,8 +67,12 @@ func (s *Store) args(a *Attempt) []any {
 // binding detects field drift, not malicious Redis writes or rollback. Fixed
 // order plus standard-library length prefixes keeps the digest input unambiguous.
 func binding(a *Attempt) string {
+	return recordBinding(a, digest(a.credential.token))
+}
+
+func recordBinding(a *Attempt, tokenDigest string) string {
 	var data []byte
-	for _, field := range []string{"ordinary-v1", a.namespace, digest(a.credential.token), a.state.ID,
+	for _, field := range []string{"ordinary-v1", a.namespace, tokenDigest, a.state.ID,
 		strconv.FormatInt(a.state.CredentialVersion, 10), strconv.FormatInt(a.state.AuthGeneration, 10), a.state.RecoveryID,
 		strconv.FormatInt(a.created, 10), strconv.FormatInt(a.absolute, 10), strconv.FormatInt(a.initial, 10)} {
 		data = binary.AppendUvarint(data, uint64(len(field)))

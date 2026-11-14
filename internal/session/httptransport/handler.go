@@ -55,6 +55,7 @@ type handler struct {
 	reviewDiscovery        ReviewDiscoveryReader
 	trainingDetail         TrainingDetail
 	trainingStatus         TrainingStatus
+	devices                deviceList
 }
 
 // New builds three explicit endpoints without registering any application route:
@@ -99,6 +100,12 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	statementID, statementKey, statementMethod := reviewActionRoute(r.URL.Path, statementConfirmationAction)
 	trainingID := trainingDetailID(r.URL.Path)
 	switch r.URL.Path {
+	case DevicesPath:
+		if h.devices == nil {
+			problem(w, http.StatusNotFound, "NOT_FOUND", "接口不存在")
+			return
+		}
+		method = http.MethodGet
 	case "/api/v1/session":
 		method = http.MethodGet
 	case "/api/v1/session/activity", "/api/v1/session/logout":
@@ -288,6 +295,10 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), h.config.Timeout)
 	defer cancel()
+	if r.URL.Path == DevicesPath {
+		h.serveDevices(w, ctx, credential)
+		return
+	}
 	var view redisstore.View
 	switch r.URL.Path {
 	case "/api/v1/session":

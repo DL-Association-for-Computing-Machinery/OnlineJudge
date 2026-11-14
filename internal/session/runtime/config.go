@@ -83,6 +83,8 @@ type Config struct {
 	TrainingHistory bool
 	// TrainingSubmissionDetail independently enables owner-only source and verdict reads.
 	TrainingSubmissionDetail bool
+	// SessionDevices enables the read-only list of the caller's sessions.
+	SessionDevices bool
 
 	// EmailLimits optionally provisions the email marker during isolated
 	// recovery. This alone does not enable any public account route.

@@ -152,6 +152,12 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 			}
 		}
 	}
+	if c.SessionDevices {
+		handler, err = httptransport.WithDevices(handler, store.ListDevices)
+		if err != nil {
+			return nil, ErrConfig
+		}
+	}
 	if err := startup.Err(); err != nil {
 		return nil, err
 	}
