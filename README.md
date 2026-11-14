@@ -894,6 +894,26 @@ python3 -B scripts/trial_app_bundle.py verify --manifest-sha256 "$TRUSTED_MANIFE
 
 核验成功输出构建方声明的 Git 提交；不执行程序，也不替代构建来源审查。封存失败时，未写出清单的输出目录不可交付，复测使用新目录。此包只覆盖[试用离线交付](docs/architecture/operations-design.md#5-发布与回滚)的应用部分；完整发布还需封存运行依赖镜像、配置模板和安装恢复说明。密钥与真实配置单独交接。
 
+### 核验试用运行镜像
+
+发送端按已审查的镜像 ID 导出指定平台，不按可变标签导出。下面以 Linux arm64 为例；如果试用拓扑需要单独的判题镜像，在同一归档加入该镜像 ID，接收端同时传入 `--sandbox`。
+
+```sh
+docker --context desktop-linux image save --platform linux/arm64 -o "$RUNTIME_ARCHIVE" \
+  "$NGINX_IMAGE_ID" "$POSTGRES_IMAGE_ID" "$REDIS_IMAGE_ID"
+sha256sum "$RUNTIME_ARCHIVE"
+```
+
+通过独立可信渠道交接归档 SHA-256，以及各角色的**平台镜像配置摘要**（OCI 镜像清单的 `config.digest`）。镜像索引摘要、平台清单摘要和配置摘要不可互换。配置摘要须由维护者对照事先审查的镜像确认，不能从收到的归档自行认定。用可信工作树的脚本核验，要求 Python 3.11+ 和现代 Docker 保存的单平台、无标签 OCI 归档：
+
+```sh
+python3 -B scripts/verify_trial_images.py "$RUNTIME_ARCHIVE" --sha256 "$TRUSTED_ARCHIVE_SHA256" \
+  --platform linux/arm64 --nginx "$NGINX_CONFIG_DIGEST" \
+  --postgres "$POSTGRES_CONFIG_DIGEST" --redis "$REDIS_CONFIG_DIGEST"
+```
+
+命令只读核对归档、每个引用 blob、目标平台和可导入镜像集合，不解包、不调用 Docker。通过后仍需在受控的空镜像库验证导入、回读身份和禁拉取启动。可选判题镜像仍须单独满足目标节点的运行准入。
+
 ### 试用同源 HTTPS 入口
 
 用[独立 Nginx 模板](deploy/trial/nginx.conf.example)准备试用入口。将 `oj.example.invalid` 的所有出现处替换为同一个公开域名；本模板对应公开端口 443，映射至 Nginx 的 8443。把已核验应用制品的 `site/` 以只读方式挂载至 `/srv/oj/site`；应让 Nginx 运行账号读取安装后的文件，同时保持原接收包不变。
