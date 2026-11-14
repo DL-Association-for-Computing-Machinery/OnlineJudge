@@ -20,15 +20,8 @@ func (p PublicationMaterialPlan) Seal(ctx context.Context, store materialstore.S
 	if err := ctx.Err(); err != nil {
 		return PublicationMaterials{}, err
 	}
-	open := persistedReferenceOpen(store)
-	snapshot, err := p.formal.FreezeMaterials(ctx, func(ctx context.Context, obj materialstore.Object) (io.ReadCloser, error) {
-		return open(ctx, fileReference{SHA256: obj.SHA256, Size: obj.Size})
-	})
-	if err != nil {
+	if err := verifyPublicationFormalMaterials(ctx, store, p.formal); err != nil {
 		return PublicationMaterials{}, err
-	}
-	if err := snapshot.Close(); err != nil {
-		return PublicationMaterials{}, ErrStore
 	}
 	result, raw, err := p.statementBytes(ctx, store)
 	if err != nil {
@@ -48,4 +41,18 @@ func (p PublicationMaterialPlan) Seal(ctx context.Context, store materialstore.S
 		return PublicationMaterials{}, err
 	}
 	return result, nil
+}
+
+func verifyPublicationFormalMaterials(ctx context.Context, store ReferenceObjectReader, plan ReferencePlan) error {
+	open := persistedReferenceOpen(store)
+	snapshot, err := plan.FreezeMaterials(ctx, func(ctx context.Context, obj materialstore.Object) (io.ReadCloser, error) {
+		return open(ctx, fileReference{SHA256: obj.SHA256, Size: obj.Size})
+	})
+	if err != nil {
+		return err
+	}
+	if err := snapshot.Close(); err != nil {
+		return ErrStore
+	}
+	return ctx.Err()
 }

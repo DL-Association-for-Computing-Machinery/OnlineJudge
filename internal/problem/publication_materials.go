@@ -74,16 +74,11 @@ func (p PublicationMaterialPlan) statementBytes(ctx context.Context, store Refer
 	// silently reuse a publication version.
 	display := PublicationStatement{ProblemID: p.problemID, Title: preview.Title, Language: preview.Language,
 		Markdown: preview.Markdown, Examples: preview.Examples, Images: preview.Images}
-	projection, err := json.Marshal(display)
-	if err != nil {
-		return PublicationMaterials{}, nil, ErrStore
-	}
 	formal := p.formal.Digest()
-	binding, err := json.Marshal([4]string{publicationMaterialSchema, p.problemID, formal, hash(projection)})
+	display.Version, err = publicationVersion(display, formal)
 	if err != nil {
 		return PublicationMaterials{}, nil, ErrStore
 	}
-	display.Version = hash(binding)
 	raw, err := json.Marshal(display)
 	if err != nil || len(raw) > MaxPublicationStatementBytes {
 		return PublicationMaterials{}, nil, ErrStore
@@ -95,4 +90,17 @@ func (p PublicationMaterialPlan) statementBytes(ctx context.Context, store Refer
 		Import: ImportIdentity{SourceID: p.formal.SourceID, Version: p.formal.Version,
 			ImportRevision: p.formal.ImportRevision, SourceLockSHA256: p.formal.SourceLockSHA256},
 		Statement: materialstore.Object{SHA256: hash(raw), Size: int64(len(raw))}}, raw, nil
+}
+
+func publicationVersion(display PublicationStatement, formal string) (string, error) {
+	display.Version = ""
+	projection, err := json.Marshal(display)
+	if err != nil {
+		return "", err
+	}
+	binding, err := json.Marshal([4]string{publicationMaterialSchema, display.ProblemID, formal, hash(projection)})
+	if err != nil {
+		return "", err
+	}
+	return hash(binding), nil
 }
