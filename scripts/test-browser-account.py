@@ -71,6 +71,7 @@ def arguments():
     parser.add_argument("--playwright-module", type=Path, required=True)
     parser.add_argument("--chromium-executable", type=Path)
     parser.add_argument("--trial-nginx-image", help="Existing local Nginx image; only with --m1-login-load")
+    parser.add_argument("--trial-firefox", type=Path, help="Existing Firefox executable for strict Nginx login sampling")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--statement-corpus", type=Path, help="optional prepared bundle statements directory, renderer-only checks")
     mode.add_argument("--authorized-draft-bundle", type=Path, help="run real authorized previews for the pinned ten-problem private bundle")
@@ -82,6 +83,10 @@ def arguments():
     args = parser.parse_args()
     if args.trial_nginx_image and not args.m1_login_load:
         raise ValueError("Nginx fixture requires concentrated login mode")
+    if args.trial_firefox:
+        if not args.trial_nginx_image or args.chromium_executable:
+            raise ValueError("strict trial Firefox requires the Nginx login fixture")
+        args.trial_firefox = local_path(args.trial_firefox, executable=True)
     output = args.output_dir.resolve()
     if args.output_dir.is_symlink() or output.exists() or output.is_relative_to(ROOT) or not output.parent.is_dir() or "," in str(output) or "," in str(ROOT):
         raise ValueError("output must be a new directory outside the repository")
@@ -275,6 +280,9 @@ def main():
             script_name, check_count = "training-history-qa.mjs", 5
         qa_script = ROOT / "tests/browser" / script_name
         expected_checks = re.findall(r"^\s+passed\('([^'\n]+)'\)", qa_script.read_text(), re.M)
+        if args.trial_firefox:
+            expected_checks.insert(0, "fresh Firefox rejects the untrusted trial issuer")
+            check_count += 1
         if len(expected_checks) != check_count or len(set(expected_checks)) != check_count:
             raise ValueError("browser driver check contract changed")
         phase = "FRONTEND"
@@ -398,6 +406,8 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
             env["OJ_CHROMIUM_EXECUTABLE"] = str(args.chromium_executable)
         if args.cold_firefox:
             env.update(OJ_FIREFOX_EXECUTABLE=str(args.cold_firefox), OJ_BROWSER_CA_FILE=str(ca))
+        if args.trial_firefox:
+            env.update(OJ_FIREFOX_EXECUTABLE=str(args.trial_firefox), OJ_BROWSER_CA_FILE=str(tls / "public-ca.pem"))
         with (out / "node.log").open("w") as node_log:
             qa = subprocess.run([str(args.node), str(qa_script)], env=env, stdout=node_log, stderr=subprocess.STDOUT,
                                 timeout=420 if args.authorized_drafts else 120)
