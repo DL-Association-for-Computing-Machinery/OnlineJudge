@@ -58,6 +58,7 @@ type handler struct {
 	devices                DeviceSessions
 	rotate                 rotateSession
 	management             ManagementSessions
+	managementRoles        ManagementRoleChanges
 }
 
 // New builds three explicit endpoints without registering any application route:
@@ -95,6 +96,10 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if IsManagementSessionPath(r.URL.Path) {
 		h.serveManagement(w, r, source)
+		return
+	}
+	if r.URL.Path == ManagementRolePath {
+		h.serveManagementRole(w, r, source)
 		return
 	}
 	method := ""

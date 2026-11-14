@@ -89,6 +89,8 @@ type Config struct {
 	SessionRotation bool
 	// ManagementSessions enables the separate platform administrator login.
 	ManagementSessions bool
+	// ManagementRoleChanges requires ManagementSessions and opens role writes.
+	ManagementRoleChanges bool
 
 	// EmailLimits optionally provisions the email marker during isolated
 	// recovery. This alone does not enable any public account route.
@@ -138,6 +140,9 @@ func cloneTLS(mode Security, config *tls.Config) (*tls.Config, error) {
 }
 
 func (c Config) validate() (*password.Hasher, *password.BoundedHasher, error) {
+	if c.ManagementRoleChanges && !c.ManagementSessions {
+		return nil, nil, ErrConfig
+	}
 	if c.EmailLimits != nil && c.EmailLimits.Validate() != nil {
 		return nil, nil, ErrConfig
 	}

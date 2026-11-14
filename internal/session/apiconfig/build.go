@@ -24,6 +24,10 @@ func (w document) config() (Config, error) {
 	r.SessionDevices = w.SessionDevices
 	r.SessionRotation = w.SessionRotation
 	r.ManagementSessions = w.ManagementSessions
+	r.ManagementRoleChanges = w.ManagementRoleChanges
+	if r.ManagementRoleChanges && !r.ManagementSessions {
+		return Config{}, ErrConfig
+	}
 	r.HTTP.Origin = w.Origin
 	if !durations([]durationField{{w.LoginWindow, &r.LoginWindow}, {w.StartupTimeout, &r.StartupTimeout},
 		{w.HTTPTimeout, &r.HTTP.Timeout}}) || r.StartupTimeout <= 0 || r.StartupTimeout > time.Minute ||

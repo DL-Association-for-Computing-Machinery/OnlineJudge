@@ -78,6 +78,12 @@ func TestManagementSessionsOptIn(t *testing.T) {
 	}
 	reject(t, with(`"true"`))
 	reject(t, with(`null`))
+	roleChanges := strings.Replace(validDocument, `"version":1,`, `"version":1,"management_role_changes":true,`, 1)
+	reject(t, []byte(roleChanges))
+	c, err = Parse([]byte(strings.Replace(roleChanges, `"version":1,`, `"version":1,"management_sessions":true,`, 1)))
+	if err != nil || !c.Runtime.ManagementRoleChanges {
+		t.Fatal("explicit role writes were not preserved")
+	}
 }
 
 func reject(t *testing.T, body []byte) {

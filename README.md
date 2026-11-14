@@ -661,7 +661,7 @@ Dockerfile 的 Go、Node、pnpm 与现有配置保持一致，基础镜像固定
 
 ## 显式启用普通会话 API
 
-平台管理员资格由受信维护入口单独管理。迁移后用 `.local/bin/migrate platform-admin inspect --subject <id>` 读取最新修订；用 `.local/bin/migrate platform-admin set --subject <id> --expected-revision <n> --enabled <true|false> --operator <name> --reason <reason>` 授权或撤销。初次修订填 0；结果未知时先 inspect。命令使用私有维护库连接 `OJ_DATABASE_URL`，不发放管理会话。只向维护角色授予写角色历史的权限。
+平台管理员首次授权由受信维护入口管理。迁移后用 `.local/bin/migrate platform-admin inspect --subject <id>` 读取最新修订；用 `.local/bin/migrate platform-admin set --subject <id> --expected-revision <n> --enabled <true|false> --operator <name> --reason <reason>` 授权或撤销。初次修订填 0；结果未知时先 inspect。命令使用私有维护库连接 `OJ_DATABASE_URL`，不发放管理会话；维护操作者名不得以 `platform-admin:` 开头。
 
 API 镜像的 `/usr/local/bin/oj-api` 在非空 `OJ_SESSION_CONFIG_FILE` 下切换为独立会话 HTTPS 服务；同时必须显式设置 `OJ_API_ADDR`（例如容器内 `:8443`），不能与 `OJ_EXPERIMENT_TOKEN_FILE` 同用。配置文件为绝对规范路径，完整字段及权限见[配置合同](docs/architecture/session-design.md#717-显式会话-api-入口)。未设置配置路径时仍运行现有 bootstrap/实验模式，不尝试连接会话数据库。
 
@@ -675,7 +675,7 @@ direct 模式要求客户端直接 TLS；proxy 模式要求同一监听器的已
 
 可选 `session_rotation: true` 启用当前会话的同源凭据轮换 API。换发保留原期限和名额，消耗共享登录恢复限额；浏览器界面不自动触发。回执未知时先读取当前会话，失效则重新登录。
 
-可选 `management_sessions: true` 启用[独立平台管理员会话](api/session.openapi.yaml)。管理员以本人密码登录，使用独立的非持久 Cookie，空闲 30 分钟、最长 8 小时；查询不续期，同源活动才续期。启用时共享现有登录限流、密码计算和连接预算；普通会话不能访问管理路由。此配置只开放管理会话生命周期。
+可选 `management_sessions: true` 启用[独立平台管理员会话](api/session.openapi.yaml)。管理员以本人密码登录，使用独立的非持久 Cookie，空闲 30 分钟、最长 8 小时；查询不续期，同源活动才续期。启用时共享现有登录限流、密码计算和连接预算；普通会话不能访问管理路由。再显式设置 `management_role_changes: true` 才开放平台角色写入，应用数据库角色须有该历史表的 INSERT 权限。每次写入需重新输入操作者本人密码；首次授权仍由受信维护命令完成，结果未知时先用 `inspect` 查目标修订。
 
 可选的 `password_change` 对象另行启用 `POST /api/v1/account/password`，省略时保持 404。必须显式给定 `minimum_characters`、`blocklist_file` 及 `global`/`source`/`subject` 三个 `{count, window}` 额度；用户已确认至少 15 个 Unicode code point、允许空格、不强制字符组合、拒绝常见弱密码，保留原始字节且不 trim/归一化/截断。最低字符数可配置更高值，KDF 最大密码字节预算至少为最低字符数的四倍。规则文件是至多 1 MiB 的版本 1 JSON 整串 SHA-256 弱密码摘要表，采用与公开证书相同的受控文件读取约束；格式及边界见上述设计。生产字典仍须验证来源、许可与覆盖，不能将合成测试词条当作生产覆盖证明。
 

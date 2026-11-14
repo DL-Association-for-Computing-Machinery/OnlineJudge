@@ -22,6 +22,50 @@ info:
 security:
   - ordinarySession: []
 paths:
+  /api/v1/platform-admin/roles/change:
+    post:
+      operationId: changePlatformAdministratorRole
+      security: [{managementSession: []}]
+      description: >-
+        仅在 management_sessions 与 management_role_changes 均开启时使用。每次以同源 POST 提交当前管理员的本人密码；
+        共享登录限流。目标必须是另一账号；首次变更期望修订填 0。授权要求目标启用且邮箱已验证。
+        只返回已提交的角色修订，操作人由会话决定，不续期或换发 Cookie。503 后先经维护命令核对当前修订。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subject_id, expected_revision, enabled, reason, password]
+              additionalProperties: false
+              properties:
+                subject_id: {type: string, pattern: '^[0-9a-f]{32}$'}
+                expected_revision: {type: integer, format: int64, minimum: 0, maximum: 9223372036854775806}
+                enabled: {type: boolean}
+                reason: {type: string, minLength: 1, description: 最多 512 UTF-8 字节。}
+                password: {type: string, minLength: 1, writeOnly: true}
+      responses:
+        '200':
+          description: 角色修订与审计已提交。
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [subject_id, revision, enabled]
+                properties:
+                  subject_id: {type: string}
+                  revision: {type: integer, format: int64}
+                  enabled: {type: boolean}
+        '400': {description: 输入无效或尝试更改本人的平台角色。}
+        '401': {description: 管理会话、密码或账号资格不满足。}
+        '403': {$ref: '#/components/responses/OriginRejected'}
+        '404': {description: 功能关闭或目标账号不存在。}
+        '405': {$ref: '#/components/responses/PostOnly'}
+        '409': {description: 目标角色修订已改变。}
+        '413': {description: 请求过大。}
+        '415': {description: 需要 JSON 请求。}
+        '429': {description: 共享登录限流已达上限。}
+        '503': {description: 结果未知，先读取当前修订；勿自动重试。}
   /api/v1/platform-admin/session/login:
     post:
       operationId: loginPlatformAdministrator

@@ -171,6 +171,16 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 		if err != nil {
 			return nil, ErrConfig
 		}
+		if c.ManagementRoleChanges {
+			changes, err := redisstore.NewManagementRoleChanges(management, login, roles)
+			if err != nil {
+				return nil, ErrConfig
+			}
+			handler, err = httptransport.WithManagementRoleChanges(handler, changes)
+			if err != nil {
+				return nil, ErrConfig
+			}
+		}
 	}
 	if c.SessionDevices {
 		handler, err = httptransport.WithDevices(handler, store)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
@@ -52,7 +53,7 @@ func (s *PlatformAdmins) Inspect(ctx context.Context, subject string) (identity.
 // first-grant races and admission against changes to an existing grant.
 func (s *PlatformAdmins) Change(ctx context.Context, c identity.PlatformAdminChange) (identity.PlatformAdminRole, error) {
 	var zero identity.PlatformAdminRole
-	if s == nil || s.pool == nil || ctx == nil || !c.Valid() || c.ExpectedRevision == math.MaxInt64 {
+	if s == nil || s.pool == nil || ctx == nil || !c.Valid() || c.ExpectedRevision == math.MaxInt64 || strings.HasPrefix(c.Operator, identity.PlatformAdminOperatorPrefix) {
 		return zero, identity.ErrInvalid
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -74,7 +75,19 @@ func (s *PlatformAdmins) Change(ctx context.Context, c identity.PlatformAdminCha
 	if err != nil {
 		return zero, storageError{err}
 	}
-	if c.Enabled && !account.Enabled {
+	next, err := appendPlatformAdmin(ctx, q, c, account.Enabled, nil)
+	if err != nil {
+		return zero, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return zero, storageError{err}
+	}
+	return next, nil
+}
+
+func appendPlatformAdmin(ctx context.Context, q *identitydb.Queries, c identity.PlatformAdminChange, enabled bool, confirm func(context.Context) error) (identity.PlatformAdminRole, error) {
+	var zero identity.PlatformAdminRole
+	if c.Enabled && !enabled {
 		return zero, identity.ErrPlatformAdminRequired
 	}
 	if c.Enabled {
@@ -89,12 +102,14 @@ func (s *PlatformAdmins) Change(ctx context.Context, c identity.PlatformAdminCha
 	if old.Revision != c.ExpectedRevision {
 		return zero, identity.ErrConflict
 	}
+	if confirm != nil {
+		if err := confirm(ctx); err != nil {
+			return zero, err
+		}
+	}
 	next := identity.PlatformAdminRole{SubjectID: c.SubjectID, Revision: old.Revision + 1, Enabled: c.Enabled}
 	if err := q.AppendPlatformAdmin(ctx, identitydb.AppendPlatformAdminParams{SubjectID: next.SubjectID,
 		Revision: next.Revision, Enabled: next.Enabled, MaintenanceOperator: c.Operator, Reason: c.Reason}); err != nil {
-		return zero, storageError{err}
-	}
-	if err := tx.Commit(ctx); err != nil {
 		return zero, storageError{err}
 	}
 	return next, nil
