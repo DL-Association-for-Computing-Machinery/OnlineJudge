@@ -11,6 +11,7 @@ const language = process.env.OJ_BROWSER_TRAINING_LANGUAGE ?? 'c17'
 assert(['c17', 'gnu++17', 'gnu++20', 'java21', 'python3'].includes(language))
 const label = { c17: 'C17', 'gnu++17': 'GNU++17', 'gnu++20': 'GNU++20', java21: 'Java 21', python3: 'Python 3.14' }[language]
 const spj = process.env.OJ_BROWSER_SPJ_SPAN === '1'
+const decimal = process.env.OJ_BROWSER_DECIMAL_SPAN === '1'
 assert(!spj || language === 'gnu++17')
 const cpp20Guard = '#if __cplusplus < 202002L\n#error GNU++20 required\n#endif\n'
 const correct = '#include <stdio.h>\nint main(void){long long a,b;if(scanf("%lld%lld",&a,&b)!=2)return 1;printf("%lld\\n",a+b);}'
@@ -87,7 +88,9 @@ const spjSources = {
   // Legal whitespace makes the checker observable for a controlled interruption.
   fault: [['#include <string>\n' + span.replace('std::cout<<1', "std::cout<<std::string(210000,' ')<<1"), 'AC']],
 }
-const sources = spj ? spjSources : language === 'java21' ? javaSources : language === 'python3' ? pythonSources : nativeSources
+const decimalSpan = span.replace("std::cout<<1<<' '<<hi-lo-1", 'std::cout<<"range "<<hi-lo<<"e-1"')
+const decimalSources = { overlap: [[decimalSpan, 'AC'], [decimalSpan, 'AC']], fault: [[decimalSpan, 'AC']] }
+const sources = decimal ? decimalSources : spj ? spjSources : language === 'java21' ? javaSources : language === 'python3' ? pythonSources : nativeSources
 function sourceForLanguage(source, verdict) {
   if (language !== 'gnu++20') return source
   // C++ requires an explicit conversion from malloc's void pointer.
@@ -131,7 +134,7 @@ try {
     for (const [fixture, verdict] of sources[phase]) {
       const source = sourceForLanguage(fixture, verdict)
       await page.goto(info.url + '/problems')
-      await page.getByRole('link', { name: spj ? '数列极差（SPJ）' : 'A + B', exact: true }).click()
+      await page.getByRole('link', { name: decimal ? '十分之一极差（浮点）' : spj ? '数列极差（SPJ）' : 'A + B', exact: true }).click()
       await page.getByLabel('语言', { exact: true }).selectOption(language)
       await page.locator('#training-source:not([readonly])').waitFor()
       await page.getByLabel('源码', { exact: true }).fill(source)

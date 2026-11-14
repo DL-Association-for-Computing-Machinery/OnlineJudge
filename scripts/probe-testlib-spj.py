@@ -98,6 +98,22 @@ def run_cases(slot, id_, cases):
 def remove(slot, id_):
     docker("exec", slot, "curl", "-fsS", "--max-time", "3", "-X", "DELETE", f"http://127.0.0.1:5050/file/{id_}")
 
+def diagnostic_limit(slot, header):
+    id_ = compile_fixture(slot, "testlib_diagnostic_checker.cpp", header)
+    try:
+        run = command(["./checker", "input", "output", "answer"], 1_000_000_000, 4_000_000_000, 128 << 20, 8)
+        run["copyIn"] = {"checker": {"fileId": id_}, **{name: {"content": ""} for name in ("input", "output", "answer")}}
+        receipt = request(slot, run)
+        # Inline diagnostics are collected differently from cached contestant
+        # stdout. Either the executor status or the inline bytes must expose it.
+        status = receipt.get("status")
+        stderr_size = len(receipt.get("files", {}).get("stderr", "").encode())
+        if status != "Output Limit Exceeded" and stderr_size <= 4096:
+            raise RuntimeError(f"missing checker diagnostic quota evidence: {status} / {stderr_size} bytes")
+        print("PASS checker diagnostic output limit")
+    finally:
+        remove(slot, id_)
+
 
 def checked_exit(slot, id_, name, test, output, answer, code):
     run = command(["./checker", "input", "output", "answer"], 1_000_000_000, 4_000_000_000, 128 << 20, 8)
@@ -193,6 +209,13 @@ def main():
         ("partial", "2", "", "", 55),
         ("partial with extra output", "2", "extra", "", 55),
     ])
+    run_cases(args.slot, compile_fixture(args.slot, "testlib_mixed_checker.cpp", header), [
+        ("mixed exact real boundary", "7", "7 1.125", "7 1", 50),
+        ("mixed real above boundary", "7", "7 1.126", "7 1", 51),
+        ("mixed wrong integer", "7", "8 1", "7 1", 51),
+        ("mixed non-integer token", "7", "7.0 1", "7 1", 52),
+    ])
+    diagnostic_limit(args.slot, header)
 
 
 if __name__ == "__main__":
