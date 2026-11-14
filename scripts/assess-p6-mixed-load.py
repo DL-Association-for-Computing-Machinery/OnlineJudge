@@ -2,71 +2,17 @@
 """Assess three recorded mixed-training rounds; never send traffic."""
 
 import argparse
-import hashlib
 import json
-import math
-import os
 from pathlib import Path
-import re
-import stat
 import sys
+
+from p6_evidence import SHA, exact, label, number, read, timings
 
 
 WINDOW = 900_000
 READ_BUCKET = 10_000
 TIERS = {"small", "medium", "heaviest"}
 READ_KINDS = {"statement", "result", "history"}
-MAX_RECORD = 24 << 20
-IDENT = re.compile(r"[a-zA-Z0-9_.:-]{1,80}")
-SHA = re.compile(r"[0-9a-f]{64}")
-
-
-def unique(pairs):
-    result = {}
-    for key, value in pairs:
-        if key in result:
-            raise ValueError("duplicate field")
-        result[key] = value
-    return result
-
-
-def read(path):
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    with os.fdopen(fd, "rb") as stream:
-        if not stat.S_ISREG(os.fstat(fd).st_mode):
-            raise ValueError("expected regular record")
-        raw = stream.read(MAX_RECORD + 1)
-    if len(raw) > MAX_RECORD:
-        raise ValueError("oversized record")
-    return json.loads(raw, object_pairs_hook=unique), hashlib.sha256(raw).hexdigest()
-
-
-def exact(obj, fields):
-    if not isinstance(obj, dict) or set(obj) != set(fields.split()):
-        raise ValueError("unexpected record fields")
-
-
-def number(value, low, high):
-    if type(value) is not int or not low <= value <= high:
-        raise ValueError("number outside supported range")
-    return value
-
-
-def label(value, pattern=IDENT):
-    if not isinstance(value, str) or not pattern.fullmatch(value):
-        raise ValueError("invalid identifier")
-    return value
-
-
-def timings(values, attempts):
-    values = sorted(values)
-    # Failed or missing observations rank after finite observations. Also
-    # report the count of actual finite measurements for each population.
-    result = {"attempts": attempts, "samples": len(values)}
-    for p in (50, 95, 99):
-        index = math.ceil(attempts * p / 100) - 1
-        result[f"p{p}_ms"] = values[index] if 0 <= index < len(values) else None
-    return result
 
 
 def assess_round(record, versions):

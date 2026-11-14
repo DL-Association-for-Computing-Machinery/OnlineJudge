@@ -791,6 +791,16 @@ python3 -B scripts/assess-p6-mixed-load.py "$MIXED_LOAD_RECORD"
 
 命令只读核对已记录的负载、时延和接收对账，不发请求；本地合成记录通过不代表试用容量达标。
 
+### 核对 P6 过载恢复记录
+
+按[过载恢复记录约定](docs/delivery-evidence/p6-trial-acceptance.md#过载恢复记录核对)留存三轮的客户端记录和独立采集的服务端账本：
+
+```sh
+python3 -B scripts/assess-p6-overload.py "$OVERLOAD_CLIENT_RECORD" "$OVERLOAD_SERVER_LEDGER"
+```
+
+命令只读核对队列打满、拒绝未写入、原键重放及恢复接收。不发送流量，也不替代对原始记录和现场环境的复核。
+
 ### 浏览器账号专项
 
 账号页面与 API 必须由同一 HTTPS Origin 提供；当前默认 Compose/Vite HTTP 入口会阻止账号请求。不要通过关闭 Secure Cookie/来源检查或启用跨源代理来让密码表单工作。实际流程及限制见[浏览器账号](docs/account-browser.md)。
