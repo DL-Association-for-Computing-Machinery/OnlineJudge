@@ -1014,6 +1014,12 @@ bash scripts/smoke-cold-trial-judge.sh "$COLD_DOCKER_SOCKET" "$COLD_ENGINE_DIR" 
 
 切换前先用安装后的配置执行 `nginx -t`，再从信任公开 CA 的干净客户端检查静态资源、`/api/v1/readyz`、登录及退出；错误公开 Host 和错误后端证书必须被拒绝。模板关闭访问日志以免记录敏感请求，现场的值守采样与告警另行配置。此模板不改变默认 Compose，也不配置校内 DNS、证书分发或发布服务。
 
+#### 试用入口暂停写入
+
+将专用维护目录只读挂载到 Nginx 的 `/run/oj-maintenance`，确保 Nginx 用户可遍历，由值守人独立控制。正常运行时不放标记；维护开始后，在宿主维护目录创建普通文件 `paused`，退出维护时仅移除此标记。挂载整个目录，切换不需重启或重载 Nginx。切换后从公开路径确认非 GET/HEAD 的 `/api/` 请求返回 `503`、`TRIAL_MAINTENANCE` 和 `Cache-Control: no-store`，现有查询、静态页面及就绪检查仍按原规则处理。
+
+未挂载目录或 Nginx 无法读取标记时不能用此开关停写，必须以实际探针确认。标记不取消已转发请求，也不阻止绕开该入口的 API、数据库维护、邮件及 Worker 操作；[试用值守手册](docs/p6-operator-runbook.md#发布排空和兼容回退)另行要求停止相关写进程并确认排空。
+
 本地可复跑真实 API 与 Nginx 联验。准备普通会话专项的工具链、Redis 镜像和模块缓存，另用本地非 root Nginx 镜像及导出的正式 `site/`。宿主机需要已有的 `openssl`：
 
 ```sh
@@ -1022,7 +1028,7 @@ python3 -B scripts/test-session-protocol.py --suite trial-edge \
   --nginx-image "$LOCAL_NGINX_IMAGE" --trial-site "$TRIAL_SITE"
 ```
 
-专项用临时 CA、合成账号、真实 PostgreSQL／Redis 和独立 API 进程；Nginx 和 API 共用私有网络空间，不发布宿主端口。Go HTTPS 客户端验证信任链、静态入口、就绪、两步登录、转发头覆盖、Cookie 及退出后旧会话失效。此专项不替代现场浏览器、DNS 或独立故障域验收。
+专项用临时 CA、合成账号、真实 PostgreSQL／Redis 和独立 API 进程；Nginx 和 API 共用私有网络空间，不发布宿主端口。Go HTTPS 客户端验证信任链、静态入口、就绪、两步登录、转发头覆盖、Cookie、维护期间写入拒绝与会话可读，以及恢复后退出使旧会话失效。此专项不替代现场浏览器、DNS 或独立故障域验收。
 
 ### 专用 Ubuntu VM 判题实验
 

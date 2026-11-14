@@ -115,13 +115,18 @@ def trial_tls(root):
 def run_trial_edge(docker, options, toolchain, nginx, assets, prefix):
     with tempfile.TemporaryDirectory(prefix="oj-trial-edge-") as tmp:
         tls = trial_tls(Path(tmp))
+        maintenance = Path(tmp) / "maintenance"
+        maintenance.mkdir(mode=0o777)
+        maintenance.chmod(0o777)
         test = docker.create(*options, "--mount", f"type=bind,src={tls},dst=/trial-tls,readonly",
+                             "--mount", f"type=bind,src={maintenance},dst=/trial-maintenance",
                              "--entrypoint", "sleep", toolchain, "infinity")
         docker.run("start", test)
         edge = docker.create("--name", prefix + "-edge", "--network", f"container:{test}",
                              "--read-only", "--tmpfs", "/tmp:rw,size=16m,mode=1777",
                              "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
                              "--mount", f"type=bind,src={tls},dst=/run/oj-edge,readonly",
+                             "--mount", f"type=bind,src={maintenance},dst=/run/oj-maintenance,readonly",
                              "--mount", f"type=bind,src={assets},dst=/srv/oj/site,readonly",
                              "--mount", f"type=bind,src={ROOT}/deploy/trial/nginx.conf.example,dst=/trial.conf,readonly",
                              "--entrypoint", "sh", nginx, "-ec",

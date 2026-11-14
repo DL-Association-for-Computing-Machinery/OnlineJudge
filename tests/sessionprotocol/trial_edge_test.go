@@ -116,6 +116,22 @@ func TestTrialEdge(t *testing.T) {
 	if identity.SubjectID != subject.ID {
 		t.Fatal("trial edge returned the wrong account")
 	}
+	marker := "/trial-maintenance/paused"
+	must(t, os.WriteFile(marker, nil, 0644))
+	for _, method := range []string{http.MethodPost, http.MethodPatch, http.MethodOptions} {
+		blocked := call("/api/v1/session/logout", "", false, func(r *http.Request) { r.Method = method })
+		loginStatus(t, blocked, 503)
+		if string(blocked.body) != `{"code":"TRIAL_MAINTENANCE"}` ||
+			blocked.headers.Get("Cache-Control") != "no-store" || len(blocked.cookies) != 0 {
+			t.Fatal("maintenance rejection changed cookies or returned a cacheable response")
+		}
+	}
+	loginStatus(t, call("/api/v1/readyz", "", true, nil), 200)
+	loginStatus(t, call("/api/v1/readyz", "", true, func(r *http.Request) {
+		r.Method = http.MethodHead
+	}), 405) // Nginx forwards HEAD; the API allows only GET here.
+	loginStatus(t, call("/api/v1/session", "", true, nil), 200)
+	must(t, os.Remove(marker))
 	logout := call("/api/v1/session/logout", "", false, nil)
 	loginStatus(t, logout, 204)
 	if responseCookie(t, logout, transport.CookieName).MaxAge != -1 ||
