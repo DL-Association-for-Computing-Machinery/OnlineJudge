@@ -145,6 +145,21 @@ env -u OJ_WORKER_M0_SLOT -u OJ_WORKER_M0_DUAL_EXPERIMENT OJ_SANDBOX_EXPERIMENT=1
 
 专用 Ubuntu VM 导出时另加 `--ubuntu-aplusb` 并使用 Ubuntu 判题清单摘要。登记、控制端和 Worker 均设置 `OJ_APLUSB_RUNTIME=ubuntu-arm64` 和 Ubuntu 运输清单及其摘要，Worker 必须设置 `OJ_APLUSB_START_STOPPED=1`。在客体内用 Linux arm64 构建和相同测试，另传 `OJ_TEST_APLUSB_DESKTOP_MANIFEST` 为原 Desktop 运输清单的绝对路径，用来验证零领取。恢复后重判 Ubuntu 提交时，维护命令也需要同一档位和清单。
 
+### 核对 A+B 现场准入记录
+
+已有[交接报告回执](docs/checker-admission.md#封存与复核报告回执)，且维护者已从独立渠道取得目标节点、Worker 制品及两份[现场观察记录](docs/checker-admission.md#生产检查器与目标节点记录复核)的绑定后，可在可信主机离线核对：
+
+```sh
+checker-candidate review-aplusb-admission \
+  --receipt-directory "$PRIVATE_RECEIPT_DIRECTORY" --expected-receipt "$TRUSTED_RECEIPT_SHA256" \
+  --expected-handoff "$TRUSTED_HANDOFF_SHA256" --expected-worker "$TRUSTED_WORKER_SHA256" \
+  --target-observation "$PRIVATE_TARGET_JSON" --expected-target-observation "$TRUSTED_TARGET_SHA256" \
+  --checker-observation "$PRIVATE_CHECKER_JSON" --expected-checker-observation "$TRUSTED_CHECKER_SHA256" \
+  --node "$EXPECTED_NODE" --revision "$EXPECTED_REVISION" --runtime "$EXPECTED_RUNTIME" --slot "$EXPECTED_SLOT"
+```
+
+三处路径须为绝对路径；摘要用独立取得的值。成功输出 `review-input-only` 供维护者核对；不会启用生产检查器、确认目标环境通过或批准题目。
+
 ### 私有草稿参考验证
 
 [#151 新题包](docs/delivery-log.md#2026-11-11新版题包十题参考复验与卷积报告接纳)的十题254点均通过固定环境维护参考验证并确认停止。最初批次因素性测试宿主超时中止，受控恢复后以新报告完成余下六题；[原失败](docs/delivery-log.md#2026-11-11新版题包维护参考复验中止)仍保留，根因未知。维护入口不写数据库验证状态或发布。需要已配置且停止的专用槽、已有固定镜像与 Docker Desktop、macOS arm64；命令不会自动创建、替换或恢复槽。使用已有 Go 1.26.11 工具链镜像构建独立宿主产物（不与 Linux 检查共用输出）：

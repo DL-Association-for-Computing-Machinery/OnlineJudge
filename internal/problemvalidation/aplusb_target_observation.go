@@ -56,7 +56,7 @@ type aplusbTargetObservation struct {
 	BuildProvenance  string                      `json:"build_provenance_sha256"`
 	Handoff          string                      `json:"handoff_sha256"`
 	Receipt          string                      `json:"receipt_sha256"`
-	Reports          [3]string                   `json:"report_sha256"`
+	Reports          [3]string                   `json:"ac_wa_ole_report_sha256"`
 	Observed         aplusbObservationProvenance `json:"observation"`
 	WorkerVerified   bool                        `json:"worker_and_revision_observed"`
 	NodeVerified     bool                        `json:"node_and_runtime_observed"`

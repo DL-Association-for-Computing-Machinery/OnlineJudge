@@ -3,6 +3,8 @@ package problemvalidation
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -78,8 +80,8 @@ func TestAPlusBObservationCanonicalFormat(t *testing.T) {
 	for _, body := range [][]byte{
 		bytes.Replace(canonical, []byte("{"), []byte("{\"private_path\":\"redacted\","), 1),
 		bytes.Replace(canonical, []byte("{"), []byte("{\"schema\":\"other\","), 1),
-		bytes.Replace(canonical, []byte("\"report_sha256\""), []byte("\"REPORT_SHA256\""), 1),
-		bytes.Replace(canonical, []byte("\"report_sha256\":["), []byte("\"report_sha256\":[\"additional\","), 1),
+		bytes.Replace(canonical, []byte("\"ac_wa_ole_report_sha256\""), []byte("\"AC_WA_OLE_REPORT_SHA256\""), 1),
+		bytes.Replace(canonical, []byte("\"ac_wa_ole_report_sha256\":["), []byte("\"ac_wa_ole_report_sha256\":[\"additional\","), 1),
 		bytes.Join([][]byte{canonical, []byte("{}")}, nil),
 		bytes.Repeat([]byte(" "), maxAPlusBObservationBytes+1),
 	} {
@@ -89,5 +91,23 @@ func TestAPlusBObservationCanonicalFormat(t *testing.T) {
 	}
 	if _, err := decodeAPlusBObservation[aplusbTargetObservation](canonical, strings.Repeat("d", 64)); err == nil {
 		t.Fatal("observation accepted with wrong external digest")
+	}
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(base, "observation.json")
+	if err := os.WriteFile(path, canonical, 0600); err != nil {
+		t.Fatal(err)
+	}
+	pin := handoffDigest(canonical)
+	if got, err := readAPlusBObservation[aplusbTargetObservation](path, pin); err != nil || got != good {
+		t.Fatalf("private observation did not read back: %v", err)
+	}
+	if err := os.Chmod(path, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readAPlusBObservation[aplusbTargetObservation](path, pin); err == nil {
+		t.Fatal("accepted a file without private permissions")
 	}
 }
