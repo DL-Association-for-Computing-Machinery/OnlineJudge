@@ -297,6 +297,43 @@ func TestReviewReturnIntakeWaitsAndSeesCommittedReturn(t *testing.T) {
 	requireReviewError(t, err, problemreference.ErrNotFound)
 }
 
+func TestReviewEligibilityWaitsForTheSameMaterialDecision(t *testing.T) {
+	f := newReviewFixture(t)
+	f.grant(t, f.reader, 0, true)
+	e := assignReview(t, f, f.item.ID)
+	tx, err := f.a.Begin(f.ctx)
+	must(t, err)
+	defer func() { _ = tx.Rollback(f.ctx) }()
+	var holder uint32
+	must(t, tx.QueryRow(f.ctx, "SELECT pg_backend_pid()").Scan(&holder))
+	digest := sha256.Sum256([]byte("onlinejudge/review-material/v1:" + f.actor.SubjectID +
+		e.ImportRevision + e.FormalPlanSHA256 + e.ProfileSHA256 + e.EvidenceSHA256 + e.ComparisonPlan))
+	_, err = tx.Exec(f.ctx, "SELECT pg_advisory_xact_lock($1::bigint)", int64(binary.BigEndian.Uint64(digest[:8])))
+	must(t, err)
+	type result struct {
+		snapshot problemreference.ReviewEligibilitySnapshot
+		err      error
+	}
+	done := make(chan result, 1)
+	go func() {
+		snapshot, err := f.reviews.ReviewEligibilitySnapshot(f.ctx, f.reader, e.ReviewID)
+		done <- result{snapshot, err}
+	}()
+	waitBacklogBlocked(t, f.backlogFixture, holder, f.appB)
+	i := returnIntent(e, "review-return-waits-eligibility")
+	_, err = tx.Exec(f.ctx, `INSERT INTO problem_review_returns
+		(review_id,material_sha256,reviewer_subject_id,request_key,reason,auth_generation,recovery_id,reviewer_revision,assignment_revision)
+		VALUES($1,$2,$3,$4,$5,$6,$7,1,$8)`, e.ReviewID, hex.EncodeToString(digest[:]), f.reader.SubjectID,
+		i.RequestKey, i.Reason, f.reader.AuthGeneration, f.reader.RecoveryID, i.AssignmentRevision)
+	must(t, err)
+	must(t, tx.Commit(f.ctx))
+	got := <-done
+	must(t, got.err)
+	if !got.snapshot.Returned || got.snapshot.Evidence != e {
+		t.Fatal("eligibility returned an observation from before the committed material decision")
+	}
+}
+
 func TestReviewReturnCoversDuplicateIntakeCommittedFirst(t *testing.T) {
 	f := newReviewFixture(t)
 	f.grant(t, f.reader, 0, true)
