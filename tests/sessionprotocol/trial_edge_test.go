@@ -36,22 +36,7 @@ func TestTrialEdge(t *testing.T) {
 	must(t, err)
 	c.Proxy.CertificateSHA256 = [][32]byte{sha256.Sum256(pair.Certificate[0])}
 	cfg := entryConfig(t, c, testpki.New(t), 3*time.Second)
-	data, err := os.ReadFile(cfg)
-	must(t, err)
-	var doc map[string]any
-	must(t, json.Unmarshal(data, &doc))
-	material := make(map[string]string)
-	for field, name := range map[string]string{"certificate_file": "backend-chain.pem", "key_file": "backend-key.pem", "ca_file": "api-ca.pem"} {
-		raw, err := os.ReadFile(filepath.Join("/trial-tls", name))
-		must(t, err)
-		path := filepath.Join(filepath.Dir(cfg), name)
-		must(t, os.WriteFile(path, raw, 0600))
-		material[field] = path
-	}
-	doc["tls"] = material
-	data, err = json.Marshal(doc)
-	must(t, err)
-	must(t, os.WriteFile(cfg, data, 0600))
+	setTrialBackendTLS(t, cfg)
 	p := entryStart(t, entryBinary(t), cfg, "127.0.0.1:9443")
 	p.waitEvent(t, "API starting")
 
@@ -148,4 +133,24 @@ func TestTrialEdge(t *testing.T) {
 	p.signal(t)
 	p.wait(t, true)
 	noRuntimeConnections(t, f, c.Database.ApplicationName)
+}
+
+func setTrialBackendTLS(t *testing.T, cfg string) {
+	t.Helper()
+	data, err := os.ReadFile(cfg)
+	must(t, err)
+	var doc map[string]any
+	must(t, json.Unmarshal(data, &doc))
+	material := make(map[string]string)
+	for field, name := range map[string]string{"certificate_file": "backend-chain.pem", "key_file": "backend-key.pem", "ca_file": "api-ca.pem"} {
+		raw, err := os.ReadFile(filepath.Join("/trial-tls", name))
+		must(t, err)
+		path := filepath.Join(filepath.Dir(cfg), name)
+		must(t, os.WriteFile(path, raw, 0600))
+		material[field] = path
+	}
+	doc["tls"] = material
+	data, err = json.Marshal(doc)
+	must(t, err)
+	must(t, os.WriteFile(cfg, data, 0600))
 }

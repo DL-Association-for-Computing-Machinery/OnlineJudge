@@ -44,6 +44,10 @@ func TestBrowserFixture(t *testing.T) {
 	c := runtimeConfig(t, f, namespace(t), false)
 	c.HTTP.Origin = origin.String()
 	loginLoad := os.Getenv("OJ_BROWSER_LOGIN_LOAD") == "1"
+	trialNginx := os.Getenv("OJ_BROWSER_TRIAL_NGINX") == "1"
+	if trialNginx && !loginLoad {
+		t.Fatal("trial Nginx requires the login load fixture")
+	}
 	if loginLoad {
 		c.PasswordPolicy.Current.MemoryKiB = 19 * 1024
 		c.PasswordPolicy.Current.Parallelism = 1
@@ -93,13 +97,23 @@ func TestBrowserFixture(t *testing.T) {
 	ca := testpki.New(t)
 	proxyCert, _, _ := ca.Issue(t, "spiffe://onlinejudge/proxy/browser-fixture", x509.ExtKeyUsageClientAuth, time.Now().Add(time.Hour))
 	c.Mode = sessionruntime.ProxyMTLS
+	if trialNginx {
+		proxyCert, err = tls.LoadX509KeyPair("/trial-tls/proxy-chain.pem", "/trial-tls/proxy-key.pem")
+		must(t, err)
+	}
 	c.Proxy.CertificateSHA256 = [][32]byte{sha256.Sum256(proxyCert.Certificate[0])}
 	connections := redisConnections(t, f)
 	writeTimeout := 5 * time.Second
 	if c.PrivateDrafts != nil {
 		writeTimeout = max(writeTimeout, c.PrivateDrafts.Timeout+time.Second)
 	}
-	process := entryStart(t, entryBinary(t), entryConfigWithWriteTimeout(t, c, ca, 3*time.Second, writeTimeout, rules), "127.0.0.1:0")
+	config := entryConfigWithWriteTimeout(t, c, ca, 3*time.Second, writeTimeout, rules)
+	address := "127.0.0.1:0"
+	if trialNginx {
+		setTrialBackendTLS(t, config)
+		address = "127.0.0.1:9443"
+	}
+	process := entryStart(t, entryBinary(t), config, address)
 	started := process.waitEvent(t, "API starting")
 	if started.Scope != "ordinary-session-http" {
 		t.Fatal("browser fixture started the wrong API scope")
@@ -171,12 +185,27 @@ func TestBrowserFixture(t *testing.T) {
 			static.ServeHTTP(w, r)
 		}
 	})
-	edge := browserServer(t, "0.0.0.0:9443", edgeHandler)
-	edgeCert, _, _ := ca.Issue(t, "", x509.ExtKeyUsageServerAuth, time.Now().Add(time.Hour))
-	edge.TLS = &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{edgeCert}}
-	edge.StartTLS()
-	plain := browserServer(t, "0.0.0.0:9444", static)
-	plain.Start()
+	var servers []*httptest.Server
+	if trialNginx {
+		control := browserServer(t, "127.0.0.1:9444", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost || r.URL.Path != "/stop" {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+			stop.Do(func() { close(done) })
+		}))
+		control.Start()
+		servers = append(servers, control)
+	} else {
+		edge := browserServer(t, "0.0.0.0:9443", edgeHandler)
+		edgeCert, _, _ := ca.Issue(t, "", x509.ExtKeyUsageServerAuth, time.Now().Add(time.Hour))
+		edge.TLS = &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{edgeCert}}
+		edge.StartTLS()
+		plain := browserServer(t, "0.0.0.0:9444", static)
+		plain.Start()
+		servers = append(servers, edge, plain)
+	}
 	info := map[string]string{"url": origin.String(), "email": subject.Email.Original(), "subject_id": subject.ID, "other_email": otherAuthor.Email.Original(), "other_subject_id": otherAuthor.ID}
 	if historyMode {
 		info["unverified_email"] = unverified
@@ -223,7 +252,7 @@ func TestBrowserFixture(t *testing.T) {
 	case <-t.Context().Done():
 		expired = true
 	}
-	for _, server := range []*httptest.Server{edge, plain} {
+	for _, server := range servers {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		err := server.Config.Shutdown(ctx)
 		cancel()

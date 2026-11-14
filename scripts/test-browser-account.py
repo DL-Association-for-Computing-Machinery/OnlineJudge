@@ -70,6 +70,7 @@ def arguments():
                         default=90, help="Preparation budget before browser checks (default: 90)")
     parser.add_argument("--playwright-module", type=Path, required=True)
     parser.add_argument("--chromium-executable", type=Path)
+    parser.add_argument("--trial-nginx-image", help="Existing local Nginx image; only with --m1-login-load")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--statement-corpus", type=Path, help="optional prepared bundle statements directory, renderer-only checks")
     mode.add_argument("--authorized-draft-bundle", type=Path, help="run real authorized previews for the pinned ten-problem private bundle")
@@ -79,6 +80,8 @@ def arguments():
     mode.add_argument("--training-history", action="store_true", help="verify personal training history through ordinary HTTPS sessions")
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
+    if args.trial_nginx_image and not args.m1_login_load:
+        raise ValueError("Nginx fixture requires concentrated login mode")
     output = args.output_dir.resolve()
     if args.output_dir.is_symlink() or output.exists() or output.is_relative_to(ROOT) or not output.parent.is_dir() or "," in str(output) or "," in str(ROOT):
         raise ValueError("output must be a new directory outside the repository")
@@ -230,6 +233,10 @@ def main():
         arch = {"x86_64": "amd64", "aarch64": "arm64"}.get(arch, arch)
         if any(item[1] != arch for item in images):
             raise ValueError("local image architecture mismatch")
+        if args.trial_nginx_image:
+            nginx, nginx_arch = protocol.image_info(docker, args.trial_nginx_image)
+            if nginx_arch != arch:
+                raise ValueError("local Nginx architecture mismatch")
         if args.build_cache_volume:
             docker.run("volume", "inspect", args.build_cache_volume)
         script = fixture_script()
@@ -290,9 +297,14 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
         script_path.write_text(script)
         script_path.chmod(0o644)
         options = ["--network", network, "--cpus", "2", "--memory", "2g", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
-            "--publish", "127.0.0.1::9443", "--publish", "127.0.0.1::9444", "--mount", f"type=bind,src={ROOT},dst=/workspace,readonly",
+            "--mount", f"type=bind,src={ROOT},dst=/workspace,readonly",
             "--mount", f"type=bind,src={assets},dst=/browser-assets,readonly", "--mount", f"type=bind,src={script_path},dst=/browser-fixture.sh,readonly",
             "-e", "GOPROXY=off", "-e", "GOTOOLCHAIN=local", "-e", "GOCACHE=/tmp/go-build"]
+        if args.trial_nginx_image:
+            tls = protocol.trial_tls(out, "IP:127.0.0.1")
+            options += ["--publish", "127.0.0.1::8443", "--mount", f"type=bind,src={tls},dst=/trial-tls,readonly"]
+        else:
+            options += ["--publish", "127.0.0.1::9443", "--publish", "127.0.0.1::9444"]
         if args.build_cache_volume:
             options += ["--mount", f"type=volume,src={args.build_cache_volume},dst=/tmp/go-build"]
         if args.module_cache:
@@ -302,8 +314,26 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
                         "-e", "OJ_BROWSER_LC_DRAFTS=1"]
         containers["test"] = docker.create("--pull", "never", *options, "--entrypoint", "sh", images[0][0], "-ec", "while :; do sleep 30; done")
         docker.run("start", containers["test"])
-        origin = published_origin(docker, containers["test"], 9443, "https")
-        http_origin = published_origin(docker, containers["test"], 9444, "http")
+        if args.trial_nginx_image:
+            origin = published_origin(docker, containers["test"], 8443, "https")
+            http_origin = None
+            config = out / "trial-nginx.conf"
+            template = (ROOT / "deploy/trial/nginx.conf.example").read_text()
+            host = urllib.parse.urlsplit(origin).netloc
+            config.write_text(template.replace("server_name oj.example.invalid;", "server_name 127.0.0.1;")
+                              .replace("oj.example.invalid", host))
+            config.chmod(0o644)
+            containers["edge"] = docker.create("--pull", "never", "--network", f"container:{containers['test']}",
+                "--user", "101:101", "--read-only", "--tmpfs", "/tmp:rw,size=16m,mode=1777",
+                "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+                "--mount", f"type=bind,src={tls},dst=/run/oj-edge,readonly",
+                "--mount", f"type=bind,src={assets},dst=/srv/oj/site,readonly",
+                "--mount", f"type=bind,src={config},dst=/trial.conf,readonly",
+                "--entrypoint", "sh", nginx, "-ec", 'nginx -t -c /trial.conf; exec nginx -c /trial.conf -g "daemon off;"')
+            docker.run("start", containers["edge"])
+        else:
+            origin = published_origin(docker, containers["test"], 9443, "https")
+            http_origin = published_origin(docker, containers["test"], 9444, "http")
         fixture_log = out / "fixture.log"
         handles.append(fixture_log.open("w"))
         cold = ["-e", "OJ_BROWSER_COLD_TLS=1"] if args.cold_firefox else []
@@ -311,10 +341,22 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
             cold += ["-e", "OJ_BROWSER_REVIEW_MATERIALS=1"]
         if args.m1_login_load:
             cold += ["-e", "OJ_BROWSER_LOGIN_LOAD=1"]
+        if args.trial_nginx_image:
+            cold += ["-e", "OJ_BROWSER_TRIAL_NGINX=1"]
         if args.training_history:
             cold += ["-e", "OJ_BROWSER_TRAINING_HISTORY=1"]
         process = subprocess.Popen([*docker.command, "exec", "-e", "OJ_BROWSER_ORIGIN=" + origin, "-e", "OJ_BROWSER_UI_DIR=/browser-assets", *cold, containers["test"], "sh", "/browser-fixture.sh"], stdout=handles[-1], stderr=subprocess.STDOUT)
         ready = wait_ready(process, fixture_log, origin, args.fixture_start_seconds)
+        if args.trial_nginx_image:
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPSHandler(
+                context=ssl.create_default_context(cafile=str(tls / "public-ca.pem"))))
+            try:
+                with opener.open(origin + "/api/v1/readyz", timeout=5) as response:
+                    if json.load(response) != {"status": "ready", "service": "api", "scope": "ordinary-session"}:
+                        raise ValueError("Nginx trial readiness did not reach the API")
+            except urllib.error.URLError as error:
+                log.write(f"Nginx trial readiness: {error.reason}\n")
+                raise
         if args.cold_firefox:
             public_ca = ready["ca_pem"]
             if not isinstance(public_ca, str) or not re.fullmatch(r"-----BEGIN CERTIFICATE-----\n[A-Za-z0-9+/=\n]{1,4096}-----END CERTIFICATE-----\n", public_ca):
@@ -345,7 +387,15 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
         failure = "INTERRUPTED" if isinstance(error, KeyboardInterrupt) else phase
         log.write(type(error).__name__ + "\n" + str(getattr(error, "stdout", "") or "") + str(getattr(error, "stderr", "") or ""))
     finally:
-        if not args.cold_firefox or ca:
+        if args.trial_nginx_image and process and process.poll() is None:
+            try:
+                docker.run("exec", containers["test"], "python3", "-c",
+                    "from urllib.request import Request, urlopen; "
+                    "urlopen(Request('http://127.0.0.1:9444/stop', method='POST'), timeout=3).close()",
+                    timeout=5)
+            except (OSError, subprocess.SubprocessError):
+                failure = failure or "FIXTURE_SHUTDOWN"
+        elif not args.trial_nginx_image and (not args.cold_firefox or ca):
             stop_fixture(origin, ca)
         if process:
             try:
@@ -361,6 +411,10 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
             if not result["fixture_ok"]:
                 failure = failure or "FIXTURE_SHUTDOWN"
         try:
+            if "edge" in containers:
+                protocol.check_state(docker, containers["edge"], True)
+                docker.run("stop", "--signal", "SIGQUIT", "--time", "5", containers["edge"], timeout=15)
+                protocol.check_state(docker, containers["edge"], False)
             if "test" in containers:
                 protocol.check_state(docker, containers["test"], True)
                 result["container_ok"] = True

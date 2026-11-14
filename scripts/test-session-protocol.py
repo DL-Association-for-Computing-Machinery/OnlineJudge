@@ -85,7 +85,7 @@ def start_redis(docker, prefix, network, image, alias, instances):
     raise RuntimeError(f"Redis fixture {alias} did not become ready")
 
 
-def trial_tls(root):
+def trial_tls(root, public_san="DNS:oj.example.invalid"):
     # Only disposable keys enter the two local containers. The enclosing host
     # directory stays private; fixture users inside the containers differ.
     mount = root / "mount"
@@ -94,15 +94,19 @@ def trial_tls(root):
     def openssl(*args):
         subprocess.run(["openssl", *args], check=True, cwd=root, capture_output=True, timeout=15)
 
+    (root / "ca.cnf").write_text("[req]\ndistinguished_name=dn\nx509_extensions=ca\n"
+                                "[dn]\nCN=Trial Fixture\n[ca]\nbasicConstraints=critical,CA:TRUE,pathlen:0\n"
+                                "keyUsage=critical,keyCertSign,cRLSign\nsubjectKeyIdentifier=hash\n")
     openssl("req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-subj", "/CN=Trial Fixture",
-            "-keyout", "ca.key", "-out", "mount/api-ca.pem")
+            "-config", "ca.cnf", "-keyout", "ca.key", "-out", "mount/api-ca.pem")
     (mount / "public-ca.pem").write_bytes((mount / "api-ca.pem").read_bytes())
     for role, extension in (
-        ("public", "subjectAltName=DNS:oj.example.invalid\nextendedKeyUsage=serverAuth"),
+        ("public", f"subjectAltName={public_san}\nextendedKeyUsage=serverAuth"),
         ("backend", "subjectAltName=DNS:oj-api.internal\nextendedKeyUsage=serverAuth"),
         ("proxy", "extendedKeyUsage=clientAuth"),
     ):
-        (root / "extension").write_text(extension + "\n")
+        (root / "extension").write_text("basicConstraints=critical,CA:FALSE\n"
+                                        "authorityKeyIdentifier=keyid:always\n" + extension + "\n")
         openssl("req", "-new", "-newkey", "rsa:2048", "-nodes", "-subj", "/CN=Trial " + role,
                 "-keyout", f"mount/{role}-key.pem", "-out", "leaf.csr")
         openssl("x509", "-req", "-in", "leaf.csr", "-CA", "mount/api-ca.pem", "-CAkey", "ca.key",
