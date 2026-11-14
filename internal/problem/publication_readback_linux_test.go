@@ -83,3 +83,39 @@ func TestReadSealedPublicationStatementUsesExactCanonicalBinding(t *testing.T) {
 		t.Fatalf("damaged display was not rejected: %v", err)
 	}
 }
+
+func TestVerifySealedPublicationMaterialsRequiresBothObjectSets(t *testing.T) {
+	for _, kind := range []string{"matching references", "different full import", "changed private plan", "missing display", "missing formal answer"} {
+		t.Run(kind, func(t *testing.T) {
+			f, d, binding, plan := publicationFixture(t, false)
+			prepared, err := d.PlanPublicationMaterials(publicationFixtureID, d.ID, d.Owner, binding, plan, plan.Digest())
+			if err != nil {
+				t.Fatal(err)
+			}
+			sealed, err := prepared.Seal(t.Context(), f.local)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantErr := true
+			switch kind {
+			case "matching references":
+				wantErr = false
+			case "different full import":
+				sealed.Import.ImportRevision = sealed.Import.Version
+			case "changed private plan":
+				plan.Cases[1].Answer = plan.Cases[0].Answer
+			case "missing display":
+				if err := os.Remove(filepath.Join(f.root, sealed.Statement.SHA256)); err != nil {
+					t.Fatal(err)
+				}
+			case "missing formal answer":
+				if err := os.Remove(filepath.Join(f.root, plan.Cases[1].Answer.SHA256)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := VerifySealedPublicationMaterials(t.Context(), f.local, sealed, plan); (err != nil) != wantErr {
+				t.Fatalf("unexpected verification result: %v", err)
+			}
+		})
+	}
+}

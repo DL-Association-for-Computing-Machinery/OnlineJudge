@@ -95,3 +95,25 @@ func validPublicationProjection(display PublicationStatement) bool {
 	}
 	return total <= MaxPreviewBytes
 }
+
+// VerifySealedPublicationMaterials reopens both sets of material for an
+// independently trusted binding. Success is a point-in-time observation,
+// not authorization to publish or permission to expose private plan objects.
+// Callers hold the shared material budget and supply a bounded context.
+func VerifySealedPublicationMaterials(ctx context.Context, store ReferenceObjectReader, expected PublicationMaterials, plan ReferencePlan) error {
+	if ctx == nil || store == nil || !expected.valid() {
+		return ErrInvalid
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	bound := ImportIdentity{SourceID: plan.SourceID, SourceLockSHA256: plan.SourceLockSHA256,
+		Version: plan.Version, ImportRevision: plan.ImportRevision}
+	if bound != expected.Import || plan.ValidateMaterials() != nil || plan.Digest() != expected.FormalPlan {
+		return ErrInvalid
+	}
+	if _, err := ReadSealedPublicationStatement(ctx, store, expected); err != nil {
+		return err
+	}
+	return verifyPublicationFormalMaterials(ctx, store, plan)
+}
