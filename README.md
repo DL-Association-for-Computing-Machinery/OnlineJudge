@@ -721,6 +721,8 @@ python3 -B scripts/test-session-protocol.py --toolchain-image oj-session-protoco
 
 `--suite archive-recovery` 单独运行同一归档的会话及邮件恢复回归，使用旧、替换及中断恢复 Redis 夹具。该用例也保留在普通会话套件中。
 
+`--suite email-archive-recovery` 另起全新夹具，只还原应用库，保留独立发信额度库。真实邮件进程处理恢复后的队列：旧任务不消耗 SMTP 许可，新邮件到达回环 TLS 收件器后可在另一 API 完成激活。此命令不连接外部邮件服务。
+
 ### 会话恢复维护
 
 会话恢复维护命令只用于已经隔离的恢复副本。先设置 `OJ_RESTORED_SESSION_CONFIG_FILE` 指向该副本专用的 API 配置，再按[恢复普通会话](docs/architecture/operations-design.md#恢复普通会话)执行；不要在在线库使用。

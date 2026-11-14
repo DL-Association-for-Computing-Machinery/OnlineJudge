@@ -7,6 +7,9 @@ case "$#:${1:-ordinary}" in
     1:email-lifecycle)
         export OJ_ISOLATED_EMAIL_LIFECYCLE=1
         oj_pattern='^TestIsolatedEmailLifecycle$' ;;
+    1:email-archive-recovery)
+        export OJ_ISOLATED_EMAIL_ARCHIVE_RECOVERY=1
+        oj_pattern='^TestIsolatedEmailArchiveRecovery$' ;;
     *) echo "Invalid session protocol suite" >&2; exit 2 ;;
 esac
 umask 077
@@ -58,7 +61,7 @@ golangci-lint run --config /workspace/.golangci.yml --build-tags=integration ./t
 export OJ_PROTOCOL_ENTRY_BIN_DIR="$oj_protocol_dir/bin"
 mkdir "$OJ_PROTOCOL_ENTRY_BIN_DIR"
 go build -mod=readonly -race -o "$OJ_PROTOCOL_ENTRY_BIN_DIR/" ./cmd/api ./cmd/migrate
-if [ "${1:-ordinary}" = email-lifecycle ]; then
+if [ "${1:-ordinary}" = email-lifecycle ] || [ "${1:-ordinary}" = email-archive-recovery ]; then
     go build -mod=readonly -race -o "$OJ_PROTOCOL_ENTRY_BIN_DIR/mail-worker" ./cmd/mail-worker
 fi
 go test -mod=readonly -race -count=1 -timeout=120s -tags=integration ./tests/sessionprotocol -run "$oj_pattern" -v

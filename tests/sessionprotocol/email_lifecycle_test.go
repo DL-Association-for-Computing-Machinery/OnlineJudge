@@ -137,8 +137,7 @@ func TestIsolatedEmailLifecycle(t *testing.T) {
 	from, err := identity.ParseEmail("sender@example.invalid")
 	must(t, err)
 	port, trustFile, receive := lifecycleSMTP(t, to, []string{activate, reset, reset})
-	stopWorker := startLifecycleWorker(t, workerBinary, keyFile, trustFile, from, port)
-	defer stopWorker()
+	startLifecycleWorker(t, workerBinary, os.Getenv("OJ_PROTOCOL_DATABASE_URL"), keyFile, trustFile, from, port)
 
 	request := func(e *loginEndpoint, path, body string) {
 		t.Helper()
@@ -377,11 +376,11 @@ func lifecycleSMTP(t *testing.T, to identity.Email, links []string) (int, string
 	}
 }
 
-func startLifecycleWorker(t *testing.T, workerBinary, keyFile, trustFile string, from identity.Email, port int) func() {
+func startLifecycleWorker(t *testing.T, workerBinary, databaseURL, keyFile, trustFile string, from identity.Email, port int) {
 	t.Helper()
 	cmd := exec.Command(workerBinary)
 	cmd.Env = []string{
-		"OJ_DATABASE_URL=" + os.Getenv("OJ_PROTOCOL_DATABASE_URL"),
+		"OJ_DATABASE_URL=" + databaseURL,
 		"OJ_EMAIL_PAYLOAD_KEYS_FILE=" + keyFile, "SSL_CERT_FILE=" + trustFile,
 		"OJ_ACCOUNT_PUBLIC_ORIGIN=" + loginOrigin,
 		"OJ_SMTP_HOST=127.0.0.1", "OJ_SMTP_PORT=" + strconv.Itoa(port),
@@ -390,7 +389,7 @@ func startLifecycleWorker(t *testing.T, workerBinary, keyFile, trustFile string,
 	must(t, cmd.Start())
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
-	return func() {
+	t.Cleanup(func() {
 		t.Helper()
 		select {
 		case err := <-done:
@@ -411,7 +410,7 @@ func startLifecycleWorker(t *testing.T, workerBinary, keyFile, trustFile string,
 			}
 			t.Errorf("mail worker exceeded its shutdown deadline (wait result: %v)", <-done)
 		}
-	}
+	})
 }
 
 func readLifecycleSMTP(listener *net.TCPListener, config *tls.Config, to identity.Email, prefix string) (string, error) {
