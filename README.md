@@ -915,6 +915,8 @@ Worker 启动完成后，向该 Worker 进程发送 `SIGUSR1`（`kill -USR1 PID`
 
 `python3 scripts/test-worker.py http-loop` 显式设置 `OJ_SANDBOX_HTTP=1`，`all` 同样包含此项。驱动使用临时 PostgreSQL、两个提交 API 进程、mTLS 控制端和真实 Worker。先以固定 AC/WA 源码填满队列；两个 API 都对第三个新键返回 `429 BACKLOG_LIMIT`，跨实例查询该键均为 404，已接收的原键仍可回读，数据库无新增提交、任务或尝试。Worker 将原两份判到终态后，测试显式按原键、原正文再提交，验证新增提交取得 AC。三份已接收提交各有一次完成尝试。
 
+Desktop 档位还在同一容器生命周期内读回缓存条数、`/tmp` 和 `/dev/shm` 可用字节与 inode：判题时应观察到一个缓存可执行文件和共享内存卷占用，三笔任务到终态后、排空停止前应已清空缓存并回到基线。只输出计数；这是固定小题的占用样本，不能当成峰值或试用容量。
+
 `python3 scripts/test-worker.py restore-loop` 验证[恢复后的真实判题](docs/architecture/storage-design.md#7-备份与验收)，`all` 也包含此项。它使用两个临时 PostgreSQL 容器，实际捕获和核验备份；停止源库后，在固定离线 Desktop 沙箱重判同一合成提交。不连接现有数据库。
 
 已经按 [A+B 租约链路](#ab-租约链路联验)导出私有材料后，可用现有、已停止的固定断网参考槽和本地已有的 `postgres:14-alpine` 镜像验证 A+B 历史重判：
