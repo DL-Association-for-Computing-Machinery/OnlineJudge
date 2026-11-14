@@ -802,6 +802,14 @@ P6 格式要求七份观察，增加异地副本核验和复判结束后源端�
 
 ### 核对 P6 混合训练记录
 
+从主库独立核对收件全集：停止并排空本轮提交入口的在途写入后，用预登记的 UTC 起止时间运行以下命令。使用只读专用账号，通过 `OJ_JUDGE_SNAPSHOT_DATABASE_URL` 指定主库。
+
+```sh
+.local/bin/migrate training-acceptance "$EXPECTED_DATABASE" "$ROUND_FROM_UTC" "$ROUND_UNTIL_UTC" > "$ACCEPTANCE_OBSERVATION"
+```
+
+该命令只需要读取 `goose_db_version` 的 `id`、`version_id` 以及 `submissions` 的 `id`、`created_at`、`material_version`、`context_id`。它输出封闭时间窗 `[from, until)` 的全部个人训练收件，最多 20,000 条、跨度最多一小时；超限、窗口尚未结束、库名不符或处于恢复中的副本均拒绝。先检查命令退出码，再保存原始 JSON 与摘要。命令不接收客户端提交 ID 列表，不导出账号、原键、源码或凭据；不替代队列、终态和 HTTPS 回读证据。
+
 将三轮脱敏逐请求观测按[混合训练记录约定](docs/delivery-evidence/p6-trial-acceptance.md#混合训练记录核对)保存后运行：
 
 ```sh

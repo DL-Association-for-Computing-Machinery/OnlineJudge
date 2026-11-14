@@ -157,4 +157,9 @@ func TestTrainingOverloadRecovery(t *testing.T) {
 	if _, ok := proc.event("API stopped gracefully"); !ok {
 		t.Fatal("API did not confirm graceful shutdown")
 	}
+	if !t.Failed() {
+		t.Run("independent acceptance export", func(t *testing.T) {
+			testTrainingAcceptanceExport(t, f, version)
+		})
+	}
 }
