@@ -11,6 +11,7 @@ import (
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
 	identitypg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/postgres"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
 	referencepg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference/postgres"
 	transport "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/httptransport"
@@ -100,14 +101,15 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 	}
 	loginStatus(t, reviewEvidenceGET(x, draftID, cookies, reviewer.ID), 404)
 	loginStatus(t, reviewEvidenceGET(x, receipt.ID, authorCookies, owner), 404)
-	assertEligibility := func(result loginResponse, returned, confirmed bool) {
+	assertEligibility := func(result loginResponse, returned, confirmed bool) string {
 		t.Helper()
 		loginStatus(t, result, 200)
 		var fields map[string]json.RawMessage
 		must(t, json.Unmarshal(result.body, &fields))
 		var view problemreference.ReviewEligibility
 		must(t, json.Unmarshal(result.body, &view))
-		if len(fields) != 4 || string(fields["evidence"]) != string(assigned.body) || string(fields["eligible"]) != "false" ||
+		if len(fields) != 5 || !problem.ValidImportRevision(view.SnapshotSHA256) ||
+			string(fields["evidence"]) != string(assigned.body) || string(fields["eligible"]) != "false" ||
 			view.PolicyVersion != "oj.review-approval.v14" || view.IndependentCorrectness != nil || view.WrongSolution != nil || view.LocalChecker != nil ||
 			view.TestCoverage != nil || !slices.Contains(view.Blockers, "test_coverage_missing") ||
 			view.StatementRendering != nil ||
@@ -117,8 +119,12 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 			slices.Contains(view.Blockers, "materials_returned") != returned {
 			t.Fatal("eligibility lost the accepted evidence or incorrectly treated formal AC/return status")
 		}
+		return view.SnapshotSHA256
 	}
-	assertEligibility(eligibility(x, receipt.ID, cookies, reviewer.ID), false, false)
+	before := assertEligibility(eligibility(x, receipt.ID, cookies, reviewer.ID), false, false)
+	if repeated := assertEligibility(eligibility(y, receipt.ID, cookies, reviewer.ID), false, false); repeated != before {
+		t.Fatal("direct and proxy reads of the same state produced different snapshots")
+	}
 	loginStatus(t, eligibility(y, receipt.ID, authorCookies, owner), 404)
 	loginStatus(t, eligibility(y, referenceID, cookies, reviewer.ID), 404)
 	loginStatus(t, reviewReadGET(y, receipt.ID+"/eligibility?policy=older", cookies, reviewer.ID), 400)
@@ -127,7 +133,10 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 		FROM problem_reference_expected_plans WHERE request_id=$1`, referenceID).Scan(&solutionHash))
 	testEntryAuthorSolution(t, x, y, receipt, got, authorCookies, cookies, owner, reviewer.ID,
 		func() func() { return corruptReviewSource(t, root, solutionHash) })
-	assertEligibility(eligibility(y, receipt.ID, cookies, reviewer.ID), false, true)
+	confirmed := assertEligibility(eligibility(y, receipt.ID, cookies, reviewer.ID), false, true)
+	if confirmed == before {
+		t.Fatal("author confirmation did not change the eligibility snapshot")
+	}
 	for _, endpoint := range []*loginEndpoint{x, y} {
 		result := comparison(endpoint, receipt.ID, cookies, reviewer.ID)
 		loginStatus(t, result, 200)
@@ -169,7 +178,9 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 	testEntryStatementConfirmation(t, x, y, got, cookies, authorCookies, reviewer.ID, owner,
 		func() func() { return corruptReviewSource(t, root, statementHash) })
 	testEntryReviewReturn(t, x, y, receipt, got, cookies, authorCookies, reviewer.ID, owner)
-	assertEligibility(eligibility(y, receipt.ID, cookies, reviewer.ID), true, true)
+	if returned := assertEligibility(eligibility(y, receipt.ID, cookies, reviewer.ID), true, true); returned == confirmed {
+		t.Fatal("same-material return did not change the eligibility snapshot")
+	}
 	grant(reviewer.ID, 1, false)
 	loginStatus(t, reviewEvidenceGET(x, receipt.ID, cookies, reviewer.ID), 403)
 	loginStatus(t, reviewMaterialsGET(x, receipt.ID, cookies, reviewer.ID), 403)

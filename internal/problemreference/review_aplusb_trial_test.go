@@ -1,10 +1,12 @@
 package problemreference
 
 import (
+	"encoding/json"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
 )
 
@@ -21,6 +23,20 @@ func TestLocalAPlusBTrialNeverWaivesReviewGates(t *testing.T) {
 		got.LocalChecker.Points != 17 || got.Eligible ||
 		!slices.Equal(got.Blockers, []string{"checker_admission_missing", "target_runtime_missing"}) {
 		t.Fatal("local archive should be visible without waiving production or target admission")
+	}
+	subject := strings.Repeat("a", 32)
+	good.Evidence.Reviewer, good.Evidence.ReviewID, good.Evidence.DraftID, good.Evidence.ReferenceRequestID = subject, subject, subject, subject
+	good.Evidence.AssignmentRevision = 1
+	good.Evidence.EvidenceSHA256 = strings.Repeat("c", 64)
+	bound, err := bindReviewEligibility(identity.ProblemActor{SubjectID: subject, SessionVersion: identity.SessionVersion{
+		RecoveryID: strings.Repeat("b", 32), AuthGeneration: 1,
+	}}, good)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(bound)
+	if err != nil || len(raw) > 4096 || bound.LocalChecker == nil || len(bound.SnapshotSHA256) != 64 {
+		t.Fatalf("full A+B response exceeded the HTTP budget or lost evidence, size=%d err=%v", len(raw), err)
 	}
 	for _, mutate := range []func(*ReviewEligibilitySnapshot){
 		func(s *ReviewEligibilitySnapshot) { s.Returned = true },

@@ -40,7 +40,7 @@ it('reads only after explicit session verification and binds the same-origin GET
   f.stop()
 })
 
-const eligibility = () => ({ evidence: material().evidence, policy_version: 'oj.review-approval.v14', eligible: false,
+const eligibility = () => ({ evidence: material().evidence, policy_version: 'oj.review-approval.v14', snapshot_sha256: hash, eligible: false,
   blockers: ['statement_quality_missing', 'target_runtime_missing'] })
 
 it('reads current blockers only on request and discards a response for another assignment revision', async () => {
