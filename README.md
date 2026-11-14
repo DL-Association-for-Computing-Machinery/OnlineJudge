@@ -1015,6 +1015,8 @@ bash scripts/smoke-cold-trial.sh --release "$COLD_DOCKER_SOCKET" "$COLD_ENGINE_D
 
 验证、导入和启动期间保持制品及目录静止。成功时输出本次联验的发布摘要。也可先单独导入运行镜像，供组件或固定合成判题专项使用：
 
+启动实验用 Docker 和 containerd 时沿用 `umask 022`，并显式将引擎根目录和制品接收目录设为 root 私有（`0700`）。在已测 Ubuntu 环境，若把接收文件时的 `umask 077` 传给这两个进程，导入仍可完成，但镜像中的命令可能无法执行。此时停止实验并检查自建引擎的启动环境，保留已封存制品。
+
 ```sh
 python3 -B scripts/cold_trial_images.py "$RUNTIME_ARCHIVE" --sha256 "$TRUSTED_ARCHIVE_SHA256" \
   --socket "$COLD_DOCKER_SOCKET" --data-root "$COLD_DOCKER_ROOT" --platform linux/arm64 \
