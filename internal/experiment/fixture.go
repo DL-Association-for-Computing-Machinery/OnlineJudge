@@ -29,7 +29,15 @@ type WorkerFixture struct {
 	localText     bool
 	java21        bool
 	python3       bool
+	checkerSHA    string
+	checker       string
 }
+
+// CheckerArtifact returns the private, digest-verified checker executable.
+func (f WorkerFixture) CheckerArtifact() []byte { return []byte(f.checker) }
+
+// UsesSPJ describes an operator-pinned local SPJ queue.
+func (f WorkerFixture) UsesSPJ() bool { return f.checkerSHA != "" }
 
 // IsLocalText reports that the worker owns an admitted bounded text fixture.
 func (f WorkerFixture) IsLocalText() bool { return f.localText }

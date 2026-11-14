@@ -92,14 +92,14 @@ func (r *Runner) Judge(ctx context.Context, d materials.Descriptor, blobs map[st
 		result.Points = append(result.Points, Point{ID: t.ID, Verdict: "NOT_RUN"})
 	}
 	sandbox := r.sandbox
-	if p.tokenBytes != 0 && r.newCached != nil {
+	if r.fixture.UsesCachedText() && r.newCached != nil {
 		sandbox = r.newCached()
 	}
 	if sandbox == nil {
 		return result, errors.New("sandbox unavailable")
 	}
 	run := sandbox.Run
-	if p.tokenBytes != 0 {
+	if r.fixture.UsesCachedText() {
 		strict, ok := sandbox.(*CachedGoJudge)
 		if !ok || strict == nil {
 			return result, errors.New("strict cached text execution required")
@@ -154,6 +154,13 @@ func (r *Runner) Judge(ctx context.Context, d materials.Descriptor, blobs map[st
 	if compiled.Artifact == "" {
 		return result, errors.New("compiler returned no artifact")
 	}
+	compare := func(_ []byte, output, answer []byte) (bool, error) { return p.compare(answer, output) }
+	if p.Checker == materials.LocalSPJChecker {
+		compare, err = r.spjChecker(ctx, p)
+		if err != nil {
+			return result, err
+		}
+	}
 	for i, t := range p.Tests {
 		if err := ctx.Err(); err != nil {
 			return result, err
@@ -180,7 +187,7 @@ func (r *Runner) Judge(ctx context.Context, d materials.Descriptor, blobs map[st
 		result.Max.CPU = max(result.Max.CPU, observed.CPU)
 		result.Max.Memory = max(result.Max.Memory, observed.Memory)
 		if verdict == "AC" {
-			ok, compareErr := p.compare(blobs[t.Answer], observed.Stdout)
+			ok, compareErr := compare(blobs[t.Input], observed.Stdout, blobs[t.Answer])
 			if p.tokenBytes != 0 && errors.Is(compareErr, judging.ErrOutput) && len(observed.Stdout) <= materials.APlusBOutputBytes {
 				verdict = "OLE"
 			} else if compareErr != nil {

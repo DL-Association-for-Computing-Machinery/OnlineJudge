@@ -4,11 +4,11 @@
 import argparse
 import hashlib
 from pathlib import Path
-import re
 
 UPSTREAM_COMMIT = "2d20123984e9479b8a56ebe0d6a51e23ad7c35b3"
 UPSTREAM_BLOB = "349b839ff14e3b933668e9938dbbe04ecb265843"
 UPSTREAM_BYTES = 206468
+UPSTREAM_SHA256 = "bb323e3c89285214966076e0d23d5a295c5f6126da7ff198c1276ddb95ecb1a0"
 
 # Keep nonzero protocol exits separate from ordinary process return 0 and
 # ICPC 42/43. All unsupported scores are rejected before trailing-output
@@ -32,7 +32,7 @@ def replace_once(data, old, new):
 
 
 def prepare(raw, expected_sha256):
-    if not re.fullmatch(r"[a-f0-9]{64}", expected_sha256) or hashlib.sha256(raw).hexdigest() != expected_sha256:
+    if expected_sha256 != UPSTREAM_SHA256 or hashlib.sha256(raw).hexdigest() != UPSTREAM_SHA256:
         raise ValueError("Testlib SHA-256 mismatch")
     blob = b"blob " + str(len(raw)).encode() + b"\0" + raw
     if len(raw) != UPSTREAM_BYTES or hashlib.sha1(blob, usedforsecurity=False).hexdigest() != UPSTREAM_BLOB:
@@ -44,7 +44,7 @@ def prepare(raw, expected_sha256):
     raw = replace_once(
         raw, start, start + b"    if (result == _points || result >= _partially)\n        result = _fail;\n",
     )
-    copyright_end = b' */\n#define VERSION "0.9.45"'
+    copyright_end = b' */\n\n#define VERSION "0.9.45"'
     return replace_once(
         raw, copyright_end,
         b' * Modified by OnlineJudge: disable scoring for the binary checker protocol.\n' + copyright_end,

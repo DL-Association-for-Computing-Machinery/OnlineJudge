@@ -211,6 +211,8 @@ OJ_SANDBOX_EXPERIMENT=1 worker validate-package-quality \
 
 合成验收题包可用 `python3 tests/fixtures/local-text/build-span-fixture.py "$NEW_PRIVATE_DIRECTORY"` 生成。它只供隔离测试，源锁沿用现有包格式，不代表上游发布。审核与训练浏览器脚本见 `tests/browser/local-package-review-qa.mjs` 和 `tests/browser/local-text-training-qa.mjs`。
 
+本机 Testlib SPJ 在同一审核流程中增加检查器证据和制品 pin。带 `quality/checker.cpp` 的题包必须附 SPJ 报告才可准入；专用 Worker 此时使用组合镜像和 `OJ_LOCAL_SPJ_CHECKER_FILE`。复现、预算与边界见 [P7 Testlib SPJ](docs/delivery-evidence/p7-testlib-spj.md)。
+
 ### A+B 租约链路联验
 
 在 [A+B 固定材料清单命令](#ab-固定材料隔离判题)上加 `--expected-manifest "$TRUSTED_JUDGE_MANIFEST_SHA256" --export "$NEW_PRIVATE_DIRECTORY"`，导出 `manifest.json` 及私有对象。核对后固定该运输清单的原始字节 SHA-256。隔离链路的登记、控制端和 Worker 都设置 `OJ_SANDBOX_EXPERIMENT=1`、`OJ_APLUSB_MANIFEST_FILE`（绝对路径）、`OJ_APLUSB_MANIFEST_SHA256`；不同时设置 `OJ_EXPERIMENT_MATERIAL_VERSION`、M0 槽或双槽配置。

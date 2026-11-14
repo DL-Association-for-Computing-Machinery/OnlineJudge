@@ -53,7 +53,7 @@ func prepare(ctx context.Context, d materials.Descriptor, blobs map[string][]byt
 		if err != nil {
 			return m, bad
 		}
-		m = manifest{Version: p.Version, Language: p.Language, Origin: p.Origin, Environment: fixture.ProfileForLanguage(d.Language), tokenBytes: p.TokenBytes}
+		m = manifest{Version: p.Version, Language: p.Language, Origin: p.Origin, Checker: p.Checker, Environment: fixture.ProfileForLanguage(d.Language), tokenBytes: p.TokenBytes}
 		for _, point := range p.Tests {
 			m.Tests = append(m.Tests, test{ID: point.ID, Input: point.Input, Answer: point.Answer})
 		}
@@ -85,7 +85,11 @@ func prepare(ctx context.Context, d materials.Descriptor, blobs map[string][]byt
 			}
 		}
 		// Corrupt later reference material must not be hidden by an earlier WA.
-		if m.tokenBytes != 0 {
+		if m.Checker == materials.LocalSPJChecker {
+			if len(blobs[t.Input]) > experiment.SPJObjectBytes || len(blobs[t.Answer]) > experiment.SPJObjectBytes {
+				return m, bad
+			}
+		} else if m.tokenBytes != 0 {
 			answer := blobs[t.Answer]
 			if (!fixture.IsLocalText() && (len(answer) > 4096 || len(blobs[t.Input]) > 16<<10)) ||
 				judging.ValidateLibraryCheckerReferenceAt(ctx, judging.FrozenText{Reader: bytes.NewReader(answer), Size: int64(len(answer))},

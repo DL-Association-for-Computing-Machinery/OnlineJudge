@@ -14,8 +14,13 @@ def obj(x):
  if isinstance(x,str):x=x.encode()
  return file('objects/sha256/'+ident(x)['sha256'],x)
 s='local/bounded_span'; sid='library-checker:bounded_span'; title='数列极差'
+spj = sys.argv[2:] == ['--spj']
+if spj:
+ title = '数列极差（SPJ）'
 source={}
 def src(name,x): source[name]=obj(x)
+if spj:
+ src('quality/checker.cpp', (Path(__file__).resolve().parents[2] / 'sandbox/testdata/testlib_span_checker.cpp').read_bytes())
 base='#include <iostream>\n#include <algorithm>\n#include <vector>\nusing namespace std;\n'
 src('sol/correct.cpp',base+'int main(){int n,x;cin>>n>>x;int a=x,b=x;while(--n){cin>>x;a=min(a,x);b=max(b,x);}cout<<b-a<<"\\n";}\n')
 src('quality/validator.cpp',base+'int main(){int n,x;if(!(cin>>n)||n<1||n>64)return 1;while(n--){if(!(cin>>x)||x < -1000 || x>1000)return 1;}string extra;return cin>>extra?1:0;}\n')
@@ -49,6 +54,8 @@ lock=dict(schema='oj.library-checker-source.v1',repository=repo,commit=commit,pr
 raw=canon(lock); (root/'library-checker.json').write_bytes(raw); file('provenance/source-lock.json',raw)
 for n in ('source-catalog','source-validation','material-map'):file('provenance/'+n+'.json','{}\n')
 statement=file('statements/span.md','# Range of a sequence\n\nGiven $N$ integers, print the largest minus the smallest.\n\n## Constraints\n\n- $1 \\leq N \\leq 64$\n- $-1000 \\leq a_i \\leq 1000$\n\n## Input\n\n```text\nN\na_1 ... a_N\n```\n\n## Output\n\nPrint one integer. In the sample, the largest is $4$ and the smallest is $-3$, so the answer is $7$.\n')
+if spj:
+ statement=file('statements/span.md', files['statements/span.md'].decode().replace('Print one integer.', 'Print the range as one integer, or print two integers in $[-2000, 2000]$ whose sum equals the range.'))
 statement['language']='en'
 doc=dict(schema='oj.problem-draft.v1',adapter='library-checker-pinned-v1',state='private-draft',title=title,statement=statement,test_cases=tests,examples=['case-0001'],judging=dict(mode='tokens',case_sensitive=True,numeric_equivalence=False,token_comparison='exact-bytes',compatibility='configured-not-validated',limits=None,production_profile=None),
  provenance=dict(commit=commit,repository=repo,original_files=original,original_title='Range of a sequence',source_id=sid,source_lock_sha256=ident(raw)['sha256'],source_path=s,upstream_time_limit_seconds=2.0,source_case_mapping=mapping),

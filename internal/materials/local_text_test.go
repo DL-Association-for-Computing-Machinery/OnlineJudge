@@ -37,6 +37,27 @@ func TestLocalTextReaderDoesNotWidenLegacy(t *testing.T) {
 	}
 }
 
+func TestLocalSPJManifestRequiresExplicitArtifactAndMode(t *testing.T) {
+	hash := checksum([]byte("fixture"))
+	m := TextTransportManifest{Checker: LocalSPJChecker, CheckerArtifact: hash,
+		JudgeSHA256: hash, RuntimeSHA256: hash, Origin: LocalTextOrigin,
+		Language: "gnu++17", Version: "local-text-" + hash,
+		Tests: []TextTransportPoint{{ID: "p1", Input: hash, Answer: hash}}}
+	check := func(m TextTransportManifest, ok bool) {
+		t.Helper()
+		raw := m.Canonical()
+		if _, err := ParseLocalText(raw, checksum(raw)); (err == nil) != ok {
+			t.Fatalf("unexpected local checker admission: %v", err)
+		}
+	}
+	check(m, true)
+	m.TokenBytes = 4096
+	check(m, false)
+	m.TokenBytes = 0
+	m.CheckerArtifact = ""
+	check(m, false)
+}
+
 func TestLocalTextTransportImport(t *testing.T) {
 	hash := strings.Repeat("a", 64)
 	m := APlusBManifest{Origin: LocalTextOrigin, Version: "local-text-" + hash, JudgeSHA256: hash,

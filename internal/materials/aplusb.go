@@ -16,14 +16,15 @@ const APlusBOutputBytes = 262144
 // TextTransportManifest is the registered transport projection of an independently
 // reviewed judge manifest. Its own digest pins every transported object.
 type TextTransportManifest struct {
-	Checker       string               `json:"checker"`
-	JudgeSHA256   string               `json:"judge_sha256"`
-	Language      string               `json:"language"`
-	Origin        string               `json:"origin"`
-	RuntimeSHA256 string               `json:"runtime_sha256"`
-	Tests         []TextTransportPoint `json:"tests"`
-	TokenBytes    int                  `json:"token_bytes"`
-	Version       string               `json:"version"`
+	Checker         string               `json:"checker"`
+	CheckerArtifact string               `json:"checker_artifact_sha256,omitempty"`
+	JudgeSHA256     string               `json:"judge_sha256"`
+	Language        string               `json:"language"`
+	Origin          string               `json:"origin"`
+	RuntimeSHA256   string               `json:"runtime_sha256"`
+	Tests           []TextTransportPoint `json:"tests"`
+	TokenBytes      int                  `json:"token_bytes"`
+	Version         string               `json:"version"`
 }
 
 // TextTransportPoint contains two private object identities without their bytes.
@@ -53,7 +54,7 @@ func ParseAPlusB(raw []byte, expected string) (APlusBManifest, error) {
 	if len(raw) > 16384 || !digestPattern.MatchString(expected) || checksum(raw) != expected ||
 		json.Unmarshal(raw, &m) != nil || !bytes.Equal(raw, m.Canonical()) ||
 		!aplusbVersion.MatchString(m.Version) || m.Version != "aplusb-"+m.JudgeSHA256 ||
-		m.Checker != judging.LibraryCheckerTextVersion || !digestPattern.MatchString(m.RuntimeSHA256) ||
+		m.Checker != judging.LibraryCheckerTextVersion || m.CheckerArtifact != "" || !digestPattern.MatchString(m.RuntimeSHA256) ||
 		m.Origin != APlusBOrigin || m.Language != "gnu++17" || m.TokenBytes < 1 || m.TokenBytes > 65536 ||
 		len(m.Tests) != 17 {
 		return APlusBManifest{}, ErrUnavailable

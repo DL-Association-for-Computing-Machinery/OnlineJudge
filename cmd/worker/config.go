@@ -66,6 +66,15 @@ func loadConfig(getenv func(string) string) (config, error) {
 	default:
 		return c, errors.New("invalid local Python setting")
 	}
+	checker := getenv("OJ_LOCAL_SPJ_CHECKER_FILE")
+	if aplusb.UsesSPJ() {
+		aplusb, err = aplusb.WithCheckerArtifact(checker)
+		if err != nil {
+			return c, err
+		}
+	} else if checker != "" {
+		return c, errors.New("unexpected local checker artifact")
+	}
 	c.ubuntuTextSlot = getenv(ubuntuTextSlotEnv)
 	if c.ubuntuTextSlot != "" {
 		if !aplusb.UsesCachedText() || aplusb.APlusBTier() != experiment.ReferenceAPlusBUbuntu {

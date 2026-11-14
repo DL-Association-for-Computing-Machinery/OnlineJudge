@@ -35,6 +35,8 @@ type LocalTextAdmissionInput struct {
 	QualitySHA256       string `json:"quality_sha256,omitempty"`
 	RenderingFile       string `json:"rendering_file,omitempty"`
 	RenderingSHA256     string `json:"rendering_sha256,omitempty"`
+	SPJReport           string `json:"spj_report,omitempty"`
+	SPJReportSHA256     string `json:"spj_report_sha256,omitempty"`
 }
 
 // Valid bounds trusted local configuration before filesystem access.
@@ -45,6 +47,10 @@ func (in LocalTextAdmissionInput) Valid() bool {
 func (in LocalTextAdmissionInput) validEvidence() bool {
 	if in.SourceID == "" || !absoluteLocalPath(in.ReportDirectory) || !problem.ValidImportRevision(in.ReportSHA256) ||
 		!problem.ValidImportRevision(in.ReviewProfileSHA256) {
+		return false
+	}
+	if (in.SPJReport != "" || in.SPJReportSHA256 != "") &&
+		(!in.PackageReview || !absoluteLocalPath(in.SPJReport) || !problem.ValidImportRevision(in.SPJReportSHA256)) {
 		return false
 	}
 	if in.PackageReview {
@@ -113,6 +119,10 @@ func VerifyLocalText(ctx context.Context, prepared *problem.Prepared, in LocalTe
 	if err != nil || id.SourceID != in.SourceID || in.PackageReview && id.SourceID == ConvolutionSourceID {
 		return zero, ErrCheckerCandidateBinding
 	}
+	spj, err := prepared.DeclaresLocalSPJ()
+	if err != nil || spj != (in.SPJReport != "") {
+		return zero, ErrCheckerCandidateBinding
+	}
 	checkComplete := func() bool {
 		_, err := os.Lstat(filepath.Join(in.ReportDirectory, "INCOMPLETE"))
 		return errors.Is(err, os.ErrNotExist)
@@ -137,6 +147,11 @@ func VerifyLocalText(ctx context.Context, prepared *problem.Prepared, in LocalTe
 	binding := digest(struct{ Plan, Candidate, Runtime string }{proof.FormalPlanSHA, proof.CandidateSHA256, runtime})
 	m := materials.TextTransportManifest{Origin: materials.LocalTextOrigin, Version: "local-text-" + binding,
 		JudgeSHA256: binding, RuntimeSHA256: runtime, Checker: judging.LibraryCheckerTextVersion, Language: "gnu++17", TokenBytes: localTextLimits.TokenBytes}
+	if in.SPJReport != "" {
+		if err := bindSPJReport(ctx, prepared, trial.plan, in, &m); err != nil {
+			return zero, err
+		}
+	}
 	for i, point := range trial.plan.Cases {
 		m.Tests = append(m.Tests, materials.TextTransportPoint{ID: point.ID, Input: point.Input.SHA256, Answer: point.Answer.SHA256})
 		if export != nil {
@@ -171,6 +186,9 @@ func VerifyLocalText(ctx context.Context, prepared *problem.Prepared, in LocalTe
 			return zero, err
 		}
 		verified.digest = digest([3]string{verified.digest, in.QualitySHA256, in.RenderingSHA256})
+	}
+	if in.SPJReport != "" {
+		verified.digest = digest([2]string{verified.digest, in.SPJReportSHA256})
 	}
 	return verified, nil
 }

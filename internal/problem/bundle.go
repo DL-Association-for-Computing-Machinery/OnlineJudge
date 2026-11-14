@@ -318,6 +318,19 @@ func (p *Prepared) ReadLocalTextQualityFile(ctx context.Context, name string, ma
 	return open.read(ctx, ref)
 }
 
+// DeclaresLocalSPJ reports whether the immutable package includes a checker.
+func (p *Prepared) DeclaresLocalSPJ() (bool, error) {
+	if p == nil {
+		return false, ErrInvalid
+	}
+	d, err := parseDocument(p.content.Document, p.content.SourceID)
+	if err != nil {
+		return false, err
+	}
+	_, present := d.Provenance.OriginalFiles["source/"+d.Provenance.SourcePath+"/quality/checker.cpp"]
+	return present, nil
+}
+
 // LocalTextDisplayBinding pins the exact statement, images and ordered samples
 // through the immutable import identity. Sample positions come from the draft.
 func (p *Prepared) LocalTextDisplayBinding() (string, []bool, error) {

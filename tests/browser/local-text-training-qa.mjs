@@ -82,7 +82,14 @@ try {
   unblock()
   await other.getByText('没有可显示的训练提交。', { exact: true }).waitFor()
   const sourceAC = process.env.OJ_BROWSER_TRAINING_AC_FILE ? await readFile(process.env.OJ_BROWSER_TRAINING_AC_FILE, 'utf8') : ac
-  for (const [source, verdict] of [[sourceAC, 'AC'], [wa, 'WA'], [ole, 'OLE']]) {
+  const variants = [[sourceAC, 'AC']]
+  const spj = process.env.OJ_BROWSER_SPJ_ALTERNATE_FILE
+  if (spj) {
+    variants.push([await readFile(process.env.OJ_BROWSER_SPJ_ALTERNATE_FILE, 'utf8'), 'AC'])
+  }
+  variants.push([wa, 'WA'])
+  if (!spj) variants.push([ole, 'OLE'])
+  for (const [source, verdict] of variants) {
     if (records.length) await page.goto(problem)
     await page.getByRole('heading', { name: title, exact: true }).waitFor()
     await page.getByLabel('源码', { exact: true }).fill(source)
@@ -104,7 +111,7 @@ try {
     await page.getByRole('button', { name: '读取本次提交', exact: true }).click()
     await page.getByText('已判定 · ' + verdict, { exact: true }).waitFor({ timeout: 70_000 })
     assert.equal(await page.getByLabel('提交时的源码').textContent(), source)
-    await page.screenshot({ path: join(output, 'local-text-' + verdict.toLowerCase() + '.png'), fullPage: true })
+    await page.screenshot({ path: join(output, 'local-text-' + records.length + '-' + verdict.toLowerCase() + '.png'), fullPage: true })
     records.push({ id: receipt.id, version: receipt.material_version, verdict })
   }
   await other.goto(page.url())
@@ -116,7 +123,7 @@ try {
   await logout(page)
   await writeFile(join(output, 'local-text-qa.json'), JSON.stringify({ records, separateAccount: true, wrongVersionRejected: true,
     keyboardFocus: true, sampleCopy: true, historyFailureLoadingEmpty: true, narrowViewport: true }) + '\n')
-  console.log('PASS published local text → actual Worker AC, WA and OLE → owner only')
+  console.log('PASS published ' + (spj ? 'SPJ → actual Worker AC, AC and WA' : 'local text → actual Worker AC, WA and OLE') + ' → owner only')
 } finally {
   await browser.close()
 }
