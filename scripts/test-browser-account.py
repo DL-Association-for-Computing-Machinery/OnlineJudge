@@ -204,6 +204,27 @@ def stop_fixture(origin, ca=None):
             pass
 
 
+def check_trial_nginx(origin, ca):
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPSHandler(
+        context=ssl.create_default_context(cafile=str(ca))))
+    path = origin + "/api/v1/readyz"
+    with opener.open(path, timeout=5) as response:
+        if (response.headers.get("X-OJ-Fixture-Upstream-Status") != "200"
+                or json.load(response) != {"status": "ready", "service": "api", "scope": "ordinary-session"}):
+            raise ValueError("Nginx trial readiness did not reach the API")
+    for request, code, upstream in (
+        (urllib.request.Request(path, method="POST"), 405, "405"),
+        (urllib.request.Request(path, headers={"Host": "wrong.invalid"}), 421, None),
+    ):
+        try:
+            with opener.open(request, timeout=5):
+                raise ValueError("expected a trial attribution probe rejection")
+        except urllib.error.HTTPError as response:
+            with response:
+                if response.code != code or response.headers.get("X-OJ-Fixture-Upstream-Status") != upstream:
+                    raise ValueError("unexpected trial attribution probe result") from None
+
+
 def main():
     try:
         args = arguments()
@@ -320,8 +341,13 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
             config = out / "trial-nginx.conf"
             template = (ROOT / "deploy/trial/nginx.conf.example").read_text()
             host = urllib.parse.urlsplit(origin).netloc
+            api_location = "location ^~ /api/ {"
+            if template.count(api_location) != 1:
+                raise ValueError("Nginx trial API location changed")
             config.write_text(template.replace("server_name oj.example.invalid;", "server_name 127.0.0.1;")
-                              .replace("oj.example.invalid", host))
+                              .replace("oj.example.invalid", host)
+                              .replace(api_location, api_location + "\n"
+                                       "            add_header X-OJ-Fixture-Upstream-Status $upstream_status always;"))
             config.chmod(0o644)
             containers["edge"] = docker.create("--pull", "never", "--network", f"container:{containers['test']}",
                 "--user", "101:101", "--read-only", "--tmpfs", "/tmp:rw,size=16m,mode=1777",
@@ -348,12 +374,8 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
         process = subprocess.Popen([*docker.command, "exec", "-e", "OJ_BROWSER_ORIGIN=" + origin, "-e", "OJ_BROWSER_UI_DIR=/browser-assets", *cold, containers["test"], "sh", "/browser-fixture.sh"], stdout=handles[-1], stderr=subprocess.STDOUT)
         ready = wait_ready(process, fixture_log, origin, args.fixture_start_seconds)
         if args.trial_nginx_image:
-            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPSHandler(
-                context=ssl.create_default_context(cafile=str(tls / "public-ca.pem"))))
             try:
-                with opener.open(origin + "/api/v1/readyz", timeout=5) as response:
-                    if json.load(response) != {"status": "ready", "service": "api", "scope": "ordinary-session"}:
-                        raise ValueError("Nginx trial readiness did not reach the API")
+                check_trial_nginx(origin, tls / "public-ca.pem")
             except urllib.error.URLError as error:
                 log.write(f"Nginx trial readiness: {error.reason}\n")
                 raise
@@ -366,7 +388,7 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
         info = out / "fixture.json"
         info.write_text(json.dumps({"origin": origin, "http_origin": http_origin, "log": str(fixture_log), "email": ready["email"],
                                     "subject_id": ready["subject_id"], "statements": args.statements,
-                                    "authorized_drafts": args.authorized_drafts,
+                                    "authorized_drafts": args.authorized_drafts, "trial_nginx": bool(args.trial_nginx_image),
                                     **({"login_accounts": json.loads(ready["login_accounts"])} if args.m1_login_load else {})}, indent=2) + "\n")
         phase = "BROWSER_QA"
         print("Running real browser account checks", flush=True)

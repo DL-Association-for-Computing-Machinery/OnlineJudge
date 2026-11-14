@@ -25,7 +25,12 @@ async function login(index, target) {
       const url = new URL(response.url())
       const method = response.request().method()
       if (url.origin === info.origin && (url.pathname === '/api/v1/session' || url.pathname.startsWith('/api/v1/session/login/'))) {
-        sample.statuses.push([method, url.pathname, response.status()])
+        const status = [method, url.pathname, response.status()]
+        if (info.trial_nginx) {
+          const upstream = response.headers()['x-oj-fixture-upstream-status']
+          status.push(/^[1-5]\d\d$/.test(upstream ?? '') ? Number(upstream) : null)
+        }
+        sample.statuses.push(status)
       }
     })
     await page.goto(info.origin + '/login', { timeout: 10_000 })
@@ -87,6 +92,7 @@ try {
   const times = samples.map(s => s.outcome === 'verified' ? s.loginMs : Infinity).sort((a, b) => a - b)
   await writeFile(path.join(output, 'browser-qa.json'), JSON.stringify({
     success: checks.length === 2, checks, fixture: 'local TLS with disposable CA, PostgreSQL and Redis',
+    edge: info.trial_nginx ? 'trial-nginx' : 'go-fixture',
     attempted: samples.length, verified: samples.filter(s => s.outcome === 'verified').length,
     within10s: times.filter(ms => ms <= 10_000).length,
     p50Ms: percentile(times, 50), p95Ms: percentile(times, 95), p99Ms: percentile(times, 99), samples,
