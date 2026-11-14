@@ -37,11 +37,11 @@ func loadConfig(getenv func(string) string) (config, error) {
 	if err != nil {
 		return c, err
 	}
-	_, aplusb, err := experiment.LoadAPlusBFixture(getenv)
+	_, aplusb, err := experiment.LoadCachedFixture(getenv)
 	if err != nil {
 		return c, err
 	}
-	if aplusb.IsAPlusB() {
+	if aplusb.UsesCachedText() {
 		if getenv("OJ_WORKER_M0_SLOT") != "" || getenv(dualModeEnv) != "" || runtime.GOARCH != "arm64" {
 			return c, errors.New("A+B requires a dedicated arm64 single reference slot")
 		}
@@ -57,7 +57,7 @@ func loadConfig(getenv func(string) string) (config, error) {
 	switch getenv("OJ_APLUSB_START_STOPPED") {
 	case "":
 	case "1":
-		if !c.fixture.IsAPlusB() {
+		if !c.fixture.UsesCachedText() {
 			return c, errors.New("managed reference startup requires an explicit A+B fixture")
 		}
 		c.startAPlusB = true

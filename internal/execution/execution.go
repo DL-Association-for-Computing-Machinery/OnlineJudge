@@ -96,7 +96,7 @@ func (r *Runner) Judge(ctx context.Context, d materials.Descriptor, blobs map[st
 	if p.tokenBytes != 0 {
 		strict, ok := sandbox.(*CachedGoJudge)
 		if !ok || strict == nil {
-			return result, errors.New("A+B strict cached execution required")
+			return result, errors.New("strict cached text execution required")
 		}
 		run = strict.RunCheckerTrial
 	}

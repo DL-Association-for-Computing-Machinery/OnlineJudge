@@ -297,6 +297,45 @@ func (p *Prepared) persist(ctx context.Context, store materialstore.Store) error
 	return nil
 }
 
+// ReadLocalTextQualityFile reads a small original, authenticated by the
+// configured source lock. Only package quality files are exposed here.
+func (p *Prepared) ReadLocalTextQualityFile(ctx context.Context, name string, maxBytes int64) ([]byte, error) {
+	if p == nil || ctx == nil || !validPath(name) || !strings.HasPrefix(name, "quality/") ||
+		maxBytes < 1 || maxBytes > maxReferenceCatalog {
+		return nil, ErrInvalid
+	}
+	d, err := parseDocument(p.content.Document, p.content.SourceID)
+	if err != nil {
+		return nil, err
+	}
+	ref, ok := d.Provenance.OriginalFiles["source/"+d.Provenance.SourcePath+"/"+name]
+	if !ok || ref.Size < 1 || ref.Size > maxBytes {
+		return nil, ErrReferenceUnsupported
+	}
+	// Verified bundle metadata is immutable. The caller owns the bundle and
+	// serializes access with Close, including while holding the formal snapshot.
+	open := referenceOpen(p.openReference)
+	return open.read(ctx, ref)
+}
+
+// LocalTextDisplayBinding pins the exact statement, images and ordered samples
+// through the immutable import identity. Sample positions come from the draft.
+func (p *Prepared) LocalTextDisplayBinding() (string, []bool, error) {
+	id, err := p.ImportIdentity()
+	if err != nil {
+		return "", nil, err
+	}
+	d, err := parseDocument(p.content.Document, p.content.SourceID)
+	if err != nil {
+		return "", nil, err
+	}
+	samples := make([]bool, len(d.TestCases))
+	for i, c := range d.TestCases {
+		samples[i] = c.Sample
+	}
+	return id.ImportRevision, samples, nil
+}
+
 func privateInfo(info fs.FileInfo, directory bool) bool {
 	if info == nil {
 		return false

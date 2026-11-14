@@ -31,5 +31,6 @@ export async function readCatalog(id: string, signal: AbortSignal) {
   const data = await readBoundedJSON(response, 7 * 1024 * 1024)
   if (!record(data) || data.problem_id !== id || 'draft_id' in data) throw invalid()
   const { problem_id, ...display } = data
-  return decodeDraftPreview({ ...display, draft_id: problem_id }, id)
+  return { ...decodeDraftPreview({ ...display, draft_id: problem_id }, id),
+    trainingIntake: response.headers.get('X-OJ-Training-Intake') === 'enabled' }
 }

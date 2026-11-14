@@ -85,6 +85,10 @@ func TestVerifyPassingCheckerTrial(t *testing.T) {
 	}{
 		{"wrong schema", func(r *problemvalidation.CheckerTrialReport) { r.Schema = "oj.checker-trial.v2" }},
 		{"isolated judge schema", func(r *problemvalidation.CheckerTrialReport) { r.Schema = "oj.aplusb-isolated-judge-report.v1" }},
+		{"local wrong solution unexpectedly accepted by checker", func(r *problemvalidation.CheckerTrialReport) {
+			r.Schema = "oj.local-text-wrong-solution-report.v1"
+			r.SubmissionSHA256 = strings.Repeat("a", 64)
+		}},
 		{"legacy schema carrying a submission binding", func(r *problemvalidation.CheckerTrialReport) {
 			r.SubmissionSHA256 = strings.Repeat("a", 64)
 		}},

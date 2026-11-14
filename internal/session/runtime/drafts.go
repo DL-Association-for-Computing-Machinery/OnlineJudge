@@ -38,6 +38,11 @@ type PrivateDraftsConfig struct {
 	PublicCatalog                                 bool
 	StatementConfirmations                        bool
 	LocalExecution                                *problemvalidation.APlusBLocalAdmissionInput
+	LocalTextExecution                            *problemvalidation.LocalTextAdmissionInput
+}
+
+func (c PrivateDraftsConfig) hasLocalExecution() bool {
+	return c.LocalExecution != nil || c.LocalTextExecution != nil
 }
 
 // Validate checks bounded lexical configuration without accessing files.
@@ -49,6 +54,10 @@ func (c PrivateDraftsConfig) Validate() error {
 		return ErrConfig
 	}
 	if c.LocalExecution != nil && (!c.ReviewApprovals || !c.PublicCatalog || len(c.SourceIDs) != 1 || c.SourceIDs[0] != "library-checker:aplusb") {
+		return ErrConfig
+	}
+	if c.LocalTextExecution != nil && (c.LocalExecution != nil || !c.ReviewApprovals || !c.PublicCatalog ||
+		!c.LocalTextExecution.Valid() || len(c.SourceIDs) != 1 || c.SourceIDs[0] != c.LocalTextExecution.SourceID) {
 		return ErrConfig
 	}
 	for _, path := range []string{c.MaterialRoot, c.BundleDirectory, c.SourceLockFile} {
@@ -75,6 +84,7 @@ func (c PrivateDraftsConfig) Validate() error {
 }
 
 type draftCapabilities struct {
+	localIntake httptransport.TrainingSubmit
 	importer    *problem.Importer
 	catalog     *httptransport.CatalogReader
 	references  *problemreference.Service
@@ -89,7 +99,7 @@ type draftCapabilities struct {
 	statements  *problemreference.StatementConfirmations
 }
 
-func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore.Store, pool *pgxpool.Pool, secrets *redisstore.LoginSecrets) (*draftCapabilities, func() error, error) {
+func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore.Store, pool *pgxpool.Pool, secrets *redisstore.LoginSecrets, enableLocalIntake bool) (*draftCapabilities, func() error, error) {
 	var prepared []*problem.Prepared
 	var materials *materialstore.Local
 	var preparation *problemreference.Preparation
@@ -159,14 +169,25 @@ func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore
 	if err != nil {
 		return nil, nil, ErrStartup
 	}
-	if c.LocalExecution != nil {
-		admission, err := problemvalidation.ReadAPlusBLocalAdmission(ctx, *c.LocalExecution)
+	var admission problemvalidation.LocalExecutionAdmission
+	if c.hasLocalExecution() {
+		if c.LocalTextExecution != nil {
+			admission, err = problemvalidation.ReadLocalTextAdmission(ctx, *c.LocalTextExecution, sources[c.LocalTextExecution.SourceID])
+		} else {
+			admission, err = problemvalidation.ReadAPlusBLocalAdmission(ctx, *c.LocalExecution)
+		}
 		if err != nil {
 			return nil, nil, ErrStartup
 		}
 		reviewer, err = reviewer.WithLocalExecution(admission)
 		if err != nil {
 			return nil, nil, ErrStartup
+		}
+		if enableLocalIntake {
+			result.localIntake, err = localTrainingSubmit(ctx, pool, reviewer, admission)
+			if err != nil {
+				return nil, nil, ErrStartup
+			}
 		}
 	}
 	if c.PublicCatalog {
@@ -233,7 +254,7 @@ func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore
 		}
 	}
 	if c.ReferenceRequests {
-		catalog, err := problemreference.NewCatalog(sources)
+		catalog, err := problemreference.NewCatalogWithLocalPackage(sources, admission)
 		if err != nil {
 			return nil, nil, ErrStartup
 		}

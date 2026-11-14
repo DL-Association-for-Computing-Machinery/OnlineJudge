@@ -31,6 +31,7 @@ import (
 	referencepg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference/postgres"
 	protocol "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/redisstore"
 	sessionruntime "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/runtime"
+	submissionpg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/testpki"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/tests/problemfixture"
 )
@@ -80,9 +81,25 @@ func TestBrowserFixture(t *testing.T) {
 		browserDrafts(t, f, &c, subject.ID)
 	}
 	reviewMode := os.Getenv("OJ_BROWSER_REVIEW_MATERIALS") == "1"
+	packageMode := os.Getenv("OJ_BROWSER_PACKAGE") == "1"
 	localExecution := os.Getenv("OJ_BROWSER_LOCAL_EXECUTION") == "1"
+	trainingIntake := os.Getenv("OJ_BROWSER_LOCAL_TRAINING_INTAKE") == "1"
+	var trainee identity.Personal
+	var trainingObserver identity.Personal
 	if localExecution && (!reviewMode || historyMode || trialNginx) {
 		t.Fatal("local execution requires an isolated review fixture")
+	}
+	if trainingIntake {
+		if !localExecution {
+			t.Fatal("training intake requires the admitted local review fixture")
+		}
+		c.LocalTrainingIntake, c.TrainingHistory, c.TrainingSubmissionDetail = true, true, true
+		trainee = f.subject(t, false)
+		trainingObserver = f.subject(t, false)
+		setHistoryEmailVerified(t, f, trainee.ID, true)
+		setHistoryEmailVerified(t, f, trainingObserver.ID, true)
+		unverified = f.subject(t, false).Email.Original()
+		must(t, submissionpg.ConfigureBacklog(f.ctx, f.pools[0], submissionpg.BacklogLimits{Global: 8, Subject: 4}))
 	}
 	if reviewMode {
 		if c.PrivateDrafts == nil || !c.PrivateDrafts.ReferenceRequests {
@@ -95,7 +112,11 @@ func TestBrowserFixture(t *testing.T) {
 		c.PrivateDrafts.StatementConfirmations = true
 		c.PrivateDrafts.PublicCatalog = true
 		if localExecution {
-			browserLocalExecution(t, f, &c)
+			if os.Getenv("OJ_BROWSER_LOCAL_TEXT") == "1" {
+				browserLocalText(t, f, &c)
+			} else {
+				browserLocalExecution(t, f, &c)
+			}
 		}
 	}
 	access, err := identitypg.NewProblemAccess(f.pools[0])
@@ -208,17 +229,27 @@ func TestBrowserFixture(t *testing.T) {
 		control.Start()
 		servers = append(servers, control)
 	} else {
-		edge := browserServer(t, "0.0.0.0:9443", edgeHandler)
+		listen := "0.0.0.0"
+		if trainingIntake {
+			listen = "127.0.0.1"
+		}
+		edge := browserServer(t, listen+":9443", edgeHandler)
 		edgeCert, _, _ := ca.Issue(t, "", x509.ExtKeyUsageServerAuth, time.Now().Add(time.Hour))
 		edge.TLS = &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{edgeCert}}
 		edge.StartTLS()
-		plain := browserServer(t, "0.0.0.0:9444", static)
+		plain := browserServer(t, listen+":9444", static)
 		plain.Start()
 		servers = append(servers, edge, plain)
 	}
 	info := map[string]string{"url": origin.String(), "email": subject.Email.Original(), "subject_id": subject.ID, "other_email": otherAuthor.Email.Original(), "other_subject_id": otherAuthor.ID}
-	if historyMode {
+	if historyMode || trainingIntake {
 		info["unverified_email"] = unverified
+	}
+	if trainingIntake {
+		info["training_email"] = trainee.Email.Original()
+		info["training_subject_id"] = trainee.ID
+		info["training_observer_email"] = trainingObserver.Email.Original()
+		info["training_observer_id"] = trainingObserver.ID
 	}
 	if loginLoad {
 		hasher, err := password.New(c.PasswordPolicy, c.PasswordLimits)
@@ -240,13 +271,21 @@ func TestBrowserFixture(t *testing.T) {
 		info["login_accounts"] = string(raw)
 	}
 	if reviewMode {
-		info["review_id"], info["review_draft_id"], info["catalog_fixture_id"] = seedBrowserReview(t, f, origin, ca.Roots, subject, otherAuthor, access, c.PrivateDrafts.MaterialRoot, localExecution)
-		info["review_reference_key"] = entryTerminalReferenceKey
+		if !packageMode {
+			info["review_id"], info["review_draft_id"], info["catalog_fixture_id"] = seedBrowserReview(t, f, origin, ca.Roots, subject, otherAuthor, access, c.PrivateDrafts.MaterialRoot, localExecution)
+			info["review_reference_key"] = entryTerminalReferenceKey
+		} else {
+			_, err = access.SetReviewerRole(f.ctx, identity.ProblemRoleChange{SubjectID: otherAuthor.ID, Enabled: true, Operator: "browser-fixture", Reason: "isolated package reviewer"})
+			must(t, err)
+		}
 		if localExecution {
 			info["publisher_id"] = browserLocalPublisher(t, f, access)
 			info["database_directory"] = c.Database.Host
 			info["material_directory"] = c.PrivateDrafts.MaterialRoot
 		}
+	}
+	if packageMode {
+		info["source_id"] = c.PrivateDrafts.SourceIDs[0]
 	}
 	if os.Getenv("OJ_BROWSER_COLD_TLS") == "1" {
 		publicCA, err := os.ReadFile(ca.CAFile)
@@ -303,7 +342,16 @@ func browserDrafts(t *testing.T, f *fixture, c *sessionruntime.Config, subjectID
 	t.Helper()
 	root := filepath.Join(t.TempDir(), "materials")
 	must(t, os.Mkdir(root, 0700))
-	if os.Getenv("OJ_BROWSER_LC_DRAFTS") == "1" {
+	if os.Getenv("OJ_BROWSER_PACKAGE") == "1" {
+		source := os.Getenv("OJ_BROWSER_PACKAGE_SOURCE")
+		if source == "" {
+			t.Fatal("local package source required")
+		}
+		c.PrivateDrafts = &sessionruntime.PrivateDraftsConfig{MaterialRoot: root, BundleDirectory: "/local-evidence/bundle",
+			SourceLockFile: "/local-evidence/library-checker.json", SourceIDs: []string{source},
+			Timeout: 45 * time.Second, MaxInFlight: 1, ReferenceRequests: os.Getenv("OJ_BROWSER_LOCAL_EXECUTION") == "1"}
+		must(t, referencepg.Configure(f.ctx, f.pools[0], problemreference.Limits{Global: 4, Owner: 1}))
+	} else if os.Getenv("OJ_BROWSER_LC_DRAFTS") == "1" {
 		const lockPath = "/workspace/config/problem-sources/library-checker.json"
 		raw, err := os.ReadFile(lockPath)
 		must(t, err)

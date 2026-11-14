@@ -55,11 +55,16 @@ func NewLeasedForFixture(s Sandbox, renew RenewLease, stop StopSandbox, fixture 
 		requestTimeout: 3 * time.Second, stopTimeout: 10 * time.Second}
 }
 
-// NewLeasedAPlusB retains lease supervision across attempts, with a fresh
-// single-attempt cache ledger on the same exclusively owned sandbox each time.
+// NewLeasedAPlusB retains the original constructor for cached text fixtures.
 func NewLeasedAPlusB(factory func() *CachedGoJudge, renew RenewLease, stop StopSandbox, fixture experiment.WorkerFixture) (*LeasedRunner, error) {
-	if factory == nil || !fixture.IsAPlusB() {
-		return nil, errors.New("A+B execution requires the isolated profile and cache factory")
+	return NewLeasedCachedText(factory, renew, stop, fixture)
+}
+
+// NewLeasedCachedText retains lease supervision across attempts, with a fresh
+// single-attempt cache ledger on the same exclusively owned sandbox each time.
+func NewLeasedCachedText(factory func() *CachedGoJudge, renew RenewLease, stop StopSandbox, fixture experiment.WorkerFixture) (*LeasedRunner, error) {
+	if factory == nil || !fixture.UsesCachedText() {
+		return nil, errors.New("cached text execution requires an isolated profile and cache factory")
 	}
 	r := NewLeasedForFixture(nil, renew, stop, fixture)
 	r.runner.newCached = factory

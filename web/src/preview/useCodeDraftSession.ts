@@ -5,7 +5,7 @@ import { subscribePrivateInvalidation } from '../account/privateInvalidation'
 import { AccountError, accountRequest } from '../services/session'
 import { CodeDraftSession } from './codeDraftSession'
 
-export function useCodeDraftSession(owner: string, problem: string, starter: string) {
+export function useCodeDraftSession(owner: string, problem: string, starter: string, context = 'preview-personal') {
   const { controller } = useCurrentAccount()
   const [gate] = useState(() => {
     let invalidated = false, verified = -1
@@ -14,7 +14,7 @@ export function useCodeDraftSession(owner: string, problem: string, starter: str
   })
   const [verifying, setVerifying] = useState(true)
   const [verifyFailed, setVerifyFailed] = useState(false)
-  const [draft] = useState(() => new CodeDraftSession([owner, 'preview-personal', problem, 'gnu++17'], starter, () => {
+  const [draft] = useState(() => new CodeDraftSession([owner, context, problem, 'gnu++17'], starter, () => {
     const { status, session } = controller.getSnapshot()
     return !gate.invalidated() && gate.generation() === controller.readPrivateGeneration() &&
       status === 'authenticated' && session?.subject_id === owner &&

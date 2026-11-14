@@ -85,6 +85,8 @@ type Config struct {
 	TrainingHistory bool
 	// TrainingSubmissionDetail independently enables owner-only source and verdict reads.
 	TrainingSubmissionDetail bool
+	// LocalTrainingIntake opens browser submission only for the admitted local queue.
+	LocalTrainingIntake bool
 	// SessionDevices enables listing and revoking the caller's other sessions.
 	SessionDevices bool
 	// SessionRotation enables replacing the caller's personal credential.
@@ -142,6 +144,10 @@ func cloneTLS(mode Security, config *tls.Config) (*tls.Config, error) {
 }
 
 func (c Config) validate() (*password.Hasher, *password.BoundedHasher, error) {
+	if c.LocalTrainingIntake && (!c.TrainingHistory || !c.TrainingSubmissionDetail ||
+		c.PrivateDrafts == nil || !c.PrivateDrafts.PublicCatalog || !c.PrivateDrafts.hasLocalExecution()) {
+		return nil, nil, ErrConfig
+	}
 	if c.ManagementRoleChanges && !c.ManagementSessions {
 		return nil, nil, ErrConfig
 	}
@@ -155,10 +161,10 @@ func (c Config) validate() (*password.Hasher, *password.BoundedHasher, error) {
 	if c.PrivateDrafts != nil && c.PrivateDrafts.Validate() != nil {
 		return nil, nil, ErrConfig
 	}
-	if c.PrivateDrafts != nil && c.PrivateDrafts.LocalExecution != nil {
+	if c.PrivateDrafts != nil && c.PrivateDrafts.hasLocalExecution() {
 		origin, err := url.Parse(c.HTTP.Origin)
 		if err != nil || !net.ParseIP(origin.Hostname()).IsLoopback() ||
-			!c.PrivateDrafts.LocalExecution.Valid() || c.Database.Host == "" || c.Database.Host[0] != '/' {
+			(c.PrivateDrafts.LocalExecution != nil && !c.PrivateDrafts.LocalExecution.Valid()) || c.Database.Host == "" || c.Database.Host[0] != '/' {
 			return nil, nil, ErrConfig
 		}
 	}

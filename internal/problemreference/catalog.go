@@ -65,6 +65,12 @@ type Catalog struct {
 // lock. The LoadBundle caller fixes that lock; this does not admit a Runner or
 // establish current material health. Empty catalogs allow old-key recovery.
 func NewCatalog(sources map[string]*problem.Prepared) (*Catalog, error) {
+	return NewCatalogWithLocalPackage(sources, problemvalidation.LocalExecutionAdmission{})
+}
+
+// NewCatalogWithLocalPackage opts only the authenticated local import into
+// the fixed profile. Ordinary catalogs still use the historical source registry.
+func NewCatalogWithLocalPackage(sources map[string]*problem.Prepared, local problemvalidation.LocalExecutionAdmission) (*Catalog, error) {
 	if len(sources) > 10 {
 		return nil, ErrInvalid
 	}
@@ -78,7 +84,7 @@ func NewCatalog(sources map[string]*problem.Prepared) (*Catalog, error) {
 		if err != nil || identity.SourceID != sourceID {
 			return nil, ErrInvalid
 		}
-		profile, _, err := problemvalidation.ResolveSource(sourceID)
+		profile, _, err := problemvalidation.ResolveReferenceProfile(sourceID, local.PackageReview(identity))
 		if err != nil {
 			return nil, ErrInvalid
 		}

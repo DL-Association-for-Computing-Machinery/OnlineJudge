@@ -99,10 +99,10 @@ func (s *Store) CheckRegisteredMaterial(ctx context.Context) error {
 // Accept atomically persists source and task, or returns the original receipt.
 // A commit error remains ambiguous: callers must query/retry with the same key.
 func (s *Store) Accept(ctx context.Context, subject, scope, key string, req submission.Request) (submission.Receipt, bool, error) {
-	return s.accept(ctx, subject, scope, key, req, nil)
+	return s.accept(ctx, subject, scope, key, req, submission.Digest(req), nil)
 }
 
-func (s *Store) accept(ctx context.Context, subject, scope, key string, req submission.Request, authorize func(context.Context, pgx.Tx) error) (submission.Receipt, bool, error) {
+func (s *Store) accept(ctx context.Context, subject, scope, key string, req submission.Request, fingerprint string, authorize func(context.Context, pgx.Tx) error) (submission.Receipt, bool, error) {
 	if err := submission.Validate(subject, scope, key, req); err != nil {
 		return submission.Receipt{}, false, err
 	}
@@ -121,7 +121,7 @@ func (s *Store) accept(ctx context.Context, subject, scope, key string, req subm
 			return submission.Receipt{}, false, err
 		}
 	}
-	result, created, err := s.enqueue(ctx, submissiondb.New(tx), subject, scope, key, req)
+	result, created, err := s.enqueue(ctx, submissiondb.New(tx), subject, scope, key, req, fingerprint)
 	if err != nil {
 		return submission.Receipt{}, false, err
 	}
@@ -136,9 +136,8 @@ func (s *Store) accept(ctx context.Context, subject, scope, key string, req subm
 	return result, created, nil
 }
 
-func (s *Store) enqueue(ctx context.Context, q *submissiondb.Queries, subject, scope, key string, req submission.Request) (submission.Receipt, bool, error) {
+func (s *Store) enqueue(ctx context.Context, q *submissiondb.Queries, subject, scope, key string, req submission.Request, fingerprint string) (submission.Receipt, bool, error) {
 	receiptKey := submissiondb.GetReceiptParams{SubjectID: subject, ContextID: scope, IdempotencyKey: key}
-	fingerprint := submission.Digest(req)
 	// Return historical acceptance even if the material store later becomes unavailable.
 	if existing, found, err := acceptedReceipt(ctx, q, receiptKey, fingerprint); found || err != nil {
 		return existing, false, err

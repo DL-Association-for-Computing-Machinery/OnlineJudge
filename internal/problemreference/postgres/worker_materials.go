@@ -56,7 +56,7 @@ func (c *ReferenceClaimer) liveReferenceClaim(ctx context.Context, node submissi
 	if node.ID != c.nodeID || node.CredentialVersion < 1 {
 		return zero, noTime, noTime, submission.ErrNode
 	}
-	profile, _, err := problemvalidation.ResolveSource(input.SourceID)
+	profile, err := c.resolveProfile(input.SourceID)
 	if err != nil {
 		return zero, noTime, noTime, problemreference.ErrClaimUnavailable
 	}

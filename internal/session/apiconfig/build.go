@@ -21,6 +21,7 @@ func (w document) config() (Config, error) {
 	r.Namespace, r.SecretsFile = w.Namespace, w.SecretsFile
 	r.TrainingHistory = w.TrainingHistory
 	r.TrainingSubmissionDetail = w.TrainingSubmissionDetail
+	r.LocalTrainingIntake = w.LocalTrainingIntake
 	r.SessionDevices = w.SessionDevices
 	r.SessionRotation = w.SessionRotation
 	r.ManagementSessions = w.ManagementSessions
@@ -111,7 +112,7 @@ func (w privateDraftsWire) apply(c *Config) error {
 		SourceLockFile: w.SourceLockFile, SourceIDs: append([]string(nil), w.SourceIDs...), MaxInFlight: w.MaxInFlight,
 		ReferenceRequests: w.ReferenceRequests, ReviewIntake: w.ReviewIntake, ReviewAccess: w.ReviewAccess,
 		ReviewReturns: w.ReviewReturns, ReviewApprovals: w.ReviewApprovals, PublicCatalog: w.PublicCatalog,
-		StatementConfirmations: w.StatementConfirmations, LocalExecution: w.LocalExecution}
+		StatementConfirmations: w.StatementConfirmations, LocalExecution: w.LocalExecution, LocalTextExecution: w.LocalTextExecution}
 	if !durations([]durationField{{w.Timeout, &d.Timeout}}) || d.Validate() != nil || c.Server.WriteTimeout < d.Timeout {
 		return ErrConfig
 	}

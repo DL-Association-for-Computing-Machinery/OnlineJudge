@@ -25,6 +25,7 @@ type document struct {
 	PrivateDrafts            *privateDraftsWire     `json:"private_drafts"`
 	TrainingHistory          bool                   `json:"training_history"`
 	TrainingSubmissionDetail bool                   `json:"training_submission_detail"`
+	LocalTrainingIntake      bool                   `json:"local_training_intake"`
 	SessionDevices           bool                   `json:"session_devices"`
 	SessionRotation          bool                   `json:"session_rotation"`
 	ManagementSessions       bool                   `json:"management_sessions"`
@@ -68,6 +69,7 @@ type privateDraftsWire struct {
 	PublicCatalog          bool                                         `json:"public_catalog"`
 	StatementConfirmations bool                                         `json:"statement_confirmations"`
 	LocalExecution         *problemvalidation.APlusBLocalAdmissionInput `json:"aplusb_local_execution"`
+	LocalTextExecution     *problemvalidation.LocalTextAdmissionInput   `json:"local_text_execution"`
 }
 
 type passwordChangeWire struct {

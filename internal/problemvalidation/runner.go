@@ -90,7 +90,7 @@ func (r *Runner) ValidateSource(ctx context.Context, prepared *problem.Prepared,
 }
 
 func (r *Runner) validate(ctx context.Context, prepared *problem.Prepared, profile Profile, sourceID string) (report Report, err error) {
-	return r.validateMaterials(ctx, profile, sourceID, true, func(ctx context.Context) (problem.ReferencePlan, referenceReader, error) {
+	return r.validateMaterials(ctx, profile, sourceID, true, false, func(ctx context.Context) (problem.ReferencePlan, referenceReader, error) {
 		if prepared == nil || prepared.Content().SourceID != sourceID {
 			return problem.ReferencePlan{}, nil, errors.New("reference source identity mismatch")
 		}
@@ -103,16 +103,22 @@ func (r *Runner) validate(ctx context.Context, prepared *problem.Prepared, profi
 // caller retains snapshot ownership and must supervise authority and confirm
 // sandbox stop; a matching plan is not an execution grant.
 func (r *Runner) ValidateFrozen(ctx context.Context, snapshot *problem.ReferenceSnapshot, sourceID, expectedPlanSHA256 string) (Report, error) {
-	profile, _, err := ResolveSource(sourceID)
+	return r.ValidateFrozenForProfile(ctx, snapshot, sourceID, expectedPlanSHA256, SourceLockSHA256, false)
+}
+
+// ValidateFrozenForProfile selects the ordinary or explicitly configured local profile.
+func (r *Runner) ValidateFrozenForProfile(ctx context.Context, snapshot *problem.ReferenceSnapshot, sourceID, expectedPlanSHA256, sourceLock string, local bool) (Report, error) {
+	profile, _, err := ResolveReferenceProfile(sourceID, local)
 	if err != nil {
 		return Report{}, err
 	}
-	return r.validateMaterials(ctx, profile, sourceID, false, func(context.Context) (problem.ReferencePlan, referenceReader, error) {
+	return r.validateMaterials(ctx, profile, sourceID, false, local, func(context.Context) (problem.ReferencePlan, referenceReader, error) {
 		if snapshot == nil || !problem.ValidImportRevision(expectedPlanSHA256) {
 			return problem.ReferencePlan{}, nil, problem.ErrInvalid
 		}
 		plan := snapshot.Plan()
-		if plan.SourceID != sourceID || plan.SourceLockSHA256 != SourceLockSHA256 || plan.Digest() != expectedPlanSHA256 || plan.ValidateMaterials() != nil {
+		if plan.SourceID != sourceID || plan.LocalText != local || plan.SourceLockSHA256 != sourceLock ||
+			!problem.ValidImportRevision(sourceLock) || plan.Digest() != expectedPlanSHA256 || plan.ValidateMaterials() != nil {
 			return problem.ReferencePlan{}, nil, errors.New("frozen reference plan does not match admission")
 		}
 		return plan, snapshot, nil
@@ -121,9 +127,9 @@ func (r *Runner) ValidateFrozen(ctx context.Context, snapshot *problem.Reference
 
 type referencePreparation func(context.Context) (problem.ReferencePlan, referenceReader, error)
 
-func (r *Runner) validateMaterials(ctx context.Context, profile Profile, sourceID string, ownSnapshot bool, prepare referencePreparation) (report Report, err error) {
+func (r *Runner) validateMaterials(ctx context.Context, profile Profile, sourceID string, ownSnapshot, local bool, prepare referencePreparation) (report Report, err error) {
 	report = Report{Schema: "oj.reference-validation.v1", Status: "reference-validation-failed", Publication: "blocked", Profile: profile, ProfileSHA256: profile.Digest(), Verdict: "SE", Points: []Point{}}
-	admitted, _, admissionErr := ResolveSource(sourceID)
+	admitted, _, admissionErr := ResolveReferenceProfile(sourceID, local)
 	if r == nil || ctx == nil || r.sandbox == nil || admissionErr != nil || !r.used.CompareAndSwap(false, true) || !reflect.DeepEqual(profile, admitted) {
 		return report, errors.New("unsupported or occupied reference validation")
 	}

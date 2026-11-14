@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -17,8 +18,10 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materials"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materialstore"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/workerapi"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
@@ -57,6 +60,15 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	}
 	startup, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+	local := localReferenceConfig{source: os.Getenv("OJ_LOCAL_REFERENCE_SOURCE"), lock: os.Getenv("OJ_LOCAL_REFERENCE_LOCK_SHA256")}
+	if local != (localReferenceConfig{}) {
+		config, err := pgxpool.ParseConfig(dsn)
+		if err != nil || !referenceExecution || os.Getenv("OJ_SANDBOX_EXPERIMENT") != "1" ||
+			!strings.HasPrefix(config.ConnConfig.Host, "/") || len(config.ConnConfig.Fallbacks) != 0 ||
+			!(problemreference.DispatchInput{SourceID: local.source}).Valid() || !problem.ValidImportRevision(local.lock) {
+			return errors.New("local package reference requires explicit isolation, a single Unix database and a pinned source lock")
+		}
+	}
 	pool, err := postgres.Open(startup, dsn)
 	if err != nil {
 		return err
@@ -65,7 +77,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	if err := db.CheckSchema(startup, pool); err != nil {
 		return err
 	}
-	aplusb, aplusbFixture, err := experiment.LoadAPlusBFixture(os.Getenv)
+	aplusb, aplusbFixture, err := experiment.LoadCachedFixture(os.Getenv)
 	if err != nil {
 		return err
 	}
@@ -73,7 +85,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	enabled := aplusbFixture.IsAPlusB()
+	enabled := aplusbFixture.UsesCachedText()
 	if enabled {
 		if os.Getenv("OJ_MATERIAL_ROOT") == "" || referenceNodeID != "" || referenceRoot != "" {
 			return errors.New("A+B controller requires a material root and no reference request service")
@@ -91,7 +103,11 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	}
 	var materialService *materials.Service
 	if path := os.Getenv("OJ_MATERIAL_ROOT"); path != "" {
-		reader, err := materials.OpenLocal(path)
+		open := materials.OpenLocal
+		if aplusbFixture.IsLocalText() {
+			open = materials.OpenLocalText
+		}
+		reader, err := open(path)
 		if err != nil {
 			return err
 		}
@@ -117,13 +133,17 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	}
 	if enabled {
 		if aplusbFixture.APlusBTier() == experiment.ReferenceAPlusBUbuntu {
-			base = workerapi.NewUbuntuAPlusBHandler(store, tlsConfig.ClientCAs, materialService, aplusb.Version, os.Getenv("OJ_APLUSB_MANIFEST_SHA256"))
+			pin := os.Getenv("OJ_APLUSB_MANIFEST_SHA256")
+			if aplusbFixture.IsLocalText() {
+				pin = os.Getenv("OJ_LOCAL_TEXT_MANIFEST_SHA256")
+			}
+			base = workerapi.NewUbuntuAPlusBHandler(store, tlsConfig.ClientCAs, materialService, aplusb.Version, pin)
 		} else {
 			base = workerapi.NewAPlusBHandler(store, tlsConfig.ClientCAs, materialService, aplusb)
 		}
 	}
 	handler, err := configureReferenceClaims(base,
-		pool, tlsConfig.ClientCAs, referenceNodeID, referenceObjects, referenceExecution, dispatchSetting == "1")
+		pool, tlsConfig.ClientCAs, referenceNodeID, referenceObjects, referenceExecution, dispatchSetting == "1", local)
 	if err != nil {
 		return err
 	}

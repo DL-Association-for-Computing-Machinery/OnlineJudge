@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,11 +27,52 @@ func browserLocalSource(t *testing.T, endpoint *loginEndpoint, cookies []*http.C
 	loginStatus(t, answer, 200)
 	var got struct{ Sources []problem.ImportSource }
 	must(t, json.Unmarshal(answer.body, &got))
-	if len(got.Sources) != 1 || got.Sources[0].SourceID != "library-checker:aplusb" ||
-		got.Sources[0].ImportRevision != "e96d280c89a6e5d3da76ee5347c0581d4153d7052e9afceddffb2fdbb3d2036d" {
-		t.Fatal("local fixture did not load the frozen A+B revision")
+	id, revision := "library-checker:aplusb", "e96d280c89a6e5d3da76ee5347c0581d4153d7052e9afceddffb2fdbb3d2036d"
+	if os.Getenv("OJ_BROWSER_LOCAL_TEXT") == "1" {
+		id, revision = "library-checker:unionfind", "98e2b6c08018d8b7228e8d4f5075a16e3238132e250ac8de6134c0308881a2a4"
+	}
+	if len(got.Sources) != 1 || got.Sources[0].SourceID != id || got.Sources[0].ImportRevision != revision {
+		t.Fatal("local fixture did not load the frozen revision")
 	}
 	return got.Sources[0]
+}
+
+func browserLocalText(t *testing.T, f *fixture, c *sessionruntime.Config) {
+	t.Helper()
+	dir := "/local-evidence"
+	raw, err := os.ReadFile(filepath.Join(dir, "admission.json"))
+	must(t, err)
+	var in problemvalidation.LocalTextAdmissionInput
+	must(t, json.Unmarshal(raw, &in))
+	lock := filepath.Join(dir, "library-checker.json")
+	lockData, err := os.ReadFile(lock)
+	must(t, err)
+	bundle := filepath.Join(dir, "bundle")
+	prepared, err := problem.LoadBundle(bundle, in.SourceID, lockData)
+	must(t, err)
+	defer func() { must(t, prepared.Close()) }()
+	admission, err := problemvalidation.ReadLocalTextAdmission(t.Context(), in, prepared)
+	must(t, err)
+	id, plan := admission.ReviewBinding()
+	if !admission.Match(id, plan, in.ReviewProfileSHA256) || admission.Match(id, plan, strings.Repeat("0", 64)) {
+		t.Fatal("local execution evidence matched the wrong publication reference profile")
+	}
+	_, version, _ := admission.Binding()
+	material, err := submissionpg.New(f.pools[0], version, admission.Manifest())
+	must(t, err)
+	must(t, material.RegisterFixture(t.Context()))
+	access, err := identitypg.NewProblemAccess(f.pools[0])
+	must(t, err)
+	reviews, err := referencepg.NewReviewStore(f.pools[0], access)
+	must(t, err)
+	reviews, err = reviews.WithLocalExecution(admission)
+	must(t, err)
+	must(t, reviews.RegisterLocalExecution(t.Context()))
+	c.PrivateDrafts.BundleDirectory, c.PrivateDrafts.SourceLockFile = bundle, lock
+	c.PrivateDrafts.SourceIDs = []string{in.SourceID}
+	c.PrivateDrafts.Timeout = 50 * time.Second
+	c.StartupTimeout = 40 * time.Second
+	c.PrivateDrafts.LocalTextExecution = &in
 }
 
 func browserLocalExecution(t *testing.T, f *fixture, c *sessionruntime.Config) {

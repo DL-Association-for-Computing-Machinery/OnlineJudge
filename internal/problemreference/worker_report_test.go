@@ -6,11 +6,60 @@ import (
 	"testing"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/execution"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materialstore"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/workerhost"
 )
+
+func TestLocalPackageReportRequiresItsPlanProfileAndSlot(t *testing.T) {
+	hash := strings.Repeat("a", 64)
+	obj := materialstore.Object{SHA256: hash, Size: 1}
+	plan := problem.ReferencePlan{SourceID: "library-checker:new_package", Version: hash, ImportRevision: hash, SourceLockSHA256: hash,
+		Source: obj, Definition: obj, Hashes: obj, LocalText: true, Cases: []problem.ReferenceCase{{ID: "case-0001", Input: obj, Answer: obj}}}
+	local := problemvalidation.LocalTextProfile()
+	legacy := problemvalidation.PinnedProfile()
+	binding := problem.ImportIdentity{SourceID: plan.SourceID, Version: hash, ImportRevision: hash, SourceLockSHA256: hash}
+	slot, err := workerhost.ReferenceSlotForTier(experiment.ReferenceAPlusBUbuntu)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := WorkerEvidence{Schema: workerEvidenceSchema, Verdict: "AC", CompileUsage: &execution.Usage{},
+		Points:        []problemvalidation.Point{{ID: "case-0001", Verdict: "AC", Usage: &execution.Usage{}}},
+		StopConfirmed: true, Slot: slot.ContainerName(), ContainerID: hash, StartedAt: "2026-11-14T00:00:00Z"}
+	for _, tc := range []struct {
+		name    string
+		profile problemvalidation.Profile
+		marked  bool
+		slot    string
+		want    bool
+	}{
+		{"local", local, true, slot.ContainerName(), true},
+		{"ordinary profile", legacy, true, slot.ContainerName(), false},
+		{"unmarked plan", local, false, slot.ContainerName(), false},
+		{"wrong slot", local, true, (workerhost.M0Slot{}).ContainerName(), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := plan
+			p.LocalText = tc.marked
+			raw, err := json.Marshal(p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			profile, err := json.Marshal(tc.profile)
+			if err != nil {
+				t.Fatal(err)
+			}
+			spec := Specification{Identity: binding, Protocol: IdentityProtocol, ProfileJSON: profile, ProfileSHA256: tc.profile.Digest()}
+			ev := e
+			ev.ProfileSHA256, ev.Slot = spec.ProfileSHA256, tc.slot
+			if ev.ValidFor(spec, ExpectedPlan{Encoding: raw, SHA256: p.Digest()}) != tc.want {
+				t.Fatal("incorrect local package evidence admission")
+			}
+		})
+	}
+}
 
 func TestWorkerEvidenceValidatesDeterminateOrderedResults(t *testing.T) {
 	digest := strings.Repeat("a", 64)

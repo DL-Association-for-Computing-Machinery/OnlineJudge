@@ -68,6 +68,7 @@ type ReferencePlan struct {
 	SourceLockSHA256 string                `json:"source_lock_sha256"`
 	Source           materialstore.Object  `json:"source"`
 	SourcePath       string                `json:"source_path,omitempty"`
+	LocalText        bool                  `json:"local_text,omitempty"`
 	Dependencies     []ReferenceDependency `json:"dependencies,omitempty"`
 	Definition       materialstore.Object  `json:"test_definition"`
 	Hashes           materialstore.Object  `json:"test_hashes"`

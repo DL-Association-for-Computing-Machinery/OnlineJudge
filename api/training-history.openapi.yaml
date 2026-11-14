@@ -1,9 +1,10 @@
 openapi: 3.1.0
 info:
-  title: OnlineJudge Personal Training Submission History
-  version: 0.3.0
+  title: OnlineJudge Personal Training Submissions
+  version: 0.4.0
   description: >-
-    普通会话 HTTPS 下的可选只读能力。列表和详情分别由 training_history 和 training_submission_detail 启用；
+    普通会话 HTTPS 下的可选能力。列表和详情分别由 training_history 和 training_submission_detail 启用；
+    local_training_intake 仅为显式配置并已准入的本机执行队列启用提交及原键回执。
     沿用普通会话的固定 Host、直连 TLS 或单跳 mTLS 代理。响应不缓存、不设置 Cookie。
 security:
   - ordinarySession: []
@@ -53,7 +54,7 @@ paths:
         '405':
           description: METHOD_NOT_ALLOWED
           headers:
-            Allow: { schema: { type: string, const: GET } }
+            Allow: { schema: { type: string, enum: [GET, 'GET, POST'] } }
             Cache-Control: { $ref: './session.openapi.yaml#/components/headers/NoStore' }
             X-Content-Type-Options: { $ref: './session.openapi.yaml#/components/headers/NoSniff' }
           content:
@@ -61,6 +62,57 @@ paths:
               schema: { $ref: './session.openapi.yaml#/components/schemas/Problem' }
         '409': { description: TRAINING_SUBJECT_CHANGED，当前会话主体与请求头不符, $ref: '#/components/responses/Failure' }
         '503': { description: SESSION_UNAVAILABLE 或 TRAINING_HISTORY_UNAVAILABLE, $ref: '#/components/responses/Failure' }
+    post:
+      operationId: submitLocalPublishedTraining
+      description: >-
+        仅启用本机执行队列时接受同源普通会话。服务端验证账号和当前发布记录，
+        自行绑定已准入的执行材料。请求键在本人训练范围内绑定题目、发布版本、
+        执行材料、GNU++17 和原始源码。接收回执可能已包含终态；响应未知时查询原键。
+      parameters:
+        - $ref: './problem-draft-management.openapi.yaml#/components/parameters/ExpectedSubject'
+        - $ref: '#/components/parameters/TrainingRequestKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [problem_id, publication_version, source]
+              properties:
+                problem_id: { type: string, pattern: '^[a-f0-9]{32}$' }
+                publication_version: { type: string, pattern: '^[a-f0-9]{64}$' }
+                source: { type: string, minLength: 1, maxLength: 65536, description: 最多 65536 个 UTF-8 字节且不含 NUL。 }
+      responses:
+        '200': { $ref: '#/components/responses/TrainingReceipt' }
+        '400': { $ref: '#/components/responses/Failure' }
+        '401': { $ref: '#/components/responses/Failure' }
+        '403': { $ref: '#/components/responses/Failure' }
+        '404': { description: 题目版本未启用提交或入口未启用, $ref: '#/components/responses/Failure' }
+        '405': { $ref: '#/components/responses/Failure' }
+        '409': { description: 当前主体变化或原键已用于不同内容, $ref: '#/components/responses/Failure' }
+        '413': { $ref: '#/components/responses/Failure' }
+        '415': { $ref: '#/components/responses/Failure' }
+        '429': { description: 队列额度已满，稍后用原键重试, $ref: '#/components/responses/Failure' }
+        '503': { $ref: '#/components/responses/Failure' }
+  /api/v1/training/receipt:
+    get:
+      operationId: recoverOwnTrainingReceipt
+      description: >-
+        读取当前账号的原键回执，无需再次解析题库。404 不排除原请求仍在提交；
+        不自动生成新请求键。请求不含查询串或正文。
+      parameters:
+        - $ref: './problem-draft-management.openapi.yaml#/components/parameters/ExpectedSubject'
+        - $ref: '#/components/parameters/TrainingRequestKey'
+      responses:
+        '200': { $ref: '#/components/responses/TrainingReceipt' }
+        '400': { $ref: '#/components/responses/Failure' }
+        '401': { $ref: '#/components/responses/Failure' }
+        '403': { $ref: '#/components/responses/Failure' }
+        '404': { $ref: '#/components/responses/Failure' }
+        '405': { $ref: '#/components/responses/Failure' }
+        '409': { $ref: '#/components/responses/Failure' }
+        '503': { $ref: '#/components/responses/Failure' }
   /api/v1/training/submissions/{id}:
     get:
       operationId: readOwnTrainingSubmission
@@ -112,7 +164,18 @@ paths:
 components:
   securitySchemes:
     ordinarySession: { type: apiKey, in: cookie, name: __Host-oj_session }
+  parameters:
+    TrainingRequestKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, pattern: '^[A-Za-z0-9_-]{16,128}$' }
   responses:
+    TrainingReceipt:
+      description: 已接收提交的本人摘要。
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/SubmissionSummary' }
     Failure:
       description: 拒绝或暂不可用；不返回提交数据。
       headers:

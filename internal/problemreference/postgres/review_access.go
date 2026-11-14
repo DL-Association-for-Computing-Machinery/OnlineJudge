@@ -24,7 +24,7 @@ type ReviewerAuthority interface {
 type ReviewStore struct {
 	pool  *pgxpool.Pool
 	auth  ReviewerAuthority
-	local problemvalidation.APlusBLocalAdmission
+	local problemvalidation.LocalExecutionAdmission
 }
 
 // NewReviewStore binds review authorization to a caller-owned pool.

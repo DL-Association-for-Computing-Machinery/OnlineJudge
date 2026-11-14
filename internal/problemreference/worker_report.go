@@ -88,7 +88,10 @@ func (e WorkerEvidence) ValidFor(spec Specification, expected ExpectedPlan) bool
 		!expected.ValidFor(spec) || json.Unmarshal(expected.Encoding, &plan) != nil || plan.ValidateMaterials() != nil || len(e.Points) != len(plan.Cases) {
 		return false
 	}
-	_, tier, err := problemvalidation.ResolveSource(plan.SourceID)
+	if plan.LocalText != (spec.ProfileSHA256 == problemvalidation.LocalTextProfile().Digest()) {
+		return false
+	}
+	_, tier, err := problemvalidation.ResolveReferenceProfile(plan.SourceID, plan.LocalText)
 	if err != nil {
 		return false
 	}

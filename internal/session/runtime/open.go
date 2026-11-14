@@ -112,13 +112,15 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 		return nil, ErrConfig
 	}
 	var catalog *httptransport.CatalogReader
+	var localTraining httptransport.TrainingSubmit
 	if c.PrivateDrafts != nil {
-		drafts, cleanup, err := openDrafts(startup, *c.PrivateDrafts, store, pool, secrets)
+		drafts, cleanup, err := openDrafts(startup, *c.PrivateDrafts, store, pool, secrets, c.LocalTrainingIntake)
 		if err != nil {
 			return nil, err
 		}
 		closeDrafts = cleanup
 		catalog = drafts.catalog
+		localTraining = drafts.localIntake
 		handler, err = httptransport.WithPrivateDrafts(handler, drafts.importer, c.PrivateDrafts.Timeout)
 		if err != nil {
 			return nil, ErrConfig
@@ -233,6 +235,15 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 	if catalog != nil {
 		handler, err = httptransport.WithCatalog(handler, *catalog)
 		if err != nil {
+			return nil, ErrConfig
+		}
+	}
+	if localTraining != nil {
+		handler, err = httptransport.WithTrainingIntake(handler, localTraining, func(ctx context.Context, actor identity.TrainingActor, key string) (submission.Receipt, error) {
+			return submissionpg.ReadTrainingReceipt(ctx, pool, actor, key)
+		})
+		if err != nil {
+			closeIntake()
 			return nil, ErrConfig
 		}
 	}

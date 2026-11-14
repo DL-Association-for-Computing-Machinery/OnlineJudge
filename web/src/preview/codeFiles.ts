@@ -9,11 +9,11 @@ export function decodePreviewCode(bytes: ArrayBuffer): string {
   return code
 }
 
-export function downloadPreviewCode(id: string, code: string) {
+export function downloadPreviewCode(id: string, code: string, kind: 'preview' | 'training' = 'preview') {
   const url = URL.createObjectURL(new Blob([code], { type: 'text/plain;charset=utf-8' }))
   const link = document.createElement('a')
   link.href = url
-  link.download = `ecut-oj-preview-${id}.cpp`
+  link.download = `ecut-oj-${kind}-${id}.cpp`
   document.body.append(link)
   link.click()
   link.remove()

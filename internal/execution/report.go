@@ -41,6 +41,9 @@ func freezeReport(lease submission.Lease, d materials.Descriptor, result Result)
 	if _, err := materials.ParseAPlusB(d.Manifest, d.ManifestSHA256); err == nil {
 		schema = "isolated-aplusb-execution-evidence-v1"
 	}
+	if _, err := materials.ParseLocalText(d.Manifest, d.ManifestSHA256); err == nil {
+		schema = "isolated-local-text-execution-evidence-v1"
+	}
 	type compilation struct {
 		Status          string
 		Exit            int

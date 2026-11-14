@@ -46,7 +46,7 @@ export function decodeHistoryPage(value: unknown): HistoryPage {
   return { submissions, next_cursor: value.next_cursor }
 }
 
-function decodeSummary(row: unknown): SubmissionSummary {
+export function decodeSummary(row: unknown): SubmissionSummary {
   if (!isRecord(row) || Object.keys(row).length !== 6 || typeof row.id !== 'string' || !idPattern.test(row.id) ||
     typeof row.material_version !== 'string' || row.material_version === '' || encoder.encode(row.material_version).length > 128 ||
     row.language !== 'gnu++17' || typeof row.created_at !== 'string' || !timePattern.test(row.created_at) ||

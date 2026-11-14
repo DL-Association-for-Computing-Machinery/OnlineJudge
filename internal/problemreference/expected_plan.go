@@ -43,6 +43,9 @@ func (p ExpectedPlan) ValidFor(spec Specification) bool {
 	if plan.SourceID != i.SourceID || plan.Version != i.Version || plan.ImportRevision != i.ImportRevision || plan.SourceLockSHA256 != i.SourceLockSHA256 {
 		return false
 	}
+	if plan.LocalText != (spec.ProfileSHA256 == problemvalidation.LocalTextProfile().Digest()) {
+		return false
+	}
 	raw, err := json.Marshal(plan)
 	return err == nil && bytes.Equal(raw, p.Encoding)
 }
@@ -80,7 +83,8 @@ func (p DifferentialExpectedPlan) CurrentPlan(formalSHA256 string) (problemvalid
 // comparison when a plan is first written. It does not change historical rows.
 func (r Request) ExpectsDifferential() bool {
 	i := r.Specification.Identity
-	return i.SourceID == problemvalidation.ConvolutionSourceID && i.SourceLockSHA256 == problemvalidation.SourceLockSHA256
+	return r.Specification.ProfileSHA256 != problemvalidation.LocalTextProfile().Digest() &&
+		i.SourceID == problemvalidation.ConvolutionSourceID && i.SourceLockSHA256 == problemvalidation.SourceLockSHA256
 }
 
 // ValidForRequest checks the formal plan and, when present, the independently
@@ -92,6 +96,9 @@ func (p ExpectedPlan) ValidForRequest(r Request) bool {
 	d := p.Differential
 	if d == nil {
 		return true
+	}
+	if r.Specification.ProfileSHA256 == problemvalidation.LocalTextProfile().Digest() {
+		return false
 	}
 	if len(d.Encoding) == 0 || len(d.Encoding) > MaxDifferentialPlanBytes ||
 		profileDigest(d.Encoding) != d.SHA256 {

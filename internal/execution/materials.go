@@ -44,8 +44,12 @@ func prepare(ctx context.Context, d materials.Descriptor, blobs map[string][]byt
 		d.Version != fixture.Version() || d.Language != "gnu++17" || !bytes.Equal(d.Manifest, fixture.Manifest()) || digest(d.Manifest) != d.ManifestSHA256 || digest([]byte(d.Source)) != d.SourceSHA256 {
 		return m, bad
 	}
-	if fixture.IsAPlusB() {
-		p, err := materials.ParseAPlusB(d.Manifest, d.ManifestSHA256)
+	if fixture.UsesCachedText() {
+		parse := materials.ParseAPlusB
+		if fixture.IsLocalText() {
+			parse = materials.ParseLocalText
+		}
+		p, err := parse(d.Manifest, d.ManifestSHA256)
 		if err != nil {
 			return m, bad
 		}
@@ -64,6 +68,7 @@ func prepare(ctx context.Context, d materials.Descriptor, blobs map[string][]byt
 	}
 	seen := map[string]bool{}
 	total := 0
+	fileLimit, totalLimit := fixture.MaterialLimits()
 	for _, t := range m.Tests {
 		if !testID.MatchString(t.ID) || seen[t.ID] {
 			return m, bad
@@ -71,18 +76,18 @@ func prepare(ctx context.Context, d materials.Descriptor, blobs map[string][]byt
 		seen[t.ID] = true
 		for _, hash := range []string{t.Input, t.Answer} {
 			data, ok := blobs[hash]
-			if !ok || len(data) > judging.TextBudget || digest(data) != hash {
+			if !ok || len(data) > fileLimit || digest(data) != hash {
 				return m, bad
 			}
 			total += len(data)
-			if total > 4<<20 {
+			if total > totalLimit {
 				return m, bad
 			}
 		}
 		// Corrupt later reference material must not be hidden by an earlier WA.
 		if m.tokenBytes != 0 {
 			answer := blobs[t.Answer]
-			if len(answer) > 4096 || len(blobs[t.Input]) > 16<<10 ||
+			if (!fixture.IsLocalText() && (len(answer) > 4096 || len(blobs[t.Input]) > 16<<10)) ||
 				judging.ValidateLibraryCheckerReferenceAt(ctx, judging.FrozenText{Reader: bytes.NewReader(answer), Size: int64(len(answer))},
 					judging.TextLimits{Bytes: materials.APlusBOutputBytes, TokenBytes: m.tokenBytes}) != nil {
 				return m, bad

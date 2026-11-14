@@ -23,7 +23,7 @@ type ReviewEligibilitySnapshot struct {
 	Returned           bool
 	SolutionConfirmed  bool
 	StatementConfirmed bool
-	LocalExecution     problemvalidation.APlusBLocalAdmission
+	LocalExecution     problemvalidation.LocalExecutionAdmission
 }
 
 // ReviewEligibility explains what blocks approval at the time of the read.
@@ -53,17 +53,20 @@ func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
 	if e.FormalVerdict != "AC" {
 		blockers = append(blockers, "formal_failed")
 	}
+	id := problem.ImportIdentity{SourceID: e.SourceID, Version: e.ContentVersion, ImportRevision: e.ImportRevision, SourceLockSHA256: e.SourceLockSHA256}
+	quality, packageCurrent := s.LocalExecution.PackageQuality(id, e.FormalPlanSHA256, e.ProfileSHA256)
 	profile, _, err := problemvalidation.ResolveSource(e.SourceID)
-	policyCurrent := err == nil && e.SourceLockSHA256 == problemvalidation.SourceLockSHA256 && e.ProfileSHA256 == profile.Digest()
+	policyCurrent := packageCurrent || err == nil && e.SourceLockSHA256 == problemvalidation.SourceLockSHA256 && e.ProfileSHA256 == profile.Digest()
 	if !policyCurrent {
 		// An unknown or older source profile cannot waive a required check.
 		blockers = append(blockers, "policy_unavailable")
 	}
-	id := problem.ImportIdentity{SourceID: e.SourceID, Version: e.ContentVersion, ImportRevision: e.ImportRevision, SourceLockSHA256: e.SourceLockSHA256}
 	formalOnly := e.ComparisonPlan == "" && e.ComparisonOutcome == ""
 	var validator *problemvalidation.InputValidatorEvidence
 	var independent *problemvalidation.IndependentCorrectnessEvidence
-	if policyCurrent && formalOnly {
+	if packageCurrent && formalOnly {
+		validator, independent = &quality.Validator, &quality.Oracle
+	} else if policyCurrent && formalOnly {
 		if input, small, ok := problemvalidation.AdmittedApPlusBQuality(id, e.FormalPlanSHA256, e.ProfileSHA256); ok {
 			validator, independent = &input, &small
 		} else if input, small, ok := problemvalidation.AdmittedUnionFindQuality(id, e.FormalPlanSHA256, e.ProfileSHA256); ok {
@@ -91,7 +94,9 @@ func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
 	}
 	var wrongSolution *problemvalidation.WrongSolutionEvidence
 	var statementRendering *problemvalidation.StatementRenderingEvidence
-	if policyCurrent {
+	if packageCurrent && formalOnly {
+		statementRendering = &quality.Rendering
+	} else if policyCurrent {
 		if validator == nil {
 			if admitted, ok := problemvalidation.AdmittedInputValidator(id, e.FormalPlanSHA256); ok {
 				validator = &admitted
@@ -114,7 +119,9 @@ func assessReviewEligibility(s ReviewEligibilitySnapshot) ReviewEligibility {
 	}
 	var coverage *problemvalidation.TestCoverageEvidence
 	if policyCurrent && !s.Returned && e.FormalVerdict == "AC" && formalOnly {
-		if admitted, ok := problemvalidation.AdmittedTestCoverage(id, e.FormalPlanSHA256, e.ProfileSHA256); ok {
+		if packageCurrent {
+			coverage = &quality.Coverage
+		} else if admitted, ok := problemvalidation.AdmittedTestCoverage(id, e.FormalPlanSHA256, e.ProfileSHA256); ok {
 			coverage = &admitted
 		}
 	}

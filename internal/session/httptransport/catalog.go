@@ -102,6 +102,9 @@ func (h *handler) serveCatalog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
+	if h.trainingSubmit != nil && r.URL.Path != catalogPath {
+		w.Header().Set("X-OJ-Training-Intake", "enabled")
+	}
 	_ = json.NewEncoder(w).Encode(result)
 }
 

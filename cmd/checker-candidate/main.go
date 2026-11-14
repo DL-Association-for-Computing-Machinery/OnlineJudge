@@ -27,6 +27,9 @@ func main() {
 }
 
 func run(parent context.Context, args []string, out, diagnostics io.Writer) error {
+	if len(args) > 0 && args[0] == "export-local-text" {
+		return exportLocalText(parent, args[1:], out, diagnostics)
+	}
 	if len(args) > 0 && args[0] == "verify-trial" {
 		return verifyTrial(parent, args[1:], out, diagnostics)
 	}

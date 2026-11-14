@@ -17,6 +17,7 @@ import (
 )
 
 const aplusbJudgeReportSchema = "oj.aplusb-isolated-judge-report.v1"
+const localTextWrongReportSchema = "oj.local-text-wrong-solution-report.v1"
 
 // CheckerTrial is a single use trial. It holds the same verified snapshot for
 // preflight and execution. Call Close even when no run was started.
@@ -156,10 +157,13 @@ func (t *CheckerTrial) Run(ctx context.Context, g *execution.CachedGoJudge) (Che
 	var err error
 	schema := "oj.checker-trial.v1"
 	runner := New(g)
-	if t.manifestSHA == "" {
+	if t.submissionSHA == "" {
 		r, err = runner.runPrepared(ctx, r, t.profile, t.plan, t.materials, nil, g)
 	} else {
 		schema = aplusbJudgeReportSchema
+		if t.manifestSHA == "" {
+			schema = localTextWrongReportSchema
+		}
 		r, err = runner.runPreparedSource(ctx, r, t.profile, t.plan, t.materials, nil, g, t.submissionSource)
 	}
 	if err = errors.Join(err, ctx.Err()); err != nil {
@@ -177,7 +181,8 @@ func (r *CheckerTrialReport) Finalize(runErr, stopErr, cleanErr error) error {
 	r.StopConfirmed = stopErr == nil
 	err := errors.Join(runErr, stopErr, cleanErr)
 	validSchema := r.Schema == "oj.checker-trial.v1" && r.JudgeManifestSHA256 == "" && r.SubmissionSHA256 == "" ||
-		r.Schema == aplusbJudgeReportSchema && problem.ValidImportRevision(r.JudgeManifestSHA256) && problem.ValidImportRevision(r.SubmissionSHA256)
+		r.Schema == aplusbJudgeReportSchema && problem.ValidImportRevision(r.JudgeManifestSHA256) && problem.ValidImportRevision(r.SubmissionSHA256) ||
+		r.Schema == localTextWrongReportSchema && r.JudgeManifestSHA256 == "" && problem.ValidImportRevision(r.SubmissionSHA256)
 	r.Complete = err == nil && validSchema && r.Verdict != "SE"
 	if !r.Complete {
 		r.Verdict = "SE"

@@ -37,15 +37,25 @@ type Reader interface {
 type Local struct {
 	root  *os.Root
 	slots chan struct{}
+	limit int64
 }
 
 // OpenLocal pins the existing controller directory; startup never creates materials.
 func OpenLocal(path string) (*Local, error) {
+	return openLocal(path, MaxFileBytes)
+}
+
+// OpenLocalText selects the bounded local text transport capacity.
+func OpenLocalText(path string) (*Local, error) {
+	return openLocal(path, LocalTextFileBytes)
+}
+
+func openLocal(path string, limit int64) (*Local, error) {
 	root, err := os.OpenRoot(path)
 	if err != nil {
 		return nil, ErrUnavailable
 	}
-	return &Local{root: root, slots: make(chan struct{}, 4)}, nil
+	return &Local{root: root, slots: make(chan struct{}, 4), limit: limit}, nil
 }
 
 // Close releases the directory descriptor after the server has drained requests.
@@ -69,7 +79,7 @@ func (s *Local) CopyVerified(ctx context.Context, hash string, destination io.Wr
 		return 0, err
 	}
 	defer func() { _ = source.Close() }()
-	return verify(ctx, source, destination, hash)
+	return verify(ctx, source, destination, hash, s.limit)
 }
 
 // Open verifies bytes before releasing any response and never serves a mutable
@@ -104,7 +114,7 @@ func (s *Local) Open(ctx context.Context, hash string) (*File, error) {
 	if err := os.Remove(file.Name()); err != nil {
 		return nil, ErrUnavailable
 	}
-	size, err := verify(ctx, source, file, hash)
+	size, err := verify(ctx, source, file, hash, s.limit)
 	if err != nil {
 		return nil, err
 	}
@@ -140,20 +150,20 @@ func (s *Local) source(hash string) (*os.File, error) {
 		return nil, ErrUnavailable
 	}
 	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Size() > MaxFileBytes {
+	if err != nil || !info.Mode().IsRegular() || info.Size() > s.limit {
 		_ = file.Close()
 		return nil, ErrUnavailable
 	}
 	return file, nil
 }
 
-func verify(ctx context.Context, source io.Reader, snapshot io.Writer, hash string) (int64, error) {
+func verify(ctx context.Context, source io.Reader, snapshot io.Writer, hash string, limit int64) (int64, error) {
 	h := sha256.New()
-	size, err := io.Copy(io.MultiWriter(snapshot, h), io.LimitReader(contextReader{ctx, source}, MaxFileBytes+1))
+	size, err := io.Copy(io.MultiWriter(snapshot, h), io.LimitReader(contextReader{ctx, source}, limit+1))
 	if err != nil {
 		return 0, err
 	}
-	if size > MaxFileBytes || hex.EncodeToString(h.Sum(nil)) != hash {
+	if size > limit || hex.EncodeToString(h.Sum(nil)) != hash {
 		return 0, ErrUnavailable
 	}
 	return size, ctx.Err()

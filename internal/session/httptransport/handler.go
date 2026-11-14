@@ -57,6 +57,8 @@ type handler struct {
 	reviewApprovals        ReviewApprovals
 	statementConfirmations StatementConfirmations
 	trainingHistory        TrainingHistory
+	trainingSubmit         TrainingSubmit
+	trainingReceipt        TrainingReceipt
 	reviewDiscovery        ReviewDiscoveryReader
 	trainingDetail         TrainingDetail
 	trainingStatus         TrainingStatus
@@ -174,7 +176,17 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		method = http.MethodPost
 	case trainingHistoryPath:
+		if r.Method == http.MethodPost && h.trainingSubmit != nil {
+			method = http.MethodPost
+			break
+		}
 		if h.trainingHistory == nil {
+			problem(w, 404, "NOT_FOUND", "接口不存在")
+			return
+		}
+		method = http.MethodGet
+	case trainingReceiptPath:
+		if h.trainingReceipt == nil {
 			problem(w, 404, "NOT_FOUND", "接口不存在")
 			return
 		}
@@ -271,6 +283,9 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if authorAction == "solution-confirmation" {
 			allow = "GET, POST"
 		}
+		if IsTrainingHistoryPath(r.URL.Path) && h.trainingSubmit != nil {
+			allow = "GET, POST"
+		}
 		w.Header().Set("Allow", allow)
 		problem(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "请求方法不支持")
 		return
@@ -328,7 +343,15 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if IsTrainingHistoryPath(r.URL.Path) {
-		h.serveTrainingHistory(w, r)
+		if r.Method == http.MethodPost {
+			h.serveTrainingIntake(w, r)
+		} else {
+			h.serveTrainingHistory(w, r)
+		}
+		return
+	}
+	if IsTrainingReceiptPath(r.URL.Path) {
+		h.serveTrainingIntake(w, r)
 		return
 	}
 	if trainingID != "" {

@@ -62,6 +62,40 @@ func (p *Prepared) PrepareDiskReferenceWithLifetime(ctx, lifetime context.Contex
 	return p.prepareDiskReferenceWithLifetime(ctx, lifetime, p.content.SourceID, a)
 }
 
+// LocalTextReferenceLimits bounds a single-file GNU++17 reference and its
+// complete local text catalog. The exported judge objects have their own cap.
+func LocalTextReferenceLimits() ReferenceLimits {
+	return ReferenceLimits{SourceBytes: 64 << 10, InputBytes: 4 << 20, AnswerBytes: 256 << 10, TotalBytes: 48<<20 + 3*maxReferenceCatalog, Cases: 64}
+}
+
+// PrepareLocalTextReference freezes the catalog identified by the source lock
+// already checked by LoadBundle. This profile admits only sol/correct.cpp as
+// the compile input; source closures with additional files need another profile.
+func (p *Prepared) PrepareLocalTextReference(ctx, lifetime context.Context) (*ReferenceSnapshot, error) {
+	if p == nil || ctx == nil || lifetime == nil {
+		return nil, ErrInvalid
+	}
+	d, err := parseDocument(p.content.Document, p.content.SourceID)
+	if err != nil {
+		return nil, err
+	}
+	return p.prepareDiskReferenceWithLifetime(ctx, lifetime, p.content.SourceID,
+		diskReferenceAdmission{path: d.Provenance.SourcePath, limits: LocalTextReferenceLimits()})
+}
+
+// PrepareLocalTextReviewReference identifies the fixed package profile in the
+// plan so historical review and publication can reconstruct its material scope.
+func (p *Prepared) PrepareLocalTextReviewReference(ctx, lifetime context.Context) (*ReferenceSnapshot, error) {
+	if p == nil || ctx == nil || lifetime == nil {
+		return nil, ErrInvalid
+	}
+	a, err := localTextDiskAdmission(p.content)
+	if err != nil {
+		return nil, err
+	}
+	return p.prepareDiskReferenceWithLifetime(ctx, lifetime, p.content.SourceID, a)
+}
+
 func (p *Prepared) prepareDiskReference(ctx context.Context, sourceID string, admission diskReferenceAdmission) (*ReferenceSnapshot, error) {
 	return p.prepareDiskReferenceWithLifetime(ctx, ctx, sourceID, admission)
 }
@@ -79,6 +113,7 @@ func freezeReferenceSnapshot(ctx, lifetime context.Context, content Content, sou
 		if err != nil {
 			return plan, nil, err
 		}
+		plan.LocalText = admission.localText
 		dependencies, err := bindReferenceDependencies(&plan, d, admission)
 		if err != nil {
 			return plan, nil, err
