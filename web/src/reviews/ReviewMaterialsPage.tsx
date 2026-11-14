@@ -9,6 +9,7 @@ import { StatementMarkdown } from '../statement/StatementMarkdown'
 import { ReviewMaterialsController } from './materialsController'
 import { ReviewAssignments } from './ReviewAssignments'
 import { ReviewReturn } from './ReviewReturn'
+import { ReviewApproval } from './ReviewApproval'
 import { StatementConfirmation } from './StatementConfirmation'
 
 function AssignedMaterials({ id }: { id: string }) {
@@ -39,13 +40,13 @@ function AssignedMaterials({ id }: { id: string }) {
     {data && <>
       <section className="problem-statement" aria-labelledby="review-eligibility">
         <h2 id="review-eligibility">批准准入状态</h2>
-        <p>查看当前冻结修订的阻断项。此处只读，不能批准或发布题目。</p>
+        <p>查看当前冻结修订的批准条件。批准不会发布题目。</p>
         <button type="button" className="button button-outline" disabled={state.busy || accountState.busy}
           onClick={() => void controller.readEligibility()}>查看当前阻断项</button>
         {state.eligibility && <>
-          <p>本次检查：尚不能批准。</p>
+          <p>{state.eligibility.eligible ? '本次检查：已满足批准条件。' : '本次检查：尚不能批准。'}</p>
           {state.eligibility.statementConfirmed && <p>当前分配已记录题意确认。</p>}
-          <ul>{state.eligibility.blockers.map(code => <li key={code}>{reviewBlockerLabels[code]}</li>)}</ul>
+          {state.eligibility.blockers.length > 0 && <ul>{state.eligibility.blockers.map(code => <li key={code}>{reviewBlockerLabels[code]}</li>)}</ul>}
         </>}
       </section>
       <article className="problem-statement" aria-labelledby="review-title">
@@ -66,7 +67,8 @@ function AssignedMaterials({ id }: { id: string }) {
       {state.returnStatus !== 'recorded' && state.returnStatus !== 'pending' &&
         !state.eligibility?.blockers.includes('materials_returned') &&
         <StatementConfirmation controller={controller} state={state} />}
-      <ReviewReturn controller={controller} state={state} />
+      <ReviewApproval controller={controller} state={state} />
+      {state.approval !== 'pending' && state.approval !== 'recorded' && <ReviewReturn controller={controller} state={state} />}
     </>}
   </>
 }

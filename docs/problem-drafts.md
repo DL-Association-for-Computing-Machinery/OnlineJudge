@@ -147,9 +147,9 @@ Schema 26 增加普通批准的审计账本。每个送审项与分配修订最�
 
 内部批准事务在当前审核权限和分配下取得同材料锁，再重算准入快照。已经退回、快照变化或仍有任何阻断的材料不能写入批准。批准与退回共用材料锁：当前资格、当前分配及当前策略下的批准阻止对同材料的新退回；历史批准保留，撤权或改派后不再阻止当前审核人的决定。原键同意图返回原审计回执，同键不同意图冲突；撤权或改派后原回执不可通过当前审核入口回读。返回原回执不构成对当前发布资格的重新确认。
 
-批准 HTTP 入口由默认关闭的 `private_drafts.review_approvals` 显式控制，需要 `review_access`。`POST /api/v1/problem-review/{review_id}/approve` 接收请求键、分配修订、准入快照摘要及理由；不接收客户端证据。提交结果未知时用 `GET /api/v1/problem-review/{review_id}/approve/{request_key}` 查询，404 不证明写入已回退。当前无页面接入，现场检查器及目标节点仍阻断新批准。
+批准 HTTP 入口由默认关闭的 `private_drafts.review_approvals` 显式控制，需要 `review_access`。`POST /api/v1/problem-review/{review_id}/approve` 接收请求键、分配修订、准入快照摘要及理由；不接收客户端证据。审核页面只有读到入口启用且准入通过后才显示批准表单。本标签页按账号、送审项及分配修订保存原键和快照摘要，不保存理由。首次提交明确返回 `REVIEW_CHANGED` 或 `REVIEW_APPROVAL_BLOCKED` 时，须重新读取材料及准入才能做新决定；结果未知时只用 `GET /api/v1/problem-review/{review_id}/approve/{request_key}` 查询，刷新不重发，查询 404 也不会清除原键。确认会话、主体或审核权限已失效时，立即清除页面私有材料。现场检查器及目标节点仍阻断新批准。
 
-`GET /api/v1/problem-review/{review_id}/eligibility` 沿用审核开关、普通会话和预期主体头。仅当前被分配的非作者可读；同一短事务先核验身份和分配，再与退回、题意确认共用材料锁。取得锁后读取完整导入修订、冻结计划、已接纳报告、同材料退回及相应确认，避免用锁等待前的状态返回阻断项。响应包含固定证据摘要、策略版本 `oj.review-approval.v14`、`eligible: false` 及阻断码。读取不写决定，不能作为批准凭证。
+`GET /api/v1/problem-review/{review_id}/eligibility` 沿用审核开关、普通会话和预期主体头。仅当前被分配的非作者可读；同一短事务先核验身份和分配，再与退回、题意确认共用材料锁。取得锁后读取完整导入修订、冻结计划、已接纳报告、同材料退回及相应确认，避免用锁等待前的状态返回阻断项。响应包含固定证据摘要、策略版本 `oj.review-approval.v14`、布尔值 `eligible` 及阻断码数组；仅启用批准时返回 `approval_enabled: true`。读取不写决定，不能作为批准凭证。
 
 | 阻断码 | 需要处理的事项 |
 | --- | --- |

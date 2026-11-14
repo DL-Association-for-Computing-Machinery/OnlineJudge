@@ -20,6 +20,7 @@ async function setup() {
   vi.stubGlobal('sessionStorage', {
     getItem: (slot: string) => journal.get(slot) ?? null,
     setItem: (slot: string, key: string) => { journal.set(slot, key) },
+    removeItem: (slot: string) => { journal.delete(slot) },
   })
   const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(url => Promise.resolve(Response.json(url === '/api/v1/session' ? session() : material())))
   vi.stubGlobal('fetch', fetch)
@@ -42,6 +43,95 @@ it('reads only after explicit session verification and binds the same-origin GET
 
 const eligibility = () => ({ evidence: material().evidence, policy_version: 'oj.review-approval.v14', snapshot_sha256: hash, eligible: false,
   blockers: ['statement_quality_missing', 'target_runtime_missing'] })
+const passing = (snapshot = hash) => ({ ...eligibility(), snapshot_sha256: snapshot, eligible: true, blockers: [], approval_enabled: true })
+const problem = (status: number, code: string) => Response.json({ type: 'about:blank', title: 'Refused', status, code },
+  { status, headers: { 'Content-Type': 'application/problem+json' } })
+
+it('writes approval once and recovers by original key after reload and an initial missing receipt', async () => {
+  const f = await setup()
+  try {
+    await f.controller.load()
+    const before = f.fetch.mock.calls.length
+    await f.controller.approve('审批理由')
+    expect(f.fetch.mock.calls).toHaveLength(before)
+    f.fetch.mockResolvedValueOnce(Response.json(passing()))
+    await f.controller.readEligibility()
+    f.fetch.mockRejectedValueOnce(new Error('lost response'))
+    await f.controller.approve('审批理由')
+    const approvalPath = `/api/v1/problem-review/${review}/approve`
+    const [url, options] = f.fetch.mock.calls.at(-1) ?? []
+    if (typeof options?.body !== 'string') throw new Error('Expected an approval JSON body')
+    const request = JSON.parse(options.body) as { request_key: string; snapshot_sha256: string }
+    expect(url).toBe(approvalPath)
+    expect(request.snapshot_sha256).toBe(hash)
+    expect([...f.journal.values()].join('')).not.toContain('审批理由')
+    f.controller.clear()
+    await f.controller.load()
+    f.fetch.mockResolvedValueOnce(problem(404, 'REVIEW_APPROVAL_NOT_FOUND'))
+    await f.controller.approve()
+    expect(f.controller.getSnapshot().approval).toBe('pending')
+    f.fetch.mockResolvedValueOnce(Response.json({ review_id: review, assignment_revision: 2, request_key: request.request_key,
+      snapshot_sha256: hash, approved_at: new Date().toISOString() }))
+    await f.controller.approve()
+    expect(f.controller.getSnapshot().approval).toBe('pending')
+    f.fetch.mockResolvedValueOnce(Response.json({ review_id: review, assignment_revision: 1, request_key: request.request_key,
+      snapshot_sha256: hash, approved_at: new Date().toISOString() }))
+    await f.controller.approve()
+    expect(f.controller.getSnapshot().approval).toBe('recorded')
+    expect(f.fetch.mock.calls.filter(([u, o]) => u === approvalPath && o?.method === 'POST')).toHaveLength(1)
+    expect(f.fetch.mock.calls.at(-1)?.[0]).toBe(`${approvalPath}/${request.request_key}`)
+  } finally { f.stop() }
+})
+
+it.each(['REVIEW_CHANGED', 'REVIEW_APPROVAL_BLOCKED'])('requires fresh materials and eligibility after a definitive %s response', async code => {
+  const f = await setup()
+  try {
+    await f.controller.load()
+    f.fetch.mockResolvedValueOnce(Response.json(passing()))
+    await f.controller.readEligibility()
+    f.fetch.mockResolvedValueOnce(problem(409, code))
+    await f.controller.approve('初次批准')
+    expect(f.journal.size).toBe(0)
+    expect(f.controller.getSnapshot()).toMatchObject({ data: null, eligibility: null })
+    expect(f.controller.getSnapshot().notice).toContain('未写入')
+    const before = f.fetch.mock.calls.length
+    await f.controller.approve('第二次批准')
+    expect(f.fetch.mock.calls).toHaveLength(before)
+    await f.controller.load()
+    const snapshot = 'f'.repeat(64)
+    f.fetch.mockResolvedValueOnce(Response.json(passing(snapshot)))
+    await f.controller.readEligibility()
+    f.fetch.mockResolvedValueOnce(problem(503, 'REVIEW_APPROVAL_UNKNOWN'))
+    await f.controller.approve('第二次批准')
+    expect(f.controller.getSnapshot().approval).toBe('pending')
+    expect([...f.journal.values()]).toEqual([expect.stringContaining(snapshot)])
+    const writes = f.fetch.mock.calls.filter(([, options]) => options?.method === 'POST')
+    expect(writes).toHaveLength(2)
+    expect(writes[0]?.[1]?.body).toContain(hash)
+    expect(writes[1]?.[1]?.body).toContain(snapshot)
+  } finally { f.stop() }
+})
+
+it.each([[401, 'SESSION_REQUIRED'], [403, 'PROBLEM_REVIEWER_REQUIRED'], [409, 'REVIEW_SUBJECT_CHANGED']] as const)(
+  'clears loaded material after a receipt request returns %s %s without losing the original key', async (status, code) => {
+    const f = await setup()
+    try {
+      await f.controller.load()
+      f.fetch.mockResolvedValueOnce(Response.json(passing()))
+      await f.controller.readEligibility()
+      f.fetch.mockRejectedValueOnce(new Error('response lost'))
+      await f.controller.approve('批准')
+      const original = [...f.journal.entries()]
+      f.fetch.mockResolvedValueOnce(problem(status, code))
+      await f.controller.approve()
+      expect(f.controller.getSnapshot()).toMatchObject({ data: null, eligibility: null })
+      expect([...f.journal.entries()]).toEqual(original)
+      const before = f.fetch.mock.calls.length
+      await f.controller.approve()
+      expect(f.fetch.mock.calls).toHaveLength(before)
+    } finally { f.stop() }
+  },
+)
 
 it('reads current blockers only on request and discards a response for another assignment revision', async () => {
   const f = await setup()

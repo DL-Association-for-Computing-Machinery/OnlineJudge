@@ -115,6 +115,7 @@ paths:
       description: >-
         核对当前非作者分配、完整导入修订与已接纳报告，以现行策略返回阻止批准的原因。
         未接入的必需验证和人工确认保持阻断。此结果仅为本次读取的快照，不可用于授权写入。
+        批准入口启用时返回 approval_enabled；eligible 为 true 时 blockers 为空。
         拒绝 query、请求体及转义路径别名，响应至多 4096 字节，no-store/nosniff。
       responses:
         '200':
@@ -161,7 +162,10 @@ paths:
       - $ref: '#/components/parameters/ReviewID'
     post:
       operationId: approveAssignedReview
-      description: 需要显式启用 review_approvals、同源请求及当前非作者分配。按服务端证据重算；阻断时不写入。
+      description: >-
+        需要显式启用 review_approvals、同源请求及当前非作者分配。按服务端证据重算；
+        首次提交返回 409 REVIEW_CHANGED 或 REVIEW_APPROVAL_BLOCKED 时，本次请求没有写入批准。
+        提交结果未知时仅按原请求键回读，勿自动重发。
       requestBody:
         required: true
         content:
@@ -392,7 +396,8 @@ components:
         snapshot_sha256:
           $ref: '#/components/schemas/SHA256'
           description: 绑定当前账号代次、分配、固定证据及本次策略结果，用于比较状态；不授予批准或发布权限。
-        eligible: { const: false }
+        eligible: { type: boolean, description: 为 true 时 blockers 为空 }
+        approval_enabled: { const: true, description: 仅在批准入口启用时返回 }
         local_checker_evidence:
           type: object
           additionalProperties: false
@@ -469,7 +474,6 @@ components:
             - $ref: '#/components/schemas/ZAlgorithmCoverage'
         blockers:
           type: array
-          minItems: 1
           uniqueItems: true
           items:
             type: string

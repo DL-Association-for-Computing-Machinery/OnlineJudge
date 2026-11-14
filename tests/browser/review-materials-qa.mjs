@@ -16,6 +16,7 @@ for (const id of [ready.subject_id, ready.other_subject_id]) assert(/^[a-f0-9]{3
 const endpoint = `/api/v1/problem-review/${ready.review_id}/materials`
 const assignments = '/api/v1/problem-review/assignments'
 const eligibilityPath = `/api/v1/problem-review/${ready.review_id}/eligibility`
+const approvalPath = `/api/v1/problem-review/${ready.review_id}/approve`
 const confirmation = `/api/v1/problem-review/${ready.review_id}/statement-confirmation`
 const returnPath = `/api/v1/problem-review/${ready.review_id}/return`
 const pagePath = `/review/materials/${ready.review_id}`
@@ -25,7 +26,7 @@ function passed(name) { report.checks.push(name); console.log('PASS ' + name) }
 let step = 'setup'
 let status
 
-async function exercise(browser, viewport, reviewer, select, confirm = false, doReturn = false) {
+async function exercise(browser, viewport, reviewer, select, confirm = false, doReturn = false, approve = false) {
   status = undefined
   const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport })
   try {
@@ -96,6 +97,9 @@ async function exercise(browser, viewport, reviewer, select, confirm = false, do
       assert.equal(eligibility.status(), 200)
       await page.getByText('缺少生产检查器准入证据', { exact: true }).waitFor()
       await page.getByText('缺少目标运行环境验收证据', { exact: true }).waitFor()
+      step = 'check approval opt-in does not override blockers'
+      assert.equal((await eligibility.json()).approval_enabled, true)
+      assert.equal(await page.getByRole('button', { name: '确认批准', exact: true }).count(), 0)
       assert.deepEqual(reads.at(-1), ['GET', eligibilityPath, ready.other_subject_id])
       step = 'fit viewport'
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
@@ -162,6 +166,7 @@ async function exercise(browser, viewport, reviewer, select, confirm = false, do
         ])
       }
       if (doReturn) await reviewerReturn(page, reads)
+      if (approve) await reviewerApproval(page, reads)
     } else {
       step = 'render denial'
       await page.getByText('无法读取材料。请核对送审 ID、当前分配及服务状态，再手动重试。', { exact: true }).waitFor()
@@ -171,7 +176,76 @@ async function exercise(browser, viewport, reviewer, select, confirm = false, do
     step = 'check browser events'
     assert.deepEqual(errors, [])
     assert.deepEqual(foreign, [])
+    step = 'release the fixture session for the next browser'
+    await page.goto(info.origin + '/account')
+    await page.getByRole('button', { name: '退出当前会话', exact: true }).click()
+    await page.getByText('已退出当前会话。', { exact: true }).waitFor()
   } finally { await context.close() }
+}
+
+async function reviewerApproval(page, reads) {
+  const load = page.getByRole('button', { name: '检查会话并读取材料' })
+  const inspect = page.getByRole('button', { name: '查看当前阻断项' })
+  const submit = page.getByRole('button', { name: '确认批准', exact: true })
+  const query = page.getByRole('button', { name: '查询原批准回执' })
+  const reason = page.getByLabel('批准理由')
+
+  // Exercise the passing UI without changing the real, blocked policy.
+  await page.route(info.origin + eligibilityPath, async route => {
+    const response = await route.fetch({ maxRedirects: 0, maxRetries: 0 })
+    assert.equal(response.status(), 200)
+    const actual = await response.json()
+    assert.equal(actual.eligible, false)
+    await route.fulfill({ status: 200, json: { ...actual, eligible: true, blockers: [] } })
+  })
+  step = 'passing UI and definitive refusal from the real API'
+  await load.click()
+  await inspect.click()
+  await submit.waitFor()
+  assert(await submit.isDisabled())
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+  step = 'receive a definitive refusal from the real API'
+  await reason.fill('核对冻结材料')
+  const [blocked] = await Promise.all([page.waitForResponse(r => r.url() === info.origin + approvalPath), submit.click()])
+  status = blocked.status()
+  assert.equal(blocked.status(), 409)
+  assert.equal((await blocked.json()).code, 'REVIEW_APPROVAL_BLOCKED')
+  await page.getByText(/本次批准未写入/).waitFor()
+  assert.equal(await query.count(), 0)
+  assert.equal(await page.getByRole('heading', { name: '冻结标程', exact: true }).count(), 0)
+
+  step = 'unknown browser response and original-key recovery'
+  let intent
+  await page.route(info.origin + approvalPath, async route => {
+    assert.equal(route.request().method(), 'POST')
+    assert.equal(route.request().headers()['x-oj-expected-subject'], ready.other_subject_id)
+    assert.equal(route.request().headers().origin, info.origin)
+    intent = route.request().postDataJSON()
+    await route.abort()
+  })
+  await load.click()
+  await inspect.click()
+  await reason.fill('再次核对冻结材料')
+  const before = reads.length
+  await submit.click()
+  await page.getByText(/尚未核实本次批准/).waitFor()
+  assert.match(intent.request_key, /^[a-f0-9]{32}$/)
+  await page.reload()
+  await load.click()
+  await query.waitFor()
+  assert.equal(await submit.count(), 0)
+  const lookup = approvalPath + '/' + intent.request_key
+  const [missing] = await Promise.all([page.waitForResponse(r => r.url() === info.origin + lookup), query.click()])
+  assert.equal(missing.status(), 404)
+  await page.getByText(/尚未核实本次批准/).waitFor()
+  await page.route(info.origin + lookup, route => route.fulfill({ json: { request_key: intent.request_key,
+    review_id: ready.review_id, assignment_revision: intent.assignment_revision, snapshot_sha256: intent.snapshot_sha256,
+    approved_at: new Date().toISOString() } }))
+  await query.click()
+  await page.getByText('已核实批准回执。题目发布另行处理。', { exact: true }).waitFor()
+  assert.deepEqual(reads.slice(before).map(([method, url]) => [method, url]), [
+    ['POST', approvalPath], ['GET', endpoint], ['GET', lookup], ['GET', lookup],
+  ])
 }
 
 async function reviewerReturn(page, reads) {
@@ -323,11 +397,13 @@ async function authorIntake(browser) {
     const historyQuery = page.getByRole('button', { name: '查该报告的送审回执' })
     await historyQuery.waitFor()
     assert.equal(await submit.count(), 0)
+    step = 'missing original intake receipt'
     const lookup = intakePath + '/' + receipt.request_key
     await page.route(info.origin + lookup, route => route.fulfill({ status: 404, contentType: 'application/problem+json', body: '{}' }), { times: 1 })
     await historyQuery.click()
     await page.getByText(/暂时查不到并不表示未送审/).waitFor()
     assert.equal(await submit.count(), 0)
+    step = 'read back the actual original intake receipt'
     const [response] = await Promise.all([page.waitForResponse(r => r.url() === info.origin + lookup), historyQuery.click()])
     assert.equal(response.status(), 200)
     assert.deepEqual(await response.json(), receipt)
@@ -516,6 +592,9 @@ try {
   phase = 'author denied'
   await exercise(browser, { width: 1280, height: 960 }, false, true)
   passed('the author with reviewer role gets an empty list and cannot read their materials')
+  phase = 'review approval'
+  await exercise(browser, { width: 390, height: 844 }, true, false, false, false, true)
+  passed('approval distinguishes a real policy rejection from a synthetic unknown response and recovers only by GET')
   phase = 'author intake'
   const authorSession = await authorIntake(browser)
   passed('author sends once and reload recovers the original review ID after a new reference request')
@@ -527,8 +606,10 @@ try {
   await authorReturn(browser, authorSession)
   passed('author sees the matching return reason through the original intake and reload clears it')
   report.success = true
-} catch {
+} catch (err) {
   console.error(`FAIL ${phase}: ${step}; material HTTP status: ${status ?? 'none'}`)
+  const frame = err instanceof Error && err.stack?.match(/review-materials-qa\.mjs:\d+:\d+/)?.[0]
+  if (frame) console.error(frame)
   process.exitCode = 1
 } finally {
   await browser?.close()

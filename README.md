@@ -787,7 +787,7 @@ python3 scripts/test-browser-account.py \
 
 可选 `--chromium-executable /absolute/path/to/existing/chromium` 指定已有浏览器；`--statement-corpus /absolute/path/to/prepared-bundle/statements` 增加至多10份只读Markdown的浏览器渲染耗时/节点测量（响应替换，不冒充十题真实HTTP授权验收）；`--toolchain-image`、`--module-cache`、`--build-cache-volume` 和 `--context` 的约束沿用现有专项。驱动只发布随机回环 HTTPS/HTTP 对照端口，建立隔离的合成账号/存储；真实 race API 使用固定 pin 的 mTLS，外层临时证书只在新测试 context 忽略。控制端点仅供本夹具，不能对外开放或接入真实数据。
 
-加 `--review-materials` 运行独立审核材料专项。夹具仅在临时库准备一项合成送审和非作者分配。验证 `/review/materials` 的桌面及 390px 分配列表、键盘选择、冻结题面和原始样例／标程、显式读取准入阻断及刷新清除，以及有审核资格的作者看不到本人的送审分配，也无法读取材料。另验证四项都勾选后才可确认、确认丢响应后原键回读，以及作者送审丢响应后更换当前参考申请仍能回读原送审 ID。该模式不执行参考 Worker，不与其他专项模式同时使用。
+加 `--review-materials` 运行独立审核材料专项。夹具仅在临时库准备一项合成送审和非作者分配。验证 `/review/materials` 的桌面及 390px 分配列表、键盘选择、冻结题面和原始样例／标程、显式读取准入阻断及刷新清除，以及有审核资格的作者看不到本人的送审分配，也无法读取材料。另验证四项都勾选后才可确认、确认丢响应后原键回读，以及作者送审丢响应后更换当前参考申请仍能回读原送审 ID。批准专项在浏览器模拟准入通过及未知回执，核对真实 API 仍拒绝不满足条件的批准，且刷新后只用原键查询。该模式不执行参考 Worker，不与其他专项模式同时使用。
 
 加 `--m1-login-load` 在同一隔离夹具运行集中登录。100 个合成账号在 60 秒内每 600 毫秒发起一次浏览器登录；每个浏览器上下文独立核对三步会话请求、账号身份和 Cookie。该夹具使用单 API、19 MiB / 2 轮 / 1 lane 的 Argon2id，证书例外只用于临时回环夹具。`browser-qa.json` 保留发起偏差、时延、状态和失败分类，不含邮箱或 Cookie。结果仅供本机复测，现场还须在实际配置、网络与正常证书验证下执行[试用验收](docs/phase-1-development-plan.md#试用容量和恢复默认值)。
 
