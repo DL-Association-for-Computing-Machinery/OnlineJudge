@@ -53,3 +53,11 @@ docker --context desktop-linux run --rm --pull never --platform linux/amd64 \
 候选包使用 `oj.aplusb-trial-candidate-handoff.v1`，只支持 `pack` 和 `verify`；报告核验及回执生成均拒绝该协议。成功核验只证明候选字节与约定绑定一致；不表示指定节点真实运行过，也不解除生产检查器、目标运行时或终审的阻断。
 
 本机无网络复验：用测试节点标签和测试 Git 修订两次打包，34 个文件逐字节一致；接收方按独立摘要回读成功，修改节点标签或一个对象字节均失败。该包只用于演练；现场包应按获准节点及正式构建修订重新封装。
+
+## A+B amd64 停止槽预检
+
+专用节点的管理员在独立核对节点及制品、预置停止槽并保存其完整容器 ID 后，可用 `checker-candidate aplusb-trial-preflight --container-id "$ORIGINAL_CONTAINER_ID"` 读回配置。只接受 Linux amd64 上的本机 Docker Unix socket，核对固定内核、cgroup v2、镜像、槽身份及所有者 `onlinejudge.trial-aplusb-amd64-test`。停止槽须为 `created` 或 `exited`，PID 为 0，断网、无挂载、只读根文件系统，且设置匹配的 CPU、内存、swap、进程数和临时文件系统限额。
+
+命令只读，不创建、拉取或启动容器；输出不含节点文件路径或凭据。成功只表示该次停止槽配置读回匹配，不能证明实际运行限额、节点专用性、判题、停止或生产准入。`guest` 的 SSH 盘点没有执行这个需要管理员读取 Engine 的检查。不得把预检通过当成批准启动的依据。
+
+本机无网络工具容器通过 Linux amd64 交叉构建、`workerhost` 和 `checker-candidate` 竞态测试及 `go vet`。本机 Docker 另用一个临时、非特权且从未启动的容器核对真实 `inspect` JSON 模板与镜像 ID、平台字段，核对后移除该容器；本机 Engine 是 arm64，此实验未通过或替代专用 amd64 节点的完整预检。
