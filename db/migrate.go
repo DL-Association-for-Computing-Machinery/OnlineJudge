@@ -42,7 +42,7 @@ func CheckSchema(ctx context.Context, connection interface {
 	if err := connection.QueryRow(ctx, `SELECT version_id FROM goose_db_version ORDER BY id DESC LIMIT 1`).Scan(&version); err != nil {
 		return errors.New("database schema unavailable; run the independent migration step")
 	}
-	if version != 27 {
+	if version != 28 {
 		return errors.New("incompatible database schema")
 	}
 	return nil

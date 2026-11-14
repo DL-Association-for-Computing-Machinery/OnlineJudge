@@ -8,6 +8,25 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type ProblemPublication struct {
+	ProblemID          string
+	Revision           int64
+	Version            string
+	Title              string
+	StatementSha256    string
+	StatementSize      int64
+	ImportRevision     string
+	FormalPlanSha256   string
+	ExecutionVersion   string
+	ExecutionSha256    string
+	ReviewID           string
+	AssignmentRevision int64
+	PublisherID        string
+	PublisherRevision  int64
+	RequestKey         string
+	PublishedAt        pgtype.Timestamptz
+}
+
 type ProblemReferenceRequest struct {
 	ID               string
 	OwnerSubjectID   string

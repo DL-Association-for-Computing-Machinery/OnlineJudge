@@ -150,6 +150,9 @@ func TestPublisherMigrationProtectsAuditAndLookupUsesPrimaryKey(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "cannot discard publisher history") {
 		t.Fatalf("rollback did not protect publisher audit: %v", err)
 	}
+	// Empty newer migrations can be removed before Down27 refuses.
+	_, err = f.provider.Up(f.ctx)
+	must(t, err)
 	must(t, db.CheckSchema(f.ctx, f.a))
 	tx, err := f.a.Begin(f.ctx)
 	must(t, err)
