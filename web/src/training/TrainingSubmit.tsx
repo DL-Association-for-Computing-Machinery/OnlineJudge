@@ -2,17 +2,17 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import { useCurrentAccount } from '../account/context'
 import { subscribePrivateInvalidation } from '../account/privateInvalidation'
-import { requestTraining, TrainingIntakeError, type TrainingAttempt } from '../services/trainingIntake'
+import { recoverTraining, submitTraining, TrainingIntakeError, type TrainingAttempt } from '../services/trainingIntake'
 import type { SubmissionSummary } from '../services/trainingHistory'
+import { clearTrainingKey, readTrainingKey, reserveTrainingKey, trainingReceiptSlot } from './receiptJournal'
+import { readTrainingSource, validTrainingSource } from './sourceFile'
 import './trainingSubmit.css'
-
-const sourceEncoder = new TextEncoder()
 
 export function TrainingSubmit({ problemID, version }: { problemID: string; version: string }) {
   const { state } = useCurrentAccount()
   if (state.status === 'anonymous') return <p><Link to="/login">登录后提交</Link></p>
   if (state.status !== 'authenticated' || !state.session) return null
-  return <TrainingForm key={state.session.subject_id + version} subject={state.session.subject_id}
+  return <TrainingForm key={state.session.subject_id + problemID + version} subject={state.session.subject_id}
     problemID={problemID} version={version} accountBusy={state.busy} />
 }
 
@@ -21,34 +21,52 @@ function TrainingForm({ subject, problemID, version, accountBusy }: {
 }) {
   const { controller } = useCurrentAccount()
   const [source, setSource] = useState('')
-  const [pending, setPending] = useState(false)
+  const slot = trainingReceiptSlot(subject, problemID)
+  const [initialKey] = useState(() => {
+    try { return readTrainingKey(slot) }
+    catch { return undefined }
+  })
+  const [key, setKey] = useState(initialKey ?? null)
+  const journalReady = initialKey !== undefined
+  const [canRetry, setCanRetry] = useState(false)
+  const [confirmForget, setConfirmForget] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [fileBusy, setFileBusy] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [notice, setNotice] = useState('')
+  const [notice, setNotice] = useState(!journalReady ? '无法读取本标签页的提交回执，暂时不能提交。' :
+    initialKey ? '有一笔提交尚未确认。请查询原回执。' : '')
   const [receipt, setReceipt] = useState<SubmissionSummary>()
   const attempt = useRef<TrainingAttempt | null>(null)
   const request = useRef<AbortController | null>(null)
+  const fileRead = useRef<AbortController | null>(null)
   useEffect(() => {
     const clear = () => {
       request.current?.abort()
       request.current = null
       attempt.current = null
+      fileRead.current?.abort()
+      fileRead.current = null
     }
     const unsubscribe = subscribePrivateInvalidation(() => {
       clear()
       setSource('')
-      setPending(false)
+      setSelectedFile(null)
+      setFileBusy(false)
+      setCanRetry(false)
+      setConfirmForget(false)
       setBusy(false)
-      setNotice('')
+      setNotice('会话状态已变化，请重新检查后再操作。')
       setReceipt(undefined)
     })
     return () => { unsubscribe(); clear() }
   }, [])
 
-  const invalid = source.length === 0 || source.includes('\0') || sourceEncoder.encode(source).length > 65_536
+  const invalid = !validTrainingSource(source)
 
   async function run(recover: boolean) {
     const snapshot = controller.getSnapshot()
-    if (request.current || snapshot.busy || snapshot.status !== 'authenticated' || snapshot.session?.subject_id !== subject) return
+    if (!journalReady || request.current || fileRead.current || snapshot.busy || snapshot.status !== 'authenticated' ||
+      snapshot.session?.subject_id !== subject) return
     const deadline = Math.min(Date.parse(snapshot.session.idle_expires_at), Date.parse(snapshot.session.absolute_deadline))
     if (!Number.isFinite(deadline) || Date.now() >= deadline) return
     const generation = controller.readPrivateGeneration()
@@ -57,10 +75,31 @@ function TrainingForm({ subject, problemID, version, accountBusy }: {
       return controller.readPrivateGeneration() === generation && current.status === 'authenticated' &&
         current.session?.subject_id === subject && Date.now() < deadline
     }
-    if (!attempt.current) {
-      if (recover || invalid || !window.isSecureContext) return
-      attempt.current = { subject, key: crypto.randomUUID(), problemID, version, source }
-      setPending(true)
+    let original: string | null
+    try {
+      original = readTrainingKey(slot)
+      if (!original && !recover && !invalid && window.isSecureContext) {
+        const candidate = crypto.randomUUID()
+        if (!reserveTrainingKey(slot, candidate)) return
+        original = candidate
+        attempt.current = { subject, key: candidate, problemID, version, source }
+        setCanRetry(true)
+        setSelectedFile(null)
+        setReceipt(undefined)
+      }
+    } catch {
+      setNotice('无法保存原回执，本次未发出请求。')
+      return
+    }
+    setKey(original)
+    if (!original) return
+    const intent = attempt.current
+    if (!recover && intent?.key !== original) {
+      setCanRetry(false)
+      setNotice('请查询原回执。')
+      return
+    }
+    if (!recover) {
       setReceipt(undefined)
     }
     const abort = new AbortController()
@@ -68,19 +107,28 @@ function TrainingForm({ subject, problemID, version, accountBusy }: {
     setBusy(true)
     setNotice(recover ? '正在查询原提交…' : '正在提交…')
     try {
-      const result = await requestTraining(attempt.current, recover, abort.signal)
+      const result = recover ? await recoverTraining({ subject, key: original }, abort.signal) :
+        intent && await submitTraining(intent, abort.signal)
       if (abort.signal.aborted || !stillCurrent()) return
+      if (!result) return
       setReceipt(result)
       setSource('')
       setNotice('已收到提交，可在「我的提交」查看结果。')
       attempt.current = null
-      setPending(false)
+      setCanRetry(false)
+      setConfirmForget(false)
+      try {
+        setKey(clearTrainingKey(slot, original) ? null : readTrainingKey(slot))
+      } catch {
+        setNotice('已收到提交，但浏览器未能清除回执记录。')
+      }
     } catch (error) {
       if (abort.signal.aborted || !stillCurrent()) return
       const status = error instanceof TrainingIntakeError ? error.status : 0
       // A missing receipt may race an in-flight commit. Keep the original
       // key and source even when a subsequent attempt receives a rejection.
-      setNotice(recover && status === 404 ? '暂未查到回执，可以再次查询或用原请求重试。' :
+      setNotice(recover && status === 404 ? intent ? '暂未查到回执，可以再次查询或用原请求重试。' :
+        '暂未查到回执。原请求可能仍在处理，请稍后再查。' :
         !recover && status === 429 ? '队列已满，请稍后重试原提交。' :
         status === 401 || status === 403 || status === 409 ? '无法继续确认提交，请检查当前账号。' :
         !recover && (status === 404 || status === 405) ? '此题目版本暂不可提交。可查询原回执，或返回题库。' :
@@ -93,9 +141,48 @@ function TrainingForm({ subject, problemID, version, accountBusy }: {
     }
   }
 
+  function forgetReceipt() {
+    const snapshot = controller.getSnapshot()
+    if (!key || !confirmForget || request.current || snapshot.busy || snapshot.status !== 'authenticated' ||
+      snapshot.session?.subject_id !== subject) return
+    try {
+      clearTrainingKey(slot, key)
+      setKey(readTrainingKey(slot))
+      attempt.current = null
+      setCanRetry(false)
+      setConfirmForget(false)
+      setNotice('已清除此标签页的原回执。已接收的提交仍可在「我的提交」查看。')
+    } catch {
+      setNotice('无法清除原回执，请先查看「我的提交」。')
+    }
+  }
+
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!pending) void run(false)
+    if (!key) void run(false)
+  }
+
+  async function loadFile(file: File) {
+    const snapshot = controller.getSnapshot()
+    if (key || request.current || fileRead.current || snapshot.busy || snapshot.status !== 'authenticated' ||
+      snapshot.session?.subject_id !== subject) return
+    const abort = new AbortController()
+    fileRead.current = abort
+    setFileBusy(true)
+    setSelectedFile(null)
+    try {
+      const text = await readTrainingSource(file)
+      if (abort.signal.aborted || controller.getSnapshot().session?.subject_id !== subject) return
+      setSource(text)
+      setNotice('已载入源码文件，确认后可提交。')
+    } catch (error) {
+      if (!abort.signal.aborted) setNotice(error instanceof Error ? error.message : '无法读取文件。')
+    } finally {
+      if (fileRead.current === abort) {
+        fileRead.current = null
+        setFileBusy(false)
+      }
+    }
   }
 
   return <section className="training-submit" aria-labelledby="training-submit-heading">
@@ -104,14 +191,40 @@ function TrainingForm({ subject, problemID, version, accountBusy }: {
       <p>语言：GNU++17 · 源码最多 64 KiB</p>
       <label htmlFor="training-source">源码</label>
       <textarea id="training-source" rows={10} maxLength={65_536} spellCheck={false}
-        value={source} readOnly={pending} onChange={event => setSource(event.target.value)} />
+        value={source} readOnly={Boolean(key) || fileBusy} onChange={event => setSource(event.target.value)} />
       {source && invalid ? <p role="status">源码含无效字符或超过 64 KiB。</p> : null}
+      {!key ? <>
+        <label htmlFor="training-source-file">选择源码文件</label>
+        <input id="training-source-file" type="file" accept=".cpp,.cc,.cxx" disabled={busy || fileBusy || accountBusy}
+          onChange={event => {
+            const file = event.target.files?.[0]
+            event.target.value = ''
+            if (!file) return
+            if (source) setSelectedFile(file)
+            else void loadFile(file)
+          }} />
+        {selectedFile ? <div className="history-controls">
+          <p>编辑区已有内容。替换后，原内容将丢失。</p>
+          <button type="button" className="button button-outline" disabled={busy || accountBusy}
+            onClick={() => void loadFile(selectedFile)}>替换编辑区内容</button>
+          <button type="button" className="button button-outline" onClick={() => setSelectedFile(null)}>保留当前源码</button>
+        </div> : null}
+      </> : null}
       <div className="history-controls">
-        {pending ? <>
+        {key ? <>
           <button type="button" className="button button-neutral" disabled={busy || accountBusy} onClick={() => void run(true)}>查询原回执</button>
-          <button type="button" className="button button-outline" disabled={busy || accountBusy} onClick={() => void run(false)}>重试原提交</button>
-        </> : <button type="submit" className="button button-neutral" disabled={busy || accountBusy || invalid}>提交判题</button>}
+          {canRetry ? <button type="button" className="button button-outline" disabled={busy || accountBusy} onClick={() => void run(false)}>重试原提交</button> : null}
+          <button type="button" className="button button-outline" disabled={busy || accountBusy}
+            onClick={() => setConfirmForget(true)}>清除本地回执</button>
+        </> : <button type="submit" className="button button-neutral"
+          disabled={!journalReady || busy || fileBusy || accountBusy || Boolean(selectedFile) || invalid}>提交判题</button>}
       </div>
+      {key && confirmForget ? <div className="history-controls">
+        <p>清除不会取消原请求。请先查看「我的提交」；再次提交可能产生重复记录。</p>
+        <button type="button" className="button button-outline" disabled={busy || accountBusy}
+          onClick={forgetReceipt}>确认清除回执</button>
+        <button type="button" className="button button-outline" onClick={() => setConfirmForget(false)}>保留原回执</button>
+      </div> : null}
     </form>
     <p role="status">{notice}</p>
     {receipt ? <Link to={'/submissions?submission=' + receipt.id}>查看本次提交</Link> : null}

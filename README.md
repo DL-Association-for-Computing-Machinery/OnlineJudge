@@ -151,7 +151,7 @@ OJ_BROWSER_QA_INFO="$FIXTURE_READY_JSON" OJ_BROWSER_QA_OUTPUT="$QA_DIRECTORY" \
   node tests/browser/published-training-qa.mjs
 ```
 
-该脚本通过浏览器正常账号登录和选题，只提交固定 A+B 源码。它等待真实判定并核对原回执重放和账户隔离；不会启动 Worker 或替代隔离检查。验证边界见[交付证据](docs/delivery-evidence/p5-published-training.md)。
+该脚本通过浏览器正常账号登录和选题，只上传并提交固定 A+B 源码。它验证文件限制、替换确认、刷新后原键回执、真实判定及账户隔离；不会启动 Worker 或替代隔离检查。验证边界见[交付证据](docs/delivery-evidence/p5-published-training.md)。
 
 ### A+B 租约链路联验
 

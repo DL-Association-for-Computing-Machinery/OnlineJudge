@@ -31,7 +31,34 @@ try {
   await page.goto(ready.url + '/problems')
   await page.getByRole('link', { name: 'A + B', exact: true }).click()
   await page.getByRole('heading', { name: 'A + B', exact: true }).waitFor()
-  await page.getByLabel('源码', { exact: true }).fill(source)
+  const editor = page.getByLabel('源码', { exact: true })
+  const picker = page.getByLabel('选择源码文件', { exact: true })
+  await picker.setInputFiles({ name: 'invalid.zip', mimeType: 'application/zip', buffer: Buffer.from('invalid') })
+  await page.getByText('请选择 .cpp、.cc 或 .cxx 文件。', { exact: true }).waitFor()
+  await picker.setInputFiles({ name: 'large.cpp', mimeType: 'text/plain', buffer: Buffer.alloc(65_537, 'x') })
+  await page.getByText('源文件不能超过 64 KiB。', { exact: true }).waitFor()
+  await editor.fill('// keep until explicitly replaced')
+  await picker.setInputFiles({ name: 'answer.cpp', mimeType: 'text/plain', buffer: Buffer.from(source) })
+  assert.equal(await editor.inputValue(), '// keep until explicitly replaced')
+  await page.getByRole('button', { name: '保留当前源码', exact: true }).click()
+  assert.equal(await editor.inputValue(), '// keep until explicitly replaced')
+  await picker.setInputFiles({ name: 'answer.cpp', mimeType: 'text/plain', buffer: Buffer.from(source) })
+  await page.getByRole('button', { name: '替换编辑区内容', exact: true }).click()
+  await page.getByText('已载入源码文件，确认后可提交。', { exact: true }).waitFor()
+  assert.equal(await editor.inputValue(), source)
+  // The request never reaches the API. After reload a 404 must not trigger
+  // a new POST, and the user can explicitly discard the uncertain key.
+  await page.route(collection, route => route.abort(), { times: 1 })
+  await page.getByRole('button', { name: '提交判题', exact: true }).click()
+  await page.getByText(/尚未确认是否收到提交/).waitFor()
+  await page.reload()
+  await page.getByRole('button', { name: '查询原回执', exact: true }).click()
+  await page.getByText(/原请求可能仍在处理/).waitFor()
+  await page.getByRole('button', { name: '清除本地回执', exact: true }).click()
+  await page.getByRole('button', { name: '确认清除回执', exact: true }).click()
+  await page.getByText(/已清除此标签页的原回执/).waitFor()
+  await picker.setInputFiles({ name: 'answer.cpp', mimeType: 'text/plain', buffer: Buffer.from(source) })
+  await page.getByText('已载入源码文件，确认后可提交。', { exact: true }).waitFor()
   let accepted, key, intent
   await page.route(collection, async route => {
     assert.equal(route.request().method(), 'POST')
@@ -46,6 +73,15 @@ try {
   }, { times: 1 })
   await page.getByRole('button', { name: '提交判题', exact: true }).click()
   await page.getByText(/尚未确认是否收到提交/).waitFor()
+  const slots = await page.evaluate(() => Object.entries(sessionStorage).filter(([name]) => name.startsWith('oj.training-receipt.v1:')))
+  assert.equal(slots.length, 1)
+  assert.equal(slots[0][1], key)
+  let additionalPosts = 0
+  page.on('request', r => { if (r.method() === 'POST' && r.url() === collection) additionalPosts++ })
+  await page.reload()
+  await page.getByText('有一笔提交尚未确认。请查询原回执。', { exact: true }).waitFor()
+  assert.equal(await editor.inputValue(), '')
+  assert.equal(await page.getByRole('button', { name: '重试原提交', exact: true }).count(), 0)
   const [readback] = await Promise.all([
     page.waitForResponse(r => r.url() === recovery),
     page.getByRole('button', { name: '查询原回执', exact: true }).click(),
@@ -53,6 +89,7 @@ try {
   assert.equal(readback.status(), 200)
   assert.equal(readback.request().headers()['idempotency-key'], key)
   assert.equal((await readback.json()).id, accepted.id)
+  assert.equal(additionalPosts, 0)
   const headers = { Origin: ready.url, 'X-OJ-Expected-Subject': ready.training_subject_id, 'Idempotency-Key': key }
   const replay = await owner.request.post(collection, { headers, data: intent })
   assert.equal(replay.status(), 200)
@@ -78,7 +115,8 @@ try {
   await observer.screenshot({ path: join(output, 'other-account.png'), fullPage: true })
   await writeFile(join(output, 'training-qa.json'), JSON.stringify({
     verdict: 'AC', id: accepted.id, publicationVersion: intent.publication_version, materialVersion: accepted.material_version,
-    receiptRecovered: true, replaySame: true, sourceConflict: true, wrongVersionRejected: true, ownerOnly: true,
+    receiptRecoveredAfterReload: true, abandonedUnsentKey: true, uploadValidation: true, replaySame: true, sourceConflict: true,
+    wrongVersionRejected: true, ownerOnly: true,
   }) + '\n')
   console.log('PASS published A+B browser → actual Worker AC → owner result; original receipt and account isolation')
 } finally {
