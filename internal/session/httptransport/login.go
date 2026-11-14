@@ -130,10 +130,14 @@ func finishLogin(w http.ResponseWriter, ctx context.Context, grant redisstore.Lo
 		return
 	}
 	// Only a verified remembered candidate gives the cookie an absolute expiry.
-	http.SetCookie(w, &http.Cookie{Name: CookieName, Value: grant.Credential.Value(), Path: "/", Secure: true,
-		HttpOnly: true, SameSite: http.SameSiteLaxMode, Expires: grant.PersistentUntil})
+	setSessionCookie(w, grant)
 	http.SetCookie(w, clearAttemptCookie())
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func setSessionCookie(w http.ResponseWriter, grant redisstore.LoginGrant) {
+	http.SetCookie(w, &http.Cookie{Name: CookieName, Value: grant.Credential.Value(), Path: "/", Secure: true,
+		HttpOnly: true, SameSite: http.SameSiteLaxMode, Expires: grant.PersistentUntil})
 }
 
 func (h *handler) canLogin(w http.ResponseWriter, r *http.Request, ctx context.Context) bool {

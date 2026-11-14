@@ -44,6 +44,9 @@ var revokeDevicesLua string
 //go:embed lua/touch.lua
 var touchLua string
 
+//go:embed lua/rotate.lua
+var rotateLua string
+
 //go:embed lua/abandon.lua
 var abandonLua string
 
@@ -68,6 +71,8 @@ func luaScript(op string) string {
 		body = retryLua
 	case "touch":
 		body = touchLua
+	case "rotate":
+		body = rotateLua
 	case "abandon":
 		body = abandonLua
 	}

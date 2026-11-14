@@ -276,6 +276,9 @@ func entryConfigWithWriteTimeout(t *testing.T, c sessionruntime.Config, ca *test
 	if c.SessionDevices {
 		doc["session_devices"] = true
 	}
+	if c.SessionRotation {
+		doc["session_rotation"] = true
+	}
 	body, err := json.Marshal(doc)
 	must(t, err)
 	path := filepath.Join(t.TempDir(), "entry.json")

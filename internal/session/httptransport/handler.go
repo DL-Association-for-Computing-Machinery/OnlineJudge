@@ -56,6 +56,7 @@ type handler struct {
 	trainingDetail         TrainingDetail
 	trainingStatus         TrainingStatus
 	devices                DeviceSessions
+	rotate                 rotateSession
 }
 
 // New builds three explicit endpoints without registering any application route:
@@ -100,6 +101,12 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	statementID, statementKey, statementMethod := reviewActionRoute(r.URL.Path, statementConfirmationAction)
 	trainingID := trainingDetailID(r.URL.Path)
 	switch r.URL.Path {
+	case RotateSessionPath:
+		if h.rotate == nil {
+			problem(w, http.StatusNotFound, "NOT_FOUND", "接口不存在")
+			return
+		}
+		method = http.MethodPost
 	case PendingDevicesPath, ReplaceDevicePath:
 		if h.login == nil || h.devices == nil {
 			problem(w, http.StatusNotFound, "NOT_FOUND", "接口不存在")
@@ -307,6 +314,10 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), h.config.Timeout)
 	defer cancel()
+	if r.URL.Path == RotateSessionPath {
+		h.serveRotate(w, r, ctx, credential, source)
+		return
+	}
 	if IsDevicePath(r.URL.Path) {
 		h.serveDevices(w, r, ctx, credential)
 		return

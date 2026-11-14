@@ -114,15 +114,10 @@ func (l *Login) CompleteGrant(ctx context.Context, c Continuation) (LoginGrant, 
 }
 
 func (l *Login) checkGrant(ctx context.Context, a *Attempt) (LoginGrant, error) {
-	credential, err := l.store.Check(ctx, a)
-	if err != nil {
+	if _, err := l.store.Check(ctx, a); err != nil {
 		return LoginGrant{}, err
 	}
-	result := LoginGrant{Credential: credential}
-	if a.matchesPolicy(rememberedPolicy) {
-		result.PersistentUntil = time.UnixMilli(a.absolute).UTC()
-	}
-	return result, nil
+	return grantFor(a), nil
 }
 
 // Abandon tombstones only this candidate, including after its login window.

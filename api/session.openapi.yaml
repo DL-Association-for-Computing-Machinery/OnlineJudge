@@ -22,6 +22,31 @@ info:
 security:
   - ordinarySession: []
 paths:
+  /api/v1/session/rotate:
+    post:
+      operationId: rotateOrdinarySession
+      description: >-
+        仅在 session_rotation 启用时换发当前普通会话的凭据。
+        原登录时间、空闲和绝对截止、名额及 Cookie 持久策略不变。
+        使用共享登录恢复限流。成功后旧凭据立即失效。
+        回执未知时先读取当前会话；若已失效则重新登录，勿自动重试轮换。
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/FetchSite'
+      responses:
+        '204':
+          description: 已确认换发；无响应体，仅设置新的普通会话 Cookie。
+        '401':
+          $ref: '#/components/responses/SessionRequired'
+        '403':
+          $ref: '#/components/responses/OriginRejected'
+        '404':
+          $ref: '#/components/responses/EntryNotEnabled'
+        '405':
+          $ref: '#/components/responses/PostOnly'
+        '429': {description: 共享恢复限流已达上限。}
+        '503':
+          $ref: '#/components/responses/SessionUnavailable'
   /api/v1/session/login/devices:
     post:
       operationId: listPendingLoginDevices

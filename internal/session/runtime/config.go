@@ -85,6 +85,8 @@ type Config struct {
 	TrainingSubmissionDetail bool
 	// SessionDevices enables listing and revoking the caller's other sessions.
 	SessionDevices bool
+	// SessionRotation enables replacing the caller's personal credential.
+	SessionRotation bool
 
 	// EmailLimits optionally provisions the email marker during isolated
 	// recovery. This alone does not enable any public account route.

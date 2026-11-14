@@ -22,6 +22,7 @@ func (w document) config() (Config, error) {
 	r.TrainingHistory = w.TrainingHistory
 	r.TrainingSubmissionDetail = w.TrainingSubmissionDetail
 	r.SessionDevices = w.SessionDevices
+	r.SessionRotation = w.SessionRotation
 	r.HTTP.Origin = w.Origin
 	if !durations([]durationField{{w.LoginWindow, &r.LoginWindow}, {w.StartupTimeout, &r.StartupTimeout},
 		{w.HTTPTimeout, &r.HTTP.Timeout}}) || r.StartupTimeout <= 0 || r.StartupTimeout > time.Minute ||

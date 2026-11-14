@@ -152,6 +152,12 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 			}
 		}
 	}
+	if c.SessionRotation {
+		handler, err = httptransport.WithRotation(handler, store.Rotate)
+		if err != nil {
+			return nil, ErrConfig
+		}
+	}
 	if c.SessionDevices {
 		handler, err = httptransport.WithDevices(handler, store)
 		if err != nil {
