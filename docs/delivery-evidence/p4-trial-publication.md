@@ -2,7 +2,7 @@
 
 本页对应[开发计划 P4](../phase-1-development-plan.md#p4-题库与发布)，记录 [#299](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/299) 的基础和 [#300](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/300) 的闭环验收。
 
-2026-11-14，项目负责人确认以 Mac Ubuntu VM 的 A+B 双账号闭环作为 **P4 功能验收结果**。该结果足以完成 P4；不再要求为本次验收增加独立人员操作，或在试用节点复跑。试用节点的执行配置、真实题集及现场运行按后续上线工作处理。
+2026-11-14，项目负责人确认以 Mac Ubuntu VM 的 A+B 双账号闭环作为 **P4 功能验收结果**。该结果足以完成 P4；不再要求为本次验收增加独立人员操作，或在试用节点复跑。试用节点的执行配置、真实题集及现场运行按后续上线工作处理。GitHub 主线仍按仓库已有规则检查合并。
 
 | 验收项 | 已有实现与证据 | 后续上线事项 |
 | --- | --- | --- |
