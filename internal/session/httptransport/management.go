@@ -114,7 +114,7 @@ func (h *handler) serveManagement(w http.ResponseWriter, r *http.Request, source
 func (h *handler) serveManagementLogin(w http.ResponseWriter, r *http.Request, ctx context.Context, source netip.Addr) {
 	email, secret, _, err := readLoginBody(w, r, false)
 	defer clear(secret)
-	if err != nil || !h.admitLogin(w, r, ctx, email, false, source) {
+	if err != nil || !h.admitLogin(r, ctx, email, false, source, func(_ string, err error) { loginError(w, err) }) {
 		return
 	}
 	value, present, err := cookieValue(r, ManagementCookieName)

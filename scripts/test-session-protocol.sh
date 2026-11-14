@@ -10,6 +10,10 @@ case "$#:${1:-ordinary}" in
     1:email-archive-recovery)
         export OJ_ISOLATED_EMAIL_ARCHIVE_RECOVERY=1
         oj_pattern='^TestIsolatedEmailArchiveRecovery$' ;;
+    1:training-overload) oj_pattern='^TestTrainingOverloadRecovery$' ;;
+    1:trial-edge)
+        export OJ_TRIAL_EDGE_FIXTURE=1
+        oj_pattern='^TestTrialEdge$' ;;
     *) echo "Invalid session protocol suite" >&2; exit 2 ;;
 esac
 umask 077

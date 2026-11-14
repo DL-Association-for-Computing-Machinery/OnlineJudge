@@ -16,12 +16,14 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/httpapi"
 	transport "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/httptransport"
 	sessionruntime "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/runtime"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/testpki"
 )
 
 func testRuntime(t *testing.T, f *fixture) {
+	t.Run("readiness tracks storage recovery independently from liveness", func(t *testing.T) { testRuntimeReadiness(t, f) })
 	t.Run("two assembled owners use one authority and cookie lifecycle", func(t *testing.T) {
 		ns := namespace(t)
 		p := f.subject(t, true)
@@ -58,8 +60,17 @@ func testRuntime(t *testing.T, f *fixture) {
 		cert, _, _ := ca.Issue(t, "spiffe://onlinejudge/proxy/runtime", x509.ExtKeyUsageClientAuth, time.Now().Add(time.Hour))
 		c.Mode, c.Proxy = sessionruntime.ProxyMTLS, transport.ProxyConfig{CertificateSHA256: [][32]byte{sha256.Sum256(cert.Certificate[0])}}
 		r := openRuntime(t, c)
-		edge := proxyServer(t, r, ca, cert)
+		edge := proxyServer(t, httpapi.NewSessionHandler(r), ca, cert)
 		x := proxyClient(t, edge.edge, "127.0.0.2", nil)
+		loginStatus(t, loginCall(x, "/api/v1/readyz", "", nil, func(r *http.Request) { r.Method = http.MethodGet }), 200)
+		other, _, _ := ca.Issue(t, "spiffe://onlinejudge/proxy/unpinned", x509.ExtKeyUsageClientAuth, time.Now().Add(time.Hour))
+		wrong := proxyClient(t, edge.backend, "127.0.0.2", &other)
+		loginStatus(t, loginCall(wrong, "/api/v1/readyz", "", nil, func(r *http.Request) {
+			r.Method = http.MethodGet
+			r.Header.Set("X-Forwarded-Host", r.Host)
+			r.Header.Set("X-Forwarded-Proto", "https")
+			r.Header.Set("X-Forwarded-For", "127.0.0.2")
+		}), 404)
 		pending := beginLogin(t, x, f.subject(t, false))
 		completedCredential(t, loginCall(x, "/api/v1/session/login/complete", "", []*http.Cookie{pending}, nil))
 		plain := httptest.NewRecorder()

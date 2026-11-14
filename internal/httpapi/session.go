@@ -21,6 +21,13 @@ func NewSessionHandler(session http.Handler) http.Handler {
 			httptransport.IsTrainingHistoryPath(r.URL.Path) || httptransport.IsTrainingDetailPath(r.URL.Path) ||
 			httptransport.IsManagementSessionPath(r.URL.Path) || r.URL.Path == httptransport.ManagementRolePath
 		switch r.URL.Path {
+		case "/api/v1/readyz":
+			if probe, ok := session.(sessionReadiness); ok {
+				serveSessionReadiness(w, r, probe)
+				return
+			}
+			bootstrap.ServeHTTP(w, r)
+			return
 		case "/api/v1/session", "/api/v1/session/activity", "/api/v1/session/logout", httptransport.RotateSessionPath,
 			"/api/v1/session/login/begin", "/api/v1/session/login/complete", "/api/v1/session/login/abandon", "/api/v1/account/password":
 		default:

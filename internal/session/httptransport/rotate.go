@@ -33,7 +33,7 @@ func (h *handler) serveRotate(w http.ResponseWriter, r *http.Request, ctx contex
 		sessionError(w, err)
 		return
 	}
-	if !h.admitLogin(w, r, ctx, identity.Email{}, true, source) {
+	if !h.admitLogin(r, ctx, identity.Email{}, true, source, func(_ string, err error) { loginError(w, err) }) {
 		return
 	}
 	grant, err := h.rotate(ctx, credential)

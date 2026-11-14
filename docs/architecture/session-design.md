@@ -375,7 +375,7 @@ JSON 必须恰有 `version`（整数词法 `1`）、`current`（key ID）、`sea
 
 认证代理必须删除客户端传入的转发头，从实际客户端连接覆写：恰一个 `X-Forwarded-For` 裸 IP（无端口/zone/列表/空白，拒绝 unspecified/multicast）、恰一个 `X-Forwarded-Proto: https`、恰一个与固定 public host 完全相等的 `X-Forwarded-Host`；同时保留经校验的原公开 Host。拒绝任何 `Forwarded`/`X-Real-IP` 字段，不支持多跳追加链或头优先级猜测。IP 归一 IPv4-mapped 地址后仅以请求局部值传入共享限流，不修改 RemoteAddr/TLS 或存入共享 handler 状态。固定 Origin、Sec-Fetch-Site、Cookie scope、两步候选和恢复期限继续按原合同执行。
 
-应用无法独立证明受信代理面向客户端真的使用 HTTPS，持有有效代理私钥者可伪造来源；公开端 HTTPS/Host 校验、后端隔离、CA/证书分发与访问边界须在真实部署另验。测试复用标准库 `httputil.ReverseProxy.Rewrite/SetXForwarded`，在 hop-by-hop 清理之后重建可信头，未复制入站 XFF；`SetURL` 后显式恢复已验证 Host，并删除 X-Real-IP。不提供通用代理协议解析器、CIDR 信任、动态 Origin、明文 backend 或生产 Nginx 配置。
+应用无法独立证明受信代理面向客户端真的使用 HTTPS，持有有效代理私钥者可伪造来源；公开端 HTTPS/Host 校验、后端隔离、CA/证书分发与访问边界须在真实部署另验。协议测试复用标准库 `httputil.ReverseProxy.Rewrite/SetXForwarded`，在 hop-by-hop 清理之后重建可信头，未复制入站 XFF；`SetURL` 后显式恢复已验证 Host，并删除 X-Real-IP。[试用 Nginx 入口](../../README.md#试用同源-https-入口)提供独立配置模板；不支持通用代理协议解析器、CIDR 信任、动态 Origin 或明文 backend。
 
 真实 Redis/PostgreSQL 专项含两个独立 Store、公开 TLS→mTLS backend、两个实际 Linux loopback 客户端来源、同源跨副本限流/异源隔离、恶意转发及 Connection 头、共享 Go Cookie jar 登录/读取/活动/退出，以及同 CA 未授权证书和无证书拒绝。合成 TLS 状态的单元边界与真实握手明确区分；Cookie jar 仍不代表浏览器验收。命令沿用 README 专项，实际结果归[交付记录](../delivery-log.md)。无依赖/SQL/迁移或默认 API 接线；回退先停用代理登录入口，不以接回未限流路径替代。未部署，生产阈值、浏览器/完整账号权限与恢复和完整 M0 仍待验。
 

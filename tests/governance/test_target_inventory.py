@@ -53,10 +53,33 @@ class InventoryTests(unittest.TestCase):
     def test_missing_and_permission_denied_volumes_are_unavailable(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp)
-            self.assertEqual(inventory.volume(path / "missing"), {"state": "unavailable"})
-            with patch.object(Path, "is_dir", side_effect=PermissionError):
-                self.assertEqual(inventory.volume(path), {"state": "unavailable"})
+            self.assertEqual(inventory.observe_volume(path / "missing"), ({"state": "unavailable"}, None))
+            with patch.object(inventory.os, "open", side_effect=PermissionError):
+                self.assertEqual(inventory.observe_volume(path), ({"state": "unavailable"}, None))
             self.assertFalse((path / "missing").exists())
+
+    def test_shared_peak_debits_both_byte_and_inode_headroom(self):
+        def observed(byte_count, inode_count, device, read_only=False):
+            return ({"state": "observed", "available_bytes": byte_count,
+                     "available_inodes": inode_count, "read_only": read_only}, device)
+
+        observations = {"scratch": observed(40, 15, 1), "materials": observed(40, 15, 1),
+                        "database": observed(30, 5, 2)}
+        report = inventory.storage_budget(observations, 10, 10, 30, 5)
+        self.assertEqual(report["state"], "sufficient")
+        self.assertEqual(report["volumes"]["materials"]["bytes_after_peak"], 30)
+        self.assertEqual(report["volumes"]["database"]["inodes_after_peak"], 5)
+        self.assertFalse(report["volumes"]["database"]["shares_scratch_device"])
+
+        observations["materials"] = observed(39, 14, 1)
+        observations["database"] = observed(30, 5, 2, read_only=True)
+        report = inventory.storage_budget(observations, 10, 10, 30, 5)
+        self.assertEqual(report["state"], "blocked")
+        self.assertEqual(report["volumes"]["materials"]["failures"], ["byte_reserve", "inode_reserve"])
+        self.assertEqual(report["volumes"]["database"]["failures"], ["read_only_volume"])
+        observations["scratch"] = ({"state": "unavailable"}, None)
+        report = inventory.storage_budget(observations, 10, 10, 30, 5)
+        self.assertTrue(all(row["state"] == "unavailable" for row in report["volumes"].values()))
 
     @unittest.skipUnless(sys.platform.startswith("linux"), "Linux inventory")
     def test_cli_reports_volume_roles_without_input_paths(self):
@@ -71,3 +94,17 @@ class InventoryTests(unittest.TestCase):
             self.assertGreater(out["volumes"]["materials"]["total_bytes"], 0)
             self.assertNotIn(tmp, result.stdout)
             self.assertFalse(Path(missing).exists())
+            blocked = subprocess.run(cmd + ["--storage-budget", "1", "1", "1", "1"],
+                                     capture_output=True, text=True, timeout=10)
+            self.assertEqual(blocked.returncode, 2)
+            self.assertEqual(json.loads(blocked.stdout)["storage_budget"]["volumes"]["database"]["state"], "unavailable")
+            self.assertNotIn(tmp, blocked.stdout)
+
+            sufficient = subprocess.run(cmd[:-1] + [tmp, "--storage-budget", "1", "1", "1", "1"],
+                                        capture_output=True, check=True, text=True, timeout=10)
+            report = json.loads(sufficient.stdout)
+            for role, volume in report["storage_budget"]["volumes"].items():
+                self.assertTrue(volume["shares_scratch_device"])
+                self.assertEqual(volume["bytes_after_peak"], report["volumes"][role]["available_bytes"] - 1)
+                self.assertEqual(volume["inodes_after_peak"], report["volumes"][role]["available_inodes"] - 1)
+            self.assertNotIn(tmp, sufficient.stdout)

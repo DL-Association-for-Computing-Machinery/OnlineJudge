@@ -55,10 +55,16 @@ func NewLimitedLogin(login *redisstore.Login, config Config, change ...*redissto
 }
 
 func (h *handler) serveLogin(w http.ResponseWriter, r *http.Request, source netip.Addr) {
+	started := time.Now()
+	fail := func(stage string, err error) {
+		if loginError(w, err) == http.StatusServiceUnavailable {
+			recordLoginFailure(h.config.Logger, loginOperation(r.URL.Path), stage, time.Since(started), err)
+		}
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), h.config.Timeout)
 	defer cancel()
 	if err := ctx.Err(); err != nil {
-		loginError(w, err)
+		fail("request", err)
 		return
 	}
 	raw, present, err := cookieValue(r, AttemptCookieName)
@@ -82,7 +88,7 @@ func (h *handler) serveLogin(w http.ResponseWriter, r *http.Request, source neti
 			problem(w, 409, "LOGIN_PENDING", "请先确认或放弃当前登录尝试")
 			return
 		}
-		h.beginLogin(w, r, ctx, source)
+		h.beginLogin(w, r, ctx, source, fail)
 		return
 	}
 	if !present {
@@ -94,7 +100,7 @@ func (h *handler) serveLogin(w http.ResponseWriter, r *http.Request, source neti
 		loginError(w, err)
 		return
 	}
-	if !h.admitLogin(w, r, ctx, identity.Email{}, true, source) {
+	if !h.admitLogin(r, ctx, identity.Email{}, true, source, fail) {
 		return
 	}
 	if r.URL.Path == "/api/v1/session/login/abandon" {
@@ -103,30 +109,30 @@ func (h *handler) serveLogin(w http.ResponseWriter, r *http.Request, source neti
 			err = ctx.Err()
 		}
 		if err != nil {
-			loginError(w, err)
+			fail("abandon", err)
 			return
 		}
 		http.SetCookie(w, clearAttemptCookie())
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	if !h.canLogin(w, r, ctx) {
+	if !h.canLogin(w, r, ctx, fail) {
 		return
 	}
 	if IsPendingDevicePath(r.URL.Path) {
-		h.servePendingDevices(w, r, ctx, c)
+		h.servePendingDevices(w, r, ctx, c, fail)
 		return
 	}
 	grant, err := h.login.CompleteGrant(ctx, c)
-	finishLogin(w, ctx, grant, err)
+	finishLogin(w, ctx, grant, err, func(err error) { fail("complete", err) })
 }
 
-func finishLogin(w http.ResponseWriter, ctx context.Context, grant redisstore.LoginGrant, err error) {
+func finishLogin(w http.ResponseWriter, ctx context.Context, grant redisstore.LoginGrant, err error, fail func(error)) {
 	if err == nil {
 		err = ctx.Err()
 	}
 	if err != nil {
-		loginError(w, err)
+		fail(err)
 		return
 	}
 	// Only a verified remembered candidate gives the cookie an absolute expiry.
@@ -140,7 +146,7 @@ func setSessionCookie(w http.ResponseWriter, grant redisstore.LoginGrant) {
 		HttpOnly: true, SameSite: http.SameSiteLaxMode, Expires: grant.PersistentUntil})
 }
 
-func (h *handler) canLogin(w http.ResponseWriter, r *http.Request, ctx context.Context) bool {
+func (h *handler) canLogin(w http.ResponseWriter, r *http.Request, ctx context.Context, fail func(string, error)) bool {
 	raw, present, err := cookieValue(r, CookieName)
 	if err != nil {
 		loginError(w, err)
@@ -162,20 +168,20 @@ func (h *handler) canLogin(w http.ResponseWriter, r *http.Request, ctx context.C
 	if sessionDenied(err) {
 		return true
 	}
-	loginError(w, err)
+	fail("session_check", err)
 	return false
 }
 
-func (h *handler) beginLogin(w http.ResponseWriter, r *http.Request, ctx context.Context, source netip.Addr) {
+func (h *handler) beginLogin(w http.ResponseWriter, r *http.Request, ctx context.Context, source netip.Addr, fail func(string, error)) {
 	email, secret, remember, err := loginBody(w, r)
 	if err != nil {
 		return
 	}
 	defer clear(secret)
-	if !h.admitLogin(w, r, ctx, email, false, source) {
+	if !h.admitLogin(r, ctx, email, false, source, fail) {
 		return
 	}
-	if !h.canLogin(w, r, ctx) {
+	if !h.canLogin(w, r, ctx, fail) {
 		return
 	}
 	c, err := h.login.PrepareWithPersistence(ctx, email, secret, remember)
@@ -183,7 +189,7 @@ func (h *handler) beginLogin(w http.ResponseWriter, r *http.Request, ctx context
 		err = ctx.Err()
 	}
 	if err != nil {
-		loginError(w, err)
+		fail("prepare", err)
 		return
 	}
 	// Cookie lifetime is the original remaining window, never a new full window.
@@ -203,7 +209,7 @@ func clearAttemptCookie() *http.Cookie {
 		MaxAge: -1, Expires: time.Unix(1, 0).UTC()}
 }
 
-func loginError(w http.ResponseWriter, err error) {
+func loginError(w http.ResponseWriter, err error) int {
 	// Unknown writes/commit outcomes must win over joined deterministic causes.
 	unknown := errors.Is(err, redisstore.ErrStore) || errors.Is(err, identity.ErrStore) || errors.Is(err, identity.ErrRecovering) ||
 		errors.Is(err, redisstore.ErrUnknown) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
@@ -225,4 +231,5 @@ func loginError(w http.ResponseWriter, err error) {
 		}
 	}
 	problem(w, status, code, title)
+	return status
 }

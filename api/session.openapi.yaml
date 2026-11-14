@@ -287,6 +287,32 @@ paths:
           $ref: '#/components/responses/GetOnly'
         '503':
           $ref: '#/components/responses/SessionUnavailable'
+  /api/v1/readyz:
+    get:
+      operationId: readOrdinarySessionReadiness
+      security: []
+      description: >-
+        仅由普通会话 API 的 TLS 监听器提供，沿用配置的 Host 和 mTLS 代理授权。
+        不接受正文、查询参数或转义路径；
+        不读写会话或设置 Cookie。观察数据库 schema、会话恢复是否开启和 Redis PING，
+        每次最多等待一秒，并可复用最近一秒的观察。不包含单项依赖的状态。
+      responses:
+        '200':
+          description: 普通会话依赖就绪
+          headers:
+            Cache-Control: { schema: { const: no-store } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrdinarySessionReadiness' }
+        '503':
+          description: 普通会话依赖未就绪或 API 正在排空
+          headers:
+            Cache-Control: { schema: { const: no-store } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrdinarySessionReadiness' }
+        '404': { description: 该监听器或请求形式不提供就绪信号 }
+        '405': { description: 方法不支持 }
   /api/v1/session:
     get:
       operationId: readOrdinarySession
@@ -592,6 +618,14 @@ components:
       description: 单个 __Host-oj_login 删除头，值为空；Secure、HttpOnly、SameSite=Lax、Path=/、无 Domain、Max-Age=0、过去的 Expires。
       schema: {type: string}
   schemas:
+    OrdinarySessionReadiness:
+      type: object
+      additionalProperties: false
+      required: [status, service, scope]
+      properties:
+        status: { enum: [ready, unavailable] }
+        service: { const: api }
+        scope: { const: ordinary-session }
     OrdinarySession:
       type: object
       additionalProperties: false

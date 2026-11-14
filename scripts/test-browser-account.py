@@ -66,8 +66,12 @@ def arguments():
     parser.add_argument("--redis-image", default=REDIS, choices=[REDIS, REDIS.replace("@", ":7.2.17@", 1)])
     parser.add_argument("--module-cache", type=Path)
     parser.add_argument("--build-cache-volume", default="onlinejudge_toolchain-cache")
+    parser.add_argument("--fixture-start-seconds", type=int, choices=range(90, 301), metavar="90..300",
+                        default=90, help="Preparation budget before browser checks (default: 90)")
     parser.add_argument("--playwright-module", type=Path, required=True)
     parser.add_argument("--chromium-executable", type=Path)
+    parser.add_argument("--trial-nginx-image", help="Existing local Nginx image; only with --m1-login-load")
+    parser.add_argument("--trial-firefox", type=Path, help="Existing Firefox executable for strict Nginx login sampling")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--statement-corpus", type=Path, help="optional prepared bundle statements directory, renderer-only checks")
     mode.add_argument("--authorized-draft-bundle", type=Path, help="run real authorized previews for the pinned ten-problem private bundle")
@@ -79,6 +83,12 @@ def arguments():
     mode.add_argument("--session-devices", action="store_true", help="verify session replacement and revocation through the account UI")
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
+    if args.trial_nginx_image and not args.m1_login_load:
+        raise ValueError("Nginx fixture requires concentrated login mode")
+    if args.trial_firefox:
+        if not args.trial_nginx_image or args.chromium_executable:
+            raise ValueError("strict trial Firefox requires the Nginx login fixture")
+        args.trial_firefox = local_path(args.trial_firefox, executable=True)
     output = args.output_dir.resolve()
     if args.output_dir.is_symlink() or output.exists() or output.is_relative_to(ROOT) or not output.parent.is_dir() or "," in str(output) or "," in str(ROOT):
         raise ValueError("output must be a new directory outside the repository")
@@ -175,8 +185,8 @@ def published_origin(docker, test, port, scheme):
     return scheme + "://127.0.0.1:" + value
 
 
-def wait_ready(process, log, origin):
-    deadline = time.monotonic() + 90
+def wait_ready(process, log, origin, seconds):
+    deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
         if process.poll() is not None:
             raise RuntimeError("fixture exited before readiness")
@@ -201,6 +211,34 @@ def stop_fixture(origin, ca=None):
                 pass
         except (OSError, ValueError):
             pass
+
+
+def check_trial_nginx(origin, ca):
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPSHandler(
+        context=ssl.create_default_context(cafile=str(ca))))
+    path = origin + "/api/v1/readyz"
+    with opener.open(path, timeout=5) as response:
+        if (response.headers.get("X-OJ-Fixture-Upstream-Status") != "200"
+                or not trial_upstream_time(response)
+                or json.load(response) != {"status": "ready", "service": "api", "scope": "ordinary-session"}):
+            raise ValueError("Nginx trial readiness did not reach the API")
+    for request, code, upstream in (
+        (urllib.request.Request(path, method="POST"), 405, "405"),
+        (urllib.request.Request(path, headers={"Host": "wrong.invalid"}), 421, None),
+    ):
+        try:
+            with opener.open(request, timeout=5):
+                raise ValueError("expected a trial attribution probe rejection")
+        except urllib.error.HTTPError as response:
+            with response:
+                timing = response.headers.get("X-OJ-Fixture-Upstream-Time")
+                if (response.code != code or response.headers.get("X-OJ-Fixture-Upstream-Status") != upstream
+                        or (not trial_upstream_time(response) if upstream else timing is not None)):
+                    raise ValueError("unexpected trial attribution probe result") from None
+
+
+def trial_upstream_time(response):
+    return re.fullmatch(r"[0-9]+\.[0-9]{3}", response.headers.get("X-OJ-Fixture-Upstream-Time", "")) is not None
 
 
 def main():
@@ -232,6 +270,10 @@ def main():
         arch = {"x86_64": "amd64", "aarch64": "arm64"}.get(arch, arch)
         if any(item[1] != arch for item in images):
             raise ValueError("local image architecture mismatch")
+        if args.trial_nginx_image:
+            nginx, nginx_arch = protocol.image_info(docker, args.trial_nginx_image)
+            if nginx_arch != arch:
+                raise ValueError("local Nginx architecture mismatch")
         if args.build_cache_volume:
             docker.run("volume", "inspect", args.build_cache_volume)
         script = fixture_script()
@@ -253,6 +295,9 @@ def main():
             script_name, check_count = "session-devices-qa.mjs", 3
         qa_script = ROOT / "tests/browser" / script_name
         expected_checks = re.findall(r"^\s+passed\('([^'\n]+)'\)", qa_script.read_text(), re.M)
+        if args.trial_firefox:
+            expected_checks.insert(0, "fresh Firefox rejects the untrusted trial issuer")
+            check_count += 1
         if len(expected_checks) != check_count or len(set(expected_checks)) != check_count:
             raise ValueError("browser driver check contract changed")
         if args.cold_firefox and args.session_devices:
@@ -298,9 +343,14 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
         script_path.write_text(script)
         script_path.chmod(0o644)
         options = ["--network", network, "--cpus", "2", "--memory", "2g", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
-            "--publish", "127.0.0.1::9443", "--publish", "127.0.0.1::9444", "--mount", f"type=bind,src={ROOT},dst=/workspace,readonly",
+            "--mount", f"type=bind,src={ROOT},dst=/workspace,readonly",
             "--mount", f"type=bind,src={assets},dst=/browser-assets,readonly", "--mount", f"type=bind,src={script_path},dst=/browser-fixture.sh,readonly",
             "-e", "GOPROXY=off", "-e", "GOTOOLCHAIN=local", "-e", "GOCACHE=/tmp/go-build"]
+        if args.trial_nginx_image:
+            tls = protocol.trial_tls(out, "IP:127.0.0.1")
+            options += ["--publish", "127.0.0.1::8443", "--mount", f"type=bind,src={tls},dst=/trial-tls,readonly"]
+        else:
+            options += ["--publish", "127.0.0.1::9443", "--publish", "127.0.0.1::9444"]
         if args.build_cache_volume:
             options += ["--mount", f"type=volume,src={args.build_cache_volume},dst=/tmp/go-build"]
         if args.module_cache:
@@ -310,8 +360,32 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
                         "-e", "OJ_BROWSER_LC_DRAFTS=1"]
         containers["test"] = docker.create("--pull", "never", *options, "--entrypoint", "sh", images[0][0], "-ec", "while :; do sleep 30; done")
         docker.run("start", containers["test"])
-        origin = published_origin(docker, containers["test"], 9443, "https")
-        http_origin = published_origin(docker, containers["test"], 9444, "http")
+        if args.trial_nginx_image:
+            origin = published_origin(docker, containers["test"], 8443, "https")
+            http_origin = None
+            config = out / "trial-nginx.conf"
+            template = (ROOT / "deploy/trial/nginx.conf.example").read_text()
+            host = urllib.parse.urlsplit(origin).netloc
+            api_location = "location ^~ /api/ {"
+            if template.count(api_location) != 1:
+                raise ValueError("Nginx trial API location changed")
+            config.write_text(template.replace("server_name oj.example.invalid;", "server_name 127.0.0.1;")
+                              .replace("oj.example.invalid", host)
+                              .replace(api_location, api_location + "\n"
+                                       "            add_header X-OJ-Fixture-Upstream-Status $upstream_status always;\n"
+                                       "            add_header X-OJ-Fixture-Upstream-Time $upstream_header_time always;"))
+            config.chmod(0o644)
+            containers["edge"] = docker.create("--pull", "never", "--network", f"container:{containers['test']}",
+                "--user", "101:101", "--read-only", "--tmpfs", "/tmp:rw,size=16m,mode=1777",
+                "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+                "--mount", f"type=bind,src={tls},dst=/run/oj-edge,readonly",
+                "--mount", f"type=bind,src={assets},dst=/srv/oj/site,readonly",
+                "--mount", f"type=bind,src={config},dst=/trial.conf,readonly",
+                "--entrypoint", "sh", nginx, "-ec", 'nginx -t -c /trial.conf; exec nginx -c /trial.conf -g "daemon off;"')
+            docker.run("start", containers["edge"])
+        else:
+            origin = published_origin(docker, containers["test"], 9443, "https")
+            http_origin = published_origin(docker, containers["test"], 9444, "http")
         fixture_log = out / "fixture.log"
         handles.append(fixture_log.open("w"))
         cold = ["-e", "OJ_BROWSER_COLD_TLS=1"] if args.cold_firefox else []
@@ -319,12 +393,23 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
             cold += ["-e", "OJ_BROWSER_REVIEW_MATERIALS=1"]
         if args.m1_login_load:
             cold += ["-e", "OJ_BROWSER_LOGIN_LOAD=1"]
+        if args.trial_nginx_image:
+            cold += ["-e", "OJ_BROWSER_TRIAL_NGINX=1"]
         if args.training_history:
             cold += ["-e", "OJ_BROWSER_TRAINING_HISTORY=1"]
         if args.session_devices:
             cold += ["-e", "OJ_BROWSER_SESSION_DEVICES=1"]
         process = subprocess.Popen([*docker.command, "exec", "-e", "OJ_BROWSER_ORIGIN=" + origin, "-e", "OJ_BROWSER_UI_DIR=/browser-assets", *cold, containers["test"], "sh", "/browser-fixture.sh"], stdout=handles[-1], stderr=subprocess.STDOUT)
-        ready = wait_ready(process, fixture_log, origin)
+        ready = wait_ready(process, fixture_log, origin, args.fixture_start_seconds)
+        if args.trial_nginx_image:
+            try:
+                check_trial_nginx(origin, tls / "public-ca.pem")
+            except ValueError:
+                log.write("Nginx trial readiness: status, upstream timing, or readiness payload mismatch\n")
+                raise
+            except urllib.error.URLError as error:
+                log.write(f"Nginx trial readiness: {error.reason}\n")
+                raise
         if args.cold_firefox:
             public_ca = ready["ca_pem"]
             if not isinstance(public_ca, str) or not re.fullmatch(r"-----BEGIN CERTIFICATE-----\n[A-Za-z0-9+/=\n]{1,4096}-----END CERTIFICATE-----\n", public_ca):
@@ -334,7 +419,7 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
         info = out / "fixture.json"
         info.write_text(json.dumps({"origin": origin, "http_origin": http_origin, "log": str(fixture_log), "email": ready["email"],
                                     "subject_id": ready["subject_id"], "statements": args.statements,
-                                    "authorized_drafts": args.authorized_drafts,
+                                    "authorized_drafts": args.authorized_drafts, "trial_nginx": bool(args.trial_nginx_image),
                                     **({"login_accounts": json.loads(ready["login_accounts"])} if args.m1_login_load else {})}, indent=2) + "\n")
         phase = "BROWSER_QA"
         print("Running real browser account checks", flush=True)
@@ -344,6 +429,8 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
             env["OJ_CHROMIUM_EXECUTABLE"] = str(args.chromium_executable)
         if args.cold_firefox:
             env.update(OJ_FIREFOX_EXECUTABLE=str(args.cold_firefox), OJ_BROWSER_CA_FILE=str(ca))
+        if args.trial_firefox:
+            env.update(OJ_FIREFOX_EXECUTABLE=str(args.trial_firefox), OJ_BROWSER_CA_FILE=str(tls / "public-ca.pem"))
         with (out / "node.log").open("w") as node_log:
             qa = subprocess.run([str(args.node), str(qa_script)], env=env, stdout=node_log, stderr=subprocess.STDOUT,
                                 timeout=420 if args.authorized_drafts else 120)
@@ -355,7 +442,15 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
         failure = "INTERRUPTED" if isinstance(error, KeyboardInterrupt) else phase
         log.write(type(error).__name__ + "\n" + str(getattr(error, "stdout", "") or "") + str(getattr(error, "stderr", "") or ""))
     finally:
-        if not args.cold_firefox or ca:
+        if args.trial_nginx_image and process and process.poll() is None:
+            try:
+                docker.run("exec", containers["test"], "python3", "-c",
+                    "from urllib.request import Request, urlopen; "
+                    "urlopen(Request('http://127.0.0.1:9444/stop', method='POST'), timeout=3).close()",
+                    timeout=5)
+            except (OSError, subprocess.SubprocessError):
+                failure = failure or "FIXTURE_SHUTDOWN"
+        elif not args.trial_nginx_image and (not args.cold_firefox or ca):
             stop_fixture(origin, ca)
         if process:
             try:
@@ -371,6 +466,10 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
             if not result["fixture_ok"]:
                 failure = failure or "FIXTURE_SHUTDOWN"
         try:
+            if "edge" in containers:
+                protocol.check_state(docker, containers["edge"], True)
+                docker.run("stop", "--signal", "SIGQUIT", "--time", "5", containers["edge"], timeout=15)
+                protocol.check_state(docker, containers["edge"], False)
             if "test" in containers:
                 protocol.check_state(docker, containers["test"], True)
                 result["container_ok"] = True

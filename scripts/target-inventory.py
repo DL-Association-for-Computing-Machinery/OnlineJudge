@@ -10,6 +10,7 @@ import re
 import sys
 
 CG = Path("/sys/fs/cgroup")
+VOLUME_ROLES = ("materials", "scratch", "database")
 
 
 def read(path):
@@ -25,6 +26,13 @@ def positive(s):
     if not re.fullmatch(r"[1-9][0-9]{0,18}", s):
         raise ValueError("invalid positive integer")
     return int(s)
+
+
+def cli_positive(value):
+    try:
+        return positive(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError("expected a positive integer of at most 19 digits") from None
 
 
 def distribution():
@@ -103,20 +111,51 @@ def constraints(directory):
     return levels
 
 
-def volume(path):
+def observe_volume(path):
     if not path.is_absolute():
-        return {"state": "unavailable"}
+        return {"state": "unavailable"}, None
     try:
-        if not path.is_dir():
-            return {"state": "unavailable"}
-        fs = os.statvfs(path)
-        if fs.f_frsize <= 0:
-            return {"state": "unavailable"}
-        return {"state": "observed", "available_bytes": fs.f_bavail * fs.f_frsize,
-                "total_bytes": fs.f_blocks * fs.f_frsize, "available_inodes": fs.f_favail,
-                "read_only": bool(fs.f_flag & os.ST_RDONLY)}
+        # Use one directory descriptor so a path change cannot mix a filesystem
+        # observation with another directory's device ID.
+        fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            fs = os.fstatvfs(fd)
+            device = os.fstat(fd).st_dev
+        finally:
+            os.close(fd)
     except OSError:
-        return {"state": "unavailable"}
+        return {"state": "unavailable"}, None
+    if fs.f_frsize <= 0 or not 0 <= fs.f_bavail <= fs.f_blocks or fs.f_blocks == 0:
+        return {"state": "unavailable"}, None
+    return ({"state": "observed", "available_bytes": fs.f_bavail * fs.f_frsize,
+             "total_bytes": fs.f_blocks * fs.f_frsize,
+             "available_inodes": fs.f_favail if 0 <= fs.f_favail <= fs.f_files and fs.f_files > 0 else None,
+             "read_only": bool(fs.f_flag & os.ST_RDONLY)}, device)
+
+
+def storage_budget(observations, peak_bytes, peak_inodes, reserve_bytes, reserve_inodes):
+    scratch_device = observations["scratch"][1]
+    rows = {}
+    for role, (observation, device) in observations.items():
+        shared = None if scratch_device is None or device is None else device == scratch_device
+        if shared is None or observation["available_inodes"] is None:
+            rows[role] = {"state": "unavailable", "shares_scratch_device": shared}
+            continue
+        after_bytes = observation["available_bytes"] - (peak_bytes if shared else 0)
+        after_inodes = observation["available_inodes"] - (peak_inodes if shared else 0)
+        failures = []
+        if role in ("scratch", "database") and observation["read_only"]:
+            failures.append("read_only_volume")
+        if after_bytes < reserve_bytes:
+            failures.append("byte_reserve")
+        if after_inodes < reserve_inodes:
+            failures.append("inode_reserve")
+        rows[role] = {"state": "insufficient" if failures else "sufficient",
+                      "shares_scratch_device": shared, "bytes_after_peak": after_bytes,
+                      "inodes_after_peak": after_inodes, "failures": failures}
+    return {"state": "sufficient" if all(row["state"] == "sufficient" for row in rows.values()) else "blocked",
+            "scratch_peak_bytes": peak_bytes, "scratch_peak_inodes": peak_inodes,
+            "reserve_bytes": reserve_bytes, "reserve_inodes": reserve_inodes, "volumes": rows}
 
 
 def inspect(args):
@@ -125,7 +164,8 @@ def inspect(args):
         affinity = len(os.sched_getaffinity(0))
     except OSError:
         affinity = None
-    return {
+    observations = {label: observe_volume(getattr(args, label + "_dir")) for label in VOLUME_ROLES}
+    report = {
         "schema": "oj.target-inventory.v1",
         "scope": "current Linux process and visible cgroup hierarchy; not target admission",
         "distribution": distribution(),
@@ -135,20 +175,26 @@ def inspect(args):
         "proc_meminfo_bytes": memory(),
         "cgroup_v2": {"state": "observed" if directory else "unavailable",
                       "visible_leaf_to_root": constraints(directory) if directory else []},
-        "volumes": {label: volume(getattr(args, label + "_dir"))
-                    for label in ("materials", "scratch", "database")},
+        "volumes": {label: observation for label, (observation, _) in observations.items()},
     }
+    if args.storage_budget is not None:
+        report["storage_budget"] = storage_budget(observations, *args.storage_budget)
+    return report
 
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    for label in ("materials", "scratch", "database"):
+    for label in VOLUME_ROLES:
         p.add_argument(f"--{label}-dir", type=Path, required=True)
+    p.add_argument("--storage-budget", nargs=4, type=cli_positive,
+                   metavar=("SCRATCH_PEAK_BYTES", "SCRATCH_PEAK_INODES", "RESERVE_BYTES", "RESERVE_INODES"),
+                   help="check explicit scratch peak and post-peak reserve per volume; exit 2 if blocked")
     args = p.parse_args()
     if platform.system() != "Linux":
         p.error("requires the Linux machine or namespace being observed")
-    print(json.dumps(inspect(args), indent=2, sort_keys=True))
-    return 0
+    report = inspect(args)
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 2 if report.get("storage_budget", {}).get("state") == "blocked" else 0
 
 
 if __name__ == "__main__":

@@ -106,6 +106,17 @@ func (h *handler) requestSource(r *http.Request) (netip.Addr, bool) {
 	return source, true
 }
 
+// AllowsReadiness applies the ordinary listener's host and verified proxy
+// boundary to a probe without reading a session or using the request body.
+func AllowsReadiness(transport http.Handler, r *http.Request) bool {
+	h, ok := transport.(*handler)
+	if !ok || h == nil {
+		return false
+	}
+	_, trusted := h.requestSource(r)
+	return trusted
+}
+
 func singleHeader(header http.Header, name, value string) bool {
 	values := header.Values(name)
 	return len(values) == 1 && values[0] == value
