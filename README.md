@@ -711,6 +711,16 @@ python3 -B scripts/test-session-protocol.py --toolchain-image oj-session-protoco
 
 在上述脚本命令末尾加 `--suite email-lifecycle` 可用另一套全新的临时 PostgreSQL 和 Redis 验证邮箱整链路。邮件仅送往容器内回环 TLS 收件器；此选项不启用 API 文件配置的注册或找回入口。
 
+### 判题运维快照
+
+值守人员可从维护工作站发起一次只读采样。由既有凭据分发渠道注入专用只读 `OJ_JUDGE_SNAPSHOT_DATABASE_URL`；连接角色和网络访问由现场维护者配置。命令显式接受期望数据库名和 1–60 分钟的接收窗口，例如：
+
+```sh
+migrate judge-snapshot <期望数据库名> 15
+```
+
+成功输出一行版本化 JSON。排队和运行计数覆盖当前积压，节点与槽位统计是配置值；近期系统错误和恢复耗尽按提交的原接收时间分组。查询不依赖 API 或 Worker；它不会判定节点在线，也不应作为高频探针。库名不匹配、schema 不兼容、权限不足及超时均失败，见[口径和限制](docs/architecture/operations-design.md#判题运维快照)。
+
 ### 会话恢复维护
 
 会话恢复维护命令只用于已经隔离的恢复副本。先设置 `OJ_RESTORED_SESSION_CONFIG_FILE` 指向该副本专用的 API 配置，再按[恢复普通会话](docs/architecture/operations-design.md#恢复普通会话)执行；不要在在线库使用。
