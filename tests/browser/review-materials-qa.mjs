@@ -14,6 +14,7 @@ assert(ready?.url === info.origin && /^[a-f0-9]{32}$/.test(ready.review_id))
 for (const email of [ready.email, ready.other_email]) assert(/^[a-zA-Z0-9._+-]+@example\.invalid$/.test(email))
 for (const id of [ready.subject_id, ready.other_subject_id]) assert(/^[a-f0-9]{32}$/.test(id))
 const endpoint = `/api/v1/problem-review/${ready.review_id}/materials`
+const assignments = '/api/v1/problem-review/assignments'
 const eligibilityPath = `/api/v1/problem-review/${ready.review_id}/eligibility`
 const confirmation = `/api/v1/problem-review/${ready.review_id}/statement-confirmation`
 const pagePath = `/review/materials/${ready.review_id}`
@@ -44,9 +45,29 @@ async function exercise(browser, viewport, reviewer, select, confirm = false) {
     step = 'select review'
     await page.goto(info.origin + (select ? '/review/materials' : pagePath))
     await page.getByRole('heading', { name: '审核材料', exact: true }).waitFor()
+    assert.deepEqual(reads, [])
     if (select) {
-      await page.getByLabel('送审 ID', { exact: true }).fill(ready.review_id)
-      await page.getByRole('button', { name: '选择送审项' }).click()
+      const [response] = await Promise.all([
+        page.waitForResponse(r => r.url() === info.origin + assignments, { timeout: 8000 }),
+        page.getByRole('button', { name: '检查会话并查看分配' }).click(),
+      ])
+      assert.equal(response.status(), 200)
+      assert.deepEqual(reads, [['GET', assignments, reviewer ? ready.other_subject_id : ready.subject_id]])
+      if (reviewer) {
+        const choice = page.getByRole('link', { name: new RegExp(ready.review_id) })
+        await choice.focus()
+        assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+        const listScreenshot = `assignments-${viewport.width}.png`
+        await page.screenshot({ path: path.join(output, listScreenshot), fullPage: true })
+        report.screenshots.push(listScreenshot)
+        await choice.press('Enter')
+      } else {
+        await page.getByText('没有可查看的审核分配。', { exact: true }).waitFor()
+        assert.equal(await page.getByRole('link', { name: new RegExp(ready.review_id) }).count(), 0)
+        await page.getByLabel('送审 ID', { exact: true }).fill(ready.review_id)
+        await page.getByRole('button', { name: '选择送审项' }).click()
+      }
+      reads.length = 0
     }
     await page.waitForURL(info.origin + pagePath)
     assert.deepEqual(reads, [])
@@ -246,14 +267,14 @@ try {
   browser = await chromium.launch({ headless: true, executablePath: process.env.OJ_CHROMIUM_EXECUTABLE })
   phase = 'desktop reviewer'
   await exercise(browser, { width: 1280, height: 960 }, true, true)
-  passed('assigned reviewer opens frozen statement samples and solution on desktop')
+  passed('assigned reviewer discovers and opens frozen materials by keyboard on desktop')
   phase = 'narrow reviewer'
-  await exercise(browser, { width: 390, height: 844 }, true, false, true)
-  passed('narrow deep link is usable and refresh clears materials without refetching')
+  await exercise(browser, { width: 390, height: 844 }, true, true, true)
+  passed('narrow assignment list is usable and refreshing the material clears private content')
   passed('four explicit checks confirm once and reload recovers the lost receipt by original-key GET')
   phase = 'author denied'
-  await exercise(browser, { width: 1280, height: 960 }, false, false)
-  passed('the author with reviewer role receives no private review materials')
+  await exercise(browser, { width: 1280, height: 960 }, false, true)
+  passed('the author with reviewer role gets an empty list and cannot read their materials')
   phase = 'author intake'
   await authorIntake(browser)
   passed('author sends once and reload recovers the original review ID after a new reference request')
