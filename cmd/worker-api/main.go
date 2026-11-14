@@ -103,11 +103,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	}
 	var materialService *materials.Service
 	if path := os.Getenv("OJ_MATERIAL_ROOT"); path != "" {
-		open := materials.OpenLocal
-		if aplusbFixture.IsLocalText() {
-			open = materials.OpenLocalText
-		}
-		reader, err := open(path)
+		reader, err := aplusbFixture.OpenMaterials(path)
 		if err != nil {
 			return err
 		}
@@ -133,11 +129,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	}
 	if enabled {
 		if aplusbFixture.APlusBTier() == experiment.ReferenceAPlusBUbuntu {
-			pin := os.Getenv("OJ_APLUSB_MANIFEST_SHA256")
-			if aplusbFixture.IsLocalText() {
-				pin = os.Getenv("OJ_LOCAL_TEXT_MANIFEST_SHA256")
-			}
-			base = workerapi.NewUbuntuAPlusBHandler(store, tlsConfig.ClientCAs, materialService, aplusb.Version, pin)
+			base = workerapi.NewUbuntuAPlusBHandler(store, tlsConfig.ClientCAs, materialService, aplusb.Version, aplusbFixture.ManifestSHA256())
 		} else {
 			base = workerapi.NewAPlusBHandler(store, tlsConfig.ClientCAs, materialService, aplusb)
 		}

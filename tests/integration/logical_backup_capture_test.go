@@ -23,13 +23,16 @@ import (
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/backup"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materialstore"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/restorecheck"
 	submissionpg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
 )
 
 func TestCaptureLogicalBackupMatchesExportedSnapshot(t *testing.T) {
-	f := newExpectedPlanFixture(t)
-	prepareClaim(t, f, expectedPlanKey)
+	f, evidence := publicationApprovalFixture(t)
+	statement := seedBackupPublication(t, f, evidence)
 	archive, schema := dumpSubmissionFixture(t, f.backlogFixture, t.TempDir())
 	seeded := newSubmissionRestoreTarget(t, f.ctx, schema, archive)
 	_, err := seeded.Exec(f.ctx, `ALTER SCHEMA public RENAME TO original_public`)
@@ -53,6 +56,12 @@ func TestCaptureLogicalBackupMatchesExportedSnapshot(t *testing.T) {
 		must(t, snapshot.Close())
 		must(t, os.WriteFile(filepath.Join(private, ref.Object.SHA256), raw, 0600))
 	}
+	snapshot, err := f.materials.Open(f.ctx, statement)
+	must(t, err)
+	display, err := io.ReadAll(snapshot)
+	must(t, snapshot.Close())
+	must(t, err)
+	must(t, os.WriteFile(filepath.Join(private, statement.SHA256), display, 0600))
 	// A file without a database reference must not be copied into the set.
 	orphan := materialHash([]byte("unreferenced judge bytes"))
 	must(t, os.WriteFile(filepath.Join(judge, orphan), []byte("unreferenced judge bytes"), 0600))
@@ -89,6 +98,10 @@ func TestCaptureLogicalBackupMatchesExportedSnapshot(t *testing.T) {
 		t.Fatalf("backup command failed: %s (%v)", receipt.String(), err)
 	}
 	sealed := assertCapturedBackup(t, output, receipt.Bytes(), lateHash, orphan)
+	captured, err := os.ReadFile(filepath.Join(output, "private", statement.SHA256))
+	if err != nil || !bytes.Equal(captured, display) {
+		t.Fatalf("successful backup did not contain the published statement: %v", err)
+	}
 	var live int
 	must(t, source.QueryRow(f.ctx, `SELECT count(*) FROM submission_materials`).Scan(&live))
 	if live != 2 {
@@ -108,6 +121,7 @@ func TestCaptureLogicalBackupMatchesExportedSnapshot(t *testing.T) {
 	if checked != sealed.References || checked.JudgeManifests != 1 || checked.Drafts != 1 || checked.ReferencePlans != 1 {
 		t.Fatal("restored archive did not match the sealed material inventory")
 	}
+	verifyBackupStatementFailures(t, source, target, judge, private, received, passfile, statement.SHA256, display)
 	var restoredLate int
 	must(t, target.QueryRow(f.ctx, `SELECT count(*) FROM submission_materials WHERE version_id=$1`, lateVersion).Scan(&restoredLate))
 	if restoredLate != 0 {
@@ -141,6 +155,73 @@ func TestCaptureLogicalBackupMatchesExportedSnapshot(t *testing.T) {
 			t.Fatal("invalid passfile created a backup directory")
 		}
 	}
+}
+
+// Use a historical approval fixture; this test exercises backup without
+// relaxing the real publication or approval gates.
+func seedBackupPublication(t *testing.T, f reviewFixture, e problemreference.ReviewEvidence) materialstore.Object {
+	t.Helper()
+	_, err := f.access.SetPublisherRole(f.ctx, publisherChange(f.actor.SubjectID, 0, true))
+	must(t, err)
+	seedPublicationApproval(t, f, e, currentPublicationSnapshot(t, f, e), problemreference.ReviewPolicyVersion)
+	draft, err := f.repository.GetOwn(f.ctx, f.actor, e.DraftID)
+	must(t, err)
+	bound, err := draft.MaterialInventoryIdentity()
+	must(t, err)
+	var plan problem.ReferencePlan
+	must(t, json.Unmarshal(f.want.Encoding, &plan))
+	prepared, err := draft.PlanPublicationMaterials(identityID(5511), e.DraftID, f.actor.SubjectID, bound, plan, e.FormalPlanSHA256)
+	must(t, err)
+	sealed, err := prepared.Seal(f.ctx, f.materials)
+	must(t, err)
+	display, err := problem.ReadSealedPublicationStatement(f.ctx, f.materials, sealed)
+	must(t, err)
+	var executionSHA string
+	must(t, f.a.QueryRow(f.ctx, `SELECT manifest_sha256 FROM submission_materials WHERE version_id=$1`, experiment.Version).Scan(&executionSHA))
+	_, err = f.a.Exec(f.ctx, `INSERT INTO problem_execution_admissions
+		(import_revision, formal_plan_sha256, execution_version, execution_sha256) VALUES ($1,$2,$3,$4)`,
+		bound.ImportRevision, e.FormalPlanSHA256, experiment.Version, executionSHA)
+	must(t, err)
+	_, err = f.a.Exec(f.ctx, `INSERT INTO problem_publications
+		(problem_id,revision,version,title,statement_sha256,statement_size,import_revision,formal_plan_sha256,
+		execution_version,execution_sha256,review_id,assignment_revision,publisher_id,publisher_revision,request_key)
+		VALUES ($1,1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,1,'backup-publication')
+	`, sealed.ProblemID, sealed.Version, display.Title, sealed.Statement.SHA256, sealed.Statement.Size,
+		bound.ImportRevision, e.FormalPlanSHA256, experiment.Version, executionSHA, e.ReviewID, e.AssignmentRevision, f.actor.SubjectID)
+	must(t, err)
+	return sealed.Statement
+}
+
+func verifyBackupStatementFailures(t *testing.T, source, target *pgxpool.Pool, judge, private, received, passfile, digest string, display []byte) {
+	t.Helper()
+	bad := bytes.Clone(display)
+	bad[0] ^= 1 // Keep the length correct so only the digest catches corruption.
+	src := filepath.Join(private, digest)
+	dst := filepath.Join(received, "private", digest)
+	for _, state := range []string{"missing", "corrupt"} {
+		if state == "missing" {
+			must(t, os.Remove(src))
+			must(t, os.Remove(dst))
+		} else {
+			must(t, os.WriteFile(src, bad, 0600))
+			must(t, os.WriteFile(dst, bad, 0600))
+		}
+		out := filepath.Join(t.TempDir(), state)
+		got, err := captureBackupCLI(t, t.Context(), source, judge, private, out, os.Getenv("PATH"), passfile).CombinedOutput()
+		if err == nil || !strings.Contains(string(got), "published statement:") {
+			t.Fatalf("%s statement did not fail capture: %s (%v)", state, got, err)
+		}
+		if _, err := os.Stat(filepath.Join(out, "manifest.json")); !os.IsNotExist(err) {
+			t.Fatalf("%s statement left a completion manifest", state)
+		}
+		_, err = restorecheck.VerifyMaterials(t.Context(), target, target.Config().ConnConfig.Database,
+			filepath.Join(received, "judge"), filepath.Join(received, "private"))
+		if err == nil || !strings.Contains(err.Error(), "published statement:") {
+			t.Fatalf("%s statement did not fail restore verification: %v", state, err)
+		}
+	}
+	must(t, os.WriteFile(src, display, 0600))
+	must(t, os.WriteFile(dst, display, 0600))
 }
 
 func verifyReceivedBackup(t *testing.T, ctx context.Context, received, trustedDigest string, manifest backup.Manifest) {

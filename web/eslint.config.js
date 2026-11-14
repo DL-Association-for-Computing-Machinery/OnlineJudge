@@ -21,6 +21,15 @@ export default [
     },
   },
   {
+    files: ['src/services/catalog.ts', 'src/services/training*.ts', 'src/training/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: [{
+        regex: '(^|/)privateDraft(?:\\.[cm]?[jt]sx?)?$',
+        message: 'Use transport/json for HTTP and statement/payload for the statement contract.',
+      }] }],
+    },
+  },
+  {
     files: ['src/**/*.{ts,tsx}'],
     plugins: { 'react-hooks': reactHooks, 'react-refresh': reactRefresh },
     rules: {
