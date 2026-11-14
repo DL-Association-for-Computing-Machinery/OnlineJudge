@@ -1,0 +1,90 @@
+worker_processes 1;
+pid /tmp/nginx.pid;
+error_log /dev/stderr crit;
+
+events {
+    worker_connections 512;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    access_log off;
+    client_body_temp_path /tmp/client_temp;
+    proxy_temp_path /tmp/proxy_temp;
+    fastcgi_temp_path /tmp/fastcgi_temp;
+    uwsgi_temp_path /tmp/uwsgi_temp;
+    scgi_temp_path /tmp/scgi_temp;
+
+    map "$trial_paused:$request_method" $trial_reject_write {
+        default 0;
+        ~^1:(?!GET$|HEAD$) 1;
+    }
+
+    server {
+        # Bind the public HTTPS port to this listener. Change the example name
+        # in server_name, the Host guard, and both upstream Host headers together.
+        listen 8443 ssl default_server;
+        server_name oj.example.invalid;
+        ssl_certificate /run/oj-edge/public-chain.pem;
+        ssl_certificate_key /run/oj-edge/public-key.pem;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        root /srv/oj/site;
+        index index.html;
+
+        if ($http_host != "oj.example.invalid") {
+            return 421;
+        }
+
+        location = /api {
+            return 404;
+        }
+
+        location ^~ /api/ {
+            set $trial_paused 0;
+            if (-f /run/oj-maintenance/paused) {
+                set $trial_paused 1;
+            }
+            error_page 503 = @trial_maintenance;
+            if ($trial_reject_write) {
+                return 503;
+            }
+
+            # The API must share this loopback namespace and listen only on it.
+            proxy_pass https://127.0.0.1:9443;
+            proxy_ssl_server_name on;
+            proxy_ssl_name oj-api.internal;
+            proxy_ssl_protocols TLSv1.2 TLSv1.3;
+            proxy_ssl_verify on;
+            proxy_ssl_verify_depth 2;
+            proxy_ssl_trusted_certificate /run/oj-edge/api-ca.pem;
+            proxy_ssl_certificate /run/oj-edge/proxy-chain.pem;
+            proxy_ssl_certificate_key /run/oj-edge/proxy-key.pem;
+            proxy_connect_timeout 3s;
+            proxy_read_timeout 20s;
+
+            proxy_set_header Host oj.example.invalid;
+            proxy_set_header X-Forwarded-Host oj.example.invalid;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_set_header X-Forwarded-For $remote_addr;
+            proxy_set_header Forwarded "";
+            proxy_set_header X-Real-IP "";
+        }
+
+        location @trial_maintenance {
+            default_type application/json;
+            add_header Cache-Control "no-store" always;
+            return 503 '{"code":"TRIAL_MAINTENANCE"}';
+        }
+
+        location ^~ /assets/ {
+            add_header Cache-Control "public, max-age=31536000, immutable";
+            try_files $uri =404;
+        }
+
+        location / {
+            add_header Cache-Control "no-cache" always;
+            try_files $uri $uri/ /index.html;
+        }
+    }
+}

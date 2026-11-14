@@ -20,6 +20,9 @@ var migrations embed.FS
 // MigrationLockID is shared by every independent migration process.
 const MigrationLockID int64 = 2026102501
 
+// RuntimeSchemaVersion is the exact version this release expects.
+const RuntimeSchemaVersion int64 = 28
+
 // Provider creates a Goose provider with a bounded PostgreSQL advisory lock.
 // The caller owns and closes conn after migrations finish.
 func Provider(conn *sql.DB) (*goose.Provider, error) {
@@ -42,7 +45,7 @@ func CheckSchema(ctx context.Context, connection interface {
 	if err := connection.QueryRow(ctx, `SELECT version_id FROM goose_db_version ORDER BY id DESC LIMIT 1`).Scan(&version); err != nil {
 		return errors.New("database schema unavailable; run the independent migration step")
 	}
-	if version != 28 {
+	if version != RuntimeSchemaVersion {
 		return errors.New("incompatible database schema")
 	}
 	return nil

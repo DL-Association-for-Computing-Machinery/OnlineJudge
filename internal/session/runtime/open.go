@@ -205,6 +205,13 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 		}
 		return nil
 	})
+	result.probe = &readinessProbe{check: func(ctx context.Context) bool {
+		if db.CheckSchema(ctx, pool) != nil {
+			return false
+		}
+		state, err := authority.RecoveryState(ctx)
+		return err == nil && state.Enabled && identity.ValidRecoveryID(state.Generation) && client.Ping(ctx).Err() == nil
+	}}
 	keep = true
 	return result, nil
 }

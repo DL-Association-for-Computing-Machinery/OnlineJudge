@@ -55,10 +55,16 @@ func NewLimitedLogin(login *redisstore.Login, config Config, change ...*redissto
 }
 
 func (h *handler) serveLogin(w http.ResponseWriter, r *http.Request, source netip.Addr) {
+	started := time.Now()
+	fail := func(stage string, err error) {
+		if loginError(w, err) == http.StatusServiceUnavailable {
+			recordLoginFailure(h.config.Logger, loginOperation(r.URL.Path), stage, time.Since(started), err)
+		}
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), h.config.Timeout)
 	defer cancel()
 	if err := ctx.Err(); err != nil {
-		loginError(w, err)
+		fail("request", err)
 		return
 	}
 	raw, present, err := cookieValue(r, AttemptCookieName)
@@ -82,7 +88,7 @@ func (h *handler) serveLogin(w http.ResponseWriter, r *http.Request, source neti
 			problem(w, 409, "LOGIN_PENDING", "请先确认或放弃当前登录尝试")
 			return
 		}
-		h.beginLogin(w, r, ctx, source)
+		h.beginLogin(w, r, ctx, source, fail)
 		return
 	}
 	if !present {
@@ -94,7 +100,7 @@ func (h *handler) serveLogin(w http.ResponseWriter, r *http.Request, source neti
 		loginError(w, err)
 		return
 	}
-	if !h.admitLogin(w, r, ctx, identity.Email{}, true, source) {
+	if !h.admitLogin(r, ctx, identity.Email{}, true, source, fail) {
 		return
 	}
 	if r.URL.Path == "/api/v1/session/login/abandon" {
@@ -103,14 +109,14 @@ func (h *handler) serveLogin(w http.ResponseWriter, r *http.Request, source neti
 			err = ctx.Err()
 		}
 		if err != nil {
-			loginError(w, err)
+			fail("abandon", err)
 			return
 		}
 		http.SetCookie(w, clearAttemptCookie())
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	if !h.canLogin(w, r, ctx) {
+	if !h.canLogin(w, r, ctx, fail) {
 		return
 	}
 	credential, err := h.login.Complete(ctx, c)
@@ -118,7 +124,7 @@ func (h *handler) serveLogin(w http.ResponseWriter, r *http.Request, source neti
 		err = ctx.Err()
 	}
 	if err != nil {
-		loginError(w, err)
+		fail("complete", err)
 		return
 	}
 	// Both headers occur only after Retry and a separate successful Check.
@@ -127,7 +133,7 @@ func (h *handler) serveLogin(w http.ResponseWriter, r *http.Request, source neti
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *handler) canLogin(w http.ResponseWriter, r *http.Request, ctx context.Context) bool {
+func (h *handler) canLogin(w http.ResponseWriter, r *http.Request, ctx context.Context, fail func(string, error)) bool {
 	raw, present, err := cookieValue(r, CookieName)
 	if err != nil {
 		loginError(w, err)
@@ -149,20 +155,20 @@ func (h *handler) canLogin(w http.ResponseWriter, r *http.Request, ctx context.C
 	if sessionDenied(err) {
 		return true
 	}
-	loginError(w, err)
+	fail("session_check", err)
 	return false
 }
 
-func (h *handler) beginLogin(w http.ResponseWriter, r *http.Request, ctx context.Context, source netip.Addr) {
+func (h *handler) beginLogin(w http.ResponseWriter, r *http.Request, ctx context.Context, source netip.Addr, fail func(string, error)) {
 	email, secret, err := loginBody(w, r)
 	if err != nil {
 		return
 	}
 	defer clear(secret)
-	if !h.admitLogin(w, r, ctx, email, false, source) {
+	if !h.admitLogin(r, ctx, email, false, source, fail) {
 		return
 	}
-	if !h.canLogin(w, r, ctx) {
+	if !h.canLogin(w, r, ctx, fail) {
 		return
 	}
 	c, err := h.login.Prepare(ctx, email, secret)
@@ -170,7 +176,7 @@ func (h *handler) beginLogin(w http.ResponseWriter, r *http.Request, ctx context
 		err = ctx.Err()
 	}
 	if err != nil {
-		loginError(w, err)
+		fail("prepare", err)
 		return
 	}
 	// Cookie lifetime is the original remaining window, never a new full window.
@@ -190,7 +196,7 @@ func clearAttemptCookie() *http.Cookie {
 		MaxAge: -1, Expires: time.Unix(1, 0).UTC()}
 }
 
-func loginError(w http.ResponseWriter, err error) {
+func loginError(w http.ResponseWriter, err error) int {
 	// Unknown writes/commit outcomes must win over joined deterministic causes.
 	unknown := errors.Is(err, redisstore.ErrStore) || errors.Is(err, identity.ErrStore) || errors.Is(err, identity.ErrRecovering) ||
 		errors.Is(err, redisstore.ErrUnknown) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
@@ -212,4 +218,5 @@ func loginError(w http.ResponseWriter, err error) {
 		}
 	}
 	problem(w, status, code, title)
+	return status
 }

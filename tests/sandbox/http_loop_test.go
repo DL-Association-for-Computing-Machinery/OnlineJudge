@@ -93,6 +93,13 @@ func testHTTPJudgeLoop(t *testing.T, version string) {
 		{key: "http-loop-ac-key-0001", verdict: "AC", source: "#include <cstdio>\nint main(){int a,b;scanf(\"%d%d\",&a,&b);printf(\"%d\",a+b);}"},
 		{key: "http-loop-wa-key-0002", verdict: "WA", source: "#include <cstdio>\nint main(){puts(\"wrong\");}"},
 	}
+	var storage *httpLoopStorage
+	if version == experiment.PinnedVersion {
+		storage = newHTTPLoopStorage(t)
+		// Keep one ordinary run in flight long enough to observe its cached
+		// executable without raising any runtime limit.
+		cases[0].source = "#include <cstdio>\n#include <unistd.h>\nint main(){int a,b;scanf(\"%d%d\",&a,&b);usleep(800000);printf(\"%d\",a+b);}"
+	}
 	for i := range cases {
 		if !submission.ValidKey(cases[i].key) {
 			t.Fatal("controlled idempotency key invalid")
@@ -200,6 +207,9 @@ func testHTTPJudgeLoop(t *testing.T, version string) {
 	}
 	start := time.Now()
 	w := startDualProcess(t, "worker", workerEnv)
+	if storage != nil {
+		storage.observeLive(t, ctx, w)
+	}
 	awaitTerminal := func(tc judgeCase) {
 		t.Helper()
 		finished := false
@@ -257,6 +267,9 @@ func testHTTPJudgeLoop(t *testing.T, version string) {
 	t.Logf("same refused key/body accepted after both original submissions finished; worker start to acceptance=%s", time.Since(start).Round(time.Millisecond))
 	awaitTerminal(recovery)
 	counts(3, 3, 3)
+	if storage != nil {
+		storage.observeClean(t)
+	}
 	lifetime(t, w)
 	for _, api := range apis {
 		api.process.stop(t)

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"time"
@@ -30,6 +31,8 @@ type Store interface {
 type Config struct {
 	Origin  string
 	Timeout time.Duration
+	// Logger receives only fixed login failure categories and elapsed time.
+	Logger *slog.Logger
 }
 
 type handler struct {
