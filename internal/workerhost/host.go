@@ -140,7 +140,7 @@ func (h *Host) Verify(ctx context.Context, p experiment.ExecutionProfile) error 
 		return err
 	}
 	textRuntime := h.fixture.UsesCachedText() || h.tier == experiment.ReferenceSmall || h.tier == experiment.ReferenceAPlusBUbuntu
-	supported := reflect.DeepEqual(p, want) || textRuntime && reflect.DeepEqual(p, experiment.C17Profile(want))
+	supported := reflect.DeepEqual(p, want) || textRuntime && experiment.MatchesPublishedTextProfile(want, p)
 	if !supported {
 		return errors.New("unsupported host profile")
 	}

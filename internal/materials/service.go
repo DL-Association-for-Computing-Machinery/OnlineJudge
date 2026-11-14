@@ -124,11 +124,11 @@ func manifestLanguageAllowed(value submission.TaskMaterials, referenceLanguage s
 	if value.Language == referenceLanguage {
 		return true
 	}
-	if value.Language != submission.LanguageC17 || referenceLanguage != submission.LanguageGNUCPP17 {
+	if !submission.SupportedLanguage(value.Language) || referenceLanguage != submission.LanguageGNUCPP17 {
 		return false
 	}
 	// The language in a text transport manifest describes its admitted reference
-	// runtime. A contestant using C17 still uses the exact same frozen tests.
+	// runtime. Alternate contestant languages use the same frozen tests.
 	if _, err := ParseAPlusB(value.Manifest, value.ManifestSHA256); err == nil {
 		return true
 	}

@@ -156,6 +156,9 @@ func runSlot(ctx context.Context, c config, logger *slog.Logger, lock *slotLock,
 		if err := factory().Verify(startup, experiment.C17Profile(c.fixture.Profile())); err != nil {
 			return errors.Join(errors.New("C17 sandbox protocol preflight failed; no task claimed"), err)
 		}
+		if err := factory().Verify(startup, experiment.GNUCPP20Profile(c.fixture.Profile())); err != nil {
+			return errors.Join(errors.New("GNU++20 sandbox protocol preflight failed; no task claimed"), err)
+		}
 		runner, err = execution.NewLeasedCachedText(factory, renewer.Renew, stop, c.fixture)
 		if err != nil {
 			return err

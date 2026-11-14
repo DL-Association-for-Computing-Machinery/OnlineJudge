@@ -4,7 +4,7 @@ import { useCurrentAccount } from '../account/context'
 import { useCodeDraftSession } from '../preview/useCodeDraftSession'
 import { subscribePrivateInvalidation } from '../account/privateInvalidation'
 import { recoverTraining, submitTraining, TrainingIntakeError, type TrainingAttempt } from '../services/trainingIntake'
-import type { SubmissionSummary, TrainingLanguage } from '../services/trainingHistory'
+import { isTrainingLanguage, trainingLanguageLabel, type SubmissionSummary, type TrainingLanguage } from '../services/trainingHistory'
 import { clearTrainingKey, readTrainingKey, reserveTrainingKey, trainingReceiptSlot } from './receiptJournal'
 import { readTrainingSource, validTrainingSource } from './sourceFile'
 import { TrainingDraftControls } from './TrainingDraftControls'
@@ -199,9 +199,11 @@ function TrainingForm({ subject, problemID, version, accountBusy, language, setL
     <form onSubmit={submit}>
       <label htmlFor="training-language">语言</label>
       <select id="training-language" value={language} disabled={!journalReady || Boolean(key) || busy || fileBusy || accountBusy}
-        onChange={event => setLanguage(event.target.value === 'c17' ? 'c17' : 'gnu++17')}>
-        <option value="gnu++17">GNU++17</option>
-        <option value="c17">C17</option>
+        onChange={event => {
+          const value = event.target.value
+          if (isTrainingLanguage(value)) setLanguage(value)
+        }}>
+        {Object.entries(trainingLanguageLabel).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
       </select>
       <p>源码最多 64 KiB</p>
       <label htmlFor="training-source">源码</label>

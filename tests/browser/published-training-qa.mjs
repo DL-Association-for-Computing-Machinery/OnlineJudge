@@ -10,12 +10,16 @@ const browser = await chromium.launch({ executablePath: process.env.OJ_CHROMIUM_
 const collection = ready.url + '/api/v1/training/submissions'
 const recovery = ready.url + '/api/v1/training/receipt'
 const language = process.env.OJ_BROWSER_TRAINING_LANGUAGE ?? 'gnu++17'
-assert(['c17', 'gnu++17'].includes(language))
+assert(['c17', 'gnu++17', 'gnu++20'].includes(language))
 const c17 = language === 'c17'
+const gnu20 = language === 'gnu++20'
+const nonDefault = language !== 'gnu++17'
 const extension = c17 ? 'c' : 'cpp'
-const label = c17 ? 'C17' : 'GNU++17'
+const label = c17 ? 'C17' : gnu20 ? 'GNU++20' : 'GNU++17'
 const cSource = "#include <stdio.h>\nint main(void){long long a,b;return scanf(\"%lld%lld\",&a,&b)==2 ? (printf(\"%lld\\n\",a+b),0):1;}\n"
-const source = c17 ? cSource : "#include <iostream>\nint main(){long long a,b;std::cin>>a>>b;std::cout<<a+b<<'\\n';}\n"
+const cppSource = "#include <iostream>\nint main(){long long a,b;std::cin>>a>>b;std::cout<<a+b<<'\\n';}\n"
+const cpp20Source = "#include <concepts>\n#include <iostream>\ntemplate<std::integral T> T sum(T a, T b) { return a+b; }\nint main(){long long a,b;std::cin>>a>>b;std::cout<<sum(a,b)<<'\\n';}\n"
+const source = c17 ? cSource : gnu20 ? cpp20Source : cppSource
 const output = process.env.OJ_BROWSER_QA_OUTPUT
 
 async function signIn(context, email) {
@@ -37,7 +41,7 @@ try {
   await page.goto(ready.url + '/problems')
   await page.getByRole('link', { name: 'A + B', exact: true }).click()
   await page.getByRole('heading', { name: 'A + B', exact: true }).waitFor()
-  if (c17) await page.getByLabel('语言', { exact: true }).selectOption(language)
+  if (nonDefault) await page.getByLabel('语言', { exact: true }).selectOption(language)
   const editor = page.getByLabel('源码', { exact: true })
   await page.locator('#training-source:not([readonly])').waitFor()
   const picker = page.getByLabel('选择源码文件', { exact: true })
@@ -66,7 +70,7 @@ try {
   await page.getByRole('button', { name: '清除本地回执', exact: true }).click()
   await page.getByRole('button', { name: '确认清除回执', exact: true }).click()
   await page.getByText(/已清除此标签页的原回执/).waitFor()
-  if (c17) {
+  if (nonDefault) {
     assert.equal(await editor.inputValue(), '')
     await page.getByLabel('语言', { exact: true }).selectOption(language)
     await page.locator('#training-source:not([readonly])').waitFor()
@@ -99,7 +103,7 @@ try {
   page.on('request', r => { if (r.method() === 'POST' && r.url() === collection) additionalPosts++ })
   await page.reload()
   await page.getByText('有一笔提交尚未确认。请查询原回执。', { exact: true }).waitFor()
-  if (!c17) {
+  if (!nonDefault) {
     await page.getByText('训练草稿已保存到此浏览器。', { exact: true }).waitFor()
     assert.equal(await editor.inputValue(), source)
   }
@@ -116,6 +120,13 @@ try {
   const replay = await owner.request.post(collection, { headers, data: intent })
   assert.equal(replay.status(), 200)
   assert.equal((await replay.json()).id, accepted.id)
+  if (!nonDefault) {
+    const legacy = await owner.request.post(collection, { headers, data: {
+      problem_id: intent.problem_id, publication_version: intent.publication_version, source: intent.source,
+    } })
+    assert.equal(legacy.status(), 200)
+    assert.equal((await legacy.json()).id, accepted.id)
+  }
   assert.equal((await owner.request.post(collection, { headers, data: { ...intent, source: source + '\n' } })).status(), 409)
   assert.equal((await owner.request.post(collection, { headers, data: { ...intent, language: c17 ? 'gnu++17' : 'c17' } })).status(), 409)
   for (const invalid of ['c++20', '', null])
@@ -140,25 +151,27 @@ try {
   assert(await observer.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
   await observer.screenshot({ path: join(output, 'other-account.png'), fullPage: true })
   const verdicts = [{ id: accepted.id, verdict: 'AC' }]
-  if (c17) {
+  if (c17 || gnu20) {
     const detailURL = page.url()
-    for (const [verdict, code] of [['WA', cSource.replace('a+b', 'a+b+1')], ['CE', 'int main(void) { return ; }']]) {
+    const cases = [['WA', source.replace('a+b', 'a+b+1')], ['CE', 'int main(void) { return ; }', language]]
+    if (gnu20) cases.push(['CE', source, 'gnu++17'])
+    for (const [verdict, code, compiler = language] of cases) {
       await page.goto(ready.url + '/problems')
       await page.getByRole('link', { name: 'A + B', exact: true }).click()
-      await page.getByLabel('语言', { exact: true }).selectOption(language)
+      await page.getByLabel('语言', { exact: true }).selectOption(compiler)
       await page.locator('#training-source:not([readonly])').waitFor()
       await editor.fill(code)
       const [post] = await Promise.all([page.waitForResponse(r => r.url() === collection),
         page.getByRole('button', { name: '提交判题', exact: true }).click()])
       assert.equal(post.status(), 200)
       const receipt = await post.json()
-      assert.equal(receipt.language, language)
+      assert.equal(receipt.language, compiler)
       await page.getByRole('link', { name: '查看本次提交', exact: true }).click()
       await page.getByRole('button', { name: '读取本次提交', exact: true }).click()
       const row = page.getByRole('listitem').filter({ hasText: receipt.id })
       await row.getByText('已判定 · ' + verdict, { exact: true }).waitFor({ timeout: 60_000 })
       assert.equal(await page.getByLabel('提交时的源码').textContent(), code)
-      verdicts.push({ id: receipt.id, verdict })
+      verdicts.push({ id: receipt.id, verdict, language: compiler })
     }
     assert.notEqual(page.url(), detailURL)
   }

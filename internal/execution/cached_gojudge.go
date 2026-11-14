@@ -26,7 +26,7 @@ type CachedGoJudge struct {
 	limits                     experiment.ReferenceFilesProfile
 	runtime                    experiment.ExecutionProfile
 	reference                  bool
-	c17                        bool
+	publishedText              bool
 	busy                       atomic.Bool
 	verified, compiled, failed bool
 	executable                 string
@@ -71,7 +71,7 @@ func NewAPlusBCacheFactory(transport http.RoundTripper, verify func(context.Cont
 	if tier == experiment.ReferenceSmall {
 		return func() *CachedGoJudge {
 			g := NewReferenceGoJudge(transport, verify, files)
-			g.c17 = true
+			g.publishedText = true
 			return g
 		}
 	}
@@ -81,7 +81,7 @@ func NewAPlusBCacheFactory(transport http.RoundTripper, verify func(context.Cont
 	return func() *CachedGoJudge {
 		// The tier has been admitted by the fixed fixture parser.
 		g, _ := NewReferenceGoJudgeForTier(transport, verify, files, tier)
-		g.c17 = true
+		g.publishedText = true
 		return g
 	}
 }
@@ -103,7 +103,7 @@ func (g *CachedGoJudge) Verify(ctx context.Context, p experiment.ExecutionProfil
 		return tagFailure(err, "verify", "environment", "")
 	}
 	defer func() { err = g.finish(ctx, err) }()
-	supported := reflect.DeepEqual(p, g.runtime) || g.c17 && reflect.DeepEqual(p, experiment.C17Profile(g.runtime))
+	supported := reflect.DeepEqual(p, g.runtime) || g.publishedText && experiment.MatchesPublishedTextProfile(g.runtime, p)
 	if g.verified || g.files == nil || !supported {
 		return failureError("verify", "environment", "invalid_evidence", "unsupported cached sandbox profile")
 	}

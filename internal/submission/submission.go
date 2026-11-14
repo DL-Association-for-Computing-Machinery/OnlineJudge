@@ -16,11 +16,12 @@ import (
 const (
 	LanguageGNUCPP17 = "gnu++17"
 	LanguageC17      = "c17"
+	LanguageGNUCPP20 = "gnu++20"
 )
 
 // SupportedLanguage identifies the accepted single-file language keys.
 func SupportedLanguage(language string) bool {
-	return language == LanguageGNUCPP17 || language == LanguageC17
+	return language == LanguageGNUCPP17 || language == LanguageC17 || language == LanguageGNUCPP20
 }
 
 // MaxSourceBytes bounds single-file source before persistence.
