@@ -7,6 +7,10 @@ assert.match(info.url, /^https:\/\/127\.0\.0\.1:\d+$/)
 const { chromium } = await import(pathToFileURL(process.env.OJ_PLAYWRIGHT_MODULE))
 const browser = await chromium.launch({ executablePath: process.env.OJ_CHROMIUM_EXECUTABLE })
 const collection = info.url + '/api/v1/training/submissions'
+const language = process.env.OJ_BROWSER_TRAINING_LANGUAGE ?? 'c17'
+assert(['c17', 'gnu++20'].includes(language))
+const label = language === 'c17' ? 'C17' : 'GNU++20'
+const cpp20Guard = '#if __cplusplus < 202002L\n#error GNU++20 required\n#endif\n'
 const correct = '#include <stdio.h>\nint main(void){long long a,b;if(scanf("%lld%lld",&a,&b)!=2)return 1;printf("%lld\\n",a+b);}'
 // CPU cost per point keeps both leases observable without changing sandbox limits.
 const cost = 'for(volatile unsigned i=0;i<9000000u;++i){}'
@@ -21,6 +25,12 @@ const sources = {
   ],
   fault: [[recoverySource, 'AC']],
 }
+function sourceForLanguage(source, verdict) {
+  if (language === 'c17') return source
+  // C++ requires an explicit conversion from malloc's void pointer.
+  const code = verdict === 'MLE' ? source.replace('p=malloc(n)', 'p=static_cast<unsigned char *>(malloc(n))') : source
+  return cpp20Guard + code
+}
 const phase = process.env.OJ_C17_PHASE
 const output = process.env.OJ_BROWSER_QA_OUTPUT
 assert(Object.hasOwn(sources, phase) || phase === 'read')
@@ -31,7 +41,7 @@ async function readResult(context, id, expected, code) {
     await page.goto(info.url + '/submissions?submission=' + id)
     await page.getByRole('button', { name: '读取本次提交', exact: true }).click()
     await page.getByText('已判定 · ' + expected, { exact: true }).waitFor({ timeout: 85_000 })
-    await page.getByText('C17', { exact: true }).waitFor()
+    await page.getByText(label, { exact: true }).waitFor()
     assert.equal(await page.getByLabel('提交时的源码').textContent(), code)
   } finally {
     await page.close()
@@ -55,10 +65,11 @@ try {
     }
   } else {
     const rows = []
-    for (const [source, verdict] of sources[phase]) {
+    for (const [fixture, verdict] of sources[phase]) {
+      const source = sourceForLanguage(fixture, verdict)
       await page.goto(info.url + '/problems')
       await page.getByRole('link', { name: 'A + B', exact: true }).click()
-      await page.getByLabel('语言', { exact: true }).selectOption('c17')
+      await page.getByLabel('语言', { exact: true }).selectOption(language)
       await page.locator('#training-source:not([readonly])').waitFor()
       await page.getByLabel('源码', { exact: true }).fill(source)
       const [response] = await Promise.all([page.waitForResponse(r => r.url() === collection),
@@ -66,7 +77,7 @@ try {
       assert.equal(response.status(), 200)
       const receipt = await response.json()
       assert.equal(receipt.state, 'queued')
-      assert.equal(receipt.language, 'c17')
+      assert.equal(receipt.language, language)
       rows.push({ id: receipt.id, verdict, source })
     }
     await writeFile(output, JSON.stringify(rows) + '\n', { mode: 0o600, flag: 'wx' })
@@ -77,7 +88,7 @@ try {
   await page.goto(info.url + '/account')
   await page.getByRole('button', { name: '退出当前会话', exact: true }).click()
   await page.getByText('已退出当前会话。', { exact: true }).waitFor()
-  console.log('PASS local C17 browser phase: ' + phase)
+  console.log('PASS local ' + label + ' browser phase: ' + phase)
 } finally {
   await browser.close()
 }

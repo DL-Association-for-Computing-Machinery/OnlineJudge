@@ -155,7 +155,7 @@ OJ_BROWSER_QA_INFO="$FIXTURE_READY_JSON" OJ_BROWSER_QA_OUTPUT="$QA_DIRECTORY" \
 
 在同一夹具中设置 `OJ_BROWSER_TRAINING_LANGUAGE=c17` 或 `OJ_BROWSER_TRAINING_LANGUAGE=gnu++20`，验证对应的源码上传、AC、WA、编译错误和本人回读；省略变量回归 GNU++17。须先排空并停止旧 API、Worker 及维护写入，迁移到 schema 31，再用同一修订启动。旧 Worker 不能处理新版语言任务。证据和回退说明见 [P7 C17](docs/delivery-evidence/p7-c17.md) 与 [P7 GNU++20](docs/delivery-evidence/p7-gnu-cpp20.md)。
 
-双 Worker 仅用于本机专用 Ubuntu VM。按原 `oj-aplusb-ubuntu-sandbox` 的固定配置另建停止的 `oj-aplusb-ubuntu-sandbox-secondary`，保持断网、只读、无挂载、固定镜像和每槽配额。给两节点分别发放证书；两终端沿用同一材料、控制端及启动参数，分别多设 `OJ_UBUNTU_TEXT_DUAL_SLOT=primary` 和 `secondary`。默认仍为原独占槽；不要与 M0 双槽或参考验题混跑。使用 `tests/browser/c17-resilience-qa.mjs` 和上文环境变量，`OJ_C17_PHASE=limits|overlap|fault|read` 选择提交超限、并发、待接管或按保存的 JSON 本人回读；`OJ_BROWSER_QA_OUTPUT` 为该 JSON 路径。
+双 Worker 仅用于本机专用 Ubuntu VM。按原 `oj-aplusb-ubuntu-sandbox` 的固定配置另建停止的 `oj-aplusb-ubuntu-sandbox-secondary`，保持断网、只读、无挂载、固定镜像和每槽配额。给两节点分别发放证书；两终端沿用同一材料、控制端及启动参数，分别多设 `OJ_UBUNTU_TEXT_DUAL_SLOT=primary` 和 `secondary`。默认仍为原独占槽；不要与 M0 双槽或参考验题混跑。使用 `tests/browser/c17-resilience-qa.mjs` 和上文环境变量，`OJ_C17_PHASE=limits|overlap|fault|read` 选择提交超限、并发、待接管或按保存的 JSON 本人回读；`OJ_BROWSER_QA_OUTPUT` 为该 JSON 路径。 此专项默认 C17，可设置 `OJ_BROWSER_TRAINING_LANGUAGE=gnu++20` 复用相同流程。
 
 正常退出用原排空流程。若进程意外退出并留隔离标记，先排空另一个 Worker，确认旧宿主控制操作全部结束，再用该槽的 `OJ_UBUNTU_TEXT_DUAL_SLOT` 和历史完整容器 ID 执行 `worker recover-aplusb-ubuntu`。恢复命令独占本机执行锁；原容器 ID 或停止状态无法确认时保留隔离。
 
