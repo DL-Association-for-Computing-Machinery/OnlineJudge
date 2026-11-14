@@ -111,7 +111,7 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 		return nil, ErrConfig
 	}
 	if c.PrivateDrafts != nil {
-		drafts, cleanup, err := openDrafts(startup, *c.PrivateDrafts, store, pool)
+		drafts, cleanup, err := openDrafts(startup, *c.PrivateDrafts, store, pool, secrets)
 		if err != nil {
 			return nil, err
 		}
@@ -142,6 +142,10 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 				statements = drafts.statements
 			}
 			handler, err = httptransport.WithReviewEvidence(handler, drafts.evidence, drafts.materials, returns, statements)
+			if err != nil {
+				return nil, ErrConfig
+			}
+			handler, err = httptransport.WithReviewDiscovery(handler, drafts.discovery)
 			if err != nil {
 				return nil, ErrConfig
 			}

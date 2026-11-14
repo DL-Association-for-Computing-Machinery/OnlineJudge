@@ -52,6 +52,7 @@ type handler struct {
 	reviewReturns          ReviewReturns
 	statementConfirmations StatementConfirmations
 	trainingHistory        TrainingHistory
+	reviewDiscovery        ReviewDiscoveryReader
 	trainingDetail         TrainingDetail
 	trainingStatus         TrainingStatus
 }
@@ -81,7 +82,7 @@ func (config Config) Validate() error {
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	if IsEmailConfirmationPath(r.URL.Path) || IsEmailRequestPath(r.URL.Path) {
+	if IsEmailConfirmationPath(r.URL.Path) || IsEmailRequestPath(r.URL.Path) || r.URL.Path == reviewDiscoveryPath {
 		w.Header().Set("Referrer-Policy", "no-referrer")
 	}
 	source, trusted := h.requestSource(r)
@@ -128,6 +129,12 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		method = http.MethodPost
 	case trainingHistoryPath:
 		if h.trainingHistory == nil {
+			problem(w, 404, "NOT_FOUND", "接口不存在")
+			return
+		}
+		method = http.MethodGet
+	case reviewDiscoveryPath:
+		if h.reviewDiscovery == nil {
 			problem(w, 404, "NOT_FOUND", "接口不存在")
 			return
 		}
@@ -240,6 +247,10 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if reviewID != "" {
 		h.serveReviewRead(w, r, reviewID, reviewRead)
+		return
+	}
+	if r.URL.Path == reviewDiscoveryPath {
+		h.serveReviewDiscovery(w, r)
 		return
 	}
 	if isDraft {

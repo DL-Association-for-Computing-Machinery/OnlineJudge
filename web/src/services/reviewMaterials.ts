@@ -86,11 +86,13 @@ export function decodeReviewMaterials(value: unknown, review: string): ReviewMat
 }
 
 export async function fetchReviewMaterials(review: string, owner: string, signal: AbortSignal): Promise<ReviewMaterials> {
-  return decodeReviewMaterials(await readReviewJSON(review, owner, 'materials', bodyLimit, signal), review)
+  if (!id(review)) throw invalid()
+  return decodeReviewMaterials(await readReviewJSON(`/api/v1/problem-review/${review}/materials`, owner, bodyLimit, signal), review)
 }
 
 export async function fetchReviewEligibility(evidence: ReviewMaterials['evidence'], owner: string, signal: AbortSignal): Promise<ReviewEligibility> {
-  const value = await readReviewJSON(evidence.review_id, owner, 'eligibility', 32 * 1024, signal)
+  if (!id(evidence.review_id)) throw invalid()
+  const value = await readReviewJSON(`/api/v1/problem-review/${evidence.review_id}/eligibility`, owner, 32 * 1024, signal)
   if (!object(value) || value.policy_version !== 'oj.review-approval.v14' || value.eligible !== false ||
     ('statement_semantics_confirmed' in value && value.statement_semantics_confirmed !== true)) throw invalid()
   const actual = decodeEvidence(value.evidence, evidence.review_id)
@@ -102,9 +104,34 @@ export async function fetchReviewEligibility(evidence: ReviewMaterials['evidence
   return { blockers, statementConfirmed: value.statement_semantics_confirmed === true }
 }
 
-async function readReviewJSON(review: string, owner: string, path: 'materials' | 'eligibility', limit: number, signal: AbortSignal): Promise<unknown> {
-  if (!id(review) || !id(owner) || globalThis.location.protocol !== 'https:') throw invalid()
-  const response = await fetch(`/api/v1/problem-review/${review}/${path}`, {
+export interface ReviewAssignmentPage {
+  assignments: { review_id: string; source_id: string; import_revision: string; assignment_revision: number }[]
+  next_cursor: string
+}
+
+const reviewCursor = /^[A-Za-z0-9_-]{91}$/
+
+export async function fetchReviewAssignments(owner: string, cursor: string, signal: AbortSignal): Promise<ReviewAssignmentPage> {
+  if (cursor !== '' && !reviewCursor.test(cursor)) throw invalid()
+  const path = '/api/v1/problem-review/assignments' + (cursor ? `?cursor=${cursor}` : '')
+  const data = await readReviewJSON(path, owner, 20480, signal)
+  if (!object(data) || Object.keys(data).length !== 2 || typeof data.next_cursor !== 'string' ||
+    (data.next_cursor !== '' && !reviewCursor.test(data.next_cursor)) ||
+    !Array.isArray(data.assignments) || data.assignments.length > 20) throw invalid()
+  let last = ''
+  for (const item of data.assignments) {
+    if (!object(item) || Object.keys(item).length !== 4 || !id(item.review_id) || item.review_id <= last ||
+      typeof item.source_id !== 'string' || !item.source_id || encoder.encode(item.source_id).byteLength > 128 ||
+      !digest(item.import_revision) || typeof item.assignment_revision !== 'number' ||
+      !Number.isSafeInteger(item.assignment_revision) || item.assignment_revision < 1) throw invalid()
+    last = item.review_id
+  }
+  return data as unknown as ReviewAssignmentPage
+}
+
+async function readReviewJSON(path: string, owner: string, limit: number, signal: AbortSignal): Promise<unknown> {
+  if (!id(owner) || globalThis.location.protocol !== 'https:') throw invalid()
+  const response = await fetch(path, {
     method: 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer',
     headers: { Accept: 'application/json', 'X-OJ-Expected-Subject': owner }, signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
   })

@@ -32,7 +32,7 @@ func TestDraftStartupFailureReleasesPreparedAndMaterialRoots(t *testing.T) {
 			}
 			// Nil PG fails repository assembly only AFTER both Prepared and Local
 			// have opened. The earlier case fails after the first candidate opened.
-			i, cleanup, err := openDrafts(t.Context(), c, nil, nil)
+			i, cleanup, err := openDrafts(t.Context(), c, nil, nil, nil)
 			if i != nil || cleanup != nil || !errors.Is(err, ErrStartup) {
 				t.Fatal("partial startup unexpectedly succeeded")
 			}

@@ -7,6 +7,7 @@ import { reviewBlockerLabels } from '../services/reviewMaterials'
 import { Sample } from '../statement/Sample'
 import { StatementMarkdown } from '../statement/StatementMarkdown'
 import { ReviewMaterialsController } from './materialsController'
+import { ReviewAssignments } from './ReviewAssignments'
 import { StatementConfirmation } from './StatementConfirmation'
 
 function AssignedMaterials({ id }: { id: string }) {
@@ -73,7 +74,8 @@ export default function ReviewMaterialsPage() {
   return <div className="page-width private-draft-page">
     <p className="breadcrumb"><Link to="/">题库</Link> / 审核材料</p>
     <h1>审核材料</h1>
-    <p>使用维护者提供的送审 ID 查看冻结题面、样例和标程。材料仅向当前指定的审核人开放。</p>
+    <p>选择分配给自己的审核项，或使用送审 ID 查看冻结材料。</p>
+    {id ? <p><Link to="/review/materials">返回我的审核分配</Link></p> : <ReviewAssignments />}
     <form className="private-draft-form" onSubmit={event => { event.preventDefault(); if (validDraftID(input)) void navigate(`/review/materials/${input}`) }}>
       <label>送审 ID<input value={input} onChange={event => setInput(event.target.value)} required pattern="[a-f0-9]{32}" maxLength={32} autoComplete="off" spellCheck={false} /></label>
       <button className="button button-outline" type="submit">选择送审项</button>

@@ -4,10 +4,52 @@ info:
   version: 0.2.0
   description: >-
     默认关闭的独立审核读取能力。使用普通 HTTPS 会话及当前审核资格；
-    每次只按明确分配读取一项的固定验证结论、对拍详情、批准阻断或审核材料。退回另需显式开启；不提供批准或发布。
+    可查询自己的当前分配，或读取一项明确分配的材料与验证证据。退回另需显式开启；不提供批准或发布。
 security:
   - ordinarySession: []
 paths:
+  /api/v1/problem-review/assignments:
+    parameters:
+      - $ref: './problem-draft-management.openapi.yaml#/components/parameters/ExpectedSubject'
+      - name: cursor
+        in: query
+        schema: { type: string, pattern: '^[A-Za-z0-9_-]{91}$' }
+    get:
+      operationId: listAssignedProblemReviews
+      description: >-
+        仅当前分配，排除本人草稿；每次检查普通会话与当前审核资格。每批最多核对 20 个候选，
+        有后续历史候选时可能返回空列表及游标。游标仅供当前会话继续读取，打开材料另行授权。
+        拒绝其余 query、请求体和转义路径别名。响应 no-store/nosniff，至多 20480 字节。
+      responses:
+        '200':
+          description: 当前审核人分配及不透明的下一页游标
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [assignments, next_cursor]
+                properties:
+                  next_cursor: { type: string, pattern: '^([A-Za-z0-9_-]{91})?$' }
+                  assignments:
+                    type: array
+                    maxItems: 20
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [review_id, source_id, import_revision, assignment_revision]
+                      properties:
+                        review_id: { $ref: '#/components/schemas/ID' }
+                        source_id: { type: string, minLength: 1, maxLength: 128 }
+                        import_revision: { $ref: '#/components/schemas/SHA256' }
+                        assignment_revision: { type: integer, minimum: 1 }
+        '400': { $ref: '#/components/responses/Failure' }
+        '401': { $ref: '#/components/responses/Failure' }
+        '403': { $ref: '#/components/responses/Failure' }
+        '404': { $ref: '#/components/responses/Failure' }
+        '405': { $ref: '#/components/responses/Failure' }
+        '409': { $ref: '#/components/responses/Failure' }
+        '503': { $ref: '#/components/responses/Failure' }
   /api/v1/problem-review/{review_id}/evidence:
     parameters:
       - $ref: './problem-draft-management.openapi.yaml#/components/parameters/ExpectedSubject'
