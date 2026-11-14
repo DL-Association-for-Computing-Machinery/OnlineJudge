@@ -79,6 +79,34 @@ func TestAPlusBUbuntuHandoffRequiresGuestReport(t *testing.T) {
 	}
 }
 
+func TestAPlusBTrialCandidateHandoffCannotBecomeAReportReceipt(t *testing.T) {
+	target := APlusBHandoffTarget{"fixture-trial", strings.Repeat("c", 40), trialAMD64HandoffRuntime, trialAMD64HandoffSlot}
+	h, err := handoffFor(target)
+	if err != nil || h.Schema != candidateHandoffSchema || h.Judge == ubuntuHandoffJudge || h.Transport == ubuntuHandoffTransport {
+		t.Fatalf("missing separate amd64 candidate binding: %v", err)
+	}
+	raw, err := json.Marshal(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pin := handoffDigest(raw)
+	receipt, err := aplusbReceiptFor(APlusBHandoffReadback{Scope: handoffReadbackScope, Handoff: pin,
+		Target: target, Reports: [3]string{strings.Repeat("1", 64), strings.Repeat("2", 64), strings.Repeat("3", 64)}, Points: 17})
+	if err == nil || receipt != (APlusBHandoffReceipt{}) {
+		t.Fatal("an offline candidate produced a verified report receipt")
+	}
+	for _, pair := range []struct{ runtime, slot string }{
+		{ubuntuHandoffRuntime, target.Slot}, {target.Runtime, "oj-aplusb-ubuntu-sandbox"},
+		{reviewedAPlusBRuntime, target.Slot}, {target.Runtime, "oj-reference-sandbox"},
+	} {
+		wrong := target
+		wrong.Runtime, wrong.Slot = pair.runtime, pair.slot
+		if _, err := handoffFor(wrong); err == nil {
+			t.Fatal("an existing arm64 slot or runtime matched the amd64 candidate")
+		}
+	}
+}
+
 func TestAPlusBHandoffReportCannotBorrowAnotherRun(t *testing.T) {
 	target := APlusBHandoffTarget{"test-receiver", strings.Repeat("a", 40), reviewedAPlusBRuntime, "oj-reference-sandbox"}
 	h, err := handoffFor(target)
