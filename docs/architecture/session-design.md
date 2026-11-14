@@ -510,7 +510,7 @@ AC25 覆盖上述流程、跨 API 并发单次消费、邮件失败与真正断�
 
 内部 SMTP 适配器固定使用 [go-mail v0.8.2](https://github.com/wneessen/go-mail/releases/tag/v0.8.2)，支持隐式 TLS 或强制 STARTTLS，均验证服务端证书且不降级到明文。单次尝试受调用方期限和配置上限共同约束。收到最终 DATA 受理响应后，即使连接随后中断也返回已受理；未收到最终响应时返回结果未知。明确的 SMTP 4xx 与 5xx 分别归临时失败与永久拒绝。队列只接收结果类别，不接收 SMTP 原始错误、凭据或正文。
 
-本地 TLS 收件器验证受理、临时及永久拒绝、断连、证书拒绝、认证拒绝和超时。真实 SMTP、供应商预算、队列重试及恢复仍待验收；服务器受理不等于进入收件箱。
+本地 TLS 收件器验证受理、临时及永久拒绝、断连、证书拒绝、认证拒绝和超时。服务器受理不等于进入收件箱；实际收件证据见[邮箱隔离联验](#126-邮箱隔离联验)。
 
 参考（2026-10-25）：[阿里云 SMTP](https://www.alibabacloud.com/help/en/direct-mail/smtp-endpoints)、[发信域名配置](https://help.aliyun.com/zh/direct-mail/user-guide/how-to-configure-sending-domain-names)、[Resend SMTP](https://resend.com/docs/send-with-smtp)、[go-mail](https://github.com/wneessen/go-mail)、[安全公告](https://github.com/wneessen/go-mail/security)、[net/smtp](https://pkg.go.dev/net/smtp)。
 
@@ -661,6 +661,6 @@ AC25 增补：完整流程还须用可控时钟验证 24 小时/30 分钟、60 �
 
 联验用正式文件配置启动两个 HTTPS API 进程及独立 `mail-worker` 进程，使用真实 Redis、PostgreSQL/River、独立额度数据库和验证证书的回环 SMTP；从收件器取得链接，经另一 API 确认。双 API 并发提交同一找回链接和不同新密码时，夹具先确认两个事务都在等待账号行锁，再释放锁：仅一个请求成功，旧密码、落败请求的新密码和两个 API 上的旧会话均被拒绝，获胜密码可以重新登录。见 `tests/sessionprotocol/email_lifecycle_test.go`。同一临时 PostgreSQL 集群内的两个数据库可验证事务隔离，但不证明物理故障域独立。
 
-真实投递验收需要获授权的独立测试发件配置、收件箱和 HTTPS 入口。执行时从两个 API 分别发起注册与找回，核对邮件实际到达、链接指向预定 HTTPS 域名、跨实例确认及重复链接拒绝；找回申请不得让既有会话提前失效。对照邮件任务终态并保留时间、脱敏收件结果和关联测试编号。验收记录不得保存 SMTP 密码、完整链接或会话 Cookie。实际测试配置未提供；回环结果不可记作真实投递验收。
+真实投递验收需要获授权的测试发件配置、收件箱和 HTTPS 入口。从两个 API 分别发起注册与找回，核对实际收件、链接域名、跨实例确认及重复链接拒绝；找回申请不得让既有会话提前失效。核对邮件任务终态，记录脱敏收件结果和测试编号，不保存 SMTP 密码、完整链接或会话 Cookie。[隔离 Gmail 实测](../delivery-log.md#2026-11-14p3-隔离-gmail-真实投递)已收到激活和找回邮件；目标环境的供应商额度、配置及恢复仍待验收。
 
 依据：[OWASP 找回密码](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html)支持随机、限时、一次性令牌及限流原则；具体数值和旧链接并存策略由本项目确认。后续前端配套及请求/缓存/刷新约定已确认，见 [前端设计](frontend-sandbox-options.md#31-已确认的路由请求缓存与刷新约定)；IndexedDB＋idb 及草稿保存/恢复/清理规则已确认，见前端设计第 3.2 节；题面渲染组件及约定后续已确认，见前端设计第 3.3 节；首期题型与判定原则后续已确认，见 [判题设计](judging-design.md)；题包模型与 2025-09 子集导入验证路线已确认，见 [题包设计](problem-package-design.md)；SPJ 协议与复用路线后续已确认，见判题设计第 4.1 节；浮点比较规则已确认，见判题设计第 3 节，数值实现待验证；测试顺序/提交内串行/首次失败停止已确认，见判题设计第 5.1 节，编排实现待验证；分类、资源、反馈及自测已确认，实施按总体架构和专题文档验证；供应商、密码参数、密钥轮换及其他已列缺口继续保留。
