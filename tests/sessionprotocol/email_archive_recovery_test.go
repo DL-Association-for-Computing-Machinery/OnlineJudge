@@ -99,7 +99,7 @@ func TestIsolatedEmailArchiveRecovery(t *testing.T) {
 	from, err := identity.ParseEmail("sender@example.invalid")
 	must(t, err)
 	const activate = "/api/v1/account/activate"
-	port, trustFile, receive := lifecycleSMTP(t, to, []string{activate})
+	port, trustFile, receive := lifecycleSMTPWithRetry(t, to, []string{activate}, true)
 	permit := func() string {
 		t.Helper()
 		var next string
@@ -122,12 +122,18 @@ func TestIsolatedEmailArchiveRecovery(t *testing.T) {
 	c.Database.ApplicationName += "_replica"
 	b := start(c)
 	register(entryClient(t, a, ca), freshAddress)
+	waitArchiveMailRetry(t, ctx, target, oldID)
+	account, err := authority.LookupPersonalByEmail(ctx, to)
+	must(t, err)
+	if account.EmailVerified {
+		t.Fatal("temporary SMTP failure bypassed confirmation")
+	}
 	token := receive(ctx)
 	waitLifecycleMail(t, ctx, target, 2)
 	checkCharges(3)
 	var accepted bool
 	must(t, target.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM river_job WHERE args->>'payload_id'<>$1
-		AND state='completed' AND metadata->>'oj_delivery_result'='accepted')`, oldID).Scan(&accepted))
+		AND state='completed' AND attempt=2 AND metadata->>'oj_delivery_result'='accepted')`, oldID).Scan(&accepted))
 	if !accepted || permit() == before {
 		t.Fatal("fresh mail did not use the shared SMTP permit and record acceptance")
 	}
@@ -142,6 +148,27 @@ func TestIsolatedEmailArchiveRecovery(t *testing.T) {
 	for _, proc := range []*entryProcess{a, b} {
 		proc.signal(t)
 		proc.wait(t, true)
+	}
+}
+
+func waitArchiveMailRetry(t *testing.T, ctx context.Context, pool *pgxpool.Pool, oldID string) {
+	t.Helper()
+	tick := time.NewTicker(10 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		var pending bool
+		must(t, pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM river_job j
+			JOIN identity_email_payloads p ON p.token_id=j.args->>'payload_id'
+			WHERE p.token_id<>$1 AND j.state='available' AND j.attempt=1
+			AND j.metadata->>'oj_delivery_result'='temporary_failure')`, oldID).Scan(&pending))
+		if pending {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal("temporary SMTP failure did not retain the encrypted payload for retry")
+		case <-tick.C:
+		}
 	}
 }
 

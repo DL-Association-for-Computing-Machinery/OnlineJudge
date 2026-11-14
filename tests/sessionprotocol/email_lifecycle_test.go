@@ -339,6 +339,11 @@ func waitLifecycleMail(t *testing.T, ctx context.Context, pool *pgxpool.Pool, wa
 
 func lifecycleSMTP(t *testing.T, to identity.Email, links []string) (int, string, func(context.Context) string) {
 	t.Helper()
+	return lifecycleSMTPWithRetry(t, to, links, false)
+}
+
+func lifecycleSMTPWithRetry(t *testing.T, to identity.Email, links []string, rejectFirst bool) (int, string, func(context.Context) string) {
+	t.Helper()
 	fixture := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	config := &tls.Config{Certificates: fixture.TLS.Certificates, MinVersion: tls.VersionTLS12}
 	trustFile := filepath.Join(t.TempDir(), "receipt-fixture.pem")
@@ -353,8 +358,14 @@ func lifecycleSMTP(t *testing.T, to identity.Email, links []string) (int, string
 	}
 	inbox := make(chan result, len(links))
 	go func() {
+		if rejectFirst {
+			if _, err := readLifecycleSMTP(listener, config, to, "", true); err != nil {
+				inbox <- result{err: err}
+				return
+			}
+		}
 		for _, link := range links {
-			token, err := readLifecycleSMTP(listener, config, to, loginOrigin+strings.TrimPrefix(link, "/api/v1")+"#token=")
+			token, err := readLifecycleSMTP(listener, config, to, loginOrigin+strings.TrimPrefix(link, "/api/v1")+"#token=", false)
 			inbox <- result{token, err}
 			if err != nil {
 				return
@@ -413,7 +424,7 @@ func startLifecycleWorker(t *testing.T, workerBinary, databaseURL, keyFile, trus
 	})
 }
 
-func readLifecycleSMTP(listener *net.TCPListener, config *tls.Config, to identity.Email, prefix string) (string, error) {
+func readLifecycleSMTP(listener *net.TCPListener, config *tls.Config, to identity.Email, prefix string, rejectRecipient bool) (string, error) {
 	raw, err := listener.AcceptTCP()
 	if err != nil {
 		return "", err
@@ -442,6 +453,9 @@ func readLifecycleSMTP(listener *net.TCPListener, config *tls.Config, to identit
 		case strings.HasPrefix(line, "EHLO "), strings.HasPrefix(line, "MAIL FROM:"), line == "NOOP":
 			err = reply("250 OK")
 		case line == "RCPT TO:<"+to.Original()+">":
+			if rejectRecipient {
+				return "", reply("450 Try again later")
+			}
 			recipient = true
 			err = reply("250 OK")
 		case line == "DATA" && recipient && token == "":
