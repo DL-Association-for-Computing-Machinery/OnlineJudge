@@ -265,6 +265,15 @@ func TestBrowserFixture(t *testing.T) {
 	transport.CloseIdleConnections()
 	process.signal(t)
 	process.wait(t, true)
+	if trialNginx {
+		for _, event := range process.logs {
+			if event.Message == "session login unavailable" {
+				_, err = fmt.Printf("BROWSER_LOGIN_FAILURE operation=%s stage=%s reason=%s elapsed_ms=%d\n",
+					event.Operation, event.Stage, event.Reason, event.ElapsedMS)
+				must(t, err)
+			}
+		}
+	}
 	if _, ok := process.event("API stopped gracefully"); !ok {
 		t.Error("browser fixture API did not confirm resource drain")
 	}

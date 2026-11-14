@@ -51,6 +51,7 @@ func Run(ctx context.Context, logger *slog.Logger, address, path string, lookup 
 	if err := startup.Err(); err != nil {
 		return err
 	}
+	c.Runtime.HTTP.Logger = logger
 	runtime, err := sessionruntime.Open(startup, c.Runtime)
 	if err != nil {
 		return err

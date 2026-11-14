@@ -9,7 +9,7 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/redisstore"
 )
 
-func (h *handler) admitLogin(w http.ResponseWriter, r *http.Request, ctx context.Context, email identity.Email, recovery bool, source netip.Addr) bool {
+func (h *handler) admitLogin(r *http.Request, ctx context.Context, email identity.Email, recovery bool, source netip.Addr, fail func(string, error)) bool {
 	if !h.login.RateLimited() {
 		return true
 	}
@@ -19,7 +19,7 @@ func (h *handler) admitLogin(w http.ResponseWriter, r *http.Request, ctx context
 	if !source.IsValid() {
 		source, err = loginSource(r.RemoteAddr)
 		if err != nil {
-			loginError(w, err)
+			fail("admission", err)
 			return false
 		}
 	}
@@ -32,7 +32,7 @@ func (h *handler) admitLogin(w http.ResponseWriter, r *http.Request, ctx context
 		err = ctx.Err()
 	}
 	if err != nil {
-		loginError(w, err)
+		fail("admission", err)
 		return false
 	}
 	return true
