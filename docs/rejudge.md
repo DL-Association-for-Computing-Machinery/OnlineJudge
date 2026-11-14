@@ -1,6 +1,6 @@
 # 维护者重判
 
-维护命令可将**单条已完成的个人训练提交**按原源码、原语言、材料版本和清单重新排队。首次成功后，个人历史会显示新代次的排队、执行及最终结果；旧判定仍保留在尝试历史。当前支持固定 Desktop／Ubuntu M0 档位及已固定的隔离 A+B 材料；Worker 须启用原语言。命令不启用公开提交、题目发布或比赛重判。
+维护命令可将**单条已完成的个人训练提交**按原源码、原语言、材料版本和清单重新排队。首次成功后，个人历史会显示新代次的排队、执行及最终结果；旧判定仍保留在尝试历史。当前支持固定 Desktop／Ubuntu M0 档位、已固定的隔离 A+B 及本机通用材料（含 Testlib SPJ）；Worker 须启用原语言。命令不启用公开提交、题目发布或比赛重判。
 
 操作员须连接已升级的专用维护数据库凭据。数据库管理员在目标数据库为每位操作员配置独立的 PostgreSQL LOGIN，并直接授予 `oj_rejudge_operator`。命令使用数据库认证的 `session_user`，不接收自报操作员；间接成员或 `SET ROLE` 不代替直接授权。不要给运行 API/Worker 的账号授权，不向维护登录授予超级用户、创建角色或转授权权限。保留登录名以便回读，禁止改名或将旧名称重新分配给他人。
 
@@ -27,6 +27,8 @@ GRANT USAGE ON SEQUENCE training_enqueue_order TO oj_rejudge_operator;
 维护端使用专用 `OJ_REJUDGE_DATABASE_URL`，与服务运行凭据分开设置。执行时把 `OJ_MATERIAL_ROOT` 指向该控制端实际读取的同一绝对目录。材料须在操作和 Worker 执行期间保持不可变；提交之前的核验不能证明后续节点可用。理由只写可审计的操作说明，勿包含凭据、选手源码或私有题目内容。
 
 Ubuntu A+B 入队还须显式设置 `OJ_SANDBOX_EXPERIMENT=1`、`OJ_APLUSB_RUNTIME=ubuntu-arm64`、`OJ_APLUSB_MANIFEST_FILE`、`OJ_APLUSB_MANIFEST_SHA256`，与恢复库中的原版本、摘要、清单字节逐一核对，并重新核验恢复目录中的所有原对象。档位和可信摘要由维护端独立配置。Desktop A+B 原命令仍可用，状态回读不需要清单。
+
+本机通用材料入队使用 `OJ_SANDBOX_EXPERIMENT=1`、`OJ_LOCAL_TEXT_MANIFEST_FILE` 和 `OJ_LOCAL_TEXT_MANIFEST_SHA256`，不混用 A+B 档位变量。若原清单为 Testlib SPJ，再用 `OJ_LOCAL_SPJ_CHECKER_FILE` 指向原检查器制品。命令核验原清单字节、版本、运行契约、制品摘要和材料对象，任何不匹配都拒绝入队。状态回读无需材料或检查器。
 
 ```sh
 .local/bin/migrate rejudge enqueue "$DATABASE" "$SUBMISSION_ID" "$OLD_GENERATION" \

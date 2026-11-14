@@ -8,8 +8,10 @@ const { chromium } = await import(pathToFileURL(process.env.OJ_PLAYWRIGHT_MODULE
 const browser = await chromium.launch({ executablePath: process.env.OJ_CHROMIUM_EXECUTABLE })
 const collection = info.url + '/api/v1/training/submissions'
 const language = process.env.OJ_BROWSER_TRAINING_LANGUAGE ?? 'c17'
-assert(['c17', 'gnu++20', 'java21', 'python3'].includes(language))
-const label = { c17: 'C17', 'gnu++20': 'GNU++20', java21: 'Java 21', python3: 'Python 3.14' }[language]
+assert(['c17', 'gnu++17', 'gnu++20', 'java21', 'python3'].includes(language))
+const label = { c17: 'C17', 'gnu++17': 'GNU++17', 'gnu++20': 'GNU++20', java21: 'Java 21', python3: 'Python 3.14' }[language]
+const spj = process.env.OJ_BROWSER_SPJ_SPAN === '1'
+assert(!spj || language === 'gnu++17')
 const cpp20Guard = '#if __cplusplus < 202002L\n#error GNU++20 required\n#endif\n'
 const correct = '#include <stdio.h>\nint main(void){long long a,b;if(scanf("%lld%lld",&a,&b)!=2)return 1;printf("%lld\\n",a+b);}'
 // CPU cost per point keeps both leases observable without changing sandbox limits.
@@ -77,7 +79,15 @@ const pythonSources = {
     ['import sys\nsys.stdout.buffer.write(b"x" * 400000)\n', 'OLE'],
   ],
 }
-const sources = language === 'java21' ? javaSources : language === 'python3' ? pythonSources : nativeSources
+const span = '#include <algorithm>\n#include <iostream>\nint main(){int n,x;std::cin>>n>>x;int lo=x,hi=x;while(--n){std::cin>>x;lo=std::min(lo,x);hi=std::max(hi,x);}for(volatile unsigned i=0;i<9000000u;++i){}std::cout<<1<<\' \'<<hi-lo-1<<\'\\n\';}\n'
+const spjSources = {
+  limits: [['#include <iostream>\nint main(){for(int i=0;i<400000;i++)std::cout<<\'1\';}\n', 'OLE']],
+  overlap: [[span, 'AC'], [span, 'AC']],
+  budget: Array.from({ length: 4 }, () => [span, 'AC']),
+  // Legal whitespace makes the checker observable for a controlled interruption.
+  fault: [['#include <string>\n' + span.replace('std::cout<<1', "std::cout<<std::string(210000,' ')<<1"), 'AC']],
+}
+const sources = spj ? spjSources : language === 'java21' ? javaSources : language === 'python3' ? pythonSources : nativeSources
 function sourceForLanguage(source, verdict) {
   if (language !== 'gnu++20') return source
   // C++ requires an explicit conversion from malloc's void pointer.
@@ -121,7 +131,7 @@ try {
     for (const [fixture, verdict] of sources[phase]) {
       const source = sourceForLanguage(fixture, verdict)
       await page.goto(info.url + '/problems')
-      await page.getByRole('link', { name: 'A + B', exact: true }).click()
+      await page.getByRole('link', { name: spj ? '数列极差（SPJ）' : 'A + B', exact: true }).click()
       await page.getByLabel('语言', { exact: true }).selectOption(language)
       await page.locator('#training-source:not([readonly])').waitFor()
       await page.getByLabel('源码', { exact: true }).fill(source)

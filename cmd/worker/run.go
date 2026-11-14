@@ -186,7 +186,15 @@ func runSlot(ctx context.Context, c config, logger *slog.Logger, lock *slotLock,
 		runner = execution.NewLeasedForFixture(sandbox, renewer.Renew, stop, c.fixture)
 	}
 	cancel()
-	w, err := worker.New(acquirer, acquirer, runner, reporter)
+	var executor worker.Executor = runner
+	if c.fixture.UsesSPJ() {
+		budget, ok := host.(interface{ ResetFileAttemptBudget() error })
+		if !ok {
+			return errors.New("SPJ requires per-attempt file accounting")
+		}
+		executor = spjAttemptExecutor{runner, budget.ResetFileAttemptBudget}
+	}
+	w, err := worker.New(acquirer, acquirer, executor, reporter)
 	if err != nil {
 		return err
 	}

@@ -83,8 +83,30 @@ func verifyRejudgeMaterialWithEnv(ctx context.Context, version, digest string, m
 		if err != nil || hashErr != nil || hash != digest {
 			return submission.ErrMaterial
 		}
-	} else if !matchesAPlusBRejudgeMaterial(version, digest, manifest, getenv) {
-		return submission.ErrMaterial
+	}
+	open := materials.OpenLocal
+	if version != experiment.PinnedVersion && version != experiment.UbuntuVersion {
+		if getenv("OJ_LOCAL_TEXT_MANIFEST_FILE") != "" || getenv("OJ_LOCAL_TEXT_MANIFEST_SHA256") != "" {
+			_, f, err := experiment.LoadCachedFixture(getenv)
+			if err != nil || !f.IsLocalText() || getenv("OJ_LOCAL_TEXT_MANIFEST_SHA256") != digest ||
+				f.Version() != version || !bytes.Equal(f.Manifest(), manifest) {
+				return submission.ErrMaterial
+			}
+			if f.UsesSPJ() {
+				f, err = f.WithPython3()
+				if err == nil {
+					_, err = f.WithCheckerArtifact(getenv("OJ_LOCAL_SPJ_CHECKER_FILE"))
+				}
+				if err != nil {
+					return submission.ErrMaterial
+				}
+			} else if getenv("OJ_LOCAL_SPJ_CHECKER_FILE") != "" {
+				return submission.ErrMaterial
+			}
+			open = materials.OpenLocalText
+		} else if !matchesAPlusBRejudgeMaterial(version, digest, manifest, getenv) {
+			return submission.ErrMaterial
+		}
 	}
 	path := getenv("OJ_MATERIAL_ROOT")
 	if !filepath.IsAbs(path) {
@@ -94,7 +116,7 @@ func verifyRejudgeMaterialWithEnv(ctx context.Context, version, digest string, m
 	if err != nil {
 		return err
 	}
-	reader, err := materials.OpenLocal(path)
+	reader, err := open(path)
 	if err != nil {
 		return err
 	}
