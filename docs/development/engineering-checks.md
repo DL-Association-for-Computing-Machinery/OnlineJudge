@@ -1,0 +1,81 @@
+# 工程检查与安全
+
+[开发导航](README.md) · [本机检查命令](local-checks.md) · [CI 触发与门禁](ci-cd.md)
+
+## 代码质量
+
+命令见[本机工程检查](local-checks.md)，本机与 CI 使用同一容器入口。静态分析不能替代行为测试、真实数据库/Worker 联调或业务验收。
+
+### Go
+
+golangci-lint 固定 v2.15.0，配置位于 `.golangci.yml`，仅启用 staticcheck、errcheck、ineffassign、unused。既有 gofmt、vet、race 和构建继续保留；不全量开启风格检查，不使用仅检查新增告警或全局排除来隐藏基线。
+
+`scripts/check-go.sh` 依次检查主模块、sandbox 标签测试源码、`tests/sessionexperiment` 独立模块。主模块 `./...` 不会自动进入嵌套模块；sandbox 静态分析不运行判题程序。当前平台是容器 Linux，不宣称覆盖所有 OS/build tags。
+
+每次执行先用临时独立模块运行真实检测器：正确代码必须成功，四类错误必须返回告警退出码且分别出现对应规则；工具错误不能冒充成功拒绝。测试仅使用标准库，不执行样例代码。告警数量不截断，模块只读检查避免悄悄修改依赖。
+
+已有资源清理保留原有行为，并明确忽略理由；影响行为的返回值应检查，不能为了 lint 机械添加空白赋值。文件写入/同步、租约与授权错误继续由行为测试验证。测试故障注入中客户端主动中断的响应写入允许显式忽略返回值。
+
+### 前端
+
+前端沿用已有锁定的 ESLint/typescript-eslint，无新增依赖。`src/**/*.{ts,tsx}` 和 `vite.config.ts` 使用 `recommendedTypeChecked`、`projectService` 及固定配置目录，包含未处理 Promise、Promise 回调误用与不安全 any 数据流检查；JS 配置/工具脚本沿用普通 lint，不要求加入 TypeScript 项目。保留 React Hooks、refresh、零警告及原有 typecheck/Vitest/build。
+
+`pnpm lint` 先扫描真实源码，再通过 Node 测试运行器使用实际 ESLint 配置进行六项正反例。内存样例使用已有 tsconfig 成员路径，不落盘、不进入构建；覆盖 TS、TSX 事件回调和 Vite 配置，解析错误不能冒充目标规则拒绝。自测脚本命名 `lint-selftest.mjs`，避免被 Vitest 的 `*.test.*` 自动发现而混用测试运行器。
+
+类型感知分析增加 TypeScript 项目分析成本，不能替代运行时外部数据校验。`void promise` 只表示显式放弃等待，不处理拒绝；业务入口仍需 catch/错误状态。前端现有健康检查已将响应作为 unknown 并校验契约，事件处理器已有 try/catch，本次不改 UI 或业务源码。官方依据：[typed linting](https://typescript-eslint.io/getting-started/typed-linting/)。
+
+### Go 工具准入
+
+2026-10-29 核对 [v2.15.0](https://github.com/golangci/golangci-lint/releases/tag/v2.15.0)：要求 Go 1.26.0，当时以项目 Go 1.26.10 构建；当前版本见[运行环境](../operations/runtime-maintenance.md#运行环境)；主项目许可证 GPL-3.0，作为独立开发 CLI 使用，不链接到应用，也不进入运行镜像。若对外分发开发镜像，应履行适用许可义务。公开 GitHub advisory 查询为空，不代表工具或传递依赖无漏洞。
+
+工具通过固定 Go 模块版本和校验和下载，额外成本是首次构建下载、开发镜像空间及每次分析时间；不上传源码到第三方质量服务。后续升级须验证配置、有效/无效样例、源码基线和 CI，并重新核对许可、安全与兼容性。官方规则见 [linters](https://golangci-lint.run/docs/linters/)。
+
+## 安全检查
+
+本页维护扫描范围与处置流程；扫描通过不等于完整安全审计。主线必需结果门禁要求 `security` 成功，失败、取消、超时和未知状态均阻断合并，不修改远端保护名称。
+
+2026-11-11，CI 在 Go 1.26.10 上报告了可达的 [GO-2026-6859](https://github.com/golang/go/issues/82563)。主模块、会话实验模块和 Docker 构建工具链统一到 Go 1.26.11，并锁定 [Docker 官方 Go 镜像](https://github.com/docker-library/official-images/blob/master/library/golang)的多架构摘要。请求上限、扫描器、CI 门禁和 Go 模块依赖保持不变。
+
+### 执行与边界
+
+在仓库根目录执行：
+
+```sh
+python3 scripts/check-secrets.py --self-test
+python3 scripts/check-secrets.py
+docker --context desktop-linux compose run --build --rm backend-audit
+docker --context desktop-linux compose run --build --rm frontend-audit
+```
+
+Linux CI 使用相同镜像与命令，省略 `--context desktop-linux`。PR、主线 push 和手动 CI 均执行；没有新增定时任务。
+
+- 秘密：Gitleaks v8.30.1 扫描 HEAD 可达的完整提交历史，包含已删除内容；扫描前用合成令牌确认检测器确实拒绝泄漏且脱敏。通过 `git bundle` 导出，不挂载 checkout、Docker socket、用户配置或凭据，扫描容器禁网、非 root、只读根文件系统、无 capabilities。忽略文件、未跟踪/未提交内容、其他不可达分支不在扫描范围内；提交前仍须审查暂存差异。日志完整脱敏，不发布原始秘密报告。
+- Go：官方 govulncheck v1.9.0 分析 `./...` 当前默认构建条件下的可达调用；可达漏洞与工具错误返回失败。verbose 输出保留模块级未触达条目，不能将这些条目说成依赖完全无漏洞；不同平台、build tags、动态调用与镜像 OS 包不由本检查完整覆盖。
+- 前端：沿用项目固定 pnpm，`audit --audit-level low` 包括开发依赖；任何已知等级告警都阻断。不使用自动 fix、忽略不可修复漏洞或忽略 registry 错误的选项。
+
+下载公共模块/镜像、查询 Go 漏洞库和 npm audit 接口需要联网。pnpm audit 会向包 registry 发送依赖名称与版本；不上传仓库源码或扫描出的秘密。服务不可用是未完成检查，不是安全通过。
+
+### 工具准入与维护
+
+2026-10-29 核对官方仓库：Gitleaks CLI 为 MIT，govulncheck 为 Go BSD 风格许可；两个版本的 Go 要求分别为 1.24.11 与 1.26.0，当时项目构建工具链为 1.26.10；当前版本见[运行环境](../operations/runtime-maintenance.md#运行环境)。固定版本通过 Go 模块校验安装到专用 Docker stage；不进入应用运行镜像，不修改应用依赖清单。代价是首次下载、工具镜像空间与分析时间。Gitleaks 官方公开 advisory 查询为空，仅表示该接口未返回公告，不是无漏洞证明。
+
+使用 CLI 而非额外第三方 Action，沿用现有只读工作流权限、固定 checkout SHA 和 Docker 工具链。镜像 OS 包漏洞扫描及 SBOM 留作独立后续目标，不宣称本项覆盖。
+
+2026-10-29 初始基线有三个未触达模块条目。本次将 `golang.org/x/net` 从 v0.61.0 升至 v0.62.0，处置 [GO-2026-6866](https://pkg.go.dev/vuln/GO-2026-6866)（HTML 渲染的祖先命名空间检查）和 [GO-2026-6860](https://pkg.go.dev/vuln/GO-2026-6860)（HTML 文本节点合并的二次复杂度）；仅更新该模块及校验值，不改业务接口或升级其他依赖。实际复扫与兼容性验证见[交付记录](../acceptance/delivery-log.md)。
+
+[GO-2026-5932](https://pkg.go.dev/vuln/GO-2026-5932) 涉及 `golang.org/x/crypto/openpgp` 及其子包，所有版本均无已知修复。项目默认及 `sandbox` 标签的 `go list -deps -test` 包图均未导入这些包；这属于当前项目不适用，不能称为已修复上游模块。`x/crypto` 仍用于其他包，例如 `cmd/api → gin → binding → validator/v10 → x/crypto/sha3`，不能为消除模块提示删除必要依赖或引入无用途的 OpenPGP 替代库。verbose 告警继续保留，未配置忽略或降低门禁；调用、依赖、平台或标签变化后须重新评估。
+
+### 告警与例外
+
+2026-10-31：前端开发依赖 `minimatch 10.2.6` 命中 [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249)，公告修复版为 11.0.1。`web/pnpm-workspace.yaml` 仅对当前 `eslint 10.13.0`、`@eslint/config-array 0.23.5`、`@typescript-eslint/typescript-estree 8.72.0` 三个精确父版本固定该修复版，Docker 在冻结安装前复制配置。这是依赖解析覆盖，不是审计忽略；原低等级阻断和 TLS/完整性/供应链策略保持。
+
+11版移除 makeRe/regexp/AST 等接口并改变部分匹配行为，不能当作兼容补丁自动全局替换。已核对当前调用方的 match/partial/pattern/minimatch 用法，新增 lint 文件枚举与忽略回归，实际前后文件集合及检查结果见[交付记录](../acceptance/delivery-log.md)。必要新增间接依赖 `@isaacs/nonrecursive-glob-match 1.0.3`，两包为 BlueOak-1.0.0；Node24.19.0 实测，其他平台不据此宣称通过。父依赖正式支持修复版后移除对应 override 并重生成锁文件、复验；精确父版本变更或新增调用方会重新触发审计/兼容性核验，不扩大覆盖范围。回退解析配置与锁文件会重新引入已知告警，不能作为可合并安全状态。
+
+当前维护者负责处理阻断；Codex 可在授权任务内定位和修复，但不得静默禁用检测器、增加忽略、降低等级或升级无关依赖。
+
+1. 秘密疑似泄漏：日志只记录规则、路径和位置，先由凭据所有者撤销/轮换，再处理历史及外部副本；删除代码不是撤销。历史重写需单独授权。
+2. 漏洞：记录 advisory ID、版本、触达条件、修复版本和验证。可达/前端阻断项在合并前解决；Go 未触达条目保留在 verbose 输出中，评估后单独修复，不能称为已修复。
+3. 确需例外：由用户明确批准，记录精确规则/advisory、范围、原因、补偿措施、负责人和到期日期。当前没有例外配置；如将来引入，须同时实现到期失败检查，禁止永久宽泛排除。
+4. 工具或网络故障：先诊断、恢复后重跑当前 head，不以旧报告或成功占位替代。工具版本升级独立验证合成拒绝案例与实际仓库，保留回退版本和兼容性证据。
+
+官方依据：[Gitleaks](https://github.com/gitleaks/gitleaks/tree/v8.30.1)、[Go 漏洞管理](https://go.dev/doc/security/vuln/)、[govulncheck v1.9.0](https://github.com/golang/vuln/tree/v1.9.0)、[pnpm audit](https://pnpm.io/cli/audit)。

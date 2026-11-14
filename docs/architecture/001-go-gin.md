@@ -1,12 +1,12 @@
 # ADR-001：Go + Gin 自研与成熟组件复用边界
 
-初始决策日期：2026-10-25。以下选型理由及未实现措辞记录当时背景；当前引入、验证和缺口见 [M0 记录](../m0-experiment.md)与 [README](../../README.md)。原始状态：Go + Gin 自研、模块化单体＋独立判题 Worker 和 React＋TypeScript＋Vite 前端已由用户确认；已有 API/Worker/前端工程骨架，业务细化设计尚未实现或压测；精简阶段见 [交付基线](../phase-1-development-plan.md)。文档修订以 Git 历史为准。
+初始决策日期：2026-10-25。以下选型理由及未实现措辞记录当时背景；当前引入、验证和缺口见 [M0 记录](../acceptance/m0-experiment.md)与 [README](../../README.md)。原始状态：Go + Gin 自研、模块化单体＋独立判题 Worker 和 React＋TypeScript＋Vite 前端已由用户确认；已有 API/Worker/前端工程骨架，业务细化设计尚未实现或压测；精简阶段见 [交付基线](../development/phase-1-development-plan.md)。文档修订以 Git 历史为准。
 
 ## 决策来源与背景
 
 用户明确要求：“我希望你参考它们的思路，但是项目是我自己用go+gin去写”。本决策替代此前“以 Hydro 为基础进行二次开发”的建议；此前建议不是用户已批准的实现路线。
 
-主要开发者为用户与 AI，未来可能增加长期维护者。需求包含长期战队、赛事阵容、题目审核、成长体系与名额管理，具体见 [需求文档](../requirements.md)。这些模型应由本项目掌握，不能被上游 OJ 的数据结构隐式限制。
+主要开发者为用户与 AI，未来可能增加长期维护者。需求包含长期战队、赛事阵容、题目审核、成长体系与名额管理，具体见 [需求文档](../development/requirements.md)。这些模型应由本项目掌握，不能被上游 OJ 的数据结构隐式限制。
 
 ## 已确认方向
 
@@ -67,7 +67,7 @@
 
 ## 已确认专题与下一步验证
 
-核心架构需求已收敛；后续决策索引见 [总体架构](system-design.md#10-确认状态与下一步)、[比赛设计](contest-design.md)、[接口与 Worker](api-worker-design.md)、[运维与实施阶段](operations-design.md)。保留原基础选型，不把已选路线视为已准入。
+核心架构需求已收敛；后续决策索引见 [总体架构](system-design.md#10-确认状态与下一步)、[比赛设计](contest-design.md)、[接口与 Worker](api-worker-design.md)、[运维与实施阶段](../operations/operations-design.md)。保留原基础选型，不把已选路线视为已准入。
 
 首个技术验证为 GNU++17 文本题提交到结果的完整闭环，并验证未知接收回执、节点失联、迟到回报和材料异常；随后补齐所有已选语言、浮点和 SPJ。真实骨架目录、命令及基础依赖已经建立，见 README；数据库模式、任务和业务依赖按交付阶段接入。首期不建设协会成员身份和飞书导入。
 
