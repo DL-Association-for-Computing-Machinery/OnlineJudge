@@ -8,15 +8,15 @@ const { chromium } = await import(pathToFileURL(process.env.OJ_PLAYWRIGHT_MODULE
 const browser = await chromium.launch({ executablePath: process.env.OJ_CHROMIUM_EXECUTABLE })
 const collection = info.url + '/api/v1/training/submissions'
 const language = process.env.OJ_BROWSER_TRAINING_LANGUAGE ?? 'c17'
-assert(['c17', 'gnu++20'].includes(language))
-const label = language === 'c17' ? 'C17' : 'GNU++20'
+assert(['c17', 'gnu++20', 'java21'].includes(language))
+const label = { c17: 'C17', 'gnu++20': 'GNU++20', java21: 'Java 21' }[language]
 const cpp20Guard = '#if __cplusplus < 202002L\n#error GNU++20 required\n#endif\n'
 const correct = '#include <stdio.h>\nint main(void){long long a,b;if(scanf("%lld%lld",&a,&b)!=2)return 1;printf("%lld\\n",a+b);}'
 // CPU cost per point keeps both leases observable without changing sandbox limits.
 const cost = 'for(volatile unsigned i=0;i<9000000u;++i){}'
 const slow = correct.replace('printf(', cost + 'printf(')
 const recoverySource = correct.replace('printf(', 'for(volatile unsigned i=0;i<120000000u;++i){}printf(')
-const sources = {
+const nativeSources = {
   overlap: [[slow, 'AC'], [slow, 'AC']],
   limits: [
     ['int main(void){for(;;){}}', 'TLE'],
@@ -25,8 +25,45 @@ const sources = {
   ],
   fault: [[recoverySource, 'AC']],
 }
+const javaSum = iterations => `import java.util.Scanner;
+public class Main {
+  public static void main(String[] args) {
+    var in = new Scanner(System.in);
+    long sum = in.nextLong() + in.nextLong();
+    for (int i = 0; i < ${iterations}; i++) sum ^= (i & 1);
+    System.out.println(sum);
+  }
+}`
+const javaSources = {
+  overlap: [[javaSum(4_000_000), 'AC'], [javaSum(4_000_000), 'AC']],
+  fault: [[javaSum(40_000_000), 'AC']],
+  limits: [
+    // The single array cannot fit within the configured 64 MiB Java heap.
+    ['public class Main { public static void main(String[] args) { System.out.println(new byte[80 << 20].length); } }', 'RE'],
+    // Retain a bounded number of standard-library zlib buffers to exercise
+    // the total-memory cgroup independently of Java heap allocation.
+    [`import java.util.zip.Deflater;
+import java.util.Random;
+public class Main {
+  public static void main(String[] args) {
+    var input = new byte[32768];
+    new Random(123).nextBytes(input);
+    var output = new byte[65536];
+    var buffers = new Deflater[1100];
+    for (int i = 0; i < buffers.length; i++) {
+      buffers[i] = new Deflater(1);
+      buffers[i].setInput(input);
+      buffers[i].finish();
+      buffers[i].deflate(output);
+    }
+    System.out.println(buffers.length);
+  }
+}`, 'MLE'],
+  ],
+}
+const sources = language === 'java21' ? javaSources : nativeSources
 function sourceForLanguage(source, verdict) {
-  if (language === 'c17') return source
+  if (language !== 'gnu++20') return source
   // C++ requires an explicit conversion from malloc's void pointer.
   const code = verdict === 'MLE' ? source.replace('p=malloc(n)', 'p=static_cast<unsigned char *>(malloc(n))') : source
   return cpp20Guard + code

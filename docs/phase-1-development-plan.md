@@ -332,7 +332,7 @@ C17 复用已发布本机文本题的冻结测试数据和审核权限，单文�
 
 GNU++20 复用同一已发布文本环境，固定 `g++ -std=gnu++20`。本机 A+B 的 AC、WA、CE、TLE、MLE、OLE 与本人回读，以及 C17、GNU++17 回归已验证；另已验证同机双 Worker 并行、SIGTERM 后自然租约接管和历史重判。
 
-[Java 21](delivery-evidence/p7-java21.md) 在同一训练流程中使用单文件 `Main.java`、固定 JDK 制品和逐点 JVM。已发布 A+B 的浏览器提交、真实 Worker AC、WA、CE 与本人结果通过，C17、GNU++17、GNU++20 同镜像回归通过。超限、故障恢复、历史重判和同机双 Worker 一致性留在本阶段验收。
+[Java 21](delivery-evidence/p7-java21.md) 使用单文件 `Main.java`、固定 JDK 制品和逐点 JVM。已发布 A+B 的浏览器提交、真实 Worker AC/WA/CE 与本人结果通过，C17、GNU++17、GNU++20 同镜像回归通过。另已验证 JVM 堆耗尽为 RE、沙箱总内存超限为 MLE，以及同机双 Worker 一致性、SIGTERM 后自然接管和历史重判。
 
 - 浮点验证逐题绝对/相对容差及 OR、等于边界、零与负数、科学计数法、非法/非有限值、混合文本；非法标准答案或配置阻止发布。
 - SPJ 必须支持 Testlib C++ 检查器，保留既定 ICPC 统一协议，通过显式适配接入洛谷文档所示的 `checker.cpp`、`#include "testlib.h"`、`registerTestlibCmd` 及三文件接口。首批仍使用 GNU++17，不由外部示例改成 C++14；检查器崩溃、超时、非法协议归 SE，诊断按权限提供。

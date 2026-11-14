@@ -12,4 +12,18 @@
 
 报告 SHA-256：Java `8cca7e9bb820aefd732288d40b77d0725688051f7ff1e2593d5760a207577327`，C17 `74259af46379400ed61a3a9945c7841878609a8a6d27798033201dd4b401c453`，GNU++17 `aacd2113512386fdd5bc315d1dda2ac8735ba7f21c4f1182e3511d2901e62b26`，GNU++20 `f1b82875fa3159a9c043756f2ee81e90531fa947d1a9691bdd8c8f13dd487e68`；数据库核对 `ab007c2bcc650f29e157f7d59f9396b01450ec9c6cb57919252fb4370db8fbaa`。
 
-Java 的超限、故障恢复、历史重判与同机双 Worker 验收尚未执行。本轮使用一次性数据，未部署或访问试用环境。
+## Java 内存边界、接管、重判与双 Worker
+
+2026-11-15 在同一专用 Ubuntu VM 用临时数据库复现同一 A+B 发布版本，两个终端以独立证书和执行槽启动真实 Worker。仅补 Java 特有的两种内存用例；本轮未重跑通用 CPU、输出超限矩阵。
+
+| 项目 | 实测 |
+| --- | --- |
+| JVM 堆耗尽 | 固定堆上限为 64 MiB，申请一个 80 MiB 数组。独立执行器诊断报告 `java.lang.OutOfMemoryError: Java heap space`、`Nonzero Exit Status`、退出码 1，内存为 17,915,904 B，低于沙箱的 192 MiB。真实 Worker 判 RE。 |
+| 沙箱总内存超限 | Java 标准库压缩器持有的堆外缓冲使总内存超过 192 MiB。相同源码和固定档位在独立探针报告 `Memory Limit Exceeded`、退出码 9，内存为 201,342,976 B。真实 Worker 判 MLE。两个判定均由本人读回；判题逻辑未按 stderr 字样猜测 MLE。 |
+| 同机双 Worker | 同一查询观察到两个不同节点的有效租约，与两笔相同 Java 源码的浏览器提交对应。两节点第一代各完成一次 AC。 |
+| 运行中退出 | 确认选手 JVM 已运行后给持租约的 Worker 发 SIGTERM。沙箱停止、PID 归零，首次尝试无结果。未编辑队列或租约；租约自然到期后另一节点在同一判题代次以尝试 2 判 AC，本人读回。 |
+| 历史重判 | 独立维护角色的错材料摘要拒绝且无审计；正确摘要入队、原键回执一致。原提交获得第二代 AC，源码、语言、材料摘要和第一代结果及结果摘要逐字节不变，本人再次从浏览器读回。 |
+
+数据库对账共五笔独立提交，接管和重判均未新建提交。记录 SHA-256：原始内存诊断 `0b77ea2f57ec16bf157dcb5ae2a324268004ca277951247075240c796ae9172d`，浏览器内存报告 `2c07f8397debf7a76d8f0bd3a4532b02835579f3553124b8839de892511135d4`，同时有效租约 `010bfa5b4d5e7870f9389f7f65ffdc0600a3ef46d5320f36ed3a5b41b958e6ea`，运行中退出 `712730790c62e4f8e1cfbff71ce7262fdef8e09da95cee2612c6838c5d6cbd7c`，重判回执 `9b2e761cba5cfb6f7a02f7e6559f7b3187fe95672178617e7f0025d9c57c8ece`，最终对账 `4a6f8d8087eaf29d0792a59baac6621074791104ab6c5b8943fd135b1bf98abd`。
+
+复现使用 [README 的双 Worker 流程](../../README.md#本机已发布-ab-浏览器联验)，两 Worker 均启用同一 Java 镜像。浏览器脚本设 `OJ_BROWSER_TRAINING_LANGUAGE=java21`，沿用 `OJ_C17_PHASE` 与临时 JSON 路径。故障验证覆盖同机 SIGTERM 接管，未做 SIGKILL、跨主机故障或归档恢复。两槽和临时夹具均已关闭，未部署、未访问试用数据。
