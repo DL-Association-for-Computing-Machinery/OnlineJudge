@@ -3,6 +3,7 @@
 set -eu
 case "$#:${1:-ordinary}" in
     0:ordinary|1:ordinary) oj_pattern='^TestOrdinaryProtocol$' ;;
+    1:archive-recovery) oj_pattern='^TestOrdinaryProtocol$/^real_API_process_entry$/^database_archive_restore_fences_old_cookies$' ;;
     1:email-lifecycle)
         export OJ_ISOLATED_EMAIL_LIFECYCLE=1
         oj_pattern='^TestIsolatedEmailLifecycle$' ;;

@@ -719,6 +719,8 @@ python3 -B scripts/test-session-protocol.py --toolchain-image oj-session-protoco
 
 在上述脚本命令末尾加 `--suite email-lifecycle` 可用另一套全新的临时 PostgreSQL 和 Redis 验证邮箱整链路。专项以配置文件启动两个 API 进程，邮件只送往容器内回环 TLS 收件器，不发布宿主端口。
 
+`--suite archive-recovery` 单独运行同一归档的会话及邮件恢复回归，使用旧、替换及中断恢复 Redis 夹具。该用例也保留在普通会话套件中。
+
 ### 会话恢复维护
 
 会话恢复维护命令只用于已经隔离的恢复副本。先设置 `OJ_RESTORED_SESSION_CONFIG_FILE` 指向该副本专用的 API 配置，再按[恢复普通会话](docs/architecture/operations-design.md#恢复普通会话)执行；不要在在线库使用。
