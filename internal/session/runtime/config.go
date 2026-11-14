@@ -87,6 +87,8 @@ type Config struct {
 	TrainingSubmissionDetail bool
 	// LocalTrainingIntake opens browser submission only for the admitted local queue.
 	LocalTrainingIntake bool
+	// LocalJava21 enables Java submissions only with the admitted local intake.
+	LocalJava21 bool
 	// SessionDevices enables listing and revoking the caller's other sessions.
 	SessionDevices bool
 	// SessionRotation enables replacing the caller's personal credential.
@@ -144,6 +146,9 @@ func cloneTLS(mode Security, config *tls.Config) (*tls.Config, error) {
 }
 
 func (c Config) validate() (*password.Hasher, *password.BoundedHasher, error) {
+	if c.LocalJava21 && !c.LocalTrainingIntake {
+		return nil, nil, ErrConfig
+	}
 	if c.LocalTrainingIntake && (!c.TrainingHistory || !c.TrainingSubmissionDetail ||
 		c.PrivateDrafts == nil || !c.PrivateDrafts.PublicCatalog || !c.PrivateDrafts.hasLocalExecution()) {
 		return nil, nil, ErrConfig

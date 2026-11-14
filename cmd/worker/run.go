@@ -35,6 +35,9 @@ func run(ctx context.Context, logger *slog.Logger, drain <-chan struct{}) error 
 		if err != nil {
 			return err
 		}
+		if c.fixture.Java21Enabled() {
+			slot = slot.WithJava21Image()
+		}
 		if slot.IsUbuntuAPlusB() {
 			probe, cancel := context.WithTimeout(ctx, 5*time.Second)
 			err := workerhost.CheckUbuntuAPlusBHost(probe)
@@ -158,6 +161,11 @@ func runSlot(ctx context.Context, c config, logger *slog.Logger, lock *slotLock,
 		}
 		if err := factory().Verify(startup, experiment.GNUCPP20Profile(c.fixture.Profile())); err != nil {
 			return errors.Join(errors.New("GNU++20 sandbox protocol preflight failed; no task claimed"), err)
+		}
+		if c.fixture.Java21Enabled() {
+			if err := factory().Verify(startup, experiment.Java21Profile(c.fixture.Profile())); err != nil {
+				return errors.Join(errors.New("sandbox protocol preflight failed for Java 21; no task claimed"), err)
+			}
 		}
 		runner, err = execution.NewLeasedCachedText(factory, renewer.Renew, stop, c.fixture)
 		if err != nil {

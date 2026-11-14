@@ -26,6 +26,7 @@ type document struct {
 	TrainingHistory          bool                   `json:"training_history"`
 	TrainingSubmissionDetail bool                   `json:"training_submission_detail"`
 	LocalTrainingIntake      bool                   `json:"local_training_intake"`
+	LocalJava21              bool                   `json:"local_java21"`
 	SessionDevices           bool                   `json:"session_devices"`
 	SessionRotation          bool                   `json:"session_rotation"`
 	ManagementSessions       bool                   `json:"management_sessions"`

@@ -82,6 +82,7 @@ func NewAPlusBCacheFactory(transport http.RoundTripper, verify func(context.Cont
 		// The tier has been admitted by the fixed fixture parser.
 		g, _ := NewReferenceGoJudgeForTier(transport, verify, files, tier)
 		g.publishedText = true
+		g.runtime = fixture.Profile()
 		return g
 	}
 }
@@ -163,17 +164,18 @@ func (g *CachedGoJudge) compileSources(ctx context.Context, p experiment.Executi
 	c := command(p, p.CompileArgs, p.Compile, nil)
 	g.boundDiagnostics(c, true)
 	c["copyIn"] = copyIn
-	c["copyOutCached"] = []string{"main?"}
+	name := cachedProgramName(p)
+	c["copyOutCached"] = []string{name + "?"}
 	c["copyOutMax"] = p.ExecutableBytes
 	r, err := g.control.result(ctx, c)
 	if err != nil {
 		return o, tagFailure(cachedError(ctx, "cached compile receipt unavailable", err), "control", "executable", "")
 	}
 	if len(r.IDs) != 0 {
-		if len(r.IDs) != 1 || r.IDs["main"] == "" {
+		if len(r.IDs) != 1 || r.IDs[name] == "" {
 			return o, failureError("validate", "executable", "ownership", "unexpected cached compile identities")
 		}
-		if err = g.adopt(exe, r.IDs["main"]); err != nil {
+		if err = g.adopt(exe, r.IDs[name]); err != nil {
 			return o, tagFailure(err, "validate", "executable", "")
 		}
 	} else if r.Status != "Accepted" {
@@ -236,7 +238,7 @@ func (g *CachedGoJudge) run(ctx context.Context, p experiment.ExecutionProfile, 
 	c := command(p, p.RunArgs, p.Run, nil)
 	g.boundDiagnostics(c, false)
 	c["files"].([]any)[0] = map[string]any{"fileId": in.id}
-	c["copyIn"] = map[string]any{"main": map[string]any{"fileId": id}}
+	c["copyIn"] = map[string]any{cachedProgramName(p): map[string]any{"fileId": id}}
 	c["copyOutCached"] = []string{"stdout"}
 	c["copyOutMax"] = p.OutputBytes + 1
 	r, err := g.control.result(ctx, c)

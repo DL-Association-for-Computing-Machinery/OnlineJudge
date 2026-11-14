@@ -298,6 +298,9 @@ func entryConfigWithWriteTimeout(t *testing.T, c sessionruntime.Config, ca *test
 	if c.LocalTrainingIntake {
 		doc["local_training_intake"] = true
 	}
+	if c.LocalJava21 {
+		doc["local_java21"] = true
+	}
 	if c.SessionDevices {
 		doc["session_devices"] = true
 	}

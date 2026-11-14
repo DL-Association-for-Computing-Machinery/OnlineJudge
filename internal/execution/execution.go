@@ -48,10 +48,11 @@ type Usage struct{ CPU, Memory int64 }
 // Result retains compilation separately; maxima include only executed test points.
 // It is internal evidence, not a lease report or a public response model.
 type Result struct {
-	Verdict string
-	Compile *Observation
-	Points  []Point
-	Max     *Usage
+	Verdict       string
+	Compile       *Observation
+	Points        []Point
+	Max           *Usage
+	runtimeSHA256 string
 }
 
 // Runner owns one execution slot. Use one instance per sandbox of capacity one.
@@ -81,6 +82,9 @@ func (r *Runner) Judge(ctx context.Context, d materials.Descriptor, blobs map[st
 	p, err := prepare(ctx, d, blobs, r.fixture)
 	if err != nil {
 		return result, err
+	}
+	if r.fixture.Java21Enabled() {
+		result.runtimeSHA256 = experiment.JavaTextExecutionSHA256(p.Environment)
 	}
 	for _, t := range p.Tests {
 		result.Points = append(result.Points, Point{ID: t.ID, Verdict: "NOT_RUN"})

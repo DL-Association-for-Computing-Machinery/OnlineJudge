@@ -131,6 +131,13 @@ func recoverAPlusBUbuntu(ctx context.Context, args []string, logger *slog.Logger
 	if err != nil {
 		return err
 	}
+	switch os.Getenv("OJ_LOCAL_JAVA21") {
+	case "":
+	case "1":
+		slot = slot.WithJava21Image()
+	default:
+		return errors.New("invalid local Java setting")
+	}
 	var lock *slotLock
 	if dual {
 		lock, err = lockUbuntuTextDual(slot, true)

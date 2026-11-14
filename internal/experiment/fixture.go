@@ -27,6 +27,7 @@ type WorkerFixture struct {
 	aplusbVersion string
 	aplusbTier    ReferenceTier
 	localText     bool
+	java21        bool
 }
 
 // IsLocalText reports that the worker owns an admitted bounded text fixture.
@@ -123,6 +124,9 @@ func (f WorkerFixture) Version() string {
 func (f WorkerFixture) Profile() ExecutionProfile {
 	if f.UsesCachedText() {
 		config, _ := ResolveReferenceTier(f.aplusbTier)
+		if f.java21 {
+			return JavaTextBase(config.Runtime)
+		}
 		return config.Runtime
 	}
 	p := PinnedEnvironment()

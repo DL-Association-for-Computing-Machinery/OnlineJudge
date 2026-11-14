@@ -21,6 +21,13 @@ type CompilationSandbox interface {
 	CompileFiles(context.Context, experiment.ExecutionProfile, []SourceFile) (Observation, error)
 }
 
+func cachedProgramName(p experiment.ExecutionProfile) string {
+	if experiment.IsJava21Profile(p) {
+		return "main.jar"
+	}
+	return "main"
+}
+
 func (g *CachedGoJudge) prepareCompilation(source string, files []SourceFile, multiple bool) ([]SourceFile, string, bool) {
 	if !multiple {
 		if g.compilationEntry != "" || int64(len(source)) > g.limits.SourceBytes {

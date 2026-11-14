@@ -46,6 +46,16 @@ func loadConfig(getenv func(string) string) (config, error) {
 	if err != nil {
 		return c, err
 	}
+	switch getenv("OJ_LOCAL_JAVA21") {
+	case "":
+	case "1":
+		aplusb, err = aplusb.WithJava21()
+		if err != nil {
+			return c, err
+		}
+	default:
+		return c, errors.New("invalid local Java setting")
+	}
 	c.ubuntuTextSlot = getenv(ubuntuTextSlotEnv)
 	if c.ubuntuTextSlot != "" {
 		if !aplusb.UsesCachedText() || aplusb.APlusBTier() != experiment.ReferenceAPlusBUbuntu {

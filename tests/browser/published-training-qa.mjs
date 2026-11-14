@@ -10,16 +10,18 @@ const browser = await chromium.launch({ executablePath: process.env.OJ_CHROMIUM_
 const collection = ready.url + '/api/v1/training/submissions'
 const recovery = ready.url + '/api/v1/training/receipt'
 const language = process.env.OJ_BROWSER_TRAINING_LANGUAGE ?? 'gnu++17'
-assert(['c17', 'gnu++17', 'gnu++20'].includes(language))
+assert(['c17', 'gnu++17', 'gnu++20', 'java21'].includes(language))
 const c17 = language === 'c17'
 const gnu20 = language === 'gnu++20'
+const java = language === 'java21'
 const nonDefault = language !== 'gnu++17'
-const extension = c17 ? 'c' : 'cpp'
-const label = c17 ? 'C17' : gnu20 ? 'GNU++20' : 'GNU++17'
+const extension = java ? 'java' : c17 ? 'c' : 'cpp'
+const label = java ? 'Java 21' : c17 ? 'C17' : gnu20 ? 'GNU++20' : 'GNU++17'
 const cSource = "#include <stdio.h>\nint main(void){long long a,b;return scanf(\"%lld%lld\",&a,&b)==2 ? (printf(\"%lld\\n\",a+b),0):1;}\n"
 const cppSource = "#include <iostream>\nint main(){long long a,b;std::cin>>a>>b;std::cout<<a+b<<'\\n';}\n"
 const cpp20Source = "#include <concepts>\n#include <iostream>\ntemplate<std::integral T> T sum(T a, T b) { return a+b; }\nint main(){long long a,b;std::cin>>a>>b;std::cout<<sum(a,b)<<'\\n';}\n"
-const source = c17 ? cSource : gnu20 ? cpp20Source : cppSource
+const javaSource = 'import java.io.*;\nimport java.util.*;\npublic class Main {\n record Pair(long a, long b) { long sum() { return a+b; } }\n public static void main(String[] args) throws IOException {\n  var in = new BufferedReader(new InputStreamReader(System.in));\n  var t = new StringTokenizer(in.readLine());\n  System.out.println(new Pair(Long.parseLong(t.nextToken()), Long.parseLong(t.nextToken())).sum());\n }\n}\n'
+const source = java ? javaSource : c17 ? cSource : gnu20 ? cpp20Source : cppSource
 const output = process.env.OJ_BROWSER_QA_OUTPUT
 
 async function signIn(context, email) {
@@ -46,7 +48,7 @@ try {
   await page.locator('#training-source:not([readonly])').waitFor()
   const picker = page.getByLabel('选择源码文件', { exact: true })
   await picker.setInputFiles({ name: 'invalid.zip', mimeType: 'application/zip', buffer: Buffer.from('invalid') })
-  await page.getByText(c17 ? '请选择 .c 文件。' : '请选择 .cpp、.cc 或 .cxx 文件。', { exact: true }).waitFor()
+  await page.getByText(java ? '请选择 .java 文件。' : c17 ? '请选择 .c 文件。' : '请选择 .cpp、.cc 或 .cxx 文件。', { exact: true }).waitFor()
   await picker.setInputFiles({ name: 'large.' + extension, mimeType: 'text/plain', buffer: Buffer.alloc(65_537, 'x') })
   await page.getByText('源文件不能超过 64 KiB。', { exact: true }).waitFor()
   await editor.fill('// keep until explicitly replaced')
@@ -151,9 +153,10 @@ try {
   assert(await observer.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
   await observer.screenshot({ path: join(output, 'other-account.png'), fullPage: true })
   const verdicts = [{ id: accepted.id, verdict: 'AC' }]
-  if (c17 || gnu20) {
+  if (c17 || gnu20 || java) {
     const detailURL = page.url()
-    const cases = [['WA', source.replace('a+b', 'a+b+1')], ['CE', 'int main(void) { return ; }', language]]
+    const cases = [['WA', source.replace('a+b', 'a+b+1')],
+      ['CE', java ? 'public class Main { INVALID }' : 'int main(void) { return ; }', language]]
     if (gnu20) cases.push(['CE', source, 'gnu++17'])
     for (const [verdict, code, compiler = language] of cases) {
       await page.goto(ready.url + '/problems')
@@ -180,6 +183,11 @@ try {
     receiptRecoveredAfterReload: true, abandonedUnsentKey: true, uploadValidation: true, replaySame: true, sourceConflict: true,
     wrongVersionRejected: true, ownerOnly: true,
   }) + '\n')
+  for (const active of [observer, page]) {
+    await active.goto(ready.url + '/account')
+    await active.getByRole('button', { name: '退出当前会话', exact: true }).click()
+    await active.getByText('已退出当前会话。', { exact: true }).waitFor()
+  }
   console.log('PASS published A+B ' + label + ' browser → actual Worker → owner result; original receipt and account isolation')
 } finally {
   await browser.close()

@@ -6,7 +6,7 @@ const verdicts = ['AC', 'WA', 'CE', 'RE', 'TLE', 'MLE', 'OLE', 'SE']
 const maxSourceBytes = 65_536
 const encoder = new TextEncoder()
 
-export const trainingLanguageLabel = { 'gnu++17': 'GNU++17', c17: 'C17', 'gnu++20': 'GNU++20' } as const
+export const trainingLanguageLabel = { 'gnu++17': 'GNU++17', c17: 'C17', 'gnu++20': 'GNU++20', java21: 'Java 21' } as const
 export type TrainingLanguage = keyof typeof trainingLanguageLabel
 
 export function isTrainingLanguage(value: unknown): value is TrainingLanguage {

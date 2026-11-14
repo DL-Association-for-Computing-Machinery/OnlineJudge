@@ -22,6 +22,7 @@ func (w document) config() (Config, error) {
 	r.TrainingHistory = w.TrainingHistory
 	r.TrainingSubmissionDetail = w.TrainingSubmissionDetail
 	r.LocalTrainingIntake = w.LocalTrainingIntake
+	r.LocalJava21 = w.LocalJava21
 	r.SessionDevices = w.SessionDevices
 	r.SessionRotation = w.SessionRotation
 	r.ManagementSessions = w.ManagementSessions

@@ -29,6 +29,7 @@ type Host struct {
 	fileOps     int                      // guarded by mu; bounds even empty transfers
 	tier        experiment.ReferenceTier // zero is the separate M0 configuration
 	fixture     experiment.WorkerFixture
+	java21      bool
 	id, started string
 	mu          sync.Mutex
 	closed      bool
@@ -86,6 +87,9 @@ func (h *Host) configuration() (experiment.ExecutionProfile, experiment.Referenc
 		return h.fixture.Profile(), experiment.PinnedReferenceFiles(), nil
 	}
 	c, err := experiment.ResolveReferenceTier(h.tier)
+	if h.java21 && err == nil {
+		c.Runtime = experiment.JavaTextBase(c.Runtime)
+	}
 	return c.Runtime, c.Files, err
 }
 
