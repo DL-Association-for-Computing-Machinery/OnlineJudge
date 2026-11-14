@@ -870,6 +870,19 @@ python3 scripts/test-worker.py aplusb-restore-loop \
 
 专项检查跨 API 原键重试/回执、异源冲突、缺失/错误凭据、Origin 拒绝无写入、闭合回执字段及无 Cookie/CORS、Worker 正常排空和槽停止。提交 API 用 `127.0.0.1:0`，仅从自身私有有界 JSON 日志取得回环地址，客户端禁代理/重定向；控制端沿用既有临时端口流程。私有 Bearer 留在服务端测试进程中。该入口不支持浏览器，不授予普通账号训练权限；独立opt-in最小页面及其失败路径见下节。无 API、迁移或预算变化，可单独回退专项及驱动选择器。
 
+### 试用离线应用制品
+
+从干净、已审查的提交构建一次。根据目标机明确选择 `linux/amd64` 或 `linux/arm64`，将输出写入新目录：
+
+```sh
+stage=$(mktemp -d)
+docker --context desktop-linux buildx build --builder desktop-linux \
+  --platform linux/arm64 --target trial-artifacts \
+  --output "type=local,dest=$stage" .
+```
+
+输出包含 `bin/` 下的 API、Worker、控制器、内嵌迁移工具、材料工具和邮件执行器，以及 `site/` 下的正式前端。开发登录启动器和实验测试二进制不会导出。首次构建需获取已锁定的依赖；目标机接收成品，不重新编译。此目录是[试用离线交付](docs/architecture/operations-design.md#5-发布与回滚)的应用输入，完整发布还要封存运行依赖镜像、模板、校验清单和安装恢复说明；密钥与真实配置单独交接。
+
 ### 专用 Ubuntu VM 判题实验
 
 仅供无宿主共享目录的本地 Ubuntu 24.04 arm64 实验 VM。固定 Linux `6.8.0-106-generic`、Apple 虚拟化、go-judge/GCC 镜像及原生 Docker Unix socket。提交 API、控制器和 Worker 同时显式设置 `OJ_EXPERIMENT_MATERIAL_VERSION=m0-sum-ubuntu-arm64-v1`；运行和恢复只用 VM 内同一专用 root 账号的主槽。错误版本在领取前返回 412，不消耗尝试。禁止双槽、参考执行及浏览器模式；Desktop 默认仍用 `m0-sum-v3`。
