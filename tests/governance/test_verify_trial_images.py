@@ -152,6 +152,16 @@ class TrialImagesTests(unittest.TestCase):
         result = verify()
         self.assertEqual(result.returncode, 1)
         self.assertEqual(result.stdout, "")
+        # Even before it considers opening a Docker socket, the import entry
+        # point must refuse the swapped runtime from this valid alternate export.
+        with patch.object(sys, "path", [str(SCRIPT.parent), *sys.path]):
+            spec = importlib.util.spec_from_file_location("cold_trial_release", SCRIPT.with_name("cold_trial_release.py"))
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+        with patch.object(module, "receiver") as receiver:
+            with self.assertRaises(ValueError):
+                module.receive_release(release, pin, app, self.archive, root / "socket", root / "data")
+            receiver.assert_not_called()
 
     def test_release_pack_rejects_revision_conflict_before_writing(self):
         roles = self.export()

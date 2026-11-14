@@ -946,7 +946,7 @@ python3 -B scripts/trial_release.py pack "$RELEASE_MANIFEST" \
   --nginx "$NGINX_CONFIG_DIGEST" --postgres "$POSTGRES_CONFIG_DIGEST" --redis "$REDIS_CONFIG_DIGEST"
 ```
 
-接收端在导入或启动前，用独立可信渠道取得的发布清单 SHA-256 和可信工作树中的脚本重新核验两份制品。保持清单、应用目录和归档静止，导入时沿用报告中的平台、归档摘要和配置摘要。
+接收端在导入或启动前，用独立可信渠道取得的发布清单 SHA-256 和可信工作树中的脚本重新核验两份制品。保持清单、应用目录和归档静止。
 
 ```sh
 python3 -B scripts/trial_release.py verify "$RELEASE_MANIFEST" \
@@ -957,7 +957,14 @@ python3 -B scripts/trial_release.py verify "$RELEASE_MANIFEST" \
 
 ### 从空引擎导入并联验试用制品
 
-在专用实验 VM 内，先准备无外网路由的网络空间、独立 Docker Unix socket、全新的 Docker 和 containerd 数据目录，并确认 containerd 内容库为空。保持归档和其父目录由操作员控制，验证、导入期间不替换文件。使用相同的信任参数运行：
+在专用 arm64 实验 VM 内，先准备无外网路由的网络空间、独立 Docker Unix socket、全新的 Docker 和 containerd 数据目录，并确认 containerd 内容库为空。临时引擎根目录应为 `/tmp/oj-p6-*/engine.*` 下的 root 私有目录，socket 为其中的 `docker.sock`，Docker 数据目录为其 `data/`。应用包由 root 持有并保留权限。用独立交接的发布摘要执行联合冷启动，应用和镜像使用同一清单：
+
+```sh
+bash scripts/smoke-cold-trial.sh --release "$COLD_DOCKER_SOCKET" "$COLD_ENGINE_DIR" \
+  "$RECEIVED_BUNDLE_DIR" "$RELEASE_MANIFEST" "$TRUSTED_RELEASE_SHA256" "$RUNTIME_ARCHIVE"
+```
+
+验证、导入和启动期间保持制品及目录静止。成功时输出本次联验的发布摘要。也可先单独导入运行镜像，供组件或固定合成判题专项使用：
 
 ```sh
 python3 -B scripts/cold_trial_images.py "$RUNTIME_ARCHIVE" --sha256 "$TRUSTED_ARCHIVE_SHA256" \

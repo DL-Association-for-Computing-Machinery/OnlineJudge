@@ -1,8 +1,17 @@
 #!/usr/bin/env bash
 # Run only in the private, no-egress network namespace of a disposable receiver.
 set -Eeuo pipefail
-[[ $# == 5 && $(id -u) == 0 ]]
-socket=$1 root=$2 app=$3 digest=$4 image_report=$5
+[[ $(id -u) == 0 ]]
+release_mode=false
+if [[ ${1:-} == --release ]]; then
+    [[ $# == 7 ]]
+    release_mode=true
+    shift
+    socket=$1 root=$2 app=$3 manifest=$4 release_digest=$5 archive=$6
+else
+    [[ $# == 5 ]]
+    socket=$1 root=$2 app=$3 digest=$4 image_report=$5
+fi
 [[ $socket == "$root/docker.sock" && $root == /tmp/oj-p6-*/engine.* && -S $socket ]]
 [[ $(realpath -e "$root") == "$root" && $(stat -c '%u:%a' "$root") == 0:700 ]]
 [[ -z $(ip route show default) && -z $(ip -6 route show default) ]]
@@ -11,7 +20,14 @@ socket=$1 root=$2 app=$3 digest=$4 image_report=$5
 docker=(/usr/bin/docker --host "unix://$socket")
 [[ $("${docker[@]}" info --format '{{.DockerRootDir}}') == "$root/data" ]]
 [[ -z $("${docker[@]}" ps -aq) && -z $("${docker[@]}" volume ls -q) ]]
-python3 -B "$(dirname "$0")/trial_app_bundle.py" verify --platform linux/arm64 --manifest-sha256 "$digest" "$app"
+scripts=$(cd -- "$(dirname -- "$0")" && pwd -P)
+if "$release_mode"; then
+    image_report=$(mktemp "$root/release-report.XXXXXX")
+    python3 -B "$scripts/cold_trial_release.py" "$manifest" --sha256 "$release_digest" --app "$app" \
+        --runtime "$archive" --socket "$socket" --data-root "$root/data" > "$image_report"
+    digest=$(python3 -c 'import json, sys; print(json.load(sys.stdin)["application_sha256"])' < "$image_report")
+fi
+python3 -B "$scripts/trial_app_bundle.py" verify --platform linux/arm64 --manifest-sha256 "$digest" "$app"
 
 image_list=$(python3 - "$image_report" <<'PY'
 import json, re, sys
@@ -154,3 +170,6 @@ grep -q '"msg":"API stopped gracefully"' "$stage/api.log"
 "${docker[@]}" stop --signal SIGQUIT --time 5 "${containers[2]}" >/dev/null
 [[ $("${docker[@]}" inspect --format '{{.State.ExitCode}}' "${containers[2]}") == 0 ]]
 printf 'Cold trial passed: migration, closed-to-open session state, HTTPS readiness and frontend, API and edge shutdown\n'
+if "$release_mode"; then
+    printf 'Cold trial release SHA-256: %s\n' "$release_digest"
+fi
