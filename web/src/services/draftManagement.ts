@@ -1,4 +1,5 @@
 import { validDraftID } from './privateDraft'
+import { decodeFrozenSolution } from './frozenSolution'
 import { validReturnReason } from './reviewReturnReason'
 
 export interface ImportSource { source_id: string; title: string; version: string; import_revision: string }
@@ -56,7 +57,7 @@ export function decodeOwnDraftPage(value: unknown, owner: string): OwnDraftPage 
 const base = '/api/v1/problem-draft-management'
 // No compatibility fallback: old servers must refuse this namespace rather than
 // silently ignoring the subject precondition on an older import endpoint.
-async function request(owner: string, path: string, signal: AbortSignal, body?: object): Promise<unknown> {
+async function request(owner: string, path: string, signal: AbortSignal, body?: object, limit = 32_768): Promise<unknown> {
   if (!validDraftID(owner) || location.protocol !== 'https:') throw new ImportError()
   const method = body ? 'POST' : 'GET'
   const response = await fetch(base + path, {
@@ -74,7 +75,7 @@ async function request(owner: string, path: string, signal: AbortSignal, body?: 
       const { done, value } = await reader.read()
       if (done) break
       size += value.byteLength
-      if (size > 32_768) throw new ImportError()
+      if (size > limit) throw new ImportError()
       chunks.push(value)
     }
   } finally { await reader.cancel().catch(() => undefined); reader.releaseLock() }
@@ -105,6 +106,8 @@ export interface ReviewIntakeIntent {
   request_key: string; draft_id: string; import_revision: string; reference_request_id: string
 }
 
+export interface AuthorSolutionBinding { import_revision: string; formal_plan_sha256: string }
+
 export async function requestReviewIntake(
   action: 'submit' | 'read', owner: string, intent: ReviewIntakeIntent, version: string, signal: AbortSignal,
 ): Promise<string> {
@@ -131,4 +134,28 @@ export async function readAuthorReviewReturn(
     !validReturnReason(data.reason) || typeof data.returned_at !== 'string' ||
     !/^\d{4}-\d\d-\d\dT/.test(data.returned_at) || !Number.isFinite(Date.parse(data.returned_at))) throw new ImportError()
   return { id, reason: data.reason }
+}
+
+export async function readAuthorSolution(owner: string, intent: ReviewIntakeIntent, version: string, signal: AbortSignal) {
+  const id = await requestReviewIntake('read', owner, intent, version, signal)
+  const data = await request(owner, `/review-submissions/${intent.request_key}/solution`, signal, undefined, 512 * 1024)
+  if (!object(data) || Object.keys(data).length !== 3 || data.import_revision !== intent.import_revision ||
+    !validRevision(data.formal_plan_sha256)) throw new ImportError()
+  return { id, binding: { import_revision: intent.import_revision, formal_plan_sha256: data.formal_plan_sha256 },
+    solution: decodeFrozenSolution(data.standard_solution) }
+}
+
+export async function requestAuthorSolutionConfirmation(
+  action: 'confirm' | 'read', owner: string, intent: ReviewIntakeIntent, version: string,
+  binding: AuthorSolutionBinding, signal: AbortSignal,
+) {
+  if (!validKey(intent.request_key) || !validRevision(intent.import_revision) || binding.import_revision !== intent.import_revision ||
+    !validRevision(binding.formal_plan_sha256)) throw new ImportError()
+  if (action === 'read') await requestReviewIntake('read', owner, intent, version, signal)
+  const data = await request(owner, `/review-submissions/${intent.request_key}/solution-confirmation`, signal,
+    action === 'confirm' ? binding : undefined, 4096)
+  if (!object(data) || Object.keys(data).length !== 4 || data.request_key !== intent.request_key ||
+    data.import_revision !== binding.import_revision || data.formal_plan_sha256 !== binding.formal_plan_sha256 ||
+    typeof data.confirmed_at !== 'string' || !/^\d{4}-\d\d-\d\dT/.test(data.confirmed_at) ||
+    !Number.isFinite(Date.parse(data.confirmed_at))) throw new ImportError()
 }

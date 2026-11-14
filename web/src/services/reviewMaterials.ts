@@ -1,4 +1,5 @@
 import { object } from './draftManagement'
+import { decodeFrozenSolution, type FrozenSolution } from './frozenSolution'
 import { decodeDraftPreview, validDraftID, type DraftPreview } from './privateDraft'
 
 const digest = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)
@@ -7,7 +8,6 @@ const invalid = () => new Error('无法读取当前分配的审核材料。')
 const encoder = new TextEncoder()
 const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
 const bodyLimit = 7 * 1024 * 1024
-const sourceLimit = 64 * 1024
 const evidenceHashes = ['content_version', 'import_revision', 'source_lock_sha256', 'formal_plan_sha256', 'profile_sha256', 'evidence_sha256'] as const
 const evidenceFields = ['review_id', 'draft_id', 'source_id', 'reference_request_id', 'assignment_revision', 'formal_verdict',
   'comparison_plan_sha256', 'comparison_outcome', ...evidenceHashes] as const
@@ -20,7 +20,7 @@ type ReviewEvidence = Record<typeof evidenceHashes[number], string> & {
 interface ReviewMaterials {
   evidence: ReviewEvidence
   statement: DraftPreview
-  standard_solution: { source: string; dependencies?: { name: string; source: string }[] }
+  standard_solution: FrozenSolution
 }
 
 export const reviewBlockerLabels = {
@@ -56,33 +56,12 @@ function decodeEvidence(value: unknown, review: string): ReviewMaterials['eviden
   return value as unknown as ReviewMaterials['evidence']
 }
 
-function sourceBytes(value: unknown) {
-  if (typeof value !== 'string' || !value) throw invalid()
-  const raw = encoder.encode(value)
-  if (raw.byteLength > sourceLimit || decoder.decode(raw) !== value) throw invalid()
-  return raw.byteLength
-}
-
 export function decodeReviewMaterials(value: unknown, review: string): ReviewMaterials {
   if (!object(value) || Object.keys(value).length !== 3) throw invalid()
   const evidence = decodeEvidence(value.evidence, review)
   const statement = decodeDraftPreview(value.statement, evidence.draft_id)
   if (statement.version !== evidence.content_version) throw invalid()
-  const solution = value.standard_solution
-  if (!object(solution) || Object.keys(solution).length !== ('dependencies' in solution ? 2 : 1)) throw invalid()
-  let bytes = sourceBytes(solution.source)
-  if ('dependencies' in solution) {
-    if (!Array.isArray(solution.dependencies) || solution.dependencies.length < 1 || solution.dependencies.length > 4) throw invalid()
-    const allowed = ['lib/prime.hpp', 'lib/montgomery.hpp', 'lib/util.hpp', 'common/random.h']
-    const seen = new Set<string>()
-    for (const dep of solution.dependencies) {
-      if (!object(dep) || Object.keys(dep).length !== 2 || typeof dep.name !== 'string' || !allowed.includes(dep.name) || seen.has(dep.name)) throw invalid()
-      seen.add(dep.name)
-      bytes += sourceBytes(dep.source)
-      if (bytes > sourceLimit) throw invalid()
-    }
-  }
-  return { evidence, statement, standard_solution: solution as unknown as ReviewMaterials['standard_solution'] }
+  return { evidence, statement, standard_solution: decodeFrozenSolution(value.standard_solution) }
 }
 
 export async function fetchReviewMaterials(review: string, owner: string, signal: AbortSignal): Promise<ReviewMaterials> {
