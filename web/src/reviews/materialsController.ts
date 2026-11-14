@@ -1,7 +1,8 @@
 import type { AccountController } from '../account/controller'
 import { validKey } from '../services/draftManagement'
-import { fetchReviewEligibility, fetchReviewMaterials, type ReviewEligibility, type ReviewMaterials } from '../services/reviewMaterials'
+import { fetchReviewEligibility, fetchReviewMaterials, ReviewResponseError, type ReviewEligibility, type ReviewMaterials } from '../services/reviewMaterials'
 import { requestReviewReturn, type ReviewReturnKey } from '../services/reviewReturn'
+import { decodeApprovalKey, requestReviewApproval, type ApprovalKey } from '../services/reviewApproval'
 import { validReturnReason } from '../services/reviewReturnReason'
 import { requestStatementConfirmation } from '../services/statementConfirmation'
 import { originalReturn, reserveReturn, returnSlot } from './returnJournal'
@@ -10,10 +11,10 @@ type Confirmation = 'ready' | 'pending' | 'recorded' | 'unavailable'
 type ReturnStatus = 'ready' | 'pending' | 'recorded' | 'unavailable'
 interface MaterialsState {
   data: ReviewMaterials | null; busy: boolean; notice: string; confirmation: Confirmation
-  eligibility: ReviewEligibility | null; returnStatus: ReturnStatus
+  eligibility: ReviewEligibility | null; returnStatus: ReturnStatus; approval: Confirmation
 }
 const empty = (notice: string): MaterialsState => ({
-  data: null, busy: false, notice, confirmation: 'unavailable', eligibility: null, returnStatus: 'unavailable',
+  data: null, busy: false, notice, confirmation: 'unavailable', eligibility: null, returnStatus: 'unavailable', approval: 'unavailable',
 })
 
 function journalSlot(owner: string, evidence: ReviewMaterials['evidence']) {
@@ -31,6 +32,19 @@ function returnStatus(slot: string): ReturnStatus {
   try { return originalReturn(slot) === null ? 'ready' : 'pending' } catch { return 'unavailable' }
 }
 const authorityExpired = (deadline: number) => Date.now() >= deadline || document.visibilityState === 'hidden'
+
+function approvalSlot(owner: string, evidence: ReviewMaterials['evidence']) {
+  return ['oj.review-approval.v1', owner, evidence.review_id, evidence.assignment_revision].join(':')
+}
+
+function savedApproval(slot: string): ApprovalKey | null {
+  const raw = sessionStorage.getItem(slot)
+  return raw === null ? null : decodeApprovalKey(JSON.parse(raw) as unknown)
+}
+
+function approvalStatus(slot: string): Confirmation {
+  try { return savedApproval(slot) === null ? 'ready' : 'pending' } catch { return 'unavailable' }
+}
 
 export class ReviewMaterialsController {
   private state = empty('请检查会话并读取分配给当前账号的审核材料。')
@@ -80,7 +94,8 @@ export class ReviewMaterialsController {
           this.authority = { owner: session.subject_id, deadline }
           this.publish({ ...empty('已读取当前分配的冻结材料。'), data,
             confirmation: confirmationStatus(journalSlot(session.subject_id, data.evidence)),
-            returnStatus: returnStatus(returnSlot(session.subject_id, data.evidence)) })
+            returnStatus: returnStatus(returnSlot(session.subject_id, data.evidence)),
+            approval: approvalStatus(approvalSlot(session.subject_id, data.evidence)) })
         }
       } catch {
         if (current()) this.publish(empty('无法读取材料。请核对送审 ID、当前分配及服务状态，再手动重试。'))
@@ -163,11 +178,11 @@ export class ReviewMaterialsController {
   }
 
   async returnReview(reason?: string) {
-    const { data, busy, returnStatus, eligibility } = this.state
+    const { data, busy, returnStatus, eligibility, approval } = this.state
     const authority = this.authority
     const write = reason !== undefined
     if (!this.connected || this.running || busy || this.account.getSnapshot().busy || !data || !authority ||
-      (write ? returnStatus !== 'ready' || !validReturnReason(reason) ||
+      (write ? approval === 'pending' || approval === 'recorded' || returnStatus !== 'ready' || !validReturnReason(reason) ||
         eligibility?.blockers.includes('materials_returned') : returnStatus !== 'pending')) return
     const { owner, deadline } = authority
     if (authorityExpired(deadline)) { this.clear(); return }
@@ -205,6 +220,71 @@ export class ReviewMaterialsController {
           this.abort = null
           this.publish({ ...this.state, busy: false, returnStatus: recorded ? 'recorded' : 'pending',
             notice: recorded ? '已核实这份材料的退回回执。' : '尚未核实本次退回。' })
+        }
+      }
+    }
+  }
+
+  async approve(reason?: string) {
+    const { data, busy, approval, eligibility, returnStatus } = this.state
+    const authority = this.authority
+    if (!this.connected || this.running || busy || this.account.getSnapshot().busy || !data || !authority) return
+    const write = reason !== undefined
+    if (write ? approval !== 'ready' || !eligibility?.approvalEnabled || !eligibility.eligible ||
+      returnStatus === 'pending' || returnStatus === 'recorded' || !validReturnReason(reason) : approval !== 'pending') return
+    const { owner, deadline } = authority
+    if (authorityExpired(deadline)) { this.clear(); return }
+    const slot = approvalSlot(owner, data.evidence)
+    let original: ApprovalKey
+    try {
+      const saved = savedApproval(slot)
+      if (saved && write) { this.publish({ ...this.state, approval: 'pending' }); return }
+      if (saved) original = saved
+      else if (write && eligibility) {
+        original = { key: crypto.randomUUID().replaceAll('-', ''), snapshot: eligibility.snapshot }
+        sessionStorage.setItem(slot, JSON.stringify(original))
+      } else throw new Error('Original approval key unavailable')
+    } catch {
+      this.publish({ ...this.state, approval: 'unavailable' })
+      return
+    }
+    const generation = this.generation
+    const abort = new AbortController()
+    this.abort = abort
+    this.running = true
+    this.publish({ ...this.state, busy: true, approval: 'pending', eligibility: null,
+      notice: write ? '正在提交终审批准…' : '正在查询原批准回执…' })
+    let status: Confirmation = 'pending'
+    let notice = '尚未核实本次批准，请查询原回执。'
+    try {
+      await requestReviewApproval(owner, data.evidence.review_id, data.evidence.assignment_revision, original, abort.signal, reason)
+      status = 'recorded'
+      notice = '已核实批准回执。'
+    } catch (err) {
+      if (err instanceof ReviewResponseError && generation === this.generation) {
+        if ((err.status === 401 && err.code === 'SESSION_REQUIRED') ||
+          (err.status === 403 && err.code === 'PROBLEM_REVIEWER_REQUIRED') ||
+          (err.status === 409 && err.code === 'REVIEW_SUBJECT_CHANGED')) {
+          this.clear()
+          this.publish(empty('无法核实当前审核权限，请重新检查会话并读取材料。'))
+        } else if (write && err.status === 409 && (err.code === 'REVIEW_CHANGED' || err.code === 'REVIEW_APPROVAL_BLOCKED')) {
+          // Only these responses to the first POST prove this key did not write.
+          // A failed GET, even 404, cannot settle an earlier unknown result.
+          try {
+            const saved = savedApproval(slot)
+            if (saved?.key === original.key && saved.snapshot === original.snapshot) sessionStorage.removeItem(slot)
+            this.clear()
+            this.publish(empty('本次批准未写入，请重新读取材料和准入状态。'))
+          } catch { /* Leave a potentially outstanding journal entry alone. */ }
+        }
+      }
+    } finally {
+      this.running = false
+      if (generation === this.generation) {
+        if (authorityExpired(deadline)) this.clear()
+        else {
+          this.abort = null
+          this.publish({ ...this.state, busy: false, approval: status, notice })
         }
       }
     }

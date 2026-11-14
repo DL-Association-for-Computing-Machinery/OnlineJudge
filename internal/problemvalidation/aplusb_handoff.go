@@ -23,14 +23,19 @@ func handoffDigest(raw []byte) string {
 }
 
 const handoffSchema = "oj.aplusb-target-handoff.v1"
+const candidateHandoffSchema = "oj.aplusb-trial-candidate-handoff.v1"
 const handoffManifest = "handoff.json"
 const handoffTransport = "manifest.json"
 const transportPin = "d896b91d12727acc290e98f6cd8b0944d590efa905efaa1c84ef7cbe4a2f4a13"
 
 const (
-	ubuntuHandoffRuntime   = "8cf3b8386627d1a92b7566521c78dd030bf00fdd2acd5485dcc9bc4357e492b8"
-	ubuntuHandoffJudge     = "a2aac16ff12078b51106b6a26ed374aa89dbe386152742d6c1aeee2f189983bb"
-	ubuntuHandoffTransport = "337c7a52705e4a8ff77c8d8ee03388563c3b54e80ed1b34b1d2a72e0863e4640"
+	ubuntuHandoffRuntime       = "8cf3b8386627d1a92b7566521c78dd030bf00fdd2acd5485dcc9bc4357e492b8"
+	ubuntuHandoffJudge         = "a2aac16ff12078b51106b6a26ed374aa89dbe386152742d6c1aeee2f189983bb"
+	ubuntuHandoffTransport     = "337c7a52705e4a8ff77c8d8ee03388563c3b54e80ed1b34b1d2a72e0863e4640"
+	trialAMD64HandoffRuntime   = "0127bfe7d7703cd5eb382f33d71dc81bdb8860d1c69abe20a5c2f51dc45c3365"
+	trialAMD64HandoffJudge     = "8fc0161f7229ea8c8882098d61973fa6f1b81c3bda4fcccc0c6d285fb1c94817"
+	trialAMD64HandoffTransport = "d136160e862b2553e6bb0c87637052635ec2871d72f7efcb51840454479e89b4"
+	trialAMD64HandoffSlot      = "oj-aplusb-trial-amd64-sandbox"
 )
 
 var errHandoff = errors.New("A+B handoff is incomplete or does not match the trusted binding")
@@ -66,6 +71,9 @@ func handoffFor(target APlusBHandoffTarget) (APlusBHandoff, error) {
 		h.Judge, h.Transport = reviewedAPlusBManifest, transportPin
 	case target.Runtime == ubuntuHandoffRuntime && target.Slot == "oj-aplusb-ubuntu-sandbox":
 		h.Judge, h.Transport = ubuntuHandoffJudge, ubuntuHandoffTransport
+	case target.Runtime == trialAMD64HandoffRuntime && target.Slot == trialAMD64HandoffSlot:
+		h.Schema = candidateHandoffSchema
+		h.Judge, h.Transport = trialAMD64HandoffJudge, trialAMD64HandoffTransport
 	default:
 		return APlusBHandoff{}, errHandoff
 	}
@@ -250,6 +258,12 @@ type APlusBHandoffReadback struct {
 // pinned reports. No signature, node attestation or approval is inferred.
 func VerifyAPlusBHandoffReports(ctx context.Context, path, pin string, target APlusBHandoffTarget, reports [3][]byte, digests [3]string) (APlusBHandoffReadback, error) {
 	var zero APlusBHandoffReadback
+	// Candidate bytes can be handed off before runtime admission. They cannot
+	// be used to establish that the proposed runtime has already run.
+	binding, err := handoffFor(target)
+	if err != nil || binding.Schema != handoffSchema {
+		return zero, errHandoff
+	}
 	h, points, err := verifyAPlusBHandoff(ctx, path, pin, target)
 	if err != nil {
 		return zero, err

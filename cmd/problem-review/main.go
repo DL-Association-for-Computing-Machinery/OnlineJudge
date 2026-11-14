@@ -1,4 +1,4 @@
-// Command problem-review manages explicit reviewer grants and assignments.
+// Command problem-review manages explicit reviewer and publisher grants and assignments.
 package main
 
 import (
@@ -37,7 +37,7 @@ func parse(args []string) (command, error) {
 	f := flag.NewFlagSet(c.op, flag.ContinueOnError)
 	f.SetOutput(io.Discard)
 	switch c.op {
-	case "reviewer-inspect", "reviewer-set":
+	case "reviewer-inspect", "reviewer-set", "publisher-inspect", "publisher-set":
 		f.StringVar(&c.id, "subject", "", "account subject ID")
 	case "assignment-inspect", "assign", "withdraw":
 		f.StringVar(&c.id, "review", "", "review submission ID")
@@ -46,13 +46,13 @@ func parse(args []string) (command, error) {
 	}
 	var rev *int64
 	var operator, reason *string
-	if c.op == "reviewer-set" || c.op == "assign" || c.op == "withdraw" {
+	if c.op == "reviewer-set" || c.op == "publisher-set" || c.op == "assign" || c.op == "withdraw" {
 		rev = f.Int64("expected-revision", -1, "current revision; zero for initial grant")
 		operator = f.String("operator", "", "maintenance attribution")
 		reason = f.String("reason", "", "reason for change")
 	}
 	var enabled *string
-	if c.op == "reviewer-set" {
+	if c.op == "reviewer-set" || c.op == "publisher-set" {
 		enabled = f.String("enabled", "", "true or false")
 	}
 	if c.op == "assign" {
@@ -63,7 +63,7 @@ func parse(args []string) (command, error) {
 		return command{}, identity.ErrInvalid
 	}
 	switch c.op {
-	case "reviewer-set":
+	case "reviewer-set", "publisher-set":
 		c.role = identity.ProblemRoleChange{SubjectID: c.id, ExpectedRevision: *rev,
 			Enabled: *enabled == "true", Operator: *operator, Reason: *reason}
 		if (*enabled != "true" && *enabled != "false") || !c.role.Valid() {
@@ -108,6 +108,10 @@ func run(parent context.Context, args []string, out io.Writer) error {
 		result, err = access.ReviewerRole(ctx, c.id)
 	case "reviewer-set":
 		result, err = access.SetReviewerRole(ctx, c.role)
+	case "publisher-inspect":
+		result, err = access.PublisherRole(ctx, c.id)
+	case "publisher-set":
+		result, err = access.SetPublisherRole(ctx, c.role)
 	case "assignment-inspect":
 		result, err = reviews.Assignment(ctx, c.id)
 	case "assign", "withdraw":
@@ -128,6 +132,8 @@ func main() {
 			_, _ = fmt.Fprintln(os.Stderr, "invalid review maintenance arguments")
 		case errors.Is(err, identity.ErrReviewerRequired):
 			_, _ = fmt.Fprintln(os.Stderr, "explicit active non-author reviewer required")
+		case errors.Is(err, identity.ErrPublisherRequired):
+			_, _ = fmt.Fprintln(os.Stderr, "active account required for a publisher grant")
 		default:
 			_, _ = fmt.Fprintln(os.Stderr, "review operation not confirmed; inspect the stored revision before any further change")
 		}

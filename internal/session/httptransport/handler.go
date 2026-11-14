@@ -53,6 +53,7 @@ type handler struct {
 	reviewSolution         AuthorReviewSolution
 	reviewMaterials        ReviewMaterialsReader
 	reviewReturns          ReviewReturns
+	reviewApprovals        ReviewApprovals
 	statementConfirmations StatementConfirmations
 	trainingHistory        TrainingHistory
 	reviewDiscovery        ReviewDiscoveryReader
@@ -89,7 +90,7 @@ func (config Config) Validate() error {
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	if IsEmailConfirmationPath(r.URL.Path) || IsEmailRequestPath(r.URL.Path) || r.URL.Path == reviewDiscoveryPath {
+	if IsEmailConfirmationPath(r.URL.Path) || IsEmailRequestPath(r.URL.Path) || r.URL.Path == reviewDiscoveryPath || IsReviewApprovalPath(r.URL.Path) {
 		w.Header().Set("Referrer-Policy", "no-referrer")
 	}
 	source, trusted := h.requestSource(r)
@@ -111,6 +112,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	reviewMethod, reviewKey, authorAction := reviewIntakeRoute(r.URL.Path)
 	reviewID, reviewRead := reviewReadRoute(r.URL.Path)
 	returnID, returnKey, returnMethod := reviewReturnRoute(r.URL.Path)
+	approvalID, approvalKey, approvalMethod := reviewActionRoute(r.URL.Path, approvalAction)
 	statementID, statementKey, statementMethod := reviewActionRoute(r.URL.Path, statementConfirmationAction)
 	trainingID := trainingDetailID(r.URL.Path)
 	switch r.URL.Path {
@@ -195,6 +197,14 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			method = statementMethod
 			break
 		}
+		if approvalMethod != "" {
+			if h.reviewApprovals == nil {
+				problem(w, http.StatusNotFound, "NOT_FOUND", "接口不存在")
+				return
+			}
+			method = approvalMethod
+			break
+		}
 		if returnMethod != "" {
 			if h.reviewReturns == nil {
 				problem(w, http.StatusNotFound, "NOT_FOUND", "接口不存在")
@@ -274,6 +284,10 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		} else {
 			h.serveReviewIntake(w, r, reviewKey, authorAction == "return")
 		}
+		return
+	}
+	if approvalMethod != "" {
+		h.serveReviewApproval(w, r, approvalID, approvalKey)
 		return
 	}
 	if returnMethod != "" {

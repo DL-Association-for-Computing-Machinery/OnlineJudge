@@ -36,7 +36,7 @@ type APlusBHandoffReceipt struct {
 func aplusbReceiptFor(readback APlusBHandoffReadback) (APlusBHandoffReceipt, error) {
 	var zero APlusBHandoffReceipt
 	h, err := handoffFor(readback.Target)
-	if err != nil || readback.Scope != handoffReadbackScope || readback.Points != 17 {
+	if err != nil || h.Schema != handoffSchema || readback.Scope != handoffReadbackScope || readback.Points != 17 {
 		return zero, errHandoff
 	}
 	encoded, _ := json.Marshal(h)

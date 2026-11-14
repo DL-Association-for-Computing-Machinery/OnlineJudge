@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/db"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/testpki"
@@ -29,7 +30,7 @@ const (
 	rollbackVersion       = experiment.PinnedVersion
 	rollbackCurrent       = "../../.local/bin"
 	rollbackBaseSchema    = 20
-	rollbackCurrentSchema = 26
+	rollbackCurrentSchema = int(db.RuntimeSchemaVersion)
 )
 
 type rollbackFixture struct {
@@ -102,8 +103,7 @@ func TestCompatibleRollbackLoop(t *testing.T) {
 	f.counts(t, ctx, 2, migrationRows+rollbackCurrentSchema-rollbackBaseSchema, rollbackCurrentSchema)
 
 	start := time.Now()
-	// Check each boundary before going further. Down26 needs empty platform
-	// role history; Down25 only removes the discovery index.
+	// The newer ledgers must be empty; the discovery index survives until Down25.
 	for next := rollbackCurrentSchema - 1; next >= rollbackBaseSchema; next-- {
 		runFixtureMigration(t, ctx, rollbackCurrent, f.database.dsn, f.root, rollbackVersion, []string{"down"})
 		f.counts(t, ctx, 2, migrationRows+next-rollbackBaseSchema, next)

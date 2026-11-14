@@ -16,7 +16,7 @@ func NewSessionHandler(session http.Handler) http.Handler {
 		optional := httptransport.IsDevicePath(r.URL.Path) || httptransport.IsPendingDevicePath(r.URL.Path) ||
 			httptransport.IsPrivateDraftPath(r.URL.Path) || httptransport.IsReferenceRequestPath(r.URL.Path) ||
 			httptransport.IsReviewIntakePath(r.URL.Path) || httptransport.IsReviewReadPath(r.URL.Path) ||
-			httptransport.IsReviewReturnPath(r.URL.Path) || httptransport.IsStatementConfirmationPath(r.URL.Path) ||
+			httptransport.IsReviewReturnPath(r.URL.Path) || httptransport.IsReviewApprovalPath(r.URL.Path) || httptransport.IsStatementConfirmationPath(r.URL.Path) ||
 			httptransport.IsEmailConfirmationPath(r.URL.Path) || httptransport.IsEmailRequestPath(r.URL.Path) ||
 			httptransport.IsTrainingHistoryPath(r.URL.Path) || httptransport.IsTrainingDetailPath(r.URL.Path) ||
 			httptransport.IsManagementSessionPath(r.URL.Path) || r.URL.Path == httptransport.ManagementRolePath

@@ -94,9 +94,17 @@ func (h *handler) serveReviewRead(w http.ResponseWriter, r *http.Request, id, le
 	case "eligibility":
 		var status problemreference.ReviewEligibility
 		status, err = h.reviewEvidence.EligibilityForSubject(ctx, credential, expected, id)
-		result, e = status, status.Evidence
+		// A future passing policy may produce a nil slice. Keep the wire
+		// contract as an array and advertise availability independently.
+		if status.Blockers == nil {
+			status.Blockers = []string{}
+		}
+		result, e = struct {
+			problemreference.ReviewEligibility
+			ApprovalEnabled bool `json:"approval_enabled,omitempty"`
+		}{status, h.reviewApprovals != nil}, status.Evidence
 		valid = e.Valid() && status.PolicyVersion == problemreference.ReviewPolicyVersion &&
-			problemdomain.ValidImportRevision(status.SnapshotSHA256) && !status.Eligible && len(status.Blockers) > 0
+			problemdomain.ValidImportRevision(status.SnapshotSHA256) && status.Eligible == (len(status.Blockers) == 0)
 	case "evidence":
 		e, err = h.reviewEvidence.EvidenceForSubject(ctx, credential, expected, id)
 		result, valid = e, e.Valid()

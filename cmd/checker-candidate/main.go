@@ -42,6 +42,9 @@ func run(parent context.Context, args []string, out, diagnostics io.Writer) erro
 	if len(args) > 0 && args[0] == "aplusb-judge-manifest" {
 		return aplusbJudgeManifest(parent, args[1:], out, diagnostics)
 	}
+	if len(args) > 0 && args[0] == "aplusb-trial-preflight" {
+		return aplusbTrialPreflight(parent, args[1:], out, diagnostics)
+	}
 	f := flag.NewFlagSet("checker-candidate", flag.ContinueOnError)
 	f.SetOutput(diagnostics)
 	bundle := f.String("bundle", "", "absolute path to a prepared private bundle")

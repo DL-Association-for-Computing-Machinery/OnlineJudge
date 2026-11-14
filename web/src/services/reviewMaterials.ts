@@ -41,6 +41,9 @@ export const reviewBlockerLabels = {
 export interface ReviewEligibility {
   blockers: (keyof typeof reviewBlockerLabels)[]
   statementConfirmed: boolean
+  eligible: boolean
+  approvalEnabled: boolean
+  snapshot: string
 }
 
 function decodeEvidence(value: unknown, review: string): ReviewMaterials['evidence'] {
@@ -72,20 +75,26 @@ export async function fetchReviewMaterials(review: string, owner: string, signal
 export async function fetchReviewEligibility(evidence: ReviewMaterials['evidence'], owner: string, signal: AbortSignal): Promise<ReviewEligibility> {
   if (!id(evidence.review_id)) throw invalid()
   const value = await readReviewJSON(`/api/v1/problem-review/${evidence.review_id}/eligibility`, owner, 32 * 1024, signal)
-  if (!object(value) || value.policy_version !== 'oj.review-approval.v14' || value.eligible !== false ||
+  if (!object(value) || value.policy_version !== 'oj.review-approval.v14' || typeof value.eligible !== 'boolean' ||
+    !digest(value.snapshot_sha256) || ('approval_enabled' in value && value.approval_enabled !== true) ||
     ('statement_semantics_confirmed' in value && value.statement_semantics_confirmed !== true)) throw invalid()
   const actual = decodeEvidence(value.evidence, evidence.review_id)
   if (evidenceFields.some(field => actual[field] !== evidence[field])) throw invalid()
   const blockers: unknown = value.blockers
-  if (!Array.isArray(blockers) || blockers.length === 0 || blockers.length > Object.keys(reviewBlockerLabels).length ||
+  if (!Array.isArray(blockers) || value.eligible !== (blockers.length === 0) || blockers.length > Object.keys(reviewBlockerLabels).length ||
     new Set(blockers).size !== blockers.length || !blockers.every((code): code is keyof typeof reviewBlockerLabels =>
       typeof code === 'string' && Object.hasOwn(reviewBlockerLabels, code))) throw invalid()
-  return { blockers, statementConfirmed: value.statement_semantics_confirmed === true }
+  return { blockers, statementConfirmed: value.statement_semantics_confirmed === true, eligible: value.eligible,
+    snapshot: value.snapshot_sha256, approvalEnabled: value.approval_enabled === true }
 }
 
 export interface ReviewAssignmentPage {
   assignments: { review_id: string; source_id: string; import_revision: string; assignment_revision: number }[]
   next_cursor: string
+}
+
+export class ReviewResponseError extends Error {
+  constructor(readonly status: number, readonly code: string) { super('Review request was refused') }
 }
 
 const reviewCursor = /^[A-Za-z0-9_-]{91}$/
@@ -113,10 +122,12 @@ export async function readReviewJSON(path: string, owner: string, limit: number,
   const response = await fetch(path, {
     method: intent ? 'POST' : 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error',
     referrerPolicy: intent ? 'origin' : 'no-referrer',
-    headers: { Accept: 'application/json', 'X-OJ-Expected-Subject': owner, ...(intent ? { 'Content-Type': 'application/json' } : {}) },
+    headers: { Accept: 'application/json, application/problem+json', 'X-OJ-Expected-Subject': owner, ...(intent ? { 'Content-Type': 'application/json' } : {}) },
     ...(intent ? { body: JSON.stringify(intent) } : {}), signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
   })
-  if (response.status !== 200 || response.headers.get('Content-Type')?.split(';')[0].trim() !== 'application/json' || !response.body) {
+  const success = response.status === 200
+  const media = success ? 'application/json' : 'application/problem+json'
+  if (response.headers.get('Content-Type')?.split(';')[0].trim() !== media || !response.body) {
     await response.body?.cancel().catch(() => undefined)
     throw invalid()
   }
@@ -128,14 +139,21 @@ export async function readReviewJSON(path: string, owner: string, limit: number,
       const { done, value } = await reader.read()
       if (done) break
       size += value.byteLength
-      if (size > limit) throw invalid()
+      if (size > (success ? limit : 2048)) throw invalid()
       chunks.push(value)
     }
   } finally { await reader.cancel().catch(() => undefined); reader.releaseLock() }
   const body = new Uint8Array(size)
   let offset = 0
   for (const chunk of chunks) { body.set(chunk, offset); offset += chunk.byteLength }
-  return JSON.parse(decoder.decode(body)) as unknown
+  const result: unknown = JSON.parse(decoder.decode(body))
+  if (!success) {
+    if (object(result) && result.type === 'about:blank' && result.status === response.status && typeof result.code === 'string') {
+      throw new ReviewResponseError(response.status, result.code)
+    }
+    throw invalid()
+  }
+  return result
 }
 
 export type { ReviewMaterials }

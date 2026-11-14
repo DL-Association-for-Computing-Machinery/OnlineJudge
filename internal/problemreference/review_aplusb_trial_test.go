@@ -2,6 +2,7 @@ package problemreference
 
 import (
 	"encoding/json"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -28,15 +29,27 @@ func TestLocalAPlusBTrialNeverWaivesReviewGates(t *testing.T) {
 	good.Evidence.Reviewer, good.Evidence.ReviewID, good.Evidence.DraftID, good.Evidence.ReferenceRequestID = subject, subject, subject, subject
 	good.Evidence.AssignmentRevision = 1
 	good.Evidence.EvidenceSHA256 = strings.Repeat("c", 64)
-	bound, err := bindReviewEligibility(identity.ProblemActor{SubjectID: subject, SessionVersion: identity.SessionVersion{
+	actor := identity.ProblemActor{SubjectID: subject, SessionVersion: identity.SessionVersion{
 		RecoveryID: strings.Repeat("b", 32), AuthGeneration: 1,
-	}}, good)
+	}}
+	bound, err := bindReviewEligibility(actor, good)
 	if err != nil {
 		t.Fatal(err)
 	}
 	raw, err := json.Marshal(bound)
 	if err != nil || len(raw) > 4096 || bound.LocalChecker == nil || len(bound.SnapshotSHA256) != 64 {
 		t.Fatalf("full A+B response exceeded the HTTP budget or lost evidence, size=%d err=%v", len(raw), err)
+	}
+	if err := CheckReviewApprovalSnapshot(actor, good, bound.SnapshotSHA256); !errors.Is(err, ErrReviewApprovalBlocked) {
+		t.Fatalf("matching digest must not waive field evidence: %v", err)
+	}
+	if err := CheckReviewApprovalSnapshot(actor, good, "invalid"); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("malformed digest must not be accepted: %v", err)
+	}
+	newSession := actor
+	newSession.AuthGeneration++
+	if err := CheckReviewApprovalSnapshot(newSession, good, bound.SnapshotSHA256); !errors.Is(err, ErrReviewChanged) {
+		t.Fatalf("digest from another authentication generation was not rejected: %v", err)
 	}
 	for _, mutate := range []func(*ReviewEligibilitySnapshot){
 		func(s *ReviewEligibilitySnapshot) { s.Returned = true },
@@ -50,6 +63,13 @@ func TestLocalAPlusBTrialNeverWaivesReviewGates(t *testing.T) {
 	} {
 		changed := good
 		mutate(&changed)
+		want := ErrReviewChanged
+		if !changed.Evidence.Valid() {
+			want = ErrInvalid
+		}
+		if err := CheckReviewApprovalSnapshot(actor, changed, bound.SnapshotSHA256); !errors.Is(err, want) {
+			t.Fatalf("changed evidence accepted or misclassified: got %v, want %v", err, want)
+		}
 		got := assessReviewEligibility(changed)
 		if got.LocalChecker != nil || got.Eligible ||
 			!slices.Contains(got.Blockers, "checker_admission_missing") || !slices.Contains(got.Blockers, "target_runtime_missing") {

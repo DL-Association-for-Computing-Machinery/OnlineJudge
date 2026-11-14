@@ -1,5 +1,9 @@
 # 工程交付记录
 
+## 2026-11-14：P4 发布开发成果与 P3 迁移整合
+
+[#299](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/299) 保留主线 schema 26 的平台管理员历史，将普通批准、发布资格、发布与执行准入依次安排到 27–29。Docker Desktop 临时 PostgreSQL 14 的 18 项 race 专项通过，覆盖旧主线 26 升级、空账本回退和非空审计保护；已有管理员历史在 26 与 29 之间往返保持不变。旧 P4 分支临时库须重建。合并仅交付开发成果，未部署或迁移持久数据库；[P4 正式准入、非作者终审、发布和选手端联验](delivery-evidence/p4-trial-publication.md)仍待完成。
+
 ## 2026-11-14：P3 邮件回档后的临时投递失败
 
 Docker Desktop 与指定 Ubuntu ARM64 VM 的邮件回档 race 专项通过（13.649／20.501 秒，静态零问题）。恢复后的旧任务仍不取发信许可；新任务首次遇到回环 TLS SMTP 的 `450` 后，River 保留可重试任务和加密载荷，账号保持未验证。第二次投递成功且无新增签发扣额，另一 API 只允许激活一次。VM 临时容器和网络已清理，VM 日志 SHA-256 `8f35105a38b1f2cd6f1c22bafc001bc2cf89e0e10ab65ee9455826d34b8ff184`。未使用 Gmail 或外部发件配置。

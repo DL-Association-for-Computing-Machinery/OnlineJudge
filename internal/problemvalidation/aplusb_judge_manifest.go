@@ -47,6 +47,9 @@ func ExportAPlusBMaterialsForTier(ctx context.Context, prepared *problem.Prepare
 	manifest = materials.APlusBManifest{Version: "aplusb-" + expected, Origin: materials.APlusBOrigin,
 		Language: "gnu++17", JudgeSHA256: expected, TokenBytes: limits.TokenBytes,
 		Checker: judging.LibraryCheckerTextVersion, RuntimeSHA256: experiment.APlusBRuntimeSHA256ForTier(tier)}
+	if tier == experiment.ReferenceAPlusBTrialAMD64 {
+		manifest.RuntimeSHA256 = experiment.APlusBTrialAMD64CandidateSHA256()
+	}
 	seen := make(map[string]bool)
 	for _, point := range trial.plan.Cases {
 		for _, obj := range []struct {
@@ -101,7 +104,7 @@ func PrepareAPlusBJudgeManifestForTier(ctx context.Context, prepared *problem.Pr
 }
 
 func prepareAPlusBJudgeTrial(ctx context.Context, prepared *problem.Prepared, plan, candidate string, limits judging.TextLimits, tier experiment.ReferenceTier) (*CheckerTrial, error) {
-	if tier != experiment.ReferenceSmall && tier != experiment.ReferenceAPlusBUbuntu {
+	if tier != experiment.ReferenceSmall && tier != experiment.ReferenceAPlusBUbuntu && tier != experiment.ReferenceAPlusBTrialAMD64 {
 		return nil, ErrCheckerCandidateBinding
 	}
 	id, err := prepared.ImportIdentity()
@@ -111,15 +114,25 @@ func prepareAPlusBJudgeTrial(ctx context.Context, prepared *problem.Prepared, pl
 	if id.SourceID != aplusbSourceID || id.SourceLockSHA256 != SourceLockSHA256 {
 		return nil, ErrCheckerCandidateBinding
 	}
+	if tier == experiment.ReferenceAPlusBTrialAMD64 && (id != reviewedAPlusBImport() ||
+		plan != ReviewedAPlusBPlan || candidate != ReviewedAPlusBCandidate || limits != ReviewedAPlusBLimits()) {
+		return nil, ErrCheckerCandidateBinding
+	}
 	trial, err := PrepareCheckerTrial(ctx, prepared, plan, candidate, limits)
 	if err != nil || tier == experiment.ReferenceSmall {
 		return trial, err
 	}
-	config, err := experiment.ResolveReferenceTier(tier)
+	var config experiment.ReferenceConfiguration
+	if tier == experiment.ReferenceAPlusBTrialAMD64 {
+		config = experiment.APlusBTrialAMD64Candidate()
+		trial.profile.ID = "p4-checker-candidate-aplusb-trial-amd64-v1"
+	} else {
+		config, err = experiment.ResolveReferenceTier(tier)
+		trial.profile.ID = "p4-checker-candidate-aplusb-ubuntu-reference-v1"
+	}
 	if err != nil || limits.Bytes != config.Runtime.OutputBytes {
 		return nil, errors.Join(ErrCheckerCandidateBinding, trial.Close())
 	}
-	trial.profile.ID = "p4-checker-candidate-aplusb-ubuntu-reference-v1"
 	trial.profile.Runtime, trial.profile.Files = config.Runtime, config.Files
 	trial.tier = tier
 	return trial, nil

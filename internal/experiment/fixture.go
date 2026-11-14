@@ -60,6 +60,16 @@ func APlusBRuntimeSHA256ForTier(tier ReferenceTier) string {
 	if err != nil {
 		return ""
 	}
+	return aplusbRuntimeDigest(config)
+}
+
+// APlusBTrialAMD64CandidateSHA256 binds offline transport without allowing
+// the candidate to be chosen by the executable fixture loader.
+func APlusBTrialAMD64CandidateSHA256() string {
+	return aplusbRuntimeDigest(APlusBTrialAMD64Candidate())
+}
+
+func aplusbRuntimeDigest(config ReferenceConfiguration) string {
 	raw, _ := json.Marshal(config)
 	sum := sha256.Sum256(raw)
 	return hex.EncodeToString(sum[:])

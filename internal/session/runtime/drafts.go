@@ -32,6 +32,7 @@ type PrivateDraftsConfig struct {
 	ReviewIntake                                  bool
 	ReviewAccess                                  bool
 	ReviewReturns                                 bool
+	ReviewApprovals                               bool
 	StatementConfirmations                        bool
 }
 
@@ -40,7 +41,7 @@ func (c PrivateDraftsConfig) Validate() error {
 	if c.ReviewIntake && !c.ReferenceRequests {
 		return ErrConfig
 	}
-	if (c.ReviewReturns || c.StatementConfirmations) && !c.ReviewAccess {
+	if (c.ReviewReturns || c.ReviewApprovals || c.StatementConfirmations) && !c.ReviewAccess {
 		return ErrConfig
 	}
 	for _, path := range []string{c.MaterialRoot, c.BundleDirectory, c.SourceLockFile} {
@@ -76,6 +77,7 @@ type draftCapabilities struct {
 	discovery   *problemreference.ReviewDiscovery
 	materials   *problemreference.ReviewMaterialReader
 	returns     *problemreference.ReviewerReturns
+	approvals   *problemreference.ReviewerApprovals
 	statements  *problemreference.StatementConfirmations
 }
 
@@ -164,6 +166,12 @@ func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore
 		}
 		if c.ReviewReturns {
 			result.returns, err = problemreference.NewReviewerReturns(sessions, reviewer)
+			if err != nil {
+				return nil, nil, ErrStartup
+			}
+		}
+		if c.ReviewApprovals {
+			result.approvals, err = problemreference.NewReviewerApprovals(sessions, reviewer)
 			if err != nil {
 				return nil, nil, ErrStartup
 			}

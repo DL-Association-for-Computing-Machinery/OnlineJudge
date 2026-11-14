@@ -154,15 +154,33 @@ wait:
 		t.Fatalf("latest role lookup did not use the primary key: %s", plan)
 	}
 	t.Log(plan)
-	if _, err := f.provider.Down(f.ctx); err == nil {
+	if _, err := f.provider.DownTo(f.ctx, 25); err == nil {
 		t.Fatal("downgrade discarded platform administrator history")
 	}
+	version, err := f.provider.GetDBVersion(f.ctx)
+	must(t, err)
+	if version != 26 {
+		t.Fatalf("downgrade stopped at schema %d, want 26", version)
+	}
+	var remaining int
+	must(t, f.a.QueryRow(f.ctx, `SELECT count(*) FROM identity_platform_admin_history
+		WHERE subject_id=$1`, admin.ID).Scan(&remaining))
+	if remaining != history {
+		t.Fatalf("downgrade retained %d role revisions, want %d", remaining, history)
+	}
+	_, err = f.provider.Up(f.ctx)
+	must(t, err)
 	must(t, db.CheckSchema(f.ctx, f.a))
+	must(t, f.a.QueryRow(f.ctx, `SELECT count(*) FROM identity_platform_admin_history
+		WHERE subject_id=$1`, admin.ID).Scan(&remaining))
+	if remaining != history {
+		t.Fatalf("upgrade retained %d role revisions, want %d", remaining, history)
+	}
 }
 
 func TestEmptyPlatformAdminMigrationRollback(t *testing.T) {
 	f := newBacklogFixture(t)
-	_, err := f.provider.Down(f.ctx)
+	_, err := f.provider.DownTo(f.ctx, 25)
 	must(t, err)
 	if db.CheckSchema(f.ctx, f.a) == nil {
 		t.Fatal("new binary accepted the downgraded schema")

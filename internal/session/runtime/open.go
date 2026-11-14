@@ -150,6 +150,12 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 			if err != nil {
 				return nil, ErrConfig
 			}
+			if drafts.approvals != nil {
+				handler, err = httptransport.WithReviewApprovals(handler, drafts.approvals)
+				if err != nil {
+					return nil, ErrConfig
+				}
+			}
 		}
 	}
 	if c.SessionRotation {

@@ -87,6 +87,7 @@ func TestBrowserFixture(t *testing.T) {
 		c.PrivateDrafts.ReviewIntake = true
 		c.PrivateDrafts.ReviewAccess = true
 		c.PrivateDrafts.ReviewReturns = true
+		c.PrivateDrafts.ReviewApprovals = true
 		c.PrivateDrafts.StatementConfirmations = true
 	}
 	access, err := identitypg.NewProblemAccess(f.pools[0])
