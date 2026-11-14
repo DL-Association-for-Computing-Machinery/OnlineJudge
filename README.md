@@ -1002,7 +1002,7 @@ bash scripts/smoke-cold-trial.sh "$COLD_DOCKER_SOCKET" "$COLD_ENGINE_DIR" \
   "$RECEIVED_BUNDLE_DIR" "$TRUSTED_MANIFEST_SHA256" "$IMAGE_REPORT"
 ```
 
-此专项在封闭的回环网络中，从核验过的应用包复制 Nginx 模板，配合临时 PostgreSQL、Redis、测试证书和合成配置验证空库迁移、会话门禁开启、HTTPS 就绪、前端和正常退出；不接收外部模板或真实配置，不创建账号、不启动判题。不要在现场引擎运行此夹具。
+此专项在封闭的回环网络中，从核验过的应用包复制 Nginx 模板，配合临时 PostgreSQL、Redis、测试证书和合成配置验证空库迁移、会话门禁开启、HTTPS 就绪、前端和正常退出。`--release` 还使用包内工具和仅能读取账本的登录核对 schema，并以暂停状态启动入口，验证 HTTPS 读取及解除暂停后恢复转发。夹具不接收外部模板或真实配置，不创建账号、不启动判题。不要在现场引擎运行。
 
 如需在同一冷接收环境追加固定合成判题，先按下文[专用 Ubuntu VM 判题实验](#专用-ubuntu-vm-判题实验)用**同一 Git 提交**制作实验判题包。接收端须保证判题包及各级祖先目录由 root 控制。仍在同一个专用 VM 的私有挂载和无外网路由的网络空间、且只导入了试用运行镜像时执行：
 

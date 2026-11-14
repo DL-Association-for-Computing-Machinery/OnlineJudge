@@ -87,6 +87,21 @@ wait_for() {
 wait_for "${docker[@]}" exec "${containers[0]}" pg_isready -h 127.0.0.1 -q
 wait_for "${docker[@]}" exec "${containers[1]}" redis-cli ping >/dev/null
 OJ_DATABASE_URL='postgresql://postgres@127.0.0.1:5432/postgres?sslmode=disable' "$app/bin/migrate" up > "$stage/migration.log" 2>&1
+if "$release_mode"; then
+    "${docker[@]}" exec "$pg" psql -h /tmp -U postgres -d postgres -v ON_ERROR_STOP=1 \
+        -c 'CREATE ROLE trial_schema_reader LOGIN; GRANT SELECT ON public.goose_db_version TO trial_schema_reader;' >/dev/null
+    OJ_SCHEMA_STATUS_DATABASE_URL='postgresql://trial_schema_reader@127.0.0.1:5432/postgres?sslmode=disable' \
+        "$app/bin/migrate" schema-status postgres public > "$stage/schema-status.json"
+    python3 - "$stage/schema-status.json" <<'PY'
+import json, sys
+with open(sys.argv[1]) as record:
+    status = json.load(record)
+assert status["format"] == "oj.schema-status.v1" and status["matches_runtime"] is True
+assert type(status["observed_version"]) is int and status["observed_version"] > 0
+assert status["observed_version"] == status["runtime_version"]
+print(f'Cold trial schema ledger read with SELECT-only login: {status["observed_version"]}')
+PY
+fi
 
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=TrialFixture \
     -keyout "$stage/ca.key" -out "$stage/api-ca.pem" 2>/dev/null
@@ -146,23 +161,41 @@ done
 chown -R 101:101 "$stage/edge"
 cp -R "$app/site" "$stage/site"
 install -m 0644 "$app/templates/nginx.conf.example" "$stage/nginx.conf"
+mkdir -m 0755 "$stage/maintenance"
+if "$release_mode"; then
+    touch "$stage/maintenance/paused"
+fi
 find "$stage/site" -type d -exec chmod 755 {} +
 find "$stage/site" -type f -exec chmod 644 {} +
 nginx=$("${docker[@]}" run "${common[@]}" --user 101:101 \
     --mount "type=bind,src=$stage/edge,dst=/run/oj-edge,readonly" \
     --mount "type=bind,src=$stage/site,dst=/srv/oj/site,readonly" \
+    --mount "type=bind,src=$stage/maintenance,dst=/run/oj-maintenance,readonly" \
     --mount "type=bind,src=$stage/nginx.conf,dst=/trial.conf,readonly" \
     --entrypoint sh "${images[2]}" -ec 'nginx -t -c /trial.conf; exec nginx -c /trial.conf -g "daemon off;"')
 containers+=("$nginx")
 edge() {
+    local path=$1
+    shift
     curl --noproxy '*' --silent --fail --max-time 2 --cacert "$stage/api-ca.pem" \
         --resolve oj.example.invalid:8443:127.0.0.1 -H 'Host: oj.example.invalid' \
-        "https://oj.example.invalid:8443$1"
+        "$@" "https://oj.example.invalid:8443$path"
 }
 ready() { [[ $(edge /api/v1/readyz) == '{"status":"ready","service":"api","scope":"ordinary-session"}' ]]; }
 wait_for ready
 edge /login > "$stage/page.html"
 cmp "$app/site/index.html" "$stage/page.html"
+if "$release_mode"; then
+    probe_write() {
+        edge /api/v1/readyz --no-fail --request POST --output "$stage/edge-response.json" --write-out '%{http_code}'
+    }
+    [[ $(probe_write) == 503 && $(cat "$stage/edge-response.json") == '{"code":"TRIAL_MAINTENANCE"}' ]]
+    # A harmless method probe reaches the backend after the marker is removed.
+    rm -- "$stage/maintenance/paused"
+    [[ $(probe_write) == 405 ]]
+    ready
+    printf 'Cold trial entry started paused, served HTTPS reads, and resumed API forwarding without reload\n'
+fi
 kill -TERM "$api"
 wait "$api"
 api=
