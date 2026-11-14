@@ -3,6 +3,7 @@ package problemreference
 import (
 	"context"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/redisstore"
@@ -25,6 +26,7 @@ type ReviewEligibilitySnapshot struct {
 type ReviewEligibility struct {
 	Evidence                    ReviewEvidence                                    `json:"evidence"`
 	PolicyVersion               string                                            `json:"policy_version"`
+	SnapshotSHA256              string                                            `json:"snapshot_sha256"`
 	Eligible                    bool                                              `json:"eligible"`
 	Blockers                    []string                                          `json:"blockers"`
 	InputValidator              *problemvalidation.InputValidatorEvidence         `json:"input_validator_evidence,omitempty"`
@@ -150,5 +152,18 @@ func (s *ReviewAccess) EligibilityForSubject(ctx context.Context, c redisstore.C
 	if !e.Valid() || e.ReviewID != id || e.Reviewer != expected {
 		return zero, ErrStore
 	}
-	return assessReviewEligibility(snapshot), nil
+	return bindReviewEligibility(actor, snapshot)
+}
+
+func bindReviewEligibility(actor identity.ProblemActor, snapshot ReviewEligibilitySnapshot) (ReviewEligibility, error) {
+	if !actor.Valid() || !snapshot.Evidence.Valid() || snapshot.Evidence.Reviewer != actor.SubjectID {
+		return ReviewEligibility{}, ErrInvalid
+	}
+	status := assessReviewEligibility(snapshot)
+	sum, err := reviewEligibilityDigest(actor, snapshot, status)
+	if err != nil {
+		return ReviewEligibility{}, err
+	}
+	status.SnapshotSHA256 = sum
+	return status, nil
 }

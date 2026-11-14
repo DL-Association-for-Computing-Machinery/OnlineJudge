@@ -76,7 +76,7 @@ paths:
         拒绝 query、请求体及转义路径别名，响应至多 4096 字节，no-store/nosniff。
       responses:
         '200':
-          description: 固定证据摘要、准入规则版本和稳定的阻断码
+          description: 固定证据摘要、准入快照摘要、准入规则版本和稳定的阻断码
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ReviewEligibility' }
@@ -277,10 +277,13 @@ components:
     ReviewEligibility:
       type: object
       additionalProperties: false
-      required: [evidence, policy_version, eligible, blockers]
+      required: [evidence, policy_version, snapshot_sha256, eligible, blockers]
       properties:
         evidence: { $ref: '#/components/schemas/ReviewEvidence' }
         policy_version: { const: 'oj.review-approval.v14' }
+        snapshot_sha256:
+          $ref: '#/components/schemas/SHA256'
+          description: 绑定当前账号代次、分配、固定证据及本次策略结果，用于比较状态；不授予批准或发布权限。
         eligible: { const: false }
         local_checker_evidence:
           type: object

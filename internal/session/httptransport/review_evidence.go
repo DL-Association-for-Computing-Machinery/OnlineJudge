@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
+	problemdomain "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/redisstore"
 )
@@ -95,7 +96,7 @@ func (h *handler) serveReviewRead(w http.ResponseWriter, r *http.Request, id, le
 		status, err = h.reviewEvidence.EligibilityForSubject(ctx, credential, expected, id)
 		result, e = status, status.Evidence
 		valid = e.Valid() && status.PolicyVersion == problemreference.ReviewPolicyVersion &&
-			!status.Eligible && len(status.Blockers) > 0
+			problemdomain.ValidImportRevision(status.SnapshotSHA256) && !status.Eligible && len(status.Blockers) > 0
 	case "evidence":
 		e, err = h.reviewEvidence.EvidenceForSubject(ctx, credential, expected, id)
 		result, valid = e, e.Valid()

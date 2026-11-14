@@ -31,11 +31,31 @@ func (s *ReviewStore) ReviewEligibilitySnapshot(ctx context.Context, actor ident
 		return zero, err
 	}
 	q := referencedb.New(tx)
+	if err := lockReviewMaterial(ctx, q, item.materialDigest()); err != nil {
+		return zero, storageError{err}
+	}
+	snapshot, err := loadReviewEligibilitySnapshot(ctx, q, item)
+	if err != nil {
+		return zero, err
+	}
+	if err := commitTx(ctx, tx, false); err != nil {
+		return zero, err
+	}
+	if err := ctx.Err(); err != nil {
+		return zero, err
+	}
+	return snapshot, nil
+}
+
+// loadReviewEligibilitySnapshot must run after locking the current identity and
+// assignment and taking the same material lock as returns and statement confirmations.
+func loadReviewEligibilitySnapshot(ctx context.Context, q *referencedb.Queries, item assignedReview) (problemreference.ReviewEligibilitySnapshot, error) {
+	var zero problemreference.ReviewEligibilitySnapshot
 	if _, err := loadHistoricalReviewEvidence(ctx, q, item.owner, item.evidence); err != nil {
 		return zero, storageError{err}
 	}
 	statement, err := q.StatementConfirmationByAssignment(ctx, referencedb.StatementConfirmationByAssignmentParams{
-		ReviewID: id, AssignmentRevision: item.evidence.AssignmentRevision,
+		ReviewID: item.evidence.ReviewID, AssignmentRevision: item.evidence.AssignmentRevision,
 	})
 	statementConfirmed := err == nil
 	if statementConfirmed {
@@ -61,12 +81,6 @@ func (s *ReviewStore) ReviewEligibilitySnapshot(ctx context.Context, actor ident
 		return zero, storageError{problemreference.ErrInvalid}
 	case err != nil && !errors.Is(err, pgx.ErrNoRows):
 		return zero, storageError{err}
-	}
-	if err := commitTx(ctx, tx, false); err != nil {
-		return zero, err
-	}
-	if err := ctx.Err(); err != nil {
-		return zero, err
 	}
 	return problemreference.ReviewEligibilitySnapshot{Evidence: item.evidence, Returned: returned, SolutionConfirmed: confirmed,
 		StatementConfirmed: statementConfirmed && !returned}, nil
