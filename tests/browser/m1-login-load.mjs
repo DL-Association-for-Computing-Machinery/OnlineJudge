@@ -19,6 +19,7 @@ function passed(check) { checks.push(check) }
 async function login(index, target) {
   let context, started
   const sample = { index, startLagMs: null, loginMs: null, statuses: [], outcome: 'client_error' }
+  if (info.trial_nginx) sample.loginPhases = []
   try {
     context = await browser.newContext({ ignoreHTTPSErrors: !strict, serviceWorkers: 'block' })
     const page = await context.newPage()
@@ -28,14 +29,27 @@ async function login(index, target) {
     } else {
       await page.route('**/*', route => new URL(route.request().url()).origin === info.origin ? route.continue() : route.abort())
     }
+    const observedRequests = new WeakMap()
+    if (info.trial_nginx) page.on('request', request => {
+      if (started !== undefined) observedRequests.set(request, Math.round(performance.now() - started))
+    })
     page.on('response', response => {
       const url = new URL(response.url())
-      const method = response.request().method()
+      const request = response.request()
+      const method = request.method()
       if (url.origin === info.origin && (url.pathname === '/api/v1/session' || url.pathname.startsWith('/api/v1/session/login/'))) {
         const status = [method, url.pathname, response.status()]
         if (info.trial_nginx) {
           const upstream = response.headers()['x-oj-fixture-upstream-status']
           status.push(/^[1-5]\d\d$/.test(upstream ?? '') ? Number(upstream) : null)
+          const time = response.headers()['x-oj-fixture-upstream-time']
+          const upstreamMs = /^[0-9]+\.[0-9]{3}$/.test(time ?? '') ? Math.round(Number(time) * 1000) : null
+          const requestMs = observedRequests.get(request)
+          if (requestMs !== undefined) sample.loginPhases.push({
+            method, path: url.pathname, status: response.status(),
+            requestMs, responseMs: Math.round(performance.now() - started),
+            upstreamMs: status[3] !== null && Number.isSafeInteger(upstreamMs) ? upstreamMs : null,
+          })
         }
         sample.statuses.push(status)
       }

@@ -215,6 +215,7 @@ def check_trial_nginx(origin, ca):
     path = origin + "/api/v1/readyz"
     with opener.open(path, timeout=5) as response:
         if (response.headers.get("X-OJ-Fixture-Upstream-Status") != "200"
+                or not trial_upstream_time(response)
                 or json.load(response) != {"status": "ready", "service": "api", "scope": "ordinary-session"}):
             raise ValueError("Nginx trial readiness did not reach the API")
     for request, code, upstream in (
@@ -226,8 +227,14 @@ def check_trial_nginx(origin, ca):
                 raise ValueError("expected a trial attribution probe rejection")
         except urllib.error.HTTPError as response:
             with response:
-                if response.code != code or response.headers.get("X-OJ-Fixture-Upstream-Status") != upstream:
+                timing = response.headers.get("X-OJ-Fixture-Upstream-Time")
+                if (response.code != code or response.headers.get("X-OJ-Fixture-Upstream-Status") != upstream
+                        or (not trial_upstream_time(response) if upstream else timing is not None)):
                     raise ValueError("unexpected trial attribution probe result") from None
+
+
+def trial_upstream_time(response):
+    return re.fullmatch(r"[0-9]+\.[0-9]{3}", response.headers.get("X-OJ-Fixture-Upstream-Time", "")) is not None
 
 
 def main():
@@ -355,7 +362,8 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
             config.write_text(template.replace("server_name oj.example.invalid;", "server_name 127.0.0.1;")
                               .replace("oj.example.invalid", host)
                               .replace(api_location, api_location + "\n"
-                                       "            add_header X-OJ-Fixture-Upstream-Status $upstream_status always;"))
+                                       "            add_header X-OJ-Fixture-Upstream-Status $upstream_status always;\n"
+                                       "            add_header X-OJ-Fixture-Upstream-Time $upstream_header_time always;"))
             config.chmod(0o644)
             containers["edge"] = docker.create("--pull", "never", "--network", f"container:{containers['test']}",
                 "--user", "101:101", "--read-only", "--tmpfs", "/tmp:rw,size=16m,mode=1777",
@@ -384,6 +392,9 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
         if args.trial_nginx_image:
             try:
                 check_trial_nginx(origin, tls / "public-ca.pem")
+            except ValueError:
+                log.write("Nginx trial readiness: status, upstream timing, or readiness payload mismatch\n")
+                raise
             except urllib.error.URLError as error:
                 log.write(f"Nginx trial readiness: {error.reason}\n")
                 raise
