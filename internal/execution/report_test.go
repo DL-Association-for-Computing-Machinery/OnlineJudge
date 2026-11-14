@@ -6,8 +6,22 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
 )
+
+func TestJDKTextEvidenceBindsContestantRuntime(t *testing.T) {
+	d, _ := fixture()
+	lease := submission.Lease{SubmissionID: "local-java-evidence", JudgeGeneration: 1, AttemptNumber: 1}
+	p := experiment.Java21Profile(experiment.JavaTextBase(experiment.PinnedEnvironment()))
+	result := Result{Verdict: "AC", runtimeSHA256: experiment.TextExecutionSHA256(p)}
+	first := freezeReport(lease, d, result)
+	p.Run.Wall++
+	result.runtimeSHA256 = experiment.TextExecutionSHA256(p)
+	if first.EvidenceSHA256 == freezeReport(lease, d, result).EvidenceSHA256 {
+		t.Fatal("changed contestant runtime produced identical attempt evidence")
+	}
+}
 
 func TestJudgeReport(t *testing.T) {
 	for _, name := range []string{"AC", "WA", "CE", "cleanup", "lease", "cancel", "attribution", "unbound version", "manifest mismatch"} {

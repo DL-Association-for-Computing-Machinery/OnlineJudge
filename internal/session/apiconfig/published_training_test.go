@@ -18,6 +18,8 @@ func TestPublishedTrainingConfiguration(t *testing.T) {
 			p := map[string]any{"material_root": "/statements", "max_in_flight": 2, "manifest_pins": pins}
 			w["training_history"], w["training_submission_detail"], w["published_training"] = true, true, p
 			switch name {
+			case "two-pins":
+				w["local_java21"], w["local_python3"] = true, true
 			case "duplicate":
 				pins[1] = pins[0]
 			case "missing-history":
@@ -35,7 +37,8 @@ func TestPublishedTrainingConfiguration(t *testing.T) {
 			}
 			c, err := Parse(body)
 			if name == "two-pins" {
-				if err != nil || c.Runtime.PublishedTraining == nil || len(c.Runtime.PublishedTraining.ManifestPins) != 2 || c.Runtime.PrivateDrafts != nil {
+				if err != nil || c.Runtime.PublishedTraining == nil || len(c.Runtime.PublishedTraining.ManifestPins) != 2 ||
+					c.Runtime.PrivateDrafts != nil || !c.Runtime.LocalJava21 || !c.Runtime.LocalPython3 {
 					t.Fatalf("standalone configuration rejected: %v", err)
 				}
 			} else if err == nil {

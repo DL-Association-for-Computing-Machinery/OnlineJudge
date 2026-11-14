@@ -21,6 +21,8 @@
 }
 ```
 
+两种本机提交模式默认接受 GNU++17、C17 和 GNU++20。Java 21 和 Python 3.14 继续分别由 `local_java21` 和 `local_python3` 开启；先在对应队列上准备支持这些语言的 Worker，并同步前端语言开关。
+
 上述片段并入正常 API 配置。材料 pin 最多十项；只能为已批准、已发布且版本和摘要完全匹配的题目提交。两个队列可在同一 API 上同时接收；各控制端和 Worker 继续使用各自的显式材料配置。若只有一个独占 Ubuntu 槽，可排空首个 Worker 并确认槽停止后启动另一个，API 不需要重启。浏览器专项 [multi-publication-training-qa.mjs](../../tests/browser/multi-publication-training-qa.mjs) 从同一账号提交 A+B 和并查集，回读原源码和两笔判定；使用现有 Playwright 参数，另传 `OJ_BROWSER_UNION_FIND_SOURCE`。夹具模式通过 `OJ_BROWSER_PUBLISHED_TRAINING_ROOT` 指定新建的题面根，读取 `/workspace/publication-pins.json`，并从 `/local-evidence` 和 `/local-text-evidence` 读取各自已验题证据；后者的准入文件应指向相应的挂载路径。
 
 2026-11-15 在本机 Ubuntu VM 用临时 PostgreSQL 和 Redis 联验：同一普通账号在浏览器提交 A+B 与并查集，两笔 GNU++17 提交先同时进入各自的材料队列，再由各自的真实 Worker 依次使用同一个断网沙箱槽，均判为 AC。核对了两条完成记录的 Worker 节点、材料版本和摘要；API 的 PID 和启动时间始终一致。本人可回读判定和原源码，其他账号无法读取；同题同键重试返回原回执，跨题复用请求键和提交过期发布版本均被拒绝。此轮复用既有验题证据，未重跑正式参考验证或并行 Worker。
@@ -39,9 +41,19 @@ OJ_BROWSER_QA_INFO="$FIXTURE_READY_JSON" OJ_BROWSER_QA_OUTPUT="$QA_DIRECTORY" \
 
 该脚本通过浏览器正常账号登录和选题，只上传并提交固定 A+B 源码。它验证文件限制、替换确认、刷新后原键回执、真实判定及账户隔离；不会启动 Worker 或替代隔离检查。验证边界见[交付证据](delivery-evidence/p5-published-training.md)。
 
+在同一夹具中设置 `OJ_BROWSER_TRAINING_LANGUAGE=c17` 或 `OJ_BROWSER_TRAINING_LANGUAGE=gnu++20`，验证对应的源码上传、AC、WA、编译错误和本人回读；省略变量回归 GNU++17。须先排空并停止旧 API、Worker 及维护写入，迁移到 schema 33，再用同一修订启动。旧 Worker 不能处理新版语言任务。证据和回退说明见 [P7 C17](delivery-evidence/p7-c17.md) 与 [P7 GNU++20](delivery-evidence/p7-gnu-cpp20.md)。
+
+双 Worker 仅用于本机专用 Ubuntu VM。按原 `oj-aplusb-ubuntu-sandbox` 的固定配置另建停止的 `oj-aplusb-ubuntu-sandbox-secondary`，保持断网、只读、无挂载、固定镜像和每槽配额。给两节点分别发放证书；两终端沿用同一材料、控制端及启动参数，分别多设 `OJ_UBUNTU_TEXT_DUAL_SLOT=primary` 和 `secondary`。默认仍为原独占槽；不要与 M0 双槽或参考验题混跑。使用 `tests/browser/c17-resilience-qa.mjs` 和上文环境变量，`OJ_C17_PHASE=limits|overlap|fault|read` 选择提交超限、并发、待接管或按保存的 JSON 本人回读；`OJ_BROWSER_QA_OUTPUT` 为该 JSON 路径。此专项默认 C17；`OJ_BROWSER_TRAINING_LANGUAGE` 也可选 `gnu++20`、`java21` 或 `python3`。Java 或 Python 专项须在两个槽启用相同的已准入镜像和语言设置。
+
+正常退出用原排空流程。若进程意外退出并留隔离标记，先排空另一个 Worker，确认旧宿主控制操作全部结束，再用该槽的 `OJ_UBUNTU_TEXT_DUAL_SLOT` 和历史完整容器 ID 执行 `worker recover-aplusb-ubuntu`。恢复命令独占本机执行锁；原容器 ID 或停止状态无法确认时保留隔离。
+
 同一夹具、参数和已发布题可将脚本替换为 `tests/browser/published-training-drafts-qa.mjs`，验证本地草稿、冲突及退出。该专项不发判题请求，不占用 Worker 槽。
 
 ### 本机文本题验题与提交
+
+Java 21 使用另一个[本机判题制品和启用步骤](delivery-evidence/p7-java21.md)。浏览器 A+B 专项设置 `OJ_BROWSER_TRAINING_LANGUAGE=java21`；需启用 Java 的本机 API、前端及 Worker。
+
+Python 3.14 使用[本机组合判题镜像](delivery-evidence/p7-python3.md)。浏览器 A+B 专项设置 `OJ_BROWSER_TRAINING_LANGUAGE=python3`；需分别启用 Python 的本机 API、前端及 Worker。镜像保留 GCC 和 Java，Java 入口仍独立启用。
 
 这个档位支持源锁校验通过、有单文件 GNU++17 标程、使用 UTF-8 文本 token 比较的完整题包：最多 64 个正式点，单输入最多 4 MiB，单答案最多 256 KiB，测试数据合计最多 48 MiB。并查集是已联验的代表题。
 
@@ -86,3 +98,7 @@ OJ_SANDBOX_EXPERIMENT=1 worker validate-package-quality \
 在启用了此准入的本机实例，作者按现有流程导入、申请正式参考验证并准备计划。参考控制端及参考 Worker 显式设置 `OJ_LOCAL_REFERENCE_SOURCE`、`OJ_LOCAL_REFERENCE_LOCK_SHA256` 和 `OJ_SANDBOX_EXPERIMENT=1`，参考控制端保留独立 mTLS 节点、Unix socket 数据库和私有材料根；用 `worker run-reference <申请ID> <来源ID> <计划摘要>` 消费真实参考租约。作者确认标程、非作者审核人确认题意并批准、独立发布人执行发布。批准事务和发布事务各自重查完整门槛。验证完参考执行并确认槽停止后，再用同一个 Ubuntu 槽启动训练 Worker。
 
 合成验收题包可用 `python3 tests/fixtures/local-text/build-span-fixture.py "$NEW_PRIVATE_DIRECTORY"` 生成。它只供隔离测试，源锁沿用现有包格式，不代表上游发布。审核与训练浏览器脚本见 `tests/browser/local-package-review-qa.mjs` 和 `tests/browser/local-text-training-qa.mjs`。
+
+本机浮点题在完整包审核中用 `quality/decimal.json` 显式开启，不与 SPJ 混用。配置为单行 JSON 加换行，键按字母排序，例如 `{"absolute":"0.01","relative":"0.001","text":["RANGE"]}`。容差是十进制字符串，至少一项；`text` 是排序后的标准答案文字标签，可省略，`case_sensitive:true` 启用 ASCII 大小写敏感。参考试跑和独立标程对照仍要求文本一致，四类错解用实际浮点规则检查。用合成题包脚本的 `--decimal` 可复测；比较规则见[判题设计](../architecture/judging-design.md#3-显式浮点容差)。
+
+本机 Testlib SPJ 在同一审核流程中增加检查器证据和制品 pin。带 `quality/checker.cpp` 的题包必须附 SPJ 报告才可准入；专用 Worker 此时使用组合镜像和 `OJ_LOCAL_SPJ_CHECKER_FILE`。用上文的浏览器专项复测数列极差时，设 `OJ_BROWSER_SPJ_SPAN=1`、`OJ_BROWSER_TRAINING_LANGUAGE=gnu++17`；另可用 `OJ_C17_PHASE=budget` 验证单个 Worker 连续判四份完整提交。预算与故障接管实测见 [P7 Testlib SPJ](delivery-evidence/p7-testlib-spj.md)。

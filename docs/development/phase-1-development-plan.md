@@ -18,7 +18,7 @@
 | Argon2id / x/crypto | 同步密码记录、主体凭据/CAS、共享实例计算准入及同密码条件升级用例，策略/并发/排队额度显式给定；复用锁定版本 | 分项验证见会话设计；多 API 总预算、生产参数、网络入口与完整账号流程另验 |
 | 个人邮箱映射 | ASCII 裸址值对象、整址大小写不敏感唯一映射、原始显示及凭据/未验证邮箱原子初始化 | 国际化邮箱支持、公开注册/重复申请恢复、验证/改邮箱、权限与完整登录另验；昵称不作唯一键 |
 | go-judge、语言工具链 | 固定材料的 Worker 链路及故障分项已有证据；当前环境与复验见 [M0 记录](../acceptance/m0-experiment.md) | 补齐执行端恢复、组件准入与完整 M0，不在业务进程执行选手程序；不代表跨主机高可用 |
-| Testlib / SPJ | 1B/M2 必交付项（2026-11-03 用户要求），由“优先验证”明确为必须支持；尚未引入或验收 | P7 分步完成固定库版本准入、GNU++17 `checker.cpp` 构建、三文件调用适配、受限执行及真实题目回归，详见下文 |
+| Testlib / SPJ | 1B/M2 必交付项（2026-11-03 用户要求），固定 0.9.45 已通过本机协议探针 | [本机数列极差试点](../acceptance/delivery-evidence/p7-testlib-spj.md)覆盖固定制品、三文件调用与版本绑定；其余场景继续按下文验收 |
 | Tailwind / shadcn/ui、Router、Query | 保留方向，当前无多页面、复杂组件或查询缓存需求，按需引入 | 第一条相应产品功能，不同时引入第二套同职责方案 |
 | CodeMirror、idb、Markdown / KaTeX | 随题目、编辑和草稿功能引入 | 用户界面及异常路径验收，不自研通用编辑器或解析器 |
 | River / SMTP | 可靠邮件功能时引入，不自研通用队列代替成熟库 | 实际邮件流程、事务与投递验证；不赋予判题 Worker 邮件凭据 |
@@ -78,7 +78,7 @@
 | P4 题库与发布 | P1、P2 受限验证、P3 权限 | M1 | 功能验收完成：负责人采纳 Mac Ubuntu VM 的 A+B 准入、双账号审核、独立发布权限和选手读回闭环；十题题源和历史验证见[验收记录](../acceptance/delivery-evidence/p4-trial-publication.md)。试用节点和正式开放另行安排。 |
 | P5 训练前端 | P3、P4 和真实提交接口 | M1 | 本机功能验收完成，#302 已合入；A+B、并查集和未预登记的数列极差闭环见 [P5 证据](../acceptance/delivery-evidence/p5-published-training.md) |
 | P6 试用运行与验收 | 日志及预算随 P1/P2 建立；发布验收依赖 P3—P5 | M1，M2 回归 | #296 开发成果已合入；本机证据及待完成的上线检查见 [P6 清单](../acceptance/delivery-evidence/p6-trial-acceptance.md) |
-| P7 完整训练补齐 | M1、各语言与检查器准入 | M2 | 未开始 |
+| P7 完整训练补齐 | M1 训练闭环、各语言与检查器准入 | M2 | 五种语言、浮点和 Testlib SPJ 的本机验收及回归见 [P7 阶段证据](../acceptance/delivery-evidence/p7-stage.md) |
 
 核心路径为 P1 → P2 → P4 → P5 → P6 → P7。P3 的会话验证可与判题实验交错推进，生产身份权限必须在题目和训练接口开放前接入。P0 的事项按使用节点解决，不要求等待正式比赛全部环境信息才能开发训练功能。
 
@@ -328,10 +328,20 @@ M0 先做存储与并发实验；M1 交付公开邮箱注册、验证和找回�
 
 在 M1 闭环上逐项接入 C17、GNU++20、Java、Python，保留 GNU++17 回归；再补齐浮点和 SPJ。每项都固定工具链、检查器及配置版本，覆盖正确、错误、超限、系统故障、历史重判和多节点一致性。
 
-- 浮点验证逐题绝对/相对容差及 OR、等于边界、零与负数、科学计数法、非法/非有限值、混合文本；非法标准答案或配置阻止发布。
+C17 复用已发布本机文本题的冻结测试数据和审核权限，单文件使用固定 GCC C17 配置。本机 A+B 的 AC、WA、CE、TLE、MLE、OLE、本人回读及 GNU++17 回归已验证；另已验证同机双 Worker 并行及运行中退出后自然租约接管、历史提交重判。
+
+GNU++20 复用同一已发布文本环境，固定 `g++ -std=gnu++20`。本机 A+B 的 AC、WA、CE、TLE、MLE、OLE 与本人回读，以及 C17、GNU++17 回归已验证；另已验证同机双 Worker 并行、SIGTERM 后自然租约接管和历史重判。
+
+[Java 21](../acceptance/delivery-evidence/p7-java21.md) 使用单文件 `Main.java`、固定 JDK 制品和逐点 JVM。已发布 A+B 的浏览器提交、真实 Worker AC/WA/CE 与本人结果通过，C17、GNU++17、GNU++20 同镜像回归通过。另已验证 JVM 堆耗尽为 RE、沙箱总内存超限为 MLE，以及同机双 Worker 一致性、SIGTERM 后自然接管和历史重判。
+
+[CPython 3.14](../acceptance/delivery-evidence/p7-python3.md) 使用单文件 `.py`、固定 CPython 3.14.10 和逐点解释器。已发布 A+B 的浏览器提交、真实 Worker AC/WA/CE/RE 与本人回读通过，C17、GNU++17、GNU++20 和 Java 21 同镜像回归通过。Python TLE/MLE/OLE、同机双 Worker 一致性、SIGTERM 后自然接管和历史重判均通过。
+
+- [本机浮点判题](../acceptance/delivery-evidence/p7-decimal.md)已接入逐题绝对/相对容差及 OR；已发布合成题验证等于边界、科学计数法、混合文本、非法输出和超限。零与负数、非法标准答案和非法配置另有比较器回归。
 - SPJ 必须支持 Testlib C++ 检查器，保留既定 ICPC 统一协议，通过显式适配接入洛谷文档所示的 `checker.cpp`、`#include "testlib.h"`、`registerTestlibCmd` 及三文件接口。首批仍使用 GNU++17，不由外部示例改成 C++14；检查器崩溃、超时、非法协议归 SE，诊断按权限提供。
-- 补齐完整日常邮箱账号流程及真实投递验证；按真实题库需求增加录入入口，不为填满功能表实现无人使用的管理能力。
-- 回归 M1 的权限、幂等、恢复和浏览器流程；单项失败保留为未通过，不降低需求来完成里程碑。
+
+  [Testlib 协议与隔离验收](../acceptance/delivery-evidence/p7-testlib-spj.md)记录固定版本、SPJ 专用执行、本机发布、超限、重判和双 Worker 接管。
+- 日常邮箱账号和回档在本机重新验证；真实 Gmail 实收沿用 [P3 独立记录](../acceptance/delivery-log.md#2026-11-14p3-隔离-gmail-真实投递)。后续录入按真实题库需求增加入口。
+- [阶段证据](../acceptance/delivery-evidence/p7-stage.md)归拢已验证的 M1 权限、幂等、恢复和浏览器回归；远端 CI 与送审另行核验。
 
 #### P7 的 Testlib SPJ 交付拆分
 

@@ -87,7 +87,7 @@ func (a *Acquirer) describe(ctx context.Context, lease submission.Lease) (materi
 		return materials.Descriptor{}, ErrMaterials
 	}
 	if d.SubmissionID != lease.SubmissionID || d.Version != lease.MaterialVersion || d.ManifestSHA256 != lease.ManifestSHA256 ||
-		d.Language != "gnu++17" || !bytes.Equal(d.Manifest, a.fixture.Manifest()) || checksum(d.Manifest) != d.ManifestSHA256 ||
+		!a.fixture.SupportsLanguage(d.Language) || !bytes.Equal(d.Manifest, a.fixture.Manifest()) || checksum(d.Manifest) != d.ManifestSHA256 ||
 		len(d.Source) == 0 || len(d.Source) > submission.MaxSourceBytes || !utf8.ValidString(d.Source) || checksum([]byte(d.Source)) != d.SourceSHA256 {
 		return materials.Descriptor{}, ErrMaterials
 	}

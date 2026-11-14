@@ -148,7 +148,7 @@ func inlineObservationBounds(r goJudgeResult, p experiment.ExecutionProfile, com
 	if value := r.Files["stderr"]; value != nil {
 		stderr = *value
 	}
-	o := Observation{Status: r.Status, Stdout: []byte(stdout), Artifact: r.IDs["main"]}
+	o := Observation{Status: r.Status, Stdout: []byte(stdout), Artifact: r.IDs[cachedProgramName(p)]}
 	// go-judge keeps max+1 bytes on overflow. JSON can replace each invalid UTF-8
 	// byte with a three-byte U+FFFD. The fixed numeric M0 answers cannot match that
 	// replacement; this text transport is not a general byte-preserving checker.

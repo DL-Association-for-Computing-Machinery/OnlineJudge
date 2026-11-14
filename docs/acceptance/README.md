@@ -17,7 +17,7 @@
 
 - 各阶段的验收结果和缺项，从[开发计划](../development/phase-1-development-plan.md)的对应阶段进入。
 - A+B 的[隔离判题](delivery-evidence/aplusb-isolated-judging.md)、[租约链路](delivery-evidence/aplusb-leased-judging.md)、[恢复后重判](delivery-evidence/aplusb-restored-rejudge.md)和[目标环境交接](delivery-evidence/aplusb-target-handoff.md)分别留有证据。
-- 阶段证据：[P4 发布](delivery-evidence/p4-trial-publication.md)、[P5 已发布训练](delivery-evidence/p5-published-training.md)、[本地代码草稿](delivery-evidence/local-code-drafts.md)、[P6 试用验收](delivery-evidence/p6-trial-acceptance.md)。
+- 阶段证据：[P4 发布](delivery-evidence/p4-trial-publication.md)、[P5 已发布训练](delivery-evidence/p5-published-training.md)、[本地代码草稿](delivery-evidence/local-code-drafts.md)、[P6 试用验收](delivery-evidence/p6-trial-acceptance.md)、[P7 完整训练](delivery-evidence/p7-stage.md)。
 - 固定环境的 M0 证据见[机器索引](evidence/m0-20261103.json)；本机负载与容器资源见 [Ubuntu 单机混合负载](evidence/ubuntu-mixed-load-20261112.md)。
 - CI 耗时与对比口径见[交付效率基线](delivery-evidence/ci-delivery-efficiency.md)。
 

@@ -14,6 +14,46 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 )
 
+func TestNewFileAttemptRefreshesOnlyIdleSandboxBudget(t *testing.T) {
+	h := &Host{tier: experiment.ReferenceAPlusBUbuntu, python3: true, active: make(map[uint64]context.CancelFunc)}
+	_, profile, err := h.configuration()
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.fileOps, h.filePayload = profile.Operations, profile.PayloadBytes
+	if _, _, err := h.fileContext(context.Background(), 1); err == nil {
+		t.Fatal("exhausted attempt could still transfer")
+	}
+	h.active[1] = func() {}
+	if err := h.ResetFileAttemptBudget(); err == nil || h.fileOps != profile.Operations || h.filePayload != profile.PayloadBytes {
+		t.Fatal("active sandbox unexpectedly refreshed")
+	}
+	delete(h.active, 1)
+	h.fileBusy.Store(true)
+	err = h.ResetFileAttemptBudget()
+	h.fileBusy.Store(false)
+	if err == nil || h.fileOps != profile.Operations || h.filePayload != profile.PayloadBytes {
+		t.Fatal("file transfer unexpectedly refreshed its sandbox")
+	}
+	h.closed = true
+	err = h.ResetFileAttemptBudget()
+	h.closed = false
+	if err == nil || h.fileOps != profile.Operations || h.filePayload != profile.PayloadBytes {
+		t.Fatal("closed sandbox unexpectedly refreshed")
+	}
+	if err := h.ResetFileAttemptBudget(); err != nil {
+		t.Fatal(err)
+	}
+	_, done, err := h.fileContext(context.Background(), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer done()
+	if h.fileOps != 1 || h.filePayload != 1 {
+		t.Fatal("new attempt did not account for its first transfer")
+	}
+}
+
 func TestReferenceFileFramingAndRawResponses(t *testing.T) {
 	h, _ := opened(t)
 	data := append(bytes.Repeat([]byte{0, 255, '\n', '2', '0', '0'}, 90000), []byte("\n200")...)

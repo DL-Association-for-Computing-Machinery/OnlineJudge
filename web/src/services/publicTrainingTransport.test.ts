@@ -27,13 +27,14 @@ it('does not retry a refused write and can read the receipt with the original ke
     created_at: '2026-01-01T00:00:00Z', state: 'queued', verdict: null }
   const fetch = vi.fn().mockResolvedValueOnce(new Response(null, { status: 429 })).mockResolvedValueOnce(Response.json(receipt))
   vi.stubGlobal('fetch', fetch)
-  await expect(submitTraining({ ...identity, problemID: problem, version, source: 'int main(){}' }, signal))
+  await expect(submitTraining({ ...identity, problemID: problem, version, language: 'gnu++17', source: 'int main(){}' }, signal))
     .rejects.toMatchObject({ status: 429 })
   expect(fetch).toHaveBeenCalledOnce()
   const headers = { 'X-OJ-Expected-Subject': identity.subject, 'Idempotency-Key': identity.key }
   const matchingHeaders: unknown = expect.objectContaining(headers)
   expect(fetch).toHaveBeenNthCalledWith(1, '/api/v1/training/submissions',
-    expect.objectContaining({ method: 'POST', headers: matchingHeaders }))
+    expect.objectContaining({ method: 'POST', headers: matchingHeaders,
+      body: JSON.stringify({ problem_id: problem, publication_version: version, language: 'gnu++17', source: 'int main(){}' }) }))
   await expect(recoverTraining(identity, signal)).resolves.toEqual(receipt)
   expect(fetch).toHaveBeenNthCalledWith(2, '/api/v1/training/receipt',
     expect.objectContaining({ method: 'GET', headers: matchingHeaders }))

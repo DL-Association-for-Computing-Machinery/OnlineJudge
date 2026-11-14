@@ -27,9 +27,13 @@ func startM0Slot(ctx context.Context, run command, slot M0Slot) (*Host, error) {
 }
 
 func startConfiguredSlot(ctx context.Context, run command, name string, tier experiment.ReferenceTier) (*Host, error) {
+	return startConfiguredHost(ctx, &Host{run: run, tier: tier}, name)
+}
+
+func startConfiguredHost(ctx context.Context, h *Host, name string) (*Host, error) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	h := &Host{run: run, tier: tier, active: make(map[uint64]context.CancelFunc), drained: make(chan struct{})}
+	h.active, h.drained = make(map[uint64]context.CancelFunc), make(chan struct{})
 	p, _, err := h.configuration()
 	if err != nil {
 		return nil, err

@@ -35,6 +35,8 @@ type LocalTextAdmissionInput struct {
 	QualitySHA256       string `json:"quality_sha256,omitempty"`
 	RenderingFile       string `json:"rendering_file,omitempty"`
 	RenderingSHA256     string `json:"rendering_sha256,omitempty"`
+	SPJReport           string `json:"spj_report,omitempty"`
+	SPJReportSHA256     string `json:"spj_report_sha256,omitempty"`
 }
 
 // Valid bounds trusted local configuration before filesystem access.
@@ -45,6 +47,10 @@ func (in LocalTextAdmissionInput) Valid() bool {
 func (in LocalTextAdmissionInput) validEvidence() bool {
 	if in.SourceID == "" || !absoluteLocalPath(in.ReportDirectory) || !problem.ValidImportRevision(in.ReportSHA256) ||
 		!problem.ValidImportRevision(in.ReviewProfileSHA256) {
+		return false
+	}
+	if (in.SPJReport != "" || in.SPJReportSHA256 != "") &&
+		(!in.PackageReview || !absoluteLocalPath(in.SPJReport) || !problem.ValidImportRevision(in.SPJReportSHA256)) {
 		return false
 	}
 	if in.PackageReview {
@@ -113,6 +119,14 @@ func VerifyLocalText(ctx context.Context, prepared *problem.Prepared, in LocalTe
 	if err != nil || id.SourceID != in.SourceID || in.PackageReview && id.SourceID == ConvolutionSourceID {
 		return zero, ErrCheckerCandidateBinding
 	}
+	spj, err := prepared.DeclaresLocalSPJ()
+	if err != nil || spj != (in.SPJReport != "") {
+		return zero, ErrCheckerCandidateBinding
+	}
+	decimal, err := readLocalDecimal(ctx, prepared)
+	if err != nil || decimal != nil && (!in.PackageReview || spj) {
+		return zero, ErrCheckerCandidateBinding
+	}
 	checkComplete := func() bool {
 		_, err := os.Lstat(filepath.Join(in.ReportDirectory, "INCOMPLETE"))
 		return errors.Is(err, os.ErrNotExist)
@@ -137,24 +151,34 @@ func VerifyLocalText(ctx context.Context, prepared *problem.Prepared, in LocalTe
 	binding := digest(struct{ Plan, Candidate, Runtime string }{proof.FormalPlanSHA, proof.CandidateSHA256, runtime})
 	m := materials.TextTransportManifest{Origin: materials.LocalTextOrigin, Version: "local-text-" + binding,
 		JudgeSHA256: binding, RuntimeSHA256: runtime, Checker: judging.LibraryCheckerTextVersion, Language: "gnu++17", TokenBytes: localTextLimits.TokenBytes}
+	if in.SPJReport != "" {
+		if err := bindSPJReport(ctx, prepared, trial.plan, in, &m); err != nil {
+			return zero, err
+		}
+	}
+	if decimal != nil {
+		bindLocalDecimal(&m, decimal)
+	}
 	for i, point := range trial.plan.Cases {
 		m.Tests = append(m.Tests, materials.TextTransportPoint{ID: point.ID, Input: point.Input.SHA256, Answer: point.Answer.SHA256})
-		if export != nil {
-			input, err := trial.materials.ReadInput(ctx, i)
-			if err != nil {
-				return zero, err
-			}
+		if export != nil || decimal != nil {
 			answer, n, err := trial.materials.AnswerAt(ctx, i)
-			if err != nil || n != point.Answer.Size {
+			if err != nil || n != point.Answer.Size || decimal != nil && n > materials.APlusBOutputBytes {
 				return zero, ErrCheckerCandidateBinding
 			}
 			data, err := io.ReadAll(io.NewSectionReader(answer, 0, n))
-			if err != nil || int64(len(input)) != point.Input.Size || int64(len(data)) != n ||
-				handoffDigest(input) != point.Input.SHA256 || handoffDigest(data) != point.Answer.SHA256 {
+			if err != nil || int64(len(data)) != n || handoffDigest(data) != point.Answer.SHA256 ||
+				decimal != nil && judging.ValidateDecimalReference(data, *decimal) != nil {
 				return zero, ErrCheckerCandidateBinding
 			}
-			if err := errors.Join(export(point.Input.SHA256, input), export(point.Answer.SHA256, data)); err != nil {
-				return zero, err
+			if export != nil {
+				input, err := trial.materials.ReadInput(ctx, i)
+				if err != nil || int64(len(input)) != point.Input.Size || handoffDigest(input) != point.Input.SHA256 {
+					return zero, ErrCheckerCandidateBinding
+				}
+				if err := errors.Join(export(point.Input.SHA256, input), export(point.Answer.SHA256, data)); err != nil {
+					return zero, err
+				}
 			}
 		}
 	}
@@ -171,6 +195,12 @@ func VerifyLocalText(ctx context.Context, prepared *problem.Prepared, in LocalTe
 			return zero, err
 		}
 		verified.digest = digest([3]string{verified.digest, in.QualitySHA256, in.RenderingSHA256})
+	}
+	if in.SPJReport != "" {
+		verified.digest = digest([2]string{verified.digest, in.SPJReportSHA256})
+	}
+	if decimal != nil {
+		verified.digest = digest([2]string{verified.digest, m.JudgeSHA256})
 	}
 	return verified, nil
 }

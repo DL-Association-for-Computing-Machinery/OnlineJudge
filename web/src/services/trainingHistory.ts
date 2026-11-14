@@ -8,10 +8,17 @@ const verdicts = ['AC', 'WA', 'CE', 'RE', 'TLE', 'MLE', 'OLE', 'SE']
 const maxSourceBytes = 65_536
 const encoder = new TextEncoder()
 
+export const trainingLanguageLabel = { 'gnu++17': 'GNU++17', c17: 'C17', 'gnu++20': 'GNU++20', java21: 'Java 21', python3: 'Python 3.14' } as const
+export type TrainingLanguage = keyof typeof trainingLanguageLabel
+
+export function isTrainingLanguage(value: unknown): value is TrainingLanguage {
+  return typeof value === 'string' && Object.hasOwn(trainingLanguageLabel, value)
+}
+
 export interface SubmissionSummary {
   id: string
   material_version: string
-  language: 'gnu++17'
+  language: TrainingLanguage
   created_at: string
   state: 'queued' | 'running' | 'finished' | 'failed'
   verdict: string | null
@@ -51,7 +58,7 @@ export function decodeHistoryPage(value: unknown): HistoryPage {
 export function decodeSummary(row: unknown): SubmissionSummary {
   if (!isRecord(row) || Object.keys(row).length !== 6 || typeof row.id !== 'string' || !idPattern.test(row.id) ||
     typeof row.material_version !== 'string' || row.material_version === '' || encoder.encode(row.material_version).length > 128 ||
-    row.language !== 'gnu++17' || typeof row.created_at !== 'string' || !timePattern.test(row.created_at) ||
+    !isTrainingLanguage(row.language) || typeof row.created_at !== 'string' || !timePattern.test(row.created_at) ||
     !Number.isFinite(Date.parse(row.created_at)) ||
     (row.state === 'finished' ? typeof row.verdict !== 'string' || !verdicts.includes(row.verdict) :
       (row.state !== 'queued' && row.state !== 'running' && row.state !== 'failed') || row.verdict !== null)) throw new HistoryError()

@@ -21,12 +21,23 @@ type CompilationSandbox interface {
 	CompileFiles(context.Context, experiment.ExecutionProfile, []SourceFile) (Observation, error)
 }
 
+func cachedProgramName(p experiment.ExecutionProfile) string {
+	if experiment.IsJava21Profile(p) {
+		return "main.jar"
+	}
+	if experiment.IsPython3Profile(p) {
+		return "main.pyc"
+	}
+	return "main"
+}
+
 func (g *CachedGoJudge) prepareCompilation(source string, files []SourceFile, multiple bool) ([]SourceFile, string, bool) {
 	if !multiple {
 		if g.compilationEntry != "" || int64(len(source)) > g.limits.SourceBytes {
 			return nil, "", false
 		}
-		return []SourceFile{{Name: "main.cpp", Data: []byte(source)}}, "main.cpp", true
+		name := experiment.SingleSourceName(g.runtime)
+		return []SourceFile{{Name: name, Data: []byte(source)}}, name, true
 	}
 	if !g.reference || g.compilationEntry == "" || len(files) > 5 {
 		return nil, "", false

@@ -228,13 +228,13 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 		}
 	}
 	if catalog != nil {
-		handler, err = withPublishedTraining(handler, pool, *catalog, localScope)
+		handler, err = withPublishedTraining(handler, pool, *catalog, localScope, c.LocalJava21, c.LocalPython3)
 		if err != nil {
 			return nil, ErrConfig
 		}
 	}
 	if c.PublishedTraining != nil {
-		handler, closePublished, err = openPublishedTraining(handler, pool, *c.PublishedTraining)
+		handler, closePublished, err = openPublishedTraining(handler, pool, *c.PublishedTraining, c.LocalJava21, c.LocalPython3)
 		if err != nil {
 			closePublished = func() error { return nil }
 			return nil, err

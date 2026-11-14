@@ -13,6 +13,23 @@ import (
 	"unicode/utf8"
 )
 
+const (
+	LanguageGNUCPP17 = "gnu++17"
+	LanguageC17      = "c17"
+	LanguageGNUCPP20 = "gnu++20"
+	LanguageJava21   = "java21"
+	LanguagePython3  = "python3"
+)
+
+// SupportedLanguage identifies the accepted single-file language keys.
+func SupportedLanguage(language string) bool {
+	switch language {
+	case LanguageGNUCPP17, LanguageC17, LanguageGNUCPP20, LanguageJava21, LanguagePython3:
+		return true
+	}
+	return false
+}
+
 // MaxSourceBytes bounds single-file source before persistence.
 const MaxSourceBytes = 65536
 
@@ -57,7 +74,7 @@ func ValidKey(key string) bool { return keyPattern.MatchString(key) }
 // Validate checks transport-independent source and identifier constraints.
 func Validate(subject, scope, key string, req Request) error {
 	if subject == "" || len(subject) > 128 || scope == "" || len(scope) > 128 || !ValidKey(key) ||
-		req.MaterialVersion == "" || len(req.MaterialVersion) > 128 || req.Language != "gnu++17" ||
+		req.MaterialVersion == "" || len(req.MaterialVersion) > 128 || !SupportedLanguage(req.Language) ||
 		len(req.Source) == 0 || len(req.Source) > MaxSourceBytes || !utf8.ValidString(req.Source) || strings.ContainsRune(req.Source, 0) {
 		return ErrInvalid
 	}

@@ -37,6 +37,27 @@ func TestLocalTextReaderDoesNotWidenLegacy(t *testing.T) {
 	}
 }
 
+func TestLocalSPJManifestRequiresExplicitArtifactAndMode(t *testing.T) {
+	hash := checksum([]byte("fixture"))
+	m := TextTransportManifest{Checker: LocalSPJChecker, CheckerArtifact: hash,
+		JudgeSHA256: hash, RuntimeSHA256: hash, Origin: LocalTextOrigin,
+		Language: "gnu++17", Version: "local-text-" + hash,
+		Tests: []TextTransportPoint{{ID: "p1", Input: hash, Answer: hash}}}
+	check := func(m TextTransportManifest, ok bool) {
+		t.Helper()
+		raw := m.Canonical()
+		if _, err := ParseLocalText(raw, checksum(raw)); (err == nil) != ok {
+			t.Fatalf("unexpected local checker admission: %v", err)
+		}
+	}
+	check(m, true)
+	m.TokenBytes = 4096
+	check(m, false)
+	m.TokenBytes = 0
+	m.CheckerArtifact = ""
+	check(m, false)
+}
+
 func TestLocalTextTransportImport(t *testing.T) {
 	hash := strings.Repeat("a", 64)
 	m := APlusBManifest{Origin: LocalTextOrigin, Version: "local-text-" + hash, JudgeSHA256: hash,
@@ -62,4 +83,33 @@ func TestLocalTextTransportImport(t *testing.T) {
 	check(duplicate, false)
 	m.Version = "local-text-invalid"
 	check(m, false)
+}
+
+func TestLocalDecimalManifestRejectsImplicitOrMixedModes(t *testing.T) {
+	hash := strings.Repeat("a", 64)
+	m := TextTransportManifest{Checker: judging.DecimalVersion,
+		Decimal: &judging.DecimalPolicy{Absolute: "0", Relative: "1e-3"},
+		Origin:  LocalTextOrigin, Version: "local-text-" + hash, JudgeSHA256: hash,
+		RuntimeSHA256: hash, Language: "gnu++17",
+		Tests: []TextTransportPoint{{ID: "p1", Input: hash, Answer: hash}}}
+	for _, tc := range []struct {
+		name   string
+		change func(*TextTransportManifest)
+		valid  bool
+	}{
+		{"explicit", func(*TextTransportManifest) {}, true},
+		{"missing", func(m *TextTransportManifest) { m.Decimal = nil }, false},
+		{"negative", func(m *TextTransportManifest) { m.Decimal = &judging.DecimalPolicy{Relative: "-1"} }, false},
+		{"mixed with text", func(m *TextTransportManifest) { m.Checker = judging.LibraryCheckerTextVersion; m.TokenBytes = 4096 }, false},
+		{"mixed with SPJ", func(m *TextTransportManifest) { m.Checker = LocalSPJChecker; m.CheckerArtifact = hash }, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			copy := m
+			tc.change(&copy)
+			raw := copy.Canonical()
+			if _, err := ParseLocalText(raw, checksum(raw)); (err == nil) != tc.valid {
+				t.Fatalf("unexpected admission: %v", err)
+			}
+		})
+	}
 }

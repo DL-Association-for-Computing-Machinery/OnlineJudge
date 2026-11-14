@@ -27,6 +27,9 @@ func main() {
 }
 
 func run(parent context.Context, args []string, out, diagnostics io.Writer) error {
+	if len(args) == 1 && args[0] == "local-spj-runtime-pin" {
+		return localSPJRuntimePin(out)
+	}
 	if len(args) > 0 && args[0] == "export-local-text" {
 		return exportLocalText(parent, args[1:], out, diagnostics)
 	}

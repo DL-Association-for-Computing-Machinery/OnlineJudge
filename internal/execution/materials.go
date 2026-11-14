@@ -28,6 +28,7 @@ type manifest struct {
 	Environment   experiment.ExecutionProfile `json:"execution_environment"`
 	Tests         []test                      `json:"tests"`
 	tokenBytes    int
+	decimal       *judging.DecimalPolicy
 }
 type test struct {
 	ID     string `json:"id"`
@@ -41,7 +42,7 @@ func prepare(ctx context.Context, d materials.Descriptor, blobs map[string][]byt
 	var m manifest
 	bad := errors.New("unsupported or corrupt execution material")
 	if len(d.Manifest) > 16384 || len(d.Source) == 0 || len(d.Source) > submission.MaxSourceBytes || !utf8.ValidString(d.Source) || strings.ContainsRune(d.Source, 0) ||
-		d.Version != fixture.Version() || d.Language != "gnu++17" || !bytes.Equal(d.Manifest, fixture.Manifest()) || digest(d.Manifest) != d.ManifestSHA256 || digest([]byte(d.Source)) != d.SourceSHA256 {
+		d.Version != fixture.Version() || !fixture.SupportsLanguage(d.Language) || !bytes.Equal(d.Manifest, fixture.Manifest()) || digest(d.Manifest) != d.ManifestSHA256 || digest([]byte(d.Source)) != d.SourceSHA256 {
 		return m, bad
 	}
 	if fixture.UsesCachedText() {
@@ -53,7 +54,7 @@ func prepare(ctx context.Context, d materials.Descriptor, blobs map[string][]byt
 		if err != nil {
 			return m, bad
 		}
-		m = manifest{Version: p.Version, Language: p.Language, Origin: p.Origin, Environment: fixture.Profile(), tokenBytes: p.TokenBytes}
+		m = manifest{Version: p.Version, Language: p.Language, Origin: p.Origin, Checker: p.Checker, Environment: fixture.ProfileForLanguage(d.Language), tokenBytes: p.TokenBytes, decimal: p.Decimal}
 		for _, point := range p.Tests {
 			m.Tests = append(m.Tests, test{ID: point.ID, Input: point.Input, Answer: point.Answer})
 		}
@@ -85,7 +86,15 @@ func prepare(ctx context.Context, d materials.Descriptor, blobs map[string][]byt
 			}
 		}
 		// Corrupt later reference material must not be hidden by an earlier WA.
-		if m.tokenBytes != 0 {
+		if m.Checker == materials.LocalSPJChecker {
+			if len(blobs[t.Input]) > experiment.SPJObjectBytes || len(blobs[t.Answer]) > experiment.SPJObjectBytes {
+				return m, bad
+			}
+		} else if m.decimal != nil {
+			if judging.ValidateDecimalReference(blobs[t.Answer], *m.decimal) != nil {
+				return m, bad
+			}
+		} else if m.tokenBytes != 0 {
 			answer := blobs[t.Answer]
 			if (!fixture.IsLocalText() && (len(answer) > 4096 || len(blobs[t.Input]) > 16<<10)) ||
 				judging.ValidateLibraryCheckerReferenceAt(ctx, judging.FrozenText{Reader: bytes.NewReader(answer), Size: int64(len(answer))},

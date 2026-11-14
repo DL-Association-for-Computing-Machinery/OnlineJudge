@@ -35,7 +35,8 @@ func (r *LeasedRunner) JudgeReport(ctx context.Context, lease submission.Lease, 
 
 // Only locally produced, completed results reach this encoder. Explicit fields
 // keep credentials, source, answers, raw output and ephemeral artifact IDs out of
-// evidence. The manifest digest binds environment, checker and ordered tests.
+// evidence. The manifest binds reference admission, checker and tests;
+// the optional runtime digest binds the actual contestant profile.
 func freezeReport(lease submission.Lease, d materials.Descriptor, result Result) submission.Result {
 	schema := "m0-execution-evidence-v1"
 	if _, err := materials.ParseAPlusB(d.Manifest, d.ManifestSHA256); err == nil {
@@ -43,6 +44,12 @@ func freezeReport(lease submission.Lease, d materials.Descriptor, result Result)
 	}
 	if _, err := materials.ParseLocalText(d.Manifest, d.ManifestSHA256); err == nil {
 		schema = "isolated-local-text-execution-evidence-v1"
+	}
+	if result.runtimeSHA256 != "" {
+		schema = "isolated-jdk-text-execution-evidence-v1"
+		if result.pythonImage {
+			schema = "isolated-cpython-text-image-evidence-v1"
+		}
 	}
 	type compilation struct {
 		Status          string
@@ -60,11 +67,12 @@ func freezeReport(lease submission.Lease, d materials.Descriptor, result Result)
 		Compile                                                 compilation
 		Points                                                  []Point
 		Max                                                     *Usage
+		RuntimeSHA256                                           string `json:",omitempty"`
 	}{Schema: schema, SubmissionID: lease.SubmissionID,
 		JudgeGeneration: lease.JudgeGeneration, RecoveryGeneration: lease.RecoveryGeneration,
 		AttemptNumber: lease.AttemptNumber, MaterialVersion: d.Version, Language: d.Language,
 		ManifestSHA256: d.ManifestSHA256, SourceSHA256: d.SourceSHA256,
-		Verdict: result.Verdict, Points: result.Points, Max: result.Max}
+		Verdict: result.Verdict, Points: result.Points, Max: result.Max, RuntimeSHA256: result.runtimeSHA256}
 	if c := result.Compile; c != nil {
 		evidence.Compile = compilation{c.Status, c.Exit, c.CPU, c.Memory, c.OutputTruncated}
 	}

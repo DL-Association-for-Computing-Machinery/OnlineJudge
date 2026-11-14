@@ -4,7 +4,7 @@ import { useCurrentAccount } from '../account/context'
 import { useCodeDraftSession } from '../preview/useCodeDraftSession'
 import { subscribePrivateInvalidation } from '../account/privateInvalidation'
 import { recoverTraining, submitTraining, TrainingIntakeError, type TrainingAttempt } from '../services/trainingIntake'
-import type { SubmissionSummary } from '../services/trainingHistory'
+import { isTrainingLanguage, trainingLanguageLabel, type SubmissionSummary, type TrainingLanguage } from '../services/trainingHistory'
 import { clearTrainingKey, readTrainingKey, reserveTrainingKey, trainingReceiptSlot } from './receiptJournal'
 import { readTrainingSource, validTrainingSource } from './sourceFile'
 import { TrainingDraftControls } from './TrainingDraftControls'
@@ -14,15 +14,22 @@ export function TrainingSubmit({ problemID, version }: { problemID: string; vers
   const { state } = useCurrentAccount()
   if (state.status === 'anonymous') return <p><Link to="/login">登录后提交</Link></p>
   if (state.status !== 'authenticated' || !state.session) return null
-  return <TrainingForm key={state.session.subject_id + problemID + version} subject={state.session.subject_id}
+  return <TrainingLanguageForm key={state.session.subject_id + problemID + version} subject={state.session.subject_id}
     problemID={problemID} version={version} accountBusy={state.busy} />
 }
 
-function TrainingForm({ subject, problemID, version, accountBusy }: {
-  subject: string; problemID: string; version: string; accountBusy: boolean
+type TrainingFormProps = { subject: string; problemID: string; version: string; accountBusy: boolean }
+
+function TrainingLanguageForm(props: TrainingFormProps) {
+  const [language, setLanguage] = useState<TrainingLanguage>('gnu++17')
+  return <TrainingForm key={language} {...props} language={language} setLanguage={setLanguage} />
+}
+
+function TrainingForm({ subject, problemID, version, accountBusy, language, setLanguage }: TrainingFormProps & {
+  language: TrainingLanguage; setLanguage: (language: TrainingLanguage) => void
 }) {
   const { controller } = useCurrentAccount()
-  const draftSession = useCodeDraftSession(subject, problemID + ':' + version, '', 'personal-training')
+  const draftSession = useCodeDraftSession(subject, problemID + ':' + version, '', 'personal-training', language)
   const { draft, state: draftState, verifying } = draftSession
   const source = draftState.code
   const editorUnavailable = verifying || draftState.phase === 'cleared' || draftState.phase === 'loading'
@@ -86,7 +93,7 @@ function TrainingForm({ subject, problemID, version, accountBusy }: {
         const candidate = crypto.randomUUID()
         if (!reserveTrainingKey(slot, candidate)) return
         original = candidate
-        attempt.current = { subject, key: candidate, problemID, version, source }
+        attempt.current = { subject, key: candidate, problemID, version, language, source }
         setCanRetry(true)
         setSelectedFile(null)
         setReceipt(undefined)
@@ -174,7 +181,7 @@ function TrainingForm({ subject, problemID, version, accountBusy }: {
     setFileBusy(true)
     setSelectedFile(null)
     try {
-      const text = await readTrainingSource(file)
+      const text = await readTrainingSource(file, language)
       if (abort.signal.aborted || controller.getSnapshot().session?.subject_id !== subject) return
       setNotice(draft.edit(text) ? '已载入源码文件，确认后可提交。' : '会话正在核对，文件未替换。')
     } catch (error) {
@@ -190,7 +197,19 @@ function TrainingForm({ subject, problemID, version, accountBusy }: {
   return <section className="training-submit" aria-labelledby="training-submit-heading">
     <h2 id="training-submit-heading">提交代码</h2>
     <form onSubmit={submit}>
-      <p>语言：GNU++17 · 源码最多 64 KiB</p>
+      <label htmlFor="training-language">语言</label>
+      <select id="training-language" value={language} disabled={!journalReady || Boolean(key) || busy || fileBusy || accountBusy}
+        onChange={event => {
+          const value = event.target.value
+          if (isTrainingLanguage(value)) setLanguage(value)
+        }}>
+        {Object.entries(trainingLanguageLabel).filter(([key]) =>
+          (key !== 'java21' || import.meta.env.VITE_OJ_LOCAL_JAVA21 === '1') &&
+          (key !== 'python3' || import.meta.env.VITE_OJ_LOCAL_PYTHON3 === '1'))
+          .map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+      </select>
+      <p>源码最多 64 KiB</p>
+      {language === 'java21' ? <p>请使用无包名的 Main 类作为程序入口。</p> : null}
       <label htmlFor="training-source">源码</label>
       <textarea id="training-source" rows={10} maxLength={65_536} spellCheck={false}
         value={editorUnavailable ? '' : source} readOnly={editorUnavailable || Boolean(key) || fileBusy}
@@ -198,7 +217,7 @@ function TrainingForm({ subject, problemID, version, accountBusy }: {
       {source && invalid ? <p role="status">源码含无效字符或超过 64 KiB。</p> : null}
       {!key ? <>
         <label htmlFor="training-source-file">选择源码文件</label>
-        <input id="training-source-file" type="file" accept=".cpp,.cc,.cxx" disabled={editorUnavailable || busy || fileBusy || accountBusy}
+        <input id="training-source-file" type="file" accept={language === 'python3' ? '.py' : language === 'java21' ? '.java' : language === 'c17' ? '.c' : '.cpp,.cc,.cxx'} disabled={editorUnavailable || busy || fileBusy || accountBusy}
           onChange={event => {
             const file = event.target.files?.[0]
             event.target.value = ''

@@ -47,12 +47,14 @@ type PackageQualityReport struct {
 	Criteria       int     `json:"non_sample_criteria"`
 	Wrong          [][]int `json:"wrong_rejections"`
 	StopConfirmed  bool    `json:"stop_confirmed"`
+	DecimalBinding string  `json:"decimal_binding,omitempty"`
 }
 
 type packageQuality struct {
 	config  PackageQualityConfig
 	hash    string
 	samples []bool
+	decimal *judging.DecimalPolicy
 }
 
 func readPackageQuality(ctx context.Context, p *problem.Prepared) (packageQuality, error) {
@@ -75,6 +77,10 @@ func readPackageQuality(ctx context.Context, p *problem.Prepared) (packageQualit
 	if err != nil || len(q.config.Controls) != 4 || len(q.config.Probes) < 10 || len(q.config.Probes) > 32 ||
 		len(q.config.Coverage) == 0 || len(q.config.Coverage) > 32 || len(q.config.Wrong) != 4 {
 		return q, ErrCheckerTrialEvidence
+	}
+	q.decimal, err = readLocalDecimal(ctx, p)
+	if err != nil {
+		return q, err
 	}
 	isName := func(s string) bool {
 		return len(s) > 0 && len(s) <= 48 && strings.Trim(s, "abcdefghijklmnopqrstuvwxyz0123456789-_") == ""
@@ -120,6 +126,9 @@ func (q packageQuality) report(plan problem.ReferencePlan) PackageQualityReport 
 	r := PackageQualityReport{Schema: PackageQualitySchema, ImportRevision: plan.ImportRevision, Plan: plan.Digest(),
 		Profile: LocalTextProfile().Digest(), Config: q.hash, Inputs: len(plan.Cases), Controls: len(q.config.Controls),
 		OracleCases: len(q.config.Probes), Criteria: len(q.config.Coverage)}
+	if q.decimal != nil {
+		r.DecimalBinding = localDecimalDigest("", q.decimal)
+	}
 	for _, sample := range q.samples {
 		if sample {
 			r.SamplePoints++
@@ -244,6 +253,10 @@ func (q packageQuality) run(ctx context.Context, frozen *problem.ReferenceSnapsh
 	compare := func(a, b []byte) (bool, error) {
 		return judging.CompareLibraryCheckerText(a, b, localTextLimits)
 	}
+	checkWrong := compare
+	if q.decimal != nil {
+		checkWrong = func(a, b []byte) (bool, error) { return judging.CompareDecimal(a, b, *q.decimal) }
+	}
 	accepted := func(run func([]byte) (execution.Observation, error), raw []byte) ([]byte, error) {
 		o, err := run(raw)
 		if err != nil || o.Status != "Accepted" || o.Exit != 0 {
@@ -338,7 +351,7 @@ func (q packageQuality) run(ctx context.Context, frozen *problem.ReferenceSnapsh
 				if err != nil {
 					return err
 				}
-				same, err := compare(ans, out)
+				same, err := checkWrong(ans, out)
 				if err != nil {
 					return err
 				}

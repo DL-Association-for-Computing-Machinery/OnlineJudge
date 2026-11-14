@@ -17,6 +17,9 @@ func dispatch(ctx context.Context, args []string, logger *slog.Logger, drain <-c
 	if len(args) == 0 {
 		return run(ctx, logger, drain)
 	}
+	if os.Getenv(ubuntuTextSlotEnv) != "" && args[0] != "recover-aplusb-ubuntu" {
+		return errors.New("dual text slots permit only training and their fixed recovery command")
+	}
 	if os.Getenv("OJ_EXPERIMENT_MATERIAL_VERSION") == experiment.UbuntuVersion && args[0] != "recover" {
 		return errors.New("the Ubuntu M0 fixture supports only the training Worker and its recovery")
 	}
@@ -121,10 +124,33 @@ func recoverAPlusBUbuntu(ctx context.Context, args []string, logger *slog.Logger
 		return err
 	}
 	slot, err := workerhost.ReferenceSlotForTier(experiment.ReferenceAPlusBUbuntu)
+	dual := os.Getenv(ubuntuTextSlotEnv) != ""
+	if dual {
+		slot, err = workerhost.UbuntuTextSlot(os.Getenv(ubuntuTextSlotEnv))
+	}
 	if err != nil {
 		return err
 	}
-	lock, err := lockReferenceRuntime(slot, true)
+	switch os.Getenv("OJ_LOCAL_JAVA21") {
+	case "":
+	case "1":
+		slot = slot.WithJava21Image()
+	default:
+		return errors.New("invalid local Java setting")
+	}
+	switch os.Getenv("OJ_LOCAL_PYTHON3") {
+	case "":
+	case "1":
+		slot = slot.WithPython3Image()
+	default:
+		return errors.New("invalid local Python setting")
+	}
+	var lock *slotLock
+	if dual {
+		lock, err = lockUbuntuTextDual(slot, true)
+	} else {
+		lock, err = lockReferenceRuntime(slot, true)
+	}
 	if err != nil {
 		return err
 	}

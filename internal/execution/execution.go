@@ -48,10 +48,12 @@ type Usage struct{ CPU, Memory int64 }
 // Result retains compilation separately; maxima include only executed test points.
 // It is internal evidence, not a lease report or a public response model.
 type Result struct {
-	Verdict string
-	Compile *Observation
-	Points  []Point
-	Max     *Usage
+	Verdict       string
+	Compile       *Observation
+	Points        []Point
+	Max           *Usage
+	runtimeSHA256 string
+	pythonImage   bool
 }
 
 // Runner owns one execution slot. Use one instance per sandbox of capacity one.
@@ -82,18 +84,22 @@ func (r *Runner) Judge(ctx context.Context, d materials.Descriptor, blobs map[st
 	if err != nil {
 		return result, err
 	}
+	if r.fixture.Java21Enabled() || r.fixture.Python3Enabled() {
+		result.runtimeSHA256 = experiment.TextExecutionSHA256(p.Environment)
+		result.pythonImage = r.fixture.Python3Enabled()
+	}
 	for _, t := range p.Tests {
 		result.Points = append(result.Points, Point{ID: t.ID, Verdict: "NOT_RUN"})
 	}
 	sandbox := r.sandbox
-	if p.tokenBytes != 0 && r.newCached != nil {
+	if r.fixture.UsesCachedText() && r.newCached != nil {
 		sandbox = r.newCached()
 	}
 	if sandbox == nil {
 		return result, errors.New("sandbox unavailable")
 	}
 	run := sandbox.Run
-	if p.tokenBytes != 0 {
+	if r.fixture.UsesCachedText() {
 		strict, ok := sandbox.(*CachedGoJudge)
 		if !ok || strict == nil {
 			return result, errors.New("strict cached text execution required")
@@ -148,6 +154,13 @@ func (r *Runner) Judge(ctx context.Context, d materials.Descriptor, blobs map[st
 	if compiled.Artifact == "" {
 		return result, errors.New("compiler returned no artifact")
 	}
+	compare := func(_ []byte, output, answer []byte) (bool, error) { return p.compare(answer, output) }
+	if p.Checker == materials.LocalSPJChecker {
+		compare, err = r.spjChecker(ctx, p)
+		if err != nil {
+			return result, err
+		}
+	}
 	for i, t := range p.Tests {
 		if err := ctx.Err(); err != nil {
 			return result, err
@@ -174,7 +187,7 @@ func (r *Runner) Judge(ctx context.Context, d materials.Descriptor, blobs map[st
 		result.Max.CPU = max(result.Max.CPU, observed.CPU)
 		result.Max.Memory = max(result.Max.Memory, observed.Memory)
 		if verdict == "AC" {
-			ok, compareErr := p.compare(blobs[t.Answer], observed.Stdout)
+			ok, compareErr := compare(blobs[t.Input], observed.Stdout, blobs[t.Answer])
 			if p.tokenBytes != 0 && errors.Is(compareErr, judging.ErrOutput) && len(observed.Stdout) <= materials.APlusBOutputBytes {
 				verdict = "OLE"
 			} else if compareErr != nil {
@@ -194,6 +207,9 @@ func (r *Runner) Judge(ctx context.Context, d materials.Descriptor, blobs map[st
 }
 
 func (m manifest) compare(answer, output []byte) (bool, error) {
+	if m.decimal != nil {
+		return judging.CompareDecimal(answer, output, *m.decimal)
+	}
 	if m.tokenBytes == 0 {
 		return judging.CompareText(answer, output, m.CaseSensitive)
 	}

@@ -5,15 +5,22 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/checkedfile"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
 )
+
+func localSPJRuntimePin(out io.Writer) error {
+	_, err := fmt.Fprintln(out, experiment.LocalSPJRuntimeSHA256())
+	return err
+}
 
 func exportLocalText(parent context.Context, args []string, out, diagnostics io.Writer) error {
 	f := flag.NewFlagSet("export-local-text", flag.ContinueOnError)
@@ -29,6 +36,8 @@ func exportLocalText(parent context.Context, args []string, out, diagnostics io.
 	qualitySHA := f.String("expected-quality", "", "trusted quality report SHA-256")
 	rendering := f.String("rendering-file", "", "completed package rendering receipt")
 	renderingSHA := f.String("expected-rendering", "", "trusted rendering receipt SHA-256")
+	spjReport := f.String("spj-report", "", "completed local SPJ evidence file")
+	spjSHA := f.String("expected-spj-report", "", "trusted local SPJ evidence SHA-256")
 	dest := f.String("export", "", "new private material directory")
 	if f.Parse(args) != nil || f.NArg() != 0 || !filepath.IsAbs(*bundle) || !filepath.IsAbs(*lock) ||
 		!filepath.IsAbs(*report) || !filepath.IsAbs(*dest) || filepath.Clean(*dest) != *dest || !exportOutsideInputs(*dest, *bundle, *report) {
@@ -41,6 +50,7 @@ func exportLocalText(parent context.Context, args []string, out, diagnostics io.
 	in := problemvalidation.LocalTextAdmissionInput{
 		SourceID: *source, ReportDirectory: *report, ReportSHA256: *reportSHA, ReviewProfileSHA256: *reviewProfile, PackageReview: *packageReview,
 		QualityDirectory: *qualityDir, QualitySHA256: *qualitySHA, RenderingFile: *rendering, RenderingSHA256: *renderingSHA,
+		SPJReport: *spjReport, SPJReportSHA256: *spjSHA,
 	}
 	if in.PackageReview && *reviewProfile == "" {
 		in.ReviewProfileSHA256 = problemvalidation.LocalTextProfile().Digest()

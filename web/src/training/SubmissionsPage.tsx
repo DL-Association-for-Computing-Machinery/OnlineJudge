@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router'
 import { useCurrentAccount } from '../account/context'
 import { subscribePrivateInvalidation } from '../account/privateInvalidation'
 import { HistoryController } from './historyController'
-import type { SubmissionSummary } from '../services/trainingHistory'
+import { trainingLanguageLabel, type SubmissionSummary } from '../services/trainingHistory'
 import './trainingHistory.css'
 
 const stateLabels = { queued: '排队中', running: '判题中', finished: '已判定', failed: '判题失败' }
@@ -26,7 +26,7 @@ function HistoryRow({ row, history, detail, accountBusy, linked = false }: {
     </div>
     <dl>
       <div><dt>接收时间</dt><dd><time dateTime={row.created_at}>{formatDate.format(new Date(row.created_at))}</time></dd></div>
-      <div><dt>语言</dt><dd>GNU++17</dd></div>
+      <div><dt>语言</dt><dd>{trainingLanguageLabel[row.language]}</dd></div>
       <div><dt>题目材料版本</dt><dd><code>{row.material_version}</code></dd></div>
     </dl>
     <button type="button" className="button button-outline" aria-expanded={expanded} aria-controls={expanded ? panelID : undefined}

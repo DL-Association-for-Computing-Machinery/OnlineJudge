@@ -30,7 +30,17 @@ type WorkerFixture struct {
 	aplusbVersion string
 	aplusbTier    ReferenceTier
 	localText     bool
+	java21        bool
+	python3       bool
+	checkerSHA    string
+	checker       string
 }
+
+// CheckerArtifact returns the private, digest-verified checker executable.
+func (f WorkerFixture) CheckerArtifact() []byte { return []byte(f.checker) }
+
+// UsesSPJ describes an operator-pinned local SPJ queue.
+func (f WorkerFixture) UsesSPJ() bool { return f.checkerSHA != "" }
 
 // IsLocalText reports that the worker owns an admitted bounded text fixture.
 func (f WorkerFixture) IsLocalText() bool { return f.localText }
@@ -47,7 +57,9 @@ func (f WorkerFixture) MaterialLimits() (file, total int) {
 // transport budget. Every manifest reference counts, including repeats.
 func (f WorkerFixture) MaterialFileBudget(kind string, consumed int) int {
 	file, total := f.MaterialLimits()
-	if f.IsLocalText() && kind == "answer" {
+	if f.UsesSPJ() {
+		file = min(file, SPJObjectBytes)
+	} else if f.IsLocalText() && kind == "answer" {
 		file = min(file, materials.APlusBOutputBytes)
 	}
 	return min(file, total-consumed)
@@ -136,6 +148,12 @@ func (f WorkerFixture) Version() string {
 func (f WorkerFixture) Profile() ExecutionProfile {
 	if f.UsesCachedText() {
 		config, _ := ResolveReferenceTier(f.aplusbTier)
+		if f.python3 {
+			return PythonTextBase(config.Runtime)
+		}
+		if f.java21 {
+			return JavaTextBase(config.Runtime)
+		}
 		return config.Runtime
 	}
 	p := PinnedEnvironment()

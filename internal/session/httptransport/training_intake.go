@@ -15,7 +15,7 @@ import (
 const trainingReceiptPath = "/api/v1/training/receipt"
 
 // TrainingSubmit accepts a submission to an explicitly published version.
-type TrainingSubmit func(context.Context, identity.TrainingActor, string, string, string, string) (submission.Receipt, error)
+type TrainingSubmit func(context.Context, identity.TrainingActor, string, string, string, string, string) (submission.Receipt, error)
 
 // TrainingReceipt recovers a previously accepted submission by its request key.
 type TrainingReceipt func(context.Context, identity.TrainingActor, string) (submission.Receipt, error)
@@ -44,19 +44,20 @@ func (h *handler) serveTrainingIntake(w http.ResponseWriter, r *http.Request) {
 	key := keys[0]
 	post := r.Method == http.MethodPost
 	var id, version, source string
+	language := submission.LanguageGNUCPP17
 	if post {
 		if len(r.Header.Values("Content-Type")) != 1 {
 			problem(w, 415, "UNSUPPORTED_MEDIA_TYPE", "请使用 JSON 提交")
 			return
 		}
-		if !readReviewFields(w, r, submission.MaxSourceBytes*6+512, map[string]any{
+		if !readFields(w, r, submission.MaxSourceBytes*6+512, map[string]any{
 			"problem_id": &id, "publication_version": &version, "source": &source,
-		}, invalidTrainingIntake) {
+		}, map[string]any{"language": &language}, invalidTrainingIntake) {
 			return
 		}
 		if !identity.ValidID(id) || !problemmodel.ValidImportRevision(version) ||
 			submission.Validate(expected, submission.PersonalTrainingScope, key, submission.Request{
-				MaterialVersion: version, Language: "gnu++17", Source: source,
+				MaterialVersion: version, Language: language, Source: source,
 			}) != nil {
 			invalidTrainingIntake(w)
 			return
@@ -74,7 +75,7 @@ func (h *handler) serveTrainingIntake(w http.ResponseWriter, r *http.Request) {
 	var receipt submission.Receipt
 	var err error
 	if post {
-		receipt, err = h.trainingSubmit(ctx, actor, key, id, version, source)
+		receipt, err = h.trainingSubmit(ctx, actor, key, id, version, language, source)
 	} else {
 		receipt, err = h.trainingReceipt(ctx, actor, key)
 	}

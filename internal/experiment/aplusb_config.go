@@ -51,8 +51,12 @@ func LoadCachedFixture(getenv func(string) string) (materials.TextTransportManif
 		return m, f, err
 	}
 	m, err = materials.ParseLocalText(raw, pin)
-	if err != nil || m.RuntimeSHA256 != APlusBRuntimeSHA256ForTier(ReferenceAPlusBUbuntu) {
+	runtime := APlusBRuntimeSHA256ForTier(ReferenceAPlusBUbuntu)
+	if m.Checker == materials.LocalSPJChecker {
+		runtime = LocalSPJRuntimeSHA256()
+	}
+	if err != nil || m.RuntimeSHA256 != runtime {
 		return m, f, materials.ErrUnavailable
 	}
-	return m, WorkerFixture{aplusb: string(raw), aplusbVersion: m.Version, aplusbTier: ReferenceAPlusBUbuntu, localText: true}, nil
+	return m, WorkerFixture{aplusb: string(raw), aplusbVersion: m.Version, aplusbTier: ReferenceAPlusBUbuntu, localText: true, checkerSHA: m.CheckerArtifact}, nil
 }

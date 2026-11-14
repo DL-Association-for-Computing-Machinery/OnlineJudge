@@ -140,6 +140,10 @@ func reviewIntakeBody(w http.ResponseWriter, r *http.Request) (problemreference.
 }
 
 func readReviewFields(w http.ResponseWriter, r *http.Request, limitBytes int64, fields map[string]any, invalid func(http.ResponseWriter)) bool {
+	return readFields(w, r, limitBytes, fields, nil, invalid)
+}
+
+func readFields(w http.ResponseWriter, r *http.Request, limitBytes int64, fields, optional map[string]any, invalid func(http.ResponseWriter)) bool {
 	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || media != "application/json" {
 		problem(w, 415, "UNSUPPORTED_MEDIA_TYPE", "请使用 JSON 提交")
@@ -165,11 +169,16 @@ func readReviewFields(w http.ResponseWriter, r *http.Request, limitBytes int64, 
 		token, _ := d.Token()
 		name, _ := token.(string)
 		p := fields[name]
-		if p == nil || d.Decode(p) != nil {
+		if p == nil {
+			p = optional[name]
+		}
+		var value json.RawMessage
+		if p == nil || d.Decode(&value) != nil || bytes.Equal(value, []byte("null")) || json.Unmarshal(value, p) != nil {
 			invalid(w)
 			return false
 		}
 		delete(fields, name)
+		delete(optional, name)
 	}
 	if len(fields) != 0 {
 		invalid(w)

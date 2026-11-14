@@ -22,6 +22,11 @@ func (w document) config() (Config, error) {
 	r.TrainingHistory = w.TrainingHistory
 	r.TrainingSubmissionDetail = w.TrainingSubmissionDetail
 	r.LocalTrainingIntake = w.LocalTrainingIntake
+	r.LocalJava21 = w.LocalJava21
+	r.LocalPython3 = w.LocalPython3
+	if (w.LocalJava21 || w.LocalPython3) && !w.LocalTrainingIntake && w.PublishedTraining == nil {
+		return Config{}, ErrConfig
+	}
 	if p := w.PublishedTraining; p != nil {
 		if p.Validate() != nil || w.PrivateDrafts != nil || w.LocalTrainingIntake || !w.TrainingHistory || !w.TrainingSubmissionDetail {
 			return Config{}, ErrConfig

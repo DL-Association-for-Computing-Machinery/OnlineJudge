@@ -29,6 +29,8 @@ type Host struct {
 	fileOps     int                      // guarded by mu; bounds even empty transfers
 	tier        experiment.ReferenceTier // zero is the separate M0 configuration
 	fixture     experiment.WorkerFixture
+	java21      bool
+	python3     bool
 	id, started string
 	mu          sync.Mutex
 	closed      bool
@@ -86,6 +88,11 @@ func (h *Host) configuration() (experiment.ExecutionProfile, experiment.Referenc
 		return h.fixture.Profile(), experiment.PinnedReferenceFiles(), nil
 	}
 	c, err := experiment.ResolveReferenceTier(h.tier)
+	if h.python3 && err == nil {
+		c.Runtime = experiment.PythonTextBase(c.Runtime)
+	} else if h.java21 && err == nil {
+		c.Runtime = experiment.JavaTextBase(c.Runtime)
+	}
 	return c.Runtime, c.Files, err
 }
 
@@ -139,7 +146,9 @@ func (h *Host) Verify(ctx context.Context, p experiment.ExecutionProfile) error 
 	if err != nil {
 		return err
 	}
-	if !reflect.DeepEqual(p, want) {
+	textRuntime := h.fixture.UsesCachedText() || h.tier == experiment.ReferenceSmall || h.tier == experiment.ReferenceAPlusBUbuntu
+	supported := reflect.DeepEqual(p, want) || textRuntime && experiment.MatchesPublishedTextProfile(want, p)
+	if !supported {
 		return errors.New("unsupported host profile")
 	}
 	s, err := h.inspect(ctx, h.id)
@@ -149,13 +158,17 @@ func (h *Host) Verify(ctx context.Context, p experiment.ExecutionProfile) error 
 	if err := h.validate(s, p); err != nil {
 		return err
 	}
+	versionArg := "-dumpfullversion"
+	if experiment.IsPython3Profile(p) {
+		versionArg = "--version"
+	}
 	for _, check := range []struct {
 		args []string
 		want string
 	}{
 		{[]string{"exec", h.id, "uname", "-r"}, p.KernelRelease},
 		{[]string{"image", "inspect", "--format", "{{.Os}}/{{.Architecture}}", p.ImageID}, p.Platform},
-		{[]string{"exec", h.id, p.CompileArgs[0], "-dumpfullversion"}, p.CompilerVersion},
+		{[]string{"exec", h.id, p.CompileArgs[0], versionArg}, p.CompilerVersion},
 	} {
 		out, err := h.docker(ctx, nil, check.args...)
 		if err != nil || strings.TrimSpace(string(out)) != check.want {

@@ -14,14 +14,27 @@ def obj(x):
  if isinstance(x,str):x=x.encode()
  return file('objects/sha256/'+ident(x)['sha256'],x)
 s='local/bounded_span'; sid='library-checker:bounded_span'; title='数列极差'
+spj = sys.argv[2:] == ['--spj']
+decimal = sys.argv[2:] == ['--decimal']
+if spj:
+ title = '数列极差（SPJ）'
+if decimal:
+ s='local/decimal_span'; sid='library-checker:decimal_span'; title='十分之一极差（浮点）'
 source={}
 def src(name,x): source[name]=obj(x)
+if spj:
+ src('quality/checker.cpp', (Path(__file__).resolve().parents[2] / 'sandbox/testdata/testlib_span_checker.cpp').read_bytes())
 base='#include <iostream>\n#include <algorithm>\n#include <vector>\nusing namespace std;\n'
-src('sol/correct.cpp',base+'int main(){int n,x;cin>>n>>x;int a=x,b=x;while(--n){cin>>x;a=min(a,x);b=max(b,x);}cout<<b-a<<"\\n";}\n')
+if decimal:
+ src('quality/decimal.json',canon(dict(absolute='0.01',relative='0.001',text=['RANGE'])))
+ base+='#include <iomanip>\nvoid output(int x){cout<<"RANGE "<<fixed<<setprecision(1)<<x/10.0<<"\\n";}\n'
+def print_value(expr):
+ return f'output({expr});' if decimal else f'cout<<{expr}<<"\\n";'
+src('sol/correct.cpp',base+'int main(){int n,x;cin>>n>>x;int a=x,b=x;while(--n){cin>>x;a=min(a,x);b=max(b,x);}'+print_value('b-a')+'}\n')
 src('quality/validator.cpp',base+'int main(){int n,x;if(!(cin>>n)||n<1||n>64)return 1;while(n--){if(!(cin>>x)||x < -1000 || x>1000)return 1;}string extra;return cin>>extra?1:0;}\n')
-src('quality/oracle.cpp',base+'int main(){int n;cin>>n;vector<int>a(n);for(int& x:a)cin>>x;int best=0;for(int x:a)for(int y:a)best=max(best,x-y);cout<<best<<"\\n";}\n')
+src('quality/oracle.cpp',base+'int main(){int n;cin>>n;vector<int>a(n);for(int& x:a)cin>>x;int best=0;for(int x:a)for(int y:a)best=max(best,x-y);'+print_value('best')+'}\n')
 src('quality/coverage.cpp',base+'int main(){int n;cin>>n;vector<int>a(n);for(int& x:a)cin>>x;int lo=*min_element(a.begin(),a.end()),hi=*max_element(a.begin(),a.end());if(n==1)cout<<"singleton ";if(n==64)cout<<"max-size ";if(lo==-1000)cout<<"lower-bound ";if(hi==1000)cout<<"upper-bound ";if(hi<0)cout<<"all-negative ";if(hi==lo&&n>1)cout<<"equal ";if(lo<0&&hi>0)cout<<"mixed ";if(lo!=a.front()&&hi!=a.back())cout<<"internal-extrema ";}\n')
-wrong={'max-only':'cout<<b<<"\\n";','endpoints':'cout<<abs(a.front()-a.back())<<"\\n";','zero-floor':'cout<<b-min(l,0)<<"\\n";','distinct-count':'sort(a.begin(),a.end());cout<<int(unique(a.begin(),a.end())-a.begin())-1<<"\\n";'}
+wrong={'max-only':print_value('b'),'endpoints':print_value('abs(a.front()-a.back())'),'zero-floor':print_value('b-min(l,0)'),'distinct-count':'sort(a.begin(),a.end());'+print_value('int(unique(a.begin(),a.end())-a.begin())-1')}
 for k,expr in wrong.items():src('quality/wrong/'+k+'.cpp',base+'int main(){int n;cin>>n;vector<int>a(n);for(int& x:a)cin>>x;int l=*min_element(a.begin(),a.end()),b=*max_element(a.begin(),a.end());'+expr+'}\n')
 def data(a):return str(len(a))+'\n'+' '.join(map(str,a))+'\n'
 probes=[[0],[42],[-1],[0,4],[4,0],[-5,-7],[7,1,8,2],[-8,0,7,0],[4,4,4],[-6,8,8,-6],[8,7,6,5],[-1000,1000]]
@@ -36,7 +49,8 @@ cases=[[2,-3,4],[-4],[1,7,2,3],[-4,-2,-9],[5,100,-70,4],[6,6,6],[-1000,-3,-2],[9
 tests=[]; mapping=[]; hashes={}
 for i,a in enumerate(cases):
  n='example_00' if i==0 else f'edge_{i-1:02d}'
- inp=obj(data(a));ans=obj(str(max(a)-min(a))+'\n')
+ inp=obj(data(a)); value=max(a)-min(a)
+ ans=obj(f'RANGE {value//10}.{value%10}\n' if decimal else str(value)+'\n')
  hashes[n+'.in']=inp['sha256'];hashes[n+'.out']=ans['sha256']
  id=f'case-{i+1:04d}';tests.append(dict(id=id,input=inp,answer=ans,sample=i==0));mapping.append(dict(case_id=id,upstream_case=n))
 src('info.toml',f'[[tests]]\nname="example.in"\nnumber=1\n[[tests]]\nname="edge.cpp"\nnumber={len(cases)-1}\n')
@@ -49,6 +63,10 @@ lock=dict(schema='oj.library-checker-source.v1',repository=repo,commit=commit,pr
 raw=canon(lock); (root/'library-checker.json').write_bytes(raw); file('provenance/source-lock.json',raw)
 for n in ('source-catalog','source-validation','material-map'):file('provenance/'+n+'.json','{}\n')
 statement=file('statements/span.md','# Range of a sequence\n\nGiven $N$ integers, print the largest minus the smallest.\n\n## Constraints\n\n- $1 \\leq N \\leq 64$\n- $-1000 \\leq a_i \\leq 1000$\n\n## Input\n\n```text\nN\na_1 ... a_N\n```\n\n## Output\n\nPrint one integer. In the sample, the largest is $4$ and the smallest is $-3$, so the answer is $7$.\n')
+if spj:
+ statement=file('statements/span.md', files['statements/span.md'].decode().replace('Print one integer.', 'Print the range as one integer, or print two integers in $[-2000, 2000]$ whose sum equals the range.'))
+if decimal:
+ statement=file('statements/span.md', files['statements/span.md'].decode().replace('print the largest minus the smallest.', 'divide the range by 10.').replace('Print one integer.', 'Print RANGE followed by the range divided by 10. An absolute error of at most 0.01 or a relative error of at most 0.001 is accepted.').replace('the answer is $7$', 'print RANGE 0.7'))
 statement['language']='en'
 doc=dict(schema='oj.problem-draft.v1',adapter='library-checker-pinned-v1',state='private-draft',title=title,statement=statement,test_cases=tests,examples=['case-0001'],judging=dict(mode='tokens',case_sensitive=True,numeric_equivalence=False,token_comparison='exact-bytes',compatibility='configured-not-validated',limits=None,production_profile=None),
  provenance=dict(commit=commit,repository=repo,original_files=original,original_title='Range of a sequence',source_id=sid,source_lock_sha256=ident(raw)['sha256'],source_path=s,upstream_time_limit_seconds=2.0,source_case_mapping=mapping),

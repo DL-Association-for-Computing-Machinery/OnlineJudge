@@ -24,7 +24,7 @@ var hexDigestPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 // The caller must authorize the selected version before calling; fixture
 // registration is not publication. Use only the ordinary identity database.
 func (s *Store) AcceptTraining(ctx context.Context, actor identity.TrainingActor, key, language, source string) (submission.Receipt, bool, error) {
-	if s == nil || s.pool == nil || ctx == nil || !actor.Valid() {
+	if s == nil || s.pool == nil || ctx == nil || !actor.Valid() || language != submission.LanguageGNUCPP17 {
 		return submission.Receipt{}, false, submission.ErrInvalid
 	}
 	req := submission.Request{MaterialVersion: s.version, Language: language, Source: source}
@@ -43,11 +43,11 @@ type ResolvePublication func(context.Context, pgx.Tx, string, string) (Published
 
 // AcceptPublishedTraining binds a key to the displayed publication as well as
 // the immutable material. Authorization, resolution and enqueue share one transaction.
-func AcceptPublishedTraining(ctx context.Context, pool *pgxpool.Pool, actor identity.TrainingActor, key, problemID, version, source string, resolve ResolvePublication) (submission.Receipt, bool, error) {
+func AcceptPublishedTraining(ctx context.Context, pool *pgxpool.Pool, actor identity.TrainingActor, key, problemID, version, language, source string, resolve ResolvePublication) (submission.Receipt, bool, error) {
 	if pool == nil || ctx == nil || !actor.Valid() || resolve == nil || !identity.ValidID(problemID) ||
 		!hexDigestPattern.MatchString(version) ||
 		submission.Validate(actor.SubjectID, submission.PersonalTrainingScope, key, submission.Request{
-			MaterialVersion: version, Language: "gnu++17", Source: source,
+			MaterialVersion: version, Language: language, Source: source,
 		}) != nil {
 		return submission.Receipt{}, false, submission.ErrInvalid
 	}
@@ -69,7 +69,7 @@ func AcceptPublishedTraining(ctx context.Context, pool *pgxpool.Pool, actor iden
 		return submission.Receipt{}, false, submission.ErrMaterial
 	}
 	queue := Store{version: m.Version, manifestHash: m.Digest}
-	req := submission.Request{MaterialVersion: m.Version, Language: "gnu++17", Source: source}
+	req := submission.Request{MaterialVersion: m.Version, Language: language, Source: source}
 	sum := sha256.Sum256([]byte("published-training\x00" + problemID + "\x00" + version + "\x00" + submission.Digest(req)))
 	return queue.acceptInTx(ctx, tx, actor.SubjectID, submission.PersonalTrainingScope, key, req, hex.EncodeToString(sum[:]))
 }

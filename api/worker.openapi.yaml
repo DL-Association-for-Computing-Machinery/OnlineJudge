@@ -421,7 +421,7 @@ paths:
                   material_version: {type: string}
                   manifest_sha256: {$ref: '#/components/schemas/Digest'}
                   manifest: {type: string, contentEncoding: base64, contentMediaType: application/json}
-                  language: {type: string, const: 'gnu++17'}
+                  language: {type: string, enum: ['gnu++17', c17, 'gnu++20', java21, python3]}
                   source: {type: string}
                   source_sha256: {$ref: '#/components/schemas/Digest'}
         '400': {$ref: '#/components/responses/Invalid'}

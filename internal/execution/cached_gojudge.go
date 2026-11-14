@@ -26,6 +26,7 @@ type CachedGoJudge struct {
 	limits                     experiment.ReferenceFilesProfile
 	runtime                    experiment.ExecutionProfile
 	reference                  bool
+	publishedText              bool
 	busy                       atomic.Bool
 	verified, compiled, failed bool
 	executable                 string
@@ -68,7 +69,11 @@ func NewReferenceGoJudgeForTier(transport http.RoundTripper, verify func(context
 func NewAPlusBCacheFactory(transport http.RoundTripper, verify func(context.Context, experiment.ExecutionProfile) error, files FileTransport, fixture experiment.WorkerFixture) func() *CachedGoJudge {
 	tier := fixture.APlusBTier()
 	if tier == experiment.ReferenceSmall {
-		return func() *CachedGoJudge { return NewReferenceGoJudge(transport, verify, files) }
+		return func() *CachedGoJudge {
+			g := NewReferenceGoJudge(transport, verify, files)
+			g.publishedText = true
+			return g
+		}
 	}
 	if tier != experiment.ReferenceAPlusBUbuntu {
 		return nil
@@ -76,6 +81,8 @@ func NewAPlusBCacheFactory(transport http.RoundTripper, verify func(context.Cont
 	return func() *CachedGoJudge {
 		// The tier has been admitted by the fixed fixture parser.
 		g, _ := NewReferenceGoJudgeForTier(transport, verify, files, tier)
+		g.publishedText = true
+		g.runtime = fixture.Profile()
 		return g
 	}
 }
@@ -97,7 +104,8 @@ func (g *CachedGoJudge) Verify(ctx context.Context, p experiment.ExecutionProfil
 		return tagFailure(err, "verify", "environment", "")
 	}
 	defer func() { err = g.finish(ctx, err) }()
-	if g.verified || g.files == nil || !reflect.DeepEqual(p, g.runtime) {
+	supported := reflect.DeepEqual(p, g.runtime) || g.publishedText && experiment.MatchesPublishedTextProfile(g.runtime, p)
+	if g.verified || g.files == nil || !supported {
 		return failureError("verify", "environment", "invalid_evidence", "unsupported cached sandbox profile")
 	}
 	if err = g.step(0, false); err != nil {
@@ -109,6 +117,7 @@ func (g *CachedGoJudge) Verify(ctx context.Context, p experiment.ExecutionProfil
 	if err = g.control.Verify(ctx, p); err != nil {
 		return tagFailure(cachedError(ctx, "cached sandbox verification failed", err), "verify", "environment", "")
 	}
+	g.runtime = p
 	g.verified = true
 	return nil
 }
@@ -155,17 +164,18 @@ func (g *CachedGoJudge) compileSources(ctx context.Context, p experiment.Executi
 	c := command(p, p.CompileArgs, p.Compile, nil)
 	g.boundDiagnostics(c, true)
 	c["copyIn"] = copyIn
-	c["copyOutCached"] = []string{"main?"}
+	name := cachedProgramName(p)
+	c["copyOutCached"] = []string{name + "?"}
 	c["copyOutMax"] = p.ExecutableBytes
 	r, err := g.control.result(ctx, c)
 	if err != nil {
 		return o, tagFailure(cachedError(ctx, "cached compile receipt unavailable", err), "control", "executable", "")
 	}
 	if len(r.IDs) != 0 {
-		if len(r.IDs) != 1 || r.IDs["main"] == "" {
+		if len(r.IDs) != 1 || r.IDs[name] == "" {
 			return o, failureError("validate", "executable", "ownership", "unexpected cached compile identities")
 		}
-		if err = g.adopt(exe, r.IDs["main"]); err != nil {
+		if err = g.adopt(exe, r.IDs[name]); err != nil {
 			return o, tagFailure(err, "validate", "executable", "")
 		}
 	} else if r.Status != "Accepted" {
@@ -228,7 +238,7 @@ func (g *CachedGoJudge) run(ctx context.Context, p experiment.ExecutionProfile, 
 	c := command(p, p.RunArgs, p.Run, nil)
 	g.boundDiagnostics(c, false)
 	c["files"].([]any)[0] = map[string]any{"fileId": in.id}
-	c["copyIn"] = map[string]any{"main": map[string]any{"fileId": id}}
+	c["copyIn"] = map[string]any{cachedProgramName(p): map[string]any{"fileId": id}}
 	c["copyOutCached"] = []string{"stdout"}
 	c["copyOutMax"] = p.OutputBytes + 1
 	r, err := g.control.result(ctx, c)

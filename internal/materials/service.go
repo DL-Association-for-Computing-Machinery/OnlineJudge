@@ -107,7 +107,7 @@ type manifest struct {
 
 func parseManifest(value submission.TaskMaterials) (manifest, error) {
 	var m manifest
-	if json.Unmarshal(value.Manifest, &m) != nil || m.Version != value.Version || m.Language != value.Language || len(m.Tests) == 0 || len(m.Tests) > 64 {
+	if json.Unmarshal(value.Manifest, &m) != nil || m.Version != value.Version || !manifestLanguageAllowed(value, m.Language) || len(m.Tests) == 0 || len(m.Tests) > 64 {
 		return m, ErrUnavailable
 	}
 	seen := map[string]bool{}
@@ -118,6 +118,22 @@ func parseManifest(value submission.TaskMaterials) (manifest, error) {
 		seen[test.ID] = true
 	}
 	return m, nil
+}
+
+func manifestLanguageAllowed(value submission.TaskMaterials, referenceLanguage string) bool {
+	if value.Language == referenceLanguage {
+		return true
+	}
+	if !submission.SupportedLanguage(value.Language) || referenceLanguage != submission.LanguageGNUCPP17 {
+		return false
+	}
+	// The language in a text transport manifest describes its admitted reference
+	// runtime. Alternate contestant languages use the same frozen tests.
+	if _, err := ParseAPlusB(value.Manifest, value.ManifestSHA256); err == nil {
+		return true
+	}
+	_, err := ParseLocalText(value.Manifest, value.ManifestSHA256)
+	return err == nil
 }
 
 // ManifestDigests validates an archived canonical judge manifest and returns

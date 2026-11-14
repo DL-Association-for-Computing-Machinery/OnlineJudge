@@ -29,8 +29,17 @@ func run(ctx context.Context, logger *slog.Logger, drain <-chan struct{}) error 
 	}
 	if c.fixture.UsesCachedText() {
 		slot, err := workerhost.ReferenceSlotForTier(c.fixture.APlusBTier())
+		if c.ubuntuTextSlot != "" {
+			slot, err = workerhost.UbuntuTextSlot(c.ubuntuTextSlot)
+		}
 		if err != nil {
 			return err
+		}
+		if c.fixture.Java21Enabled() {
+			slot = slot.WithJava21Image()
+		}
+		if c.fixture.Python3Enabled() {
+			slot = slot.WithPython3Image()
 		}
 		if slot.IsUbuntuAPlusB() {
 			probe, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -40,7 +49,12 @@ func run(ctx context.Context, logger *slog.Logger, drain <-chan struct{}) error 
 				return err
 			}
 		}
-		lock, err := lockReferenceRuntime(slot, false)
+		var lock *slotLock
+		if c.ubuntuTextSlot != "" {
+			lock, err = lockUbuntuTextDual(slot, false)
+		} else {
+			lock, err = lockReferenceRuntime(slot, false)
+		}
 		if err != nil {
 			return err
 		}
@@ -145,6 +159,22 @@ func runSlot(ctx context.Context, c config, logger *slog.Logger, lock *slotLock,
 		if err := factory().Verify(startup, c.fixture.Profile()); err != nil {
 			return errors.New("A+B sandbox protocol preflight failed; no task claimed")
 		}
+		if err := factory().Verify(startup, experiment.C17Profile(c.fixture.Profile())); err != nil {
+			return errors.Join(errors.New("C17 sandbox protocol preflight failed; no task claimed"), err)
+		}
+		if err := factory().Verify(startup, experiment.GNUCPP20Profile(c.fixture.Profile())); err != nil {
+			return errors.Join(errors.New("GNU++20 sandbox protocol preflight failed; no task claimed"), err)
+		}
+		if c.fixture.Java21Enabled() {
+			if err := factory().Verify(startup, experiment.Java21Profile(c.fixture.Profile())); err != nil {
+				return errors.Join(errors.New("sandbox protocol preflight failed for Java 21; no task claimed"), err)
+			}
+		}
+		if c.fixture.Python3Enabled() {
+			if err := factory().Verify(startup, experiment.Python3Profile(c.fixture.Profile())); err != nil {
+				return errors.Join(errors.New("sandbox protocol preflight failed for Python; no task claimed"), err)
+			}
+		}
 		runner, err = execution.NewLeasedCachedText(factory, renewer.Renew, stop, c.fixture)
 		if err != nil {
 			return err
@@ -156,7 +186,15 @@ func runSlot(ctx context.Context, c config, logger *slog.Logger, lock *slotLock,
 		runner = execution.NewLeasedForFixture(sandbox, renewer.Renew, stop, c.fixture)
 	}
 	cancel()
-	w, err := worker.New(acquirer, acquirer, runner, reporter)
+	var executor worker.Executor = runner
+	if c.fixture.UsesSPJ() {
+		budget, ok := host.(interface{ ResetFileAttemptBudget() error })
+		if !ok {
+			return errors.New("SPJ requires per-attempt file accounting")
+		}
+		executor = spjAttemptExecutor{runner, budget.ResetFileAttemptBudget}
+	}
+	w, err := worker.New(acquirer, acquirer, executor, reporter)
 	if err != nil {
 		return err
 	}

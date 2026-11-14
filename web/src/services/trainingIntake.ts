@@ -1,5 +1,5 @@
 import { readBoundedJSON, sameOriginJSONOptions } from '../transport/json'
-import { decodeSummary } from './trainingHistory'
+import { decodeSummary, type TrainingLanguage } from './trainingHistory'
 
 export interface TrainingReceiptKey {
   subject: string
@@ -9,6 +9,7 @@ export interface TrainingReceiptKey {
 export interface TrainingAttempt extends TrainingReceiptKey {
   problemID: string
   version: string
+  language: TrainingLanguage
   source: string
 }
 
@@ -18,7 +19,7 @@ export class TrainingIntakeError extends Error {
 
 export function submitTraining(attempt: TrainingAttempt, signal: AbortSignal) {
   return requestTraining(attempt, signal, JSON.stringify({
-    problem_id: attempt.problemID, publication_version: attempt.version, source: attempt.source,
+    problem_id: attempt.problemID, publication_version: attempt.version, language: attempt.language, source: attempt.source,
   }))
 }
 

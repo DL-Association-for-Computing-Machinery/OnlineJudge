@@ -19,6 +19,47 @@ func materialDigest(raw []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
+func TestRejudgeRequiresPinnedSPJArtifactAndPointBudget(t *testing.T) {
+	root := t.TempDir()
+	put := func(name string, data []byte) string {
+		t.Helper()
+		path := filepath.Join(root, name)
+		if err := os.WriteFile(path, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	point := []byte("1\n")
+	hash := materialDigest(point)
+	put(hash, point)
+	artifact := []byte("fixture checker identity")
+	id := strings.Repeat("b", 64)
+	m := materials.TextTransportManifest{Origin: materials.LocalTextOrigin, Version: "local-text-" + id, JudgeSHA256: id,
+		RuntimeSHA256: experiment.LocalSPJRuntimeSHA256(), Checker: materials.LocalSPJChecker,
+		CheckerArtifact: materialDigest(artifact), Language: "gnu++17",
+		Tests: []materials.TextTransportPoint{{ID: "case-1", Input: hash, Answer: hash}}}
+	env := map[string]string{"OJ_SANDBOX_EXPERIMENT": "1", "OJ_MATERIAL_ROOT": root}
+	check := func(want bool) {
+		t.Helper()
+		raw := m.Canonical()
+		env["OJ_LOCAL_TEXT_MANIFEST_FILE"] = put("manifest.json", raw)
+		env["OJ_LOCAL_TEXT_MANIFEST_SHA256"] = materialDigest(raw)
+		err := verifyRejudgeMaterialWithEnv(t.Context(), m.Version, materialDigest(raw), raw, func(k string) string { return env[k] })
+		if (err == nil) != want {
+			t.Fatalf("rejudge admission success=%v, want %v (error: %v)", err == nil, want, err)
+		}
+	}
+	check(false)
+	env["OJ_LOCAL_SPJ_CHECKER_FILE"] = put("checker", []byte("different artifact"))
+	check(false)
+	put("checker", artifact)
+	check(true)
+	large := make([]byte, experiment.SPJObjectBytes+1)
+	m.Tests[0].Input = materialDigest(large)
+	put(m.Tests[0].Input, large)
+	check(false)
+}
+
 func TestRejudgeUsesPinnedLocalTextMaterials(t *testing.T) {
 	root := t.TempDir()
 	rawInput := make([]byte, materials.MaxFileBytes+1)

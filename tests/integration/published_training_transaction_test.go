@@ -54,9 +54,12 @@ func TestPublishedTrainingTransaction(t *testing.T) {
 			return postgres.PublishedMaterial{}, submission.ErrNotFound
 		}
 	}
-	submit := func(id, version, key string) trainingAcceptance {
-		r, created, err := postgres.AcceptPublishedTraining(f.ctx, f.a, actor, key, id, version, f.request.Source, resolve)
+	submitLanguage := func(id, version, key, language string) trainingAcceptance {
+		r, created, err := postgres.AcceptPublishedTraining(f.ctx, f.a, actor, key, id, version, language, f.request.Source, resolve)
 		return trainingAcceptance{r, created, err}
+	}
+	submit := func(id, version, key string) trainingAcceptance {
+		return submitLanguage(id, version, key, submission.LanguageGNUCPP17)
 	}
 	if a := submit(idA, showA, key); !errors.Is(a.err, identity.ErrTrainingAccountRequired) || lookups != 0 {
 		t.Fatalf("unverified account reached publication selection: %+v", a)
@@ -76,10 +79,13 @@ func TestPublishedTrainingTransaction(t *testing.T) {
 	if got := submit(idB, showB, key); !errors.Is(got.err, submission.ErrConflict) {
 		t.Fatalf("same request key was reusable on another problem: %+v", got)
 	}
-	b := submit(idB, showB, "second-publication-key")
+	if got := submitLanguage(idA, showA, key, submission.LanguageC17); !errors.Is(got.err, submission.ErrConflict) {
+		t.Fatalf("same request key was reusable with another language: %+v", got)
+	}
+	b := submitLanguage(idB, showB, "second-publication-key", submission.LanguageC17)
 	must(t, b.err)
-	if !b.created || b.receipt.MaterialVersion != otherQueue {
-		t.Fatal("second publication did not route to the second queue")
+	if !b.created || b.receipt.MaterialVersion != otherQueue || b.receipt.Language != submission.LanguageC17 {
+		t.Fatal("second publication did not preserve the queue and language")
 	}
 	if got := submit(idB, showB, "shared-backlog-policy-key"); !errors.Is(got.err, submission.ErrBacklog) {
 		t.Fatalf("backlog was not shared by the queues: %+v", got)

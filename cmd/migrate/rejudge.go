@@ -106,5 +106,17 @@ func rejudgeFixture(version, digest string, manifest []byte, getenv func(string)
 	if err != nil || !f.MatchesMaterial(version, digest, manifest) {
 		return experiment.WorkerFixture{}, submission.ErrMaterial
 	}
+	checker := getenv("OJ_LOCAL_SPJ_CHECKER_FILE")
+	if f.UsesSPJ() {
+		f, err = f.WithPython3()
+		if err == nil {
+			f, err = f.WithCheckerArtifact(checker)
+		}
+		if err != nil {
+			return experiment.WorkerFixture{}, submission.ErrMaterial
+		}
+	} else if checker != "" {
+		return experiment.WorkerFixture{}, submission.ErrMaterial
+	}
 	return f, nil
 }

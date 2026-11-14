@@ -93,7 +93,7 @@ func catalogReader(pool *pgxpool.Pool, localOnly bool, objects problem.Reference
 	}
 }
 
-func withPublishedTraining(h http.Handler, pool *pgxpool.Pool, catalog httptransport.CatalogReader, scope publicationScope) (http.Handler, error) {
+func withPublishedTraining(h http.Handler, pool *pgxpool.Pool, catalog httptransport.CatalogReader, scope publicationScope, java21, python3 bool) (http.Handler, error) {
 	if scope != nil {
 		catalog.CanSubmit = func(ctx context.Context, id, version string) (bool, error) {
 			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -116,15 +116,18 @@ func withPublishedTraining(h http.Handler, pool *pgxpool.Pool, catalog httptrans
 		}
 		return submissionpg.PublishedMaterial{Version: p.MaterialVersion, Digest: p.MaterialDigest}, err
 	}
-	return httptransport.WithTrainingIntake(next, func(ctx context.Context, actor identity.TrainingActor, key, id, version, source string) (submission.Receipt, error) {
-		receipt, _, err := submissionpg.AcceptPublishedTraining(ctx, pool, actor, key, id, version, source, resolve)
+	return httptransport.WithTrainingIntake(next, func(ctx context.Context, actor identity.TrainingActor, key, id, version, language, source string) (submission.Receipt, error) {
+		if (language == submission.LanguageJava21 && !java21) || (language == submission.LanguagePython3 && !python3) {
+			return submission.Receipt{}, submission.ErrNotFound
+		}
+		receipt, _, err := submissionpg.AcceptPublishedTraining(ctx, pool, actor, key, id, version, language, source, resolve)
 		return receipt, err
 	}, func(ctx context.Context, actor identity.TrainingActor, key string) (submission.Receipt, error) {
 		return submissionpg.ReadTrainingReceipt(ctx, pool, actor, key)
 	})
 }
 
-func openPublishedTraining(h http.Handler, pool *pgxpool.Pool, c PublishedTrainingConfig) (http.Handler, func() error, error) {
+func openPublishedTraining(h http.Handler, pool *pgxpool.Pool, c PublishedTrainingConfig, java21, python3 bool) (http.Handler, func() error, error) {
 	objects, err := materialstore.OpenLocal(materialstore.Config{Root: c.MaterialRoot, MaxObjectBytes: 128 << 20, MaxInFlight: c.MaxInFlight})
 	if err != nil {
 		return nil, nil, ErrStartup
@@ -145,7 +148,7 @@ func openPublishedTraining(h http.Handler, pool *pgxpool.Pool, c PublishedTraini
 	next, err := withPublishedTraining(h, pool, catalogReader(pool, true, objects, acquire),
 		func(p referencepg.TrainingPublication) bool {
 			return pins[p.MaterialVersion] != "" && pins[p.MaterialVersion] == p.MaterialDigest
-		})
+		}, java21, python3)
 	if err != nil {
 		_ = objects.Close()
 		return nil, nil, ErrConfig
