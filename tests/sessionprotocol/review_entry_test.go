@@ -53,6 +53,14 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 	pending := beginLogin(t, x, reviewer)
 	credential := completedCredential(t, loginCall(y, "/api/v1/session/login/complete", "", []*http.Cookie{pending}, nil))
 	cookies := []*http.Cookie{{Name: transport.CookieName, Value: credential.Value()}}
+	loginStatus(t, reviewReadGET(x, "assignments", nil, reviewer.ID), 401)
+	loginStatus(t, reviewReadGET(x, "assignments", cookies, owner), 409)
+	loginStatus(t, reviewReadGET(x, "assignments", cookies, reviewer.ID), 403)
+	loginStatus(t, reviewReadGET(y, "assignments?cursor=", cookies, reviewer.ID), 400)
+	loginStatus(t, reviewReadGET(y, "assignments?cursor=invalid", cookies, reviewer.ID), 400)
+	loginStatus(t, loginCall(y, "/api/v1/problem-review/assignments", "{}", cookies, func(r *http.Request) {
+		r.Header.Set("X-OJ-Expected-Subject", reviewer.ID)
+	}), 405)
 	loginStatus(t, reviewEvidenceGET(x, receipt.ID, nil, reviewer.ID), 401)
 	loginStatus(t, reviewEvidenceGET(x, receipt.ID, cookies, owner), 409)
 	loginStatus(t, reviewEvidenceGET(x, receipt.ID, cookies, reviewer.ID), 403)
@@ -79,6 +87,7 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 	}
 	grant(owner, 0, true)
 	grant(reviewer.ID, 0, true)
+	assertEntryReviewDiscovery(t, x, cookies, reviewer.ID, "", "")
 	loginStatus(t, reviewEvidenceGET(y, receipt.ID, authorCookies, owner), 404)
 	loginStatus(t, reviewEvidenceGET(y, receipt.ID, cookies, reviewer.ID), 404)
 	loginStatus(t, reviewMaterialsGET(y, receipt.ID, cookies, reviewer.ID), 404)
@@ -93,6 +102,10 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 	loginStatus(t, assigned, 200)
 	var got problemreference.ReviewEvidence
 	must(t, json.Unmarshal(assigned.body, &got))
+	assertEntryReviewDiscovery(t, x, cookies, reviewer.ID, receipt.ID, revision)
+	assertEntryReviewDiscovery(t, y, cookies, reviewer.ID, receipt.ID, revision)
+	assertEntryReviewDiscovery(t, y, authorCookies, owner, "", "")
+	assertReviewDiscoveryCrossReplica(t, f, x, y, store, cookies, reviewer.ID, receipt.ID)
 	if got.ReviewID != receipt.ID || got.DraftID != draftID || got.ImportRevision != revision ||
 		got.ReferenceRequestID != referenceID || got.FormalVerdict != "AC" || got.ComparisonOutcome != "" ||
 		strings.Contains(string(assigned.body), "retired-fixture") || strings.Contains(string(assigned.body), owner) ||
@@ -182,6 +195,7 @@ func testEntryReviewAccess(t *testing.T, f *fixture, x, y *loginEndpoint, access
 		t.Fatal("same-material return did not change the eligibility snapshot")
 	}
 	grant(reviewer.ID, 1, false)
+	loginStatus(t, reviewReadGET(y, "assignments", cookies, reviewer.ID), 403)
 	loginStatus(t, reviewEvidenceGET(x, receipt.ID, cookies, reviewer.ID), 403)
 	loginStatus(t, reviewMaterialsGET(x, receipt.ID, cookies, reviewer.ID), 403)
 	loginStatus(t, comparison(x, receipt.ID, cookies, reviewer.ID), 403)

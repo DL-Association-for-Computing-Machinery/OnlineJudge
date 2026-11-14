@@ -44,7 +44,7 @@ func WithReviewEvidence(base http.Handler, reader ReviewEvidenceReader, material
 // IsReviewReadPath recognizes scoped reviewer GET routes.
 func IsReviewReadPath(path string) bool {
 	id, _ := reviewReadRoute(path)
-	return id != ""
+	return id != "" || path == reviewDiscoveryPath
 }
 
 func reviewReadRoute(path string) (id string, leaf string) {

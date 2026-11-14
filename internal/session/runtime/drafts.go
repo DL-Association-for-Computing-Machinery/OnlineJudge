@@ -73,12 +73,13 @@ type draftCapabilities struct {
 	review      *problemreference.ReviewIntake
 	solutions   *problemreference.AuthorSolutions
 	evidence    *problemreference.ReviewAccess
+	discovery   *problemreference.ReviewDiscovery
 	materials   *problemreference.ReviewMaterialReader
 	returns     *problemreference.ReviewerReturns
 	statements  *problemreference.StatementConfirmations
 }
 
-func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore.Store, pool *pgxpool.Pool) (*draftCapabilities, func() error, error) {
+func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore.Store, pool *pgxpool.Pool, secrets *redisstore.LoginSecrets) (*draftCapabilities, func() error, error) {
 	var prepared []*problem.Prepared
 	var materials *materialstore.Local
 	var preparation *problemreference.Preparation
@@ -150,6 +151,14 @@ func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore
 			return nil, nil, ErrStartup
 		}
 		result.evidence, err = problemreference.NewReviewAccess(sessions, reviewer)
+		if err != nil {
+			return nil, nil, ErrStartup
+		}
+		cursor, err := redisstore.NewReviewCursorCipher(secrets)
+		if err != nil {
+			return nil, nil, ErrStartup
+		}
+		result.discovery, err = problemreference.NewReviewDiscovery(sessions, reviewer, cursor)
 		if err != nil {
 			return nil, nil, ErrStartup
 		}

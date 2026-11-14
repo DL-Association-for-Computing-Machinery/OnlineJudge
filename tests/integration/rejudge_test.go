@@ -193,7 +193,7 @@ func TestControlledRejudge(t *testing.T) {
 	}
 	t.Log(plan.String())
 	must(t, tx.Rollback(f.ctx))
-	if _, err := f.provider.Down(f.ctx); err == nil {
-		t.Fatal("rollback discarded durable rejudge history")
+	if _, err := f.provider.DownTo(f.ctx, 23); err == nil || !strings.Contains(err.Error(), "cannot discard rejudge audit records") {
+		t.Fatalf("rollback did not refuse to discard durable rejudge history: %v", err)
 	}
 }
