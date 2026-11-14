@@ -66,6 +66,8 @@ def arguments():
     parser.add_argument("--redis-image", default=REDIS, choices=[REDIS, REDIS.replace("@", ":7.2.17@", 1)])
     parser.add_argument("--module-cache", type=Path)
     parser.add_argument("--build-cache-volume", default="onlinejudge_toolchain-cache")
+    parser.add_argument("--fixture-start-seconds", type=int, choices=range(90, 301), metavar="90..300",
+                        default=90, help="Preparation budget before browser checks (default: 90)")
     parser.add_argument("--playwright-module", type=Path, required=True)
     parser.add_argument("--chromium-executable", type=Path)
     mode = parser.add_mutually_exclusive_group()
@@ -171,8 +173,8 @@ def published_origin(docker, test, port, scheme):
     return scheme + "://127.0.0.1:" + value
 
 
-def wait_ready(process, log, origin):
-    deadline = time.monotonic() + 90
+def wait_ready(process, log, origin, seconds):
+    deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
         if process.poll() is not None:
             raise RuntimeError("fixture exited before readiness")
@@ -312,7 +314,7 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
         if args.training_history:
             cold += ["-e", "OJ_BROWSER_TRAINING_HISTORY=1"]
         process = subprocess.Popen([*docker.command, "exec", "-e", "OJ_BROWSER_ORIGIN=" + origin, "-e", "OJ_BROWSER_UI_DIR=/browser-assets", *cold, containers["test"], "sh", "/browser-fixture.sh"], stdout=handles[-1], stderr=subprocess.STDOUT)
-        ready = wait_ready(process, fixture_log, origin)
+        ready = wait_ready(process, fixture_log, origin, args.fixture_start_seconds)
         if args.cold_firefox:
             public_ca = ready["ca_pem"]
             if not isinstance(public_ca, str) or not re.fullmatch(r"-----BEGIN CERTIFICATE-----\n[A-Za-z0-9+/=\n]{1,4096}-----END CERTIFICATE-----\n", public_ca):
