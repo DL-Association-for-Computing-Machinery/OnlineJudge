@@ -69,6 +69,13 @@ func (s *ReviewStore) ReturnReview(ctx context.Context, actor identity.ProblemAc
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return zero, storageError{err}
 		}
+		approved, approvalErr := hasCurrentReviewApproval(ctx, q, material)
+		if approvalErr != nil {
+			return zero, approvalErr
+		}
+		if approved {
+			return zero, problemreference.ErrReviewAlreadyApproved
+		}
 		row, err = q.InsertReviewReturn(ctx, referencedb.InsertReviewReturnParams{
 			ReviewID: id, MaterialSha256: material, ReviewerSubjectID: actor.SubjectID, RequestKey: i.RequestKey,
 			Reason: i.Reason, AuthGeneration: actor.AuthGeneration, RecoveryID: actor.RecoveryID,

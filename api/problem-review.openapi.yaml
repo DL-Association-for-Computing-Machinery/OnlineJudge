@@ -165,6 +165,7 @@ paths:
         需要 review_returns 和当前非作者分配。新决定绑定证据响应中的 assignment_revision、
         import_revision 与 evidence_sha256；任一变化返回 409。相同材料最多退回一次，
         即使已有多个送审 ID。理由为首尾无空白的非空 UTF-8，最多 512 字节，无控制字符。
+        相同材料已有当前有效批准时返回 409 REVIEW_CHANGED。
         请求最多 4096 字节；未知提交使用原请求键查询。所有响应 no-store/nosniff。
       requestBody:
         required: true

@@ -115,7 +115,7 @@ func reviewReturnError(w http.ResponseWriter, err error) {
 		problem(w, 404, "REVIEW_RETURN_NOT_FOUND", "审核项未分配或退回回执不存在")
 	case errors.Is(err, problemreference.ErrSubjectChanged):
 		problem(w, 409, "REVIEW_SUBJECT_CHANGED", "会话用户已变化")
-	case errors.Is(err, problemreference.ErrReviewChanged):
+	case errors.Is(err, problemreference.ErrReviewChanged), errors.Is(err, problemreference.ErrReviewAlreadyApproved):
 		problem(w, 409, "REVIEW_CHANGED", "分配或证据已变化，请重新读取审核项")
 	case errors.Is(err, problemreference.ErrReviewReturned):
 		problem(w, 409, "REVIEW_MATERIALS_RETURNED", "相同材料已有退回决定")
