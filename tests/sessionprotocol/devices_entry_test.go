@@ -42,12 +42,19 @@ func testEntryDevices(t *testing.T, f *fixture, binary string) {
 		t.Helper()
 		r := read(e, credentialCookies(credential))
 		loginStatus(t, r, 200)
-		var result struct{ Devices []redisstore.Device }
+		var result redisstore.DeviceList
 		decoder := json.NewDecoder(strings.NewReader(string(r.body)))
 		decoder.DisallowUnknownFields()
 		if decoder.Decode(&result) != nil || len(result.Devices) != count || len(r.cookies) != 0 ||
 			r.headers.Get("Cache-Control") != "no-store" {
 			t.Fatal("invalid device response")
+		}
+		wantOwner := p.ID
+		if credential == alien {
+			wantOwner = other.ID
+		}
+		if result.SubjectID != wantOwner {
+			t.Fatal("device list owner does not match the authenticated account")
 		}
 		for _, token := range []redisstore.Credential{one, two, three, alien} {
 			k := tokenKey(c.Namespace, token)
@@ -118,7 +125,9 @@ func testEntryDevices(t *testing.T, f *fixture, binary string) {
 	must(t, f.control.ZAdd(f.ctx, group, redisMember(key, int64(idle))).Err())
 	revoke := func(target string, want int) {
 		t.Helper()
-		res := loginCall(y, path+"/revoke", target, credentialCookies(one), nil)
+		res := loginCall(y, path+"/revoke", target, credentialCookies(one), func(r *http.Request) {
+			r.Header.Set("X-OJ-Session-Device", id)
+		})
 		loginStatus(t, res, want)
 		if len(res.cookies) != 0 || (want == 204 && len(res.body) != 0) {
 			t.Fatal("device revocation changed cookies or returned a receipt body")
@@ -126,6 +135,11 @@ func testEntryDevices(t *testing.T, f *fixture, binary string) {
 	}
 	revoke(id, 404)
 	revoke(alienID, 404)
+	for _, route := range []string{"/revoke", "/revoke-others"} {
+		loginStatus(t, loginCall(y, path+route, twoID, credentialCookies(two), func(r *http.Request) {
+			r.Header.Set("X-OJ-Session-Device", id)
+		}), 409)
+	}
 	loginStatus(t, loginCall(y, path+"/revoke", twoID, credentialCookies(one), func(r *http.Request) {
 		r.Header.Set("Origin", "https://wrong.invalid")
 	}), 403)
@@ -140,7 +154,9 @@ func testEntryDevices(t *testing.T, f *fixture, binary string) {
 	}
 	replacement := entryCredential(t, y, p, secret)
 	for range 2 {
-		res := loginCall(y, path+"/revoke-others", "", credentialCookies(one), nil)
+		res := loginCall(y, path+"/revoke-others", "", credentialCookies(one), func(r *http.Request) {
+			r.Header.Set("X-OJ-Session-Device", id)
+		})
 		loginStatus(t, res, 204)
 		if len(res.cookies) != 0 || len(res.body) != 0 {
 			t.Fatal("revoke-others modified current browser credentials")

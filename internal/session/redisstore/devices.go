@@ -14,6 +14,16 @@ import (
 // account, the current cookie, or a session which is no longer active.
 var ErrDeviceNotFound = errors.New("other active session not found")
 
+// MatchesDeviceCookie binds a browser action to the session displayed when it
+// listed devices. The handle is only a precondition; normal auth still applies.
+func (s *Store) MatchesDeviceCookie(c Credential, id string) bool {
+	return len(id) == 64 && deviceID(s.namespace, digest(c.token)) == id
+}
+
+func deviceID(namespace, tokenDigest string) string {
+	return digest("ordinary-device-v1:" + namespace + ":" + tokenDigest)
+}
+
 // Device describes one active browser session. ID is a selection handle, never
 // a credential or evidence that the session belongs to a physical device.
 type Device struct {
@@ -26,16 +36,22 @@ type Device struct {
 
 // ListDevices returns an atomic read of the current session's active slots.
 // The current cookie and account authority are rechecked; nothing is renewed.
-func (s *Store) ListDevices(ctx context.Context, c Credential) ([]Device, error) {
+func (s *Store) ListDevices(ctx context.Context, c Credential) (DeviceList, error) {
 	records, err := s.withDevices(ctx, c, nil)
 	if err != nil {
-		return nil, err
+		return DeviceList{}, err
 	}
 	devices := make([]Device, 0, len(records))
 	for _, record := range records {
 		devices = append(devices, record.Device)
 	}
-	return devices, nil
+	return DeviceList{SubjectID: records[0].fields[2], Devices: devices}, nil
+}
+
+// DeviceList identifies the account observed in the same authenticated read.
+type DeviceList struct {
+	SubjectID string   `json:"subject_id"`
+	Devices   []Device `json:"devices"`
 }
 
 // RevokeDevice revokes one other active session by its selection handle.
@@ -163,7 +179,7 @@ func decodeDevice(owner *Attempt, fields [12]string) (Device, error) {
 	if fields[11] != recordBinding(&record, fields[1]) {
 		return Device{}, ErrConflict
 	}
-	return Device{ID: digest("ordinary-device-v1:" + owner.namespace + ":" + fields[1]),
+	return Device{ID: deviceID(owner.namespace, fields[1]),
 		Current: fields[1] == digest(owner.credential.token), CreatedAt: time.UnixMilli(n[1]),
 		AbsoluteDeadline: time.UnixMilli(n[2]), IdleExpiresAt: time.UnixMilli(n[4])}, nil
 }

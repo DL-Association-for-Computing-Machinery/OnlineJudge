@@ -26,7 +26,8 @@ func IsDevicePath(path string) bool {
 
 // DeviceSessions provides read and revoke operations for the current owner.
 type DeviceSessions interface {
-	ListDevices(context.Context, redisstore.Credential) ([]redisstore.Device, error)
+	ListDevices(context.Context, redisstore.Credential) (redisstore.DeviceList, error)
+	MatchesDeviceCookie(redisstore.Credential, string) bool
 	RevokeDevice(context.Context, redisstore.Credential, string) error
 	RevokeOtherDevices(context.Context, redisstore.Credential) error
 }
@@ -56,12 +57,15 @@ func (h *handler) serveDevices(w http.ResponseWriter, r *http.Request, ctx conte
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(struct {
-		Devices []redisstore.Device `json:"devices"`
-	}{devices})
+	_ = json.NewEncoder(w).Encode(devices)
 }
 
 func (h *handler) revokeDevices(w http.ResponseWriter, r *http.Request, ctx context.Context, credential redisstore.Credential) {
+	expected := r.Header.Values("X-OJ-Session-Device")
+	if len(expected) != 1 || !h.devices.MatchesDeviceCookie(credential, expected[0]) {
+		problem(w, http.StatusConflict, "DEVICE_SESSION_CHANGED", "当前会话已变化，请重新读取列表")
+		return
+	}
 	var err error
 	if r.URL.Path == RevokeDevicePath {
 		body, readErr := io.ReadAll(http.MaxBytesReader(w, r.Body, 64))

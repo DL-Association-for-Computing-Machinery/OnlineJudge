@@ -45,3 +45,20 @@
   .session-summary dl > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
   .account-actions { align-items: stretch; flex-direction: column; }
 }
+.session-devices {
+  margin-block-start: 1.5rem;
+}
+
+.session-device-list {
+  padding-inline-start: 0;
+  list-style: none;
+}
+
+.session-device-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .5rem 1rem;
+  padding-block: .5rem;
+}

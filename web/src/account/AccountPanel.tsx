@@ -5,6 +5,7 @@ import { AccountNotice } from './AccountNotice'
 import { AccountRecovery } from './AccountRecovery'
 import { ConnectionCheck } from './ConnectionCheck'
 import { SessionExpiry } from './SessionExpiry'
+import { SessionDevicesPanel } from './SessionDevicesPanel'
 import './account.css'
 
 function date(value: string) {
@@ -30,7 +31,7 @@ export function AccountPanel() {
         <h1 id="account-title" tabIndex={-1}>账号与安全</h1>
         <span className={`account-badge ${state.status}`}>{labels[state.status]}</span>
       </div>
-      <p className="account-intro">管理当前浏览器的会话与密码。</p>
+      <p className="account-intro">管理账号会话与密码。</p>
       <AccountNotice />
 
       {authenticated && state.session ? (
@@ -69,6 +70,8 @@ export function AccountPanel() {
           </div>
           {manual?.owner === state.session.subject_id ? <p role="status">{manual.text}</p> : null}
           {state.passwordAvailable ? <PasswordForm controller={controller} disabled={disabled || state.passwordUnknown} /> : <p>此入口尚未启用修改密码。</p>}
+          <SessionDevicesPanel key={state.session.subject_id + ':' + state.session.created_at}
+            session={state.session} disabled={disabled || state.passwordUnknown} />
         </div>
       ) : state.status === 'anonymous' ? <LoginForm controller={controller} disabled={disabled} /> : null}
 
