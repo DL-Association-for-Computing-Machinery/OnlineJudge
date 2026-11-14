@@ -112,6 +112,20 @@ COPY web/ ./
 FROM frontend-source AS frontend-build
 RUN pnpm build
 
+# Export release inputs separately from the experiment binaries and test driver.
+FROM backend-source AS trial-build
+ARG TARGETARCH
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    set -eu; case "$TARGETARCH" in amd64|arm64) ;; *) exit 2 ;; esac; \
+    mkdir /out; for app in api worker worker-api migrate materialstore mail-worker; do \
+        GOOS=linux GOARCH=$TARGETARCH CGO_ENABLED=0 go build -trimpath -o /out/$app ./cmd/$app; \
+    done
+
+FROM scratch AS trial-artifacts
+COPY --from=trial-build /out/ /bin/
+COPY --from=frontend-build /src/web/dist/ /site/
+COPY deploy/trial/nginx.conf.example /templates/nginx.conf.example
+
 # The local account environment is a separate opt-in image. Production API and
 # frontend images do not contain this launcher or its development-only UI.
 FROM backend-source AS localdev-build

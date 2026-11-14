@@ -21,6 +21,8 @@
 !deploy/experiments/go-judge.Dockerfile
 !deploy/docker/
 !deploy/docker/**
+!deploy/trial/
+!deploy/trial/nginx.conf.example
 **/.env
 **/.env.*
 **/*.local

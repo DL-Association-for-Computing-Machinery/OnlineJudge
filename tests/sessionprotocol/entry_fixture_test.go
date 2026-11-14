@@ -28,9 +28,13 @@ import (
 )
 
 type entryLog struct {
-	Message string `json:"msg"`
-	Address string `json:"address"`
-	Scope   string `json:"scope"`
+	Message   string `json:"msg"`
+	Address   string `json:"address"`
+	Scope     string `json:"scope"`
+	Operation string `json:"operation"`
+	Stage     string `json:"stage"`
+	Reason    string `json:"reason"`
+	ElapsedMS int64  `json:"elapsed_ms"`
 }
 
 type entryProcess struct {

@@ -626,6 +626,8 @@ python3 -B scripts/target-inventory.py \
 
 三个参数是已有的材料、临时文件和数据库目录的绝对路径。脚本不创建目录或启动容器，也不输出路径或环境变量。报告分别记录当前进程 CPU 亲和性、系统内存读数、可见 cgroup v2 限额和各卷空间；缺失不等于无限。读数用于准备[单机验收](docs/architecture/operations-design.md#当前单机试用资源约束)，不证明 Worker 已拥有这些资源或目标环境已经通过。
 
+试用前可追加 `--storage-budget "$SCRATCH_PEAK_BYTES" "$SCRATCH_PEAK_INODES" "$RESERVE_BYTES" "$RESERVE_INODES"`。四个值均为正整数，分别表示从当前读数起预计新增的临时文件字节和 inode 峰值，以及峰值后每卷必须保留的字节和 inode。按并行槽位和实际材料预算预先登记数值；不要从通过结果倒推预算。同一设备上的卷均扣除峰值。读数缺失、临时文件或数据库卷只读、或预留不足时仍输出 JSON，并返回 2。通过只说明本次文件系统读数覆盖登记预算；设备号不同仍可能共享底层存储池，需另核对挂载、配额和实际峰值。预检不会清理文件或变更运行中的服务。
+
 ## 本地 HTTPS 账号环境（一键）
 
 需要在页面上实际登录时，在仓库根目录运行：
@@ -660,6 +662,8 @@ docker --context desktop-linux compose down             # 停止本项目容器�
 Dockerfile 的 Go、Node、pnpm 与现有配置保持一致，基础镜像固定多架构索引摘要；依赖仍使用 `go.sum` 和 `pnpm-lock.yaml`。`.dockerignore` 限定构建上下文，排除本地 Git、缓存、环境文件和常见凭据文件。更换工具链时需同步 Dockerfile 和对应锁定入口，并重新验证容器检查及启动流程。
 
 ## 显式启用普通会话 API
+
+维护探针可请求普通会话 API 的 TLS 监听器：`GET /api/v1/readyz`，使用既有受信 CA 和配置的 Host；mTLS 模式经受信代理发起，沿用固定证书和已有转发头。响应 200 表示最近一次会话依赖检查通过，503 表示未就绪；`/api/v1/healthz` 继续只表示进程存活。默认 Compose 不启用会话依赖探针，见[就绪语义](docs/architecture/operations-design.md#会话-api-就绪检查)。
 
 API 镜像的 `/usr/local/bin/oj-api` 在非空 `OJ_SESSION_CONFIG_FILE` 下切换为独立会话 HTTPS 服务；同时必须显式设置 `OJ_API_ADDR`（例如容器内 `:8443`），不能与 `OJ_EXPERIMENT_TOKEN_FILE` 同用。配置文件为绝对规范路径，完整字段及权限见[配置合同](docs/architecture/session-design.md#717-显式会话-api-入口)。未设置配置路径时仍运行现有 bootstrap/实验模式，不尝试连接会话数据库。
 
@@ -711,6 +715,26 @@ python3 -B scripts/test-session-protocol.py --toolchain-image oj-session-protoco
 
 在上述脚本命令末尾加 `--suite email-lifecycle` 可用另一套全新的临时 PostgreSQL 和 Redis 验证邮箱整链路。邮件仅送往容器内回环 TLS 收件器；此选项不启用 API 文件配置的注册或找回入口。
 
+### 迁移前后回读 schema
+
+将独立的 `OJ_SCHEMA_STATUS_DATABASE_URL` 指向已确认的端点。用只有账本读取权限的登录，显式传入库名和应用迁移账本所在的 schema（标准安装为 `public`）：
+
+```sh
+.local/bin/migrate schema-status "$EXPECTED_DATABASE" public
+```
+
+成功输出账本当前版本、此二进制要求的版本和 `matches_runtime`。较旧或较新的版本也会输出结果；切换前须核对值，不能只看退出码。库名不符、账本缺失、权限不足或超时均失败。命令只读，不执行迁移；库名匹配不等于端点已确认，账本读数也不能证明没有在途迁移、数据完整或所有进程已排空。
+
+### 判题运维快照
+
+值守人员可从维护工作站发起一次只读采样。由既有凭据分发渠道注入专用只读 `OJ_JUDGE_SNAPSHOT_DATABASE_URL`；连接角色和网络访问由现场维护者配置。命令显式接受期望数据库名和 1–60 分钟的接收窗口，例如：
+
+```sh
+migrate judge-snapshot <期望数据库名> 15
+```
+
+成功输出一行版本化 JSON。排队和运行计数覆盖当前积压；节点分别统计配置启用数、持有至少一个当前有效租约的节点数，以及没有当前有效租约的启用节点数。槽位统计是配置值。近期系统错误和恢复耗尽按提交的原接收时间分组。查询不依赖 API 或 Worker；它不会判定节点在线，也不应作为高频探针。库名不匹配、schema 不兼容、权限不足及超时均失败，见[口径和限制](docs/architecture/operations-design.md#判题运维快照)。
+
 ### 会话恢复维护
 
 会话恢复维护命令只用于已经隔离的恢复副本。先设置 `OJ_RESTORED_SESSION_CONFIG_FILE` 指向该副本专用的 API 配置，再按[恢复普通会话](docs/architecture/operations-design.md#恢复普通会话)执行；不要在在线库使用。
@@ -759,13 +783,54 @@ python3 -B scripts/test-session-protocol.py --toolchain-image oj-session-protoco
 
 ### 核对 M1 恢复证据
 
-独立恢复演练完成后，按[计时与证据约定](docs/architecture/operations-design.md#试用恢复计时与证据)填入脱敏记录，并传入收到的原始清单：
+独立恢复演练完成后，按[计时与证据约定](docs/architecture/operations-design.md#试用恢复计时与证据)填入脱敏记录，并传入收到的原始清单和留存的五份观察文件：
 
 ```sh
-python3 scripts/assess-m1-restore.py '/绝对路径/恢复观测.json' '/绝对路径/收到的备份目录/manifest.json'
+python3 scripts/assess-m1-restore.py '/绝对路径/恢复观测.json' '/绝对路径/收到的备份目录/manifest.json' '/绝对路径/观察文件目录'
 ```
 
-退出码 `0` 表示记录满足计时与完整性条件、可供人工复核，`1` 表示记录有未通过项，`2` 表示输入无效或不一致。命令不执行恢复、不验证备份目录内容，也不替代负责人对故障域与原始记录的复核。
+退出码 `0` 表示观察文件摘要匹配且记录满足计时与完整性条件、可供人工复核，`1` 表示记录有未通过项，`2` 表示输入无效、证据缺失或摘要不一致。命令不执行恢复、不验证备份目录内容，也不替代负责人对故障域与原始记录的复核。
+
+P6 整阶段验收使用下列命令，并从演练前独立保存的记录取得拓扑摘要：
+
+```sh
+python3 -B scripts/assess-m1-restore.py "$RESTORE_RECORD" "$BACKUP_MANIFEST" "$RESTORE_OBSERVATIONS" \
+  --topology "$RESTORE_TOPOLOGY" --topology-sha256 "$PREREGISTERED_TOPOLOGY_SHA256"
+```
+
+P6 格式要求七份观察，增加异地副本核验和复判结束后源端仍隔离的证据。沿用相同退出码，`local` 预演结果不能充当现场证据。
+
+### 核对 P6 混合训练记录
+
+从主库独立核对收件全集：停止并排空本轮提交入口的在途写入后，用预登记的 UTC 起止时间运行以下命令。使用只读专用账号，通过 `OJ_JUDGE_SNAPSHOT_DATABASE_URL` 指定主库。
+
+```sh
+.local/bin/migrate training-acceptance "$EXPECTED_DATABASE" "$ROUND_FROM_UTC" "$ROUND_UNTIL_UTC" > "$ACCEPTANCE_OBSERVATION"
+```
+
+该命令只需要读取 `goose_db_version` 的 `id`、`version_id` 以及 `submissions` 的 `id`、`created_at`、`material_version`、`context_id`。它输出封闭时间窗 `[from, until)` 的全部个人训练收件，最多 20,000 条、跨度最多一小时；超限、窗口尚未结束、库名不符或处于恢复中的副本均拒绝。先检查命令退出码，再保存原始 JSON 与摘要。命令不接收客户端提交 ID 列表，不导出账号、原键、源码或凭据；不替代队列、终态和 HTTPS 回读证据。
+
+将三轮脱敏逐请求观测按[混合训练记录约定](docs/delivery-evidence/p6-trial-acceptance.md#混合训练记录核对)保存后运行：
+
+```sh
+python3 -B scripts/assess-p6-mixed-load.py "$MIXED_LOAD_RECORD" \
+  --acceptance "$ROUND_1_ACCEPTANCE" "$ROUND_2_ACCEPTANCE" "$ROUND_3_ACCEPTANCE"
+```
+
+命令只读核对已记录的负载、时延和接收对账，不发请求。现场记录必须按轮次顺序提供三份原始主库清单；报告保留各清单摘要和对账差异数。本地旧记录可省略清单，报告显示 `independent_acceptance: null`。本地合成记录通过不代表试用容量达标。
+
+### 核对 P6 过载恢复记录
+
+本地可先运行 `python3 scripts/test-session-protocol.py --suite training-overload`。它在新建临时 PostgreSQL、Redis 和普通会话 HTTPS API 中用四个合成账号做三轮：全局额度包含一笔排队和一笔运行任务，新账号受控拒绝，原键保持同一回执；排空后重试被拒绝的原键并接收另一个新键，通过真实 HTTPS 读回四个终态。入队使用存储边界，终态由夹具受控上报；正式提交 HTTP、真实 Worker 及现场资源须另验。
+
+按[过载恢复记录约定](docs/delivery-evidence/p6-trial-acceptance.md#过载恢复记录核对)留存三轮的客户端记录和独立采集的服务端账本：
+
+```sh
+python3 -B scripts/assess-p6-overload.py "$OVERLOAD_CLIENT_RECORD" "$OVERLOAD_SERVER_LEDGER" \
+  --acceptance "$ROUND_1_ACCEPTANCE" "$ROUND_2_ACCEPTANCE" "$ROUND_3_ACCEPTANCE"
+```
+
+现场核对须提供三份与过载轮次对应的原始主库收件清单。命令用提交 ID 和接收时间核对账本，再检查队列打满、拒绝未写入、原键重放及恢复接收。本地旧记录可省略原始清单，此时报告不含独立收件对账。命令不发送流量，也不替代对原始记录和现场环境的复核。
 
 ### 浏览器账号专项
 
@@ -785,7 +850,21 @@ python3 scripts/test-browser-account.py \
 
 加 `--review-materials` 运行独立审核材料专项。夹具仅在临时库准备一项合成送审和非作者分配。验证 `/review/materials` 的桌面及 390px 分配列表、键盘选择、冻结题面和原始样例／标程、显式读取准入阻断及刷新清除，以及有审核资格的作者看不到本人的送审分配，也无法读取材料。另验证四项都勾选后才可确认、确认丢响应后原键回读，以及作者送审丢响应后更换当前参考申请仍能回读原送审 ID。该模式不执行参考 Worker，不与其他专项模式同时使用。
 
-加 `--m1-login-load` 在同一隔离夹具运行集中登录。100 个合成账号在 60 秒内每 600 毫秒发起一次浏览器登录；每个浏览器上下文独立核对三步会话请求、账号身份和 Cookie。该夹具使用单 API、19 MiB / 2 轮 / 1 lane 的 Argon2id，证书例外只用于临时回环夹具。`browser-qa.json` 保留发起偏差、时延、状态和失败分类，不含邮箱或 Cookie。结果仅供本机复测，现场还须在实际配置、网络与正常证书验证下执行[试用验收](docs/phase-1-development-plan.md#试用容量和恢复默认值)。
+加 `--m1-login-load` 在同一隔离夹具运行集中登录。100 个合成账号在 60 秒内每 600 毫秒发起一次浏览器登录；每个浏览器上下文独立核对三步会话请求、账号身份和 Cookie。该夹具使用单 API、19 MiB / 2 轮 / 1 lane 的 Argon2id，证书例外只用于临时回环夹具。`browser-qa.json` 保留发起偏差、时延、状态和失败分类，不含邮箱或 Cookie。冷编译时可用 `--fixture-start-seconds` 将准备预算从默认 90 秒提高到最多 300 秒，不改变浏览器采样时限或通过标准。结果仅供本机复测，现场还须在实际配置、网络与正常证书验证下执行[试用验收](docs/phase-1-development-plan.md#试用容量和恢复默认值)。
+
+同时指定 `--trial-nginx-image "$LOCAL_NGINX_IMAGE"` 可复用同一套集中登录采样，改由仓库试用模板渲染的本地 Nginx 服务正式前端，经 mTLS 转发真实 API。只发布一个随机回环 HTTPS 端口；后端和测试控制端口不对宿主发布。采样前使用测试 CA 严格核对就绪响应，浏览器采样仍沿用临时回环证书例外。该模式不使用现场配置。
+
+Nginx 模式的每条会话响应观测增加第四列：夹具记录的单个上游 HTTP 状态，缺失或无法解析时为 `null`。探针先核对 API 返回的 200、405 和 Nginx 在未联系 API 时返回的 421。该标记仅在本地生成的配置中启用，不修改正式模板；上游状态可辅助定位，不能代替后端错误原因或证明请求已写入。
+
+Nginx 报告另有每个样本的 `loginPhases`：从驱动发起点击到浏览器观察到请求及响应的相对毫秒数，以及 Nginx 记录的单次上游响应头耗时。没有上游或无法解析时 `upstreamMs` 为 `null`。上游耗时包括代理与后端之间的处理，差值还包括浏览器事件分发及自动化开销，不能当成纯前端渲染耗时。
+
+夹具停止后，`fixture.log` 的 `BROWSER_LOGIN_FAILURE` 行汇总本轮 API 登录处理器记录的 503，字段仅有操作、阶段、错误类别和服务端耗时（毫秒）。这些事件可与本轮浏览器上游状态一起排查，不含逐账号关联标识。
+
+再加 `--trial-firefox "$LOCAL_FIREFOX"` 可用已安装且与 Playwright 匹配的 Firefox 运行同一采样。全新配置先验证未知签发者会被拒绝，再在另一临时配置中信任测试 CA；不忽略 HTTPS 错误或改系统信任库。报告的 `browserTLS` 区分严格 Firefox 与回环例外两种模式。
+
+严格 Firefox 在预备阶段检查按钮可操作，采样时发出真实鼠标点击。报告的 `clickClock` 为 `trusted-page-event` 时，`startLagMs` 以页面收到受信点击为准，`loginMs` 从该点击算到驱动观察到会话确认；缺少受信点击的样本不能核验通过。另保留 `dispatchLagMs`，用于比较驱动调度与页面接收时间；`loginPhases` 仍以驱动发起点击为时间零点。
+
+严格模式把账号轮流交给四个独立 Firefox 进程，仍按同一条 600 毫秒采样时间线发起。报告保留 `browserProcesses`、`browserIndex`，以及首个登录 POST 被浏览器驱动观察到时相对计划的 `beginRequestLagMs`（即使没有响应也记录已观察到的发出时间）。该值有助于识别突发，但不是 API 收包时间。
 
 加 `--training-history` 运行本人历史和详情专项。临时库写入合成记录，验证普通会话登录后的桌面和 390px 页面、同时间戳翻页、键盘打开本人源码、翻页清除详情、另一账号隔离、未验证账号拒绝，以及刷新后须显式重新读取。专项推进临时库中一条排队记录，验证真实状态请求不传输源码且页面更新到终态。夹具不发布题目、不接受正式提交、不启动 Worker。
 
@@ -816,6 +895,8 @@ docker --context desktop-linux build --target host-artifacts --output type=local
 
 `.local/bin/worker` 需要 `OJ_SANDBOX_EXPERIMENT=1`、`OJ_WORKER_CONTROLLER_URL`、`OJ_WORKER_CA_FILE`、`OJ_WORKER_CERT_FILE`、`OJ_WORKER_KEY_FILE`；控制端 `.local/bin/worker-api` 需要 `OJ_WORKER_API_ADDR`、证书文件和 `OJ_DATABASE_URL`，材料目录为 `OJ_MATERIAL_ROOT`。缺失配置拒绝启动，测试脚本自动生成私有临时配置。详见 [M0 契约与历史证据](docs/m0-experiment.md)。
 
+#### Worker 排空下线
+
 Worker 启动完成后，向该 Worker 进程发送 `SIGUSR1`（`kill -USR1 PID`，将 PID 替换为对应进程号）请求排空式下线：每轮领取前检查排空，已通过检查的至多一个在途领取继续完成下载、执行及回报；确认后不再领取。空队列等待可被唤醒；未知回报仍按原令牌/结果最多发送三次，失败保留原错误。`SIGINT`/`SIGTERM` 仍取消当前操作并等待停止确认。排空返回后同样停止沙箱、确认 PID 消失，成功才清正常占用标记；停止不确定继续隔离，不自动重启或解封。排空耗时受现有任务/网络预算影响，不承诺固定下线 SLA；需要中止时仍可发送取消信号。旧版本回退后不再使用新增信号，无数据库迁移。`python3 scripts/test-worker.py report` 包含执行中排空、保留后续排队任务及显式重启复用的真实验证。
 
 邮件密文维护：使用应用库的 `OJ_DATABASE_URL` 执行 `.local/bin/migrate mail-payload-sweep <1-512> [cursor]`。每次只检查一批，输出 JSON `removed` 和 `next_cursor`；非空游标供下一批使用，空游标表示本轮结束。单个维护任务按部署负载限制调用频率与批次数，每轮不传游标起步，以重访此前锁住或后来到期的行。命令只清理超过发送窗口的密文，不撤销有效链接，也不启动发送。
@@ -833,6 +914,8 @@ Worker 启动完成后，向该 Worker 进程发送 `SIGUSR1`（`kill -USR1 PID`
 账号邮件使用独立的 `.local/bin/mail-worker`，默认 Compose 不启动。完成应用迁移、River 迁移和共享许可配置后，使用同一 `OJ_DATABASE_URL`、私有 `OJ_EMAIL_PAYLOAD_KEYS_FILE`、可信 HTTPS `OJ_ACCOUNT_PUBLIC_ORIGIN`，以及 `OJ_SMTP_HOST`、`OJ_SMTP_PORT`、`OJ_SMTP_FROM`、`OJ_SMTP_TLS`（`implicit` 或 `starttls`）。供应商要求认证时，同时设 `OJ_SMTP_USER` 和仅所有者可读的 `OJ_SMTP_PASSWORD_FILE`，文件内容是原始密码。发送器不迁移或初始化额度，不向判题 Worker 分发这些凭据。不要在同一队列同时运行 River 的默认 worker。领取、救援或提交遇到存储错误时进程退出，由运行管理器在存储恢复后重启。
 
 `python3 scripts/test-worker.py http-loop` 显式设置 `OJ_SANDBOX_HTTP=1`，`all` 同样包含此项。驱动使用临时 PostgreSQL、两个提交 API 进程、mTLS 控制端和真实 Worker。先以固定 AC/WA 源码填满队列；两个 API 都对第三个新键返回 `429 BACKLOG_LIMIT`，跨实例查询该键均为 404，已接收的原键仍可回读，数据库无新增提交、任务或尝试。Worker 将原两份判到终态后，测试显式按原键、原正文再提交，验证新增提交取得 AC。三份已接收提交各有一次完成尝试。
+
+Desktop 档位还在同一容器生命周期内读回缓存条数、`/tmp` 和 `/dev/shm` 可用字节与 inode：判题时应观察到一个缓存可执行文件和共享内存卷占用，三笔任务到终态后、排空停止前应已清空缓存并回到基线。只输出计数；这是固定小题的占用样本，不能当成峰值或试用容量。
 
 `python3 scripts/test-worker.py restore-loop` 验证[恢复后的真实判题](docs/architecture/storage-design.md#7-备份与验收)，`all` 也包含此项。它使用两个临时 PostgreSQL 容器，实际捕获和核验备份；停止源库后，在固定离线 Desktop 沙箱重判同一合成提交。不连接现有数据库。
 
@@ -855,6 +938,137 @@ python3 scripts/test-worker.py aplusb-restore-loop \
 仅在核验并隔离恢复库后，使用 `OJ_RESTORED_DATABASE_URL` 指向该副本，再执行 `.local/bin/migrate fence-restored-leases <恢复库名>`。命令拒绝使用常规 `OJ_DATABASE_URL`；隔离、结果读回和重新开放前的条件见[恢复提交租约](docs/architecture/operations-design.md#恢复提交租约)。
 
 专项检查跨 API 原键重试/回执、异源冲突、缺失/错误凭据、Origin 拒绝无写入、闭合回执字段及无 Cookie/CORS、Worker 正常排空和槽停止。提交 API 用 `127.0.0.1:0`，仅从自身私有有界 JSON 日志取得回环地址，客户端禁代理/重定向；控制端沿用既有临时端口流程。私有 Bearer 留在服务端测试进程中。该入口不支持浏览器，不授予普通账号训练权限；独立opt-in最小页面及其失败路径见下节。无 API、迁移或预算变化，可单独回退专项及驱动选择器。
+
+### 试用离线应用制品
+
+从干净、已审查的提交构建一次。根据目标机明确选择 `linux/amd64` 或 `linux/arm64`，将输出写入新目录：
+
+```sh
+stage=$(mktemp -d)
+docker --context desktop-linux buildx build --builder desktop-linux \
+  --platform linux/arm64 --target trial-artifacts \
+  --output "type=local,dest=$stage" .
+```
+
+输出包含 `bin/` 下的 API、Worker、控制器、内嵌迁移工具、材料工具和邮件执行器，`site/` 下的正式前端，以及 `templates/nginx.conf.example`。开发登录启动器、实验测试二进制、真实配置和证书不会导出。首次构建需获取已锁定的依赖；目标机接收成品，不重新编译。
+
+在发送端用 Python 3.9+ 封存到一个尚不存在的同级目录。通过独立可信渠道传递打印出的清单 SHA-256。接收端保留文件权限、由接收账号持有整个目录，使用可信工作树中的脚本核验；两端核对期间都不修改目录。接收端按目标机架构填写 `--platform`。
+
+```sh
+python3 -B scripts/trial_app_bundle.py pack --export "$stage" \
+  --revision "$(git rev-parse HEAD)" --platform linux/arm64 "${stage}-bundle"
+python3 -B scripts/trial_app_bundle.py verify --manifest-sha256 "$TRUSTED_MANIFEST_SHA256" \
+  --platform linux/arm64 "$RECEIVED_BUNDLE_DIR"
+```
+
+核验成功输出构建方声明的 Git 提交；不执行程序，也不替代构建来源审查。应用包 v2 要求同时封存 Nginx 模板；不含模板的 v1 旧包须重新导出封存后再做此联验。封存失败时，未写出清单的输出目录不可交付，复测使用新目录。完整[试用离线交付](docs/architecture/operations-design.md#5-发布与回滚)还需运行依赖镜像、其他现场配置及安装恢复说明。密钥与真实配置单独交接。
+
+### 核验试用运行镜像
+
+发送端按已审查的镜像 ID 导出指定平台，不按可变标签导出。下面以 Linux arm64 为例；如果试用拓扑需要单独的判题镜像，在同一归档加入该镜像 ID，接收端同时传入 `--sandbox`。
+
+```sh
+docker --context desktop-linux image save --platform linux/arm64 -o "$RUNTIME_ARCHIVE" \
+  "$NGINX_IMAGE_ID" "$POSTGRES_IMAGE_ID" "$REDIS_IMAGE_ID"
+sha256sum "$RUNTIME_ARCHIVE"
+```
+
+通过独立可信渠道交接归档 SHA-256，以及各角色的**平台镜像配置摘要**（OCI 镜像清单的 `config.digest`）。镜像索引摘要、平台清单摘要和配置摘要不可互换。配置摘要须由维护者对照事先审查的镜像确认，不能从收到的归档自行认定。用可信工作树的脚本核验，要求 Python 3.11+ 和现代 Docker 保存的单平台、无标签 OCI 归档：
+
+```sh
+python3 -B scripts/verify_trial_images.py "$RUNTIME_ARCHIVE" --sha256 "$TRUSTED_ARCHIVE_SHA256" \
+  --platform linux/arm64 --nginx "$NGINX_CONFIG_DIGEST" \
+  --postgres "$POSTGRES_CONFIG_DIGEST" --redis "$REDIS_CONFIG_DIGEST"
+```
+
+命令只读核对归档、每个引用 blob、目标平台和可导入镜像集合，不解包、不调用 Docker。通过后仍需在受控的空镜像库验证导入、回读身份和禁拉取启动。可选判题镜像仍须单独满足目标节点的运行准入。
+
+### 核对同一批试用制品
+
+发送端从审查记录取应用包摘要、运行镜像归档摘要和各角色配置摘要，将应用、内置 Nginx 模板和运行镜像绑定在一份发布清单中。清单只创建新文件；如归档还包含判题镜像，封存时追加 `--sandbox "$SANDBOX_CONFIG_DIGEST"`。
+
+```sh
+python3 -B scripts/trial_release.py pack "$RELEASE_MANIFEST" \
+  --revision "$RELEASE_COMMIT" --platform linux/arm64 \
+  --app "$APP_BUNDLE_DIR" --app-sha256 "$APP_MANIFEST_SHA256" \
+  --runtime "$RUNTIME_ARCHIVE" --runtime-sha256 "$RUNTIME_ARCHIVE_SHA256" \
+  --nginx "$NGINX_CONFIG_DIGEST" --postgres "$POSTGRES_CONFIG_DIGEST" --redis "$REDIS_CONFIG_DIGEST"
+```
+
+接收端在导入或启动前，用独立可信渠道取得的发布清单 SHA-256 和可信工作树中的脚本重新核验两份制品。保持清单、应用目录和归档静止。
+
+```sh
+python3 -B scripts/trial_release.py verify "$RELEASE_MANIFEST" \
+  --sha256 "$TRUSTED_RELEASE_SHA256" --app "$RECEIVED_BUNDLE_DIR" --runtime "$RUNTIME_ARCHIVE"
+```
+
+校验仅证明两份制品符合可信清单。现场配置、密钥、版本来源审查和试用验收仍分别保留。负载观测中的 `release_sha256` 使用这份发布清单的摘要。
+
+### 从空引擎导入并联验试用制品
+
+在专用原生 Linux 实验 VM 内，先准备无外网路由的网络空间、独立 Docker Unix socket、全新的 Docker 和 containerd 数据目录，并确认 containerd 内容库为空。支持 arm64 和 amd64；发布清单、应用二进制、运行镜像、客体及引擎须使用同一架构，架构不符在导入前拒绝。临时引擎根目录应为 `/tmp/oj-p6-*/engine.*` 下的 root 私有目录，socket 为其中的 `docker.sock`，Docker 数据目录为其 `data/`。应用包由 root 持有并保留权限，传输时不要附带 macOS 的 `._*` 元数据文件。用独立交接的发布摘要执行联合冷启动，应用和镜像使用同一清单：
+
+```sh
+bash scripts/smoke-cold-trial.sh --release "$COLD_DOCKER_SOCKET" "$COLD_ENGINE_DIR" \
+  "$RECEIVED_BUNDLE_DIR" "$RELEASE_MANIFEST" "$TRUSTED_RELEASE_SHA256" "$RUNTIME_ARCHIVE"
+```
+
+验证、导入和启动期间保持制品及目录静止。成功时输出本次联验的发布摘要。也可先单独导入运行镜像，供组件或固定合成判题专项使用：
+
+启动实验用 Docker 和 containerd 时沿用 `umask 022`，并显式将引擎根目录和制品接收目录设为 root 私有（`0700`）。在已测 Ubuntu 环境，若把接收文件时的 `umask 077` 传给这两个进程，导入仍可完成，但镜像中的命令可能无法执行。此时停止实验并检查自建引擎的启动环境，保留已封存制品。
+
+```sh
+python3 -B scripts/cold_trial_images.py "$RUNTIME_ARCHIVE" --sha256 "$TRUSTED_ARCHIVE_SHA256" \
+  --socket "$COLD_DOCKER_SOCKET" --data-root "$COLD_DOCKER_ROOT" --platform linux/arm64 \
+  --nginx "$NGINX_CONFIG_DIGEST" --postgres "$POSTGRES_CONFIG_DIGEST" --redis "$REDIS_CONFIG_DIGEST"
+```
+
+接收命令拒绝常用系统 socket、数据目录不匹配或已有镜像、容器、卷的引擎；不清空镜像库。导入后核对完整镜像集合，禁止拉取并验证 Nginx 程序、临时 PostgreSQL 查询及临时 Redis 写读。脚本不创建或停止 Docker 引擎，结束后由实验操作者停止自建引擎；镜像保留在该实验数据目录。此步骤不验证应用与镜像的联合冷启动，也不运行判题镜像。
+
+在**同一隔离接收环境**做联合冷启动时，将前一条命令的 `--platform` 设置为接收引擎对应的架构，把标准输出保存为 `$IMAGE_REPORT`，并以 root 持有收到的应用包（保留权限）。临时引擎根目录应为 `/tmp/oj-p6-*/engine.*` 下的 root 私有目录，Unix socket 为该目录的 `docker.sock`，Docker 数据目录为其 `data/`。在启动独立引擎的同一私有挂载和网络空间中运行：
+
+```sh
+bash scripts/smoke-cold-trial.sh "$COLD_DOCKER_SOCKET" "$COLD_ENGINE_DIR" \
+  "$RECEIVED_BUNDLE_DIR" "$TRUSTED_MANIFEST_SHA256" "$IMAGE_REPORT"
+```
+
+此专项在封闭的回环网络中，从核验过的应用包复制 Nginx 模板，配合临时 PostgreSQL、Redis、测试证书和合成配置验证空库迁移、会话门禁开启、HTTPS 就绪、前端和正常退出。`--release` 还使用包内工具和仅能读取账本的登录核对 schema，并以暂停状态启动入口，验证 HTTPS 读取及解除暂停后恢复转发。夹具不接收外部模板或真实配置，不创建账号、不启动判题。不要在现场引擎运行。
+
+追加固定合成判题仍只支持专用 arm64 档位。先按下文[专用 Ubuntu VM 判题实验](#专用-ubuntu-vm-判题实验)用**同一 Git 提交**制作实验判题包。接收端须保证判题包及各级祖先目录由 root 控制。仍在同一个专用 VM 的私有挂载和无外网路由的网络空间、且只导入了试用运行镜像时执行：
+
+```sh
+bash scripts/smoke-cold-trial-judge.sh "$COLD_DOCKER_SOCKET" "$COLD_ENGINE_DIR" \
+  "$RECEIVED_BUNDLE_DIR" "$TRUSTED_MANIFEST_SHA256" "$IMAGE_REPORT" \
+  "$JUDGE_BUNDLE_DIR" "$TRUSTED_JUDGE_MANIFEST_SHA256"
+```
+
+脚本在启动服务前核对两份独立摘要及提交号，先验证正式前端和会话 API 的冷启动与退出，再在同一引擎导入固定判题镜像，使用独立临时库运行合成 HTTP 判题和过载恢复。判题入口是实验接口；没有把普通账号的训练提交接入这次验收，也没有用实际试用配置。
+
+### 试用同源 HTTPS 入口
+
+用[独立 Nginx 模板](deploy/trial/nginx.conf.example)准备试用入口。将 `oj.example.invalid` 的所有出现处替换为同一个公开域名；本模板对应公开端口 443，映射至 Nginx 的 8443。把已核验应用制品的 `site/` 以只读方式挂载至 `/srv/oj/site`；应让 Nginx 运行账号读取安装后的文件，同时保持原接收包不变。
+
+- Nginx 与会话 API 共用回环网络空间，API 只监听 `127.0.0.1:9443`，不对客户端暴露。若采用不同网络空间或在 Nginx 前再加代理，先为实际拓扑重新核对隔离和来源地址。
+- Nginx 使用公开证书和独立的代理客户端证书；后端 API 服务端证书的 DNS SAN 为 `oj-api.internal`。按模板挂载公开证书链、验证 API 的 CA 以及代理证书链与私钥，证书和私钥由维护者另行安装。
+- 会话 API 设 `mode: "proxy"`，`origin` 为对应的公开 HTTPS Origin，配置验证代理客户端证书的 CA，并在 `proxy_fingerprints` 登记代理客户端叶证书 DER 的 SHA-256。不要用浏览器证书、CA 指纹或 Worker 证书代替。详见[单跳受信反代](docs/architecture/session-design.md#714-单跳受信反向代理)。
+
+切换前先用安装后的配置执行 `nginx -t`，再从信任公开 CA 的干净客户端检查静态资源、`/api/v1/readyz`、登录及退出；错误公开 Host 和错误后端证书必须被拒绝。模板关闭访问日志以免记录敏感请求，现场的值守采样与告警另行配置。此模板不改变默认 Compose，也不配置校内 DNS、证书分发或发布服务。
+
+#### 试用入口暂停写入
+
+将专用维护目录只读挂载到 Nginx 的 `/run/oj-maintenance`，确保 Nginx 用户可遍历，由值守人独立控制。正常运行时不放标记；维护开始后，在宿主维护目录创建普通文件 `paused`，退出维护时仅移除此标记。挂载整个目录，切换不需重启或重载 Nginx。切换后从公开路径确认非 GET/HEAD 的 `/api/` 请求返回 `503`、`TRIAL_MAINTENANCE` 和 `Cache-Control: no-store`，现有查询、静态页面及就绪检查仍按原规则处理。
+
+未挂载目录或 Nginx 无法读取标记时不能用此开关停写，必须以实际探针确认。标记不取消已转发请求，也不阻止绕开该入口的 API、数据库维护、邮件及 Worker 操作；[试用值守手册](docs/p6-operator-runbook.md#发布排空和兼容回退)另行要求停止相关写进程并确认排空。
+
+本地可复跑真实 API 与 Nginx 联验。准备普通会话专项的工具链、Redis 镜像和模块缓存，另用本地非 root Nginx 镜像及导出的正式 `site/`。宿主机需要已有的 `openssl`：
+
+```sh
+python3 -B scripts/test-session-protocol.py --suite trial-edge \
+  --toolchain-image oj-session-protocol-toolchain --build-cache-volume '' \
+  --nginx-image "$LOCAL_NGINX_IMAGE" --trial-site "$TRIAL_SITE"
+```
+
+专项用临时 CA、合成账号、真实 PostgreSQL／Redis 和独立 API 进程；Nginx 和 API 共用私有网络空间，不发布宿主端口。Go HTTPS 客户端验证信任链、静态入口、就绪、两步登录、转发头覆盖、Cookie、维护期间写入拒绝与会话可读，以及恢复后退出使旧会话失效。此专项不替代现场浏览器、DNS 或独立故障域验收。
 
 ### 专用 Ubuntu VM 判题实验
 

@@ -12,6 +12,7 @@ import (
 type Runtime struct {
 	handler       http.Handler
 	cleanup       func() error
+	probe         *readinessProbe
 	mu            sync.Mutex
 	active        int
 	closing       bool
@@ -29,27 +30,34 @@ func newRuntime(handler http.Handler, cleanup func() error) *Runtime {
 // ServeHTTP tracks the entire synchronous call, including work past HTTP timeout.
 // Once closing begins every new request fails closed before transport/storage.
 func (r *Runtime) ServeHTTP(w http.ResponseWriter, request *http.Request) {
-	if r == nil || r.handler == nil {
+	if !r.enter() {
 		unavailable(w)
 		return
+	}
+	defer r.leave()
+	r.handler.ServeHTTP(w, request)
+}
+
+func (r *Runtime) enter() bool {
+	if r == nil || r.handler == nil {
+		return false
 	}
 	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.closing {
-		r.mu.Unlock()
-		unavailable(w)
-		return
+		return false
 	}
 	r.active++
-	r.mu.Unlock()
-	defer func() {
-		r.mu.Lock()
-		r.active--
-		if r.closing && r.active == 0 {
-			close(r.drained)
-		}
-		r.mu.Unlock()
-	}()
-	r.handler.ServeHTTP(w, request)
+	return true
+}
+
+func (r *Runtime) leave() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.active--
+	if r.closing && r.active == 0 {
+		close(r.drained)
+	}
 }
 
 // Close irreversibly stops entry and starts one background drain/cleanup. Each

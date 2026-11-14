@@ -19,6 +19,13 @@ func NewSessionHandler(session http.Handler) http.Handler {
 			httptransport.IsEmailConfirmationPath(r.URL.Path) || httptransport.IsEmailRequestPath(r.URL.Path) ||
 			httptransport.IsTrainingHistoryPath(r.URL.Path) || httptransport.IsTrainingDetailPath(r.URL.Path)
 		switch r.URL.Path {
+		case "/api/v1/readyz":
+			if probe, ok := session.(sessionReadiness); ok {
+				serveSessionReadiness(w, r, probe)
+				return
+			}
+			bootstrap.ServeHTTP(w, r)
+			return
 		case "/api/v1/session", "/api/v1/session/activity", "/api/v1/session/logout",
 			"/api/v1/session/login/begin", "/api/v1/session/login/complete", "/api/v1/session/login/abandon", "/api/v1/account/password":
 		default:
