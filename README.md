@@ -723,7 +723,7 @@ python3 -B scripts/test-session-protocol.py --toolchain-image oj-session-protoco
 migrate judge-snapshot <期望数据库名> 15
 ```
 
-成功输出一行版本化 JSON。排队和运行计数覆盖当前积压，节点与槽位统计是配置值；近期系统错误和恢复耗尽按提交的原接收时间分组。查询不依赖 API 或 Worker；它不会判定节点在线，也不应作为高频探针。库名不匹配、schema 不兼容、权限不足及超时均失败，见[口径和限制](docs/architecture/operations-design.md#判题运维快照)。
+成功输出一行版本化 JSON。排队和运行计数覆盖当前积压；节点分别统计配置启用数、持有至少一个当前有效租约的节点数，以及没有当前有效租约的启用节点数。槽位统计是配置值。近期系统错误和恢复耗尽按提交的原接收时间分组。查询不依赖 API 或 Worker；它不会判定节点在线，也不应作为高频探针。库名不匹配、schema 不兼容、权限不足及超时均失败，见[口径和限制](docs/architecture/operations-design.md#判题运维快照)。
 
 ### 会话恢复维护
 
