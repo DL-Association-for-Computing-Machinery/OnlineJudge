@@ -805,6 +805,8 @@ python3 scripts/test-browser-account.py \
 
 产物包含日志、浏览器断言 JSON 与桌面/390px 截图；当前15组保留账号/预览与导入恢复覆盖，另验新浏览器档案/IndexedDB禁用时真实服务器分页发现及本人预览、迟到页隔离、列表不改变pending日志；实际Cookie换账号覆盖四条管理路由。独立journal测试入口仅由此驱动构建到临时assets，生产构建不引用它。驱动分别检查浏览器和夹具结果，结束只清理本轮带 owner 标签的资源。`integration && browser` 夹具只运行 `TestBrowserFixture`，普通 PR CI 不自动执行此手动浏览器专项。生产证书、浏览器兼容矩阵及完整业务验收仍须另做。
 
+加 `--remembered-session` 在同一个临时 Chromium 资料中真实关闭并重开浏览器，对比默认会话、主动保持登录和退出后的表现。专项使用同源 HTTPS 夹具，不导入 Cookie 或 Playwright 存储快照。
+
 真实 Worker 专项（当前固定 macOS arm64、Docker Desktop LinuxKit 7.0.14）：
 
 ```sh

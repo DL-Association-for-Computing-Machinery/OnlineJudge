@@ -75,6 +75,7 @@ def arguments():
     mode.add_argument("--review-materials", action="store_true", help="verify assigned reviewer material reads with the synthetic fixture")
     mode.add_argument("--m1-login-load", action="store_true", help="measure 100 complete browser logins over 60 seconds on the isolated fixture")
     mode.add_argument("--training-history", action="store_true", help="verify personal training history through ordinary HTTPS sessions")
+    mode.add_argument("--remembered-session", action="store_true", help="verify the account UI across Chromium profile restarts")
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
     output = args.output_dir.resolve()
@@ -243,6 +244,8 @@ def main():
             script_name, check_count = "m1-login-load.mjs", 2
         if args.training_history:
             script_name, check_count = "training-history-qa.mjs", 5
+        if args.remembered_session:
+            script_name, check_count = "remembered-session-qa.mjs", 3
         qa_script = ROOT / "tests/browser" / script_name
         expected_checks = re.findall(r"^\s+passed\('([^'\n]+)'\)", qa_script.read_text(), re.M)
         if len(expected_checks) != check_count or len(set(expected_checks)) != check_count:
