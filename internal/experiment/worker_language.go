@@ -12,11 +12,26 @@ func (f WorkerFixture) SupportsLanguage(language string) bool {
 	if language == submission.LanguageJava21 {
 		return f.Java21Enabled()
 	}
+	if language == submission.LanguagePython3 {
+		return f.Python3Enabled()
+	}
 	return language == submission.LanguageGNUCPP17 || f.UsesCachedText() && submission.SupportedLanguage(language)
 }
 
 // Java21Enabled reports whether this queue uses the admitted JDK image.
 func (f WorkerFixture) Java21Enabled() bool { return f.java21 }
+
+// Python3Enabled reports whether the pinned Ubuntu text interpreter is in use.
+func (f WorkerFixture) Python3Enabled() bool { return f.python3 }
+
+// WithPython3 opts in without changing the published material binding.
+func (f WorkerFixture) WithPython3() (WorkerFixture, error) {
+	if !f.UsesCachedText() || f.APlusBTier() != ReferenceAPlusBUbuntu {
+		return WorkerFixture{}, errors.New("the Python runtime requires a pinned Ubuntu text fixture")
+	}
+	f.python3 = true
+	return f, nil
+}
 
 // WithJava21 enables the fixed Java runtime for the Ubuntu text fixture only.
 func (f WorkerFixture) WithJava21() (WorkerFixture, error) {
@@ -41,6 +56,10 @@ func (f WorkerFixture) ProfileForLanguage(language string) ExecutionProfile {
 			if f.java21 {
 				return Java21Profile(profile)
 			}
+		case submission.LanguagePython3:
+			if f.python3 {
+				return Python3Profile(profile)
+			}
 		}
 	}
 	return profile
@@ -63,13 +82,17 @@ func GNUCPP20Profile(profile ExecutionProfile) ExecutionProfile {
 // MatchesPublishedTextProfile admits only full equality with a fixed variant.
 func MatchesPublishedTextProfile(base, candidate ExecutionProfile) bool {
 	return reflect.DeepEqual(candidate, C17Profile(base)) || reflect.DeepEqual(candidate, GNUCPP20Profile(base)) ||
-		base.ImageID == JavaImageID && reflect.DeepEqual(candidate, Java21Profile(base))
+		javaImage(base.ImageID) && reflect.DeepEqual(candidate, Java21Profile(base)) ||
+		base.ImageID == PythonImageID && reflect.DeepEqual(candidate, Python3Profile(base))
 }
 
 // SingleSourceName returns the internal filename for the trusted compiler profile.
 func SingleSourceName(profile ExecutionProfile) string {
 	if IsJava21Profile(profile) {
 		return "Main.java"
+	}
+	if IsPython3Profile(profile) {
+		return "main.py"
 	}
 	if len(profile.CompileArgs) > 0 && profile.CompileArgs[0] == "/usr/local/bin/gcc" {
 		return "main.c"

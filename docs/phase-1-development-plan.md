@@ -334,6 +334,8 @@ GNU++20 复用同一已发布文本环境，固定 `g++ -std=gnu++20`。本机 A
 
 [Java 21](delivery-evidence/p7-java21.md) 使用单文件 `Main.java`、固定 JDK 制品和逐点 JVM。已发布 A+B 的浏览器提交、真实 Worker AC/WA/CE 与本人结果通过，C17、GNU++17、GNU++20 同镜像回归通过。另已验证 JVM 堆耗尽为 RE、沙箱总内存超限为 MLE，以及同机双 Worker 一致性、SIGTERM 后自然接管和历史重判。
 
+[CPython 3.14](delivery-evidence/p7-python3.md) 使用单文件 `.py`、固定 CPython 3.14.10 和逐点解释器。已发布 A+B 的浏览器提交、真实 Worker AC/WA/CE/RE 与本人回读通过，C17、GNU++17、GNU++20 和 Java 21 同镜像回归通过。Python 超限、自然接管、历史重判和同机双 Worker 一致性待验。
+
 - 浮点验证逐题绝对/相对容差及 OR、等于边界、零与负数、科学计数法、非法/非有限值、混合文本；非法标准答案或配置阻止发布。
 - SPJ 必须支持 Testlib C++ 检查器，保留既定 ICPC 统一协议，通过显式适配接入洛谷文档所示的 `checker.cpp`、`#include "testlib.h"`、`registerTestlibCmd` 及三文件接口。首批仍使用 GNU++17，不由外部示例改成 C++14；检查器崩溃、超时、非法协议归 SE，诊断按权限提供。
 - 补齐完整日常邮箱账号流程及真实投递验证；按真实题库需求增加录入入口，不为填满功能表实现无人使用的管理能力。

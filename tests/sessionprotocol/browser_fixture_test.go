@@ -95,6 +95,7 @@ func TestBrowserFixture(t *testing.T) {
 		}
 		c.LocalTrainingIntake, c.TrainingHistory, c.TrainingSubmissionDetail = true, true, true
 		c.LocalJava21 = os.Getenv("OJ_BROWSER_LOCAL_JAVA21") == "1"
+		c.LocalPython3 = os.Getenv("OJ_BROWSER_LOCAL_PYTHON3") == "1"
 		trainee = f.subject(t, false)
 		trainingObserver = f.subject(t, false)
 		setHistoryEmailVerified(t, f, trainee.ID, true)

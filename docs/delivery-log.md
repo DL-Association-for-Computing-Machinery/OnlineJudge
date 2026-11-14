@@ -1,5 +1,9 @@
 # 工程交付记录
 
+## 2026-11-15：P7 CPython 3.14 本机闭环
+
+[CPython 3.14](delivery-evidence/p7-python3.md) 使用固定组合镜像，在本机已发布 A+B 完成浏览器提交、真实判题和本人回读。五个语言档位共 15 笔完成对账。Python 的超限、恢复、重判和同机双 Worker 尚待验收，改动留在 P7 分支，未部署。
+
 ## 2026-11-14：P4 功能验收完成
 
 项目负责人采纳 [Mac Ubuntu VM 的 A+B 双账号闭环](delivery-evidence/p4-trial-publication.md#mac-ubuntu-vm-本地完整流程)作为 P4 验收结果。[#300](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/300)覆盖本地真实判题报告准入、不同账号批准与发布、原键回读及匿名选手查看新题。未连接试用服务器，也未在试用环境启用执行档位或发布题目。

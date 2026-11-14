@@ -38,7 +38,7 @@ func RecoverReferenceSlot(ctx context.Context, slot ReferenceTierSlot, expectedI
 		return err
 	}
 	if slot.IsUbuntuAPlusB() {
-		h := &Host{run: ubuntuCommand, tier: tier, java21: slot.java21}
+		h := &Host{run: ubuntuCommand, tier: tier, java21: slot.java21, python3: slot.python3}
 		p, _, err := h.configuration()
 		if err != nil {
 			return err

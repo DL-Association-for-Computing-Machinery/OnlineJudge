@@ -34,12 +34,14 @@ func Java21Profile(p ExecutionProfile) ExecutionProfile {
 
 // IsJava21Profile identifies the already validated Java compilation contract.
 func IsJava21Profile(p ExecutionProfile) bool {
-	return p.ImageID == JavaImageID && len(p.CompileArgs) == 1 && p.CompileArgs[0] == javaCompiler
+	return javaImage(p.ImageID) && len(p.CompileArgs) == 1 && p.CompileArgs[0] == javaCompiler
 }
 
-// JavaTextExecutionSHA256 binds the actual contestant profile separately
+func javaImage(id string) bool { return id == JavaImageID || id == PythonImageID }
+
+// TextExecutionSHA256 binds the actual contestant profile separately
 // from the published materials' reference compiler and transport digest.
-func JavaTextExecutionSHA256(p ExecutionProfile) string {
+func TextExecutionSHA256(p ExecutionProfile) string {
 	raw, _ := json.Marshal(p)
 	sum := sha256.Sum256(raw)
 	return hex.EncodeToString(sum[:])

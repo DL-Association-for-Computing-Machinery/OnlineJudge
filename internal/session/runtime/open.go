@@ -239,16 +239,13 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 		}
 	}
 	if localTraining != nil {
-		if !c.LocalJava21 {
-			submit := localTraining
-			localTraining = func(ctx context.Context, actor identity.TrainingActor, key, id, version, language, source string) (submission.Receipt, error) {
-				if language == submission.LanguageJava21 {
-					return submission.Receipt{}, submission.ErrNotFound
-				}
-				return submit(ctx, actor, key, id, version, language, source)
+		submit := func(ctx context.Context, actor identity.TrainingActor, key, id, version, language, source string) (submission.Receipt, error) {
+			if language == submission.LanguageJava21 && !c.LocalJava21 || language == submission.LanguagePython3 && !c.LocalPython3 {
+				return submission.Receipt{}, submission.ErrNotFound
 			}
+			return localTraining(ctx, actor, key, id, version, language, source)
 		}
-		handler, err = httptransport.WithTrainingIntake(handler, localTraining, func(ctx context.Context, actor identity.TrainingActor, key string) (submission.Receipt, error) {
+		handler, err = httptransport.WithTrainingIntake(handler, submit, func(ctx context.Context, actor identity.TrainingActor, key string) (submission.Receipt, error) {
 			return submissionpg.ReadTrainingReceipt(ctx, pool, actor, key)
 		})
 		if err != nil {

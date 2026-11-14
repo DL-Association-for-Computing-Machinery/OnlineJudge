@@ -56,6 +56,16 @@ func loadConfig(getenv func(string) string) (config, error) {
 	default:
 		return c, errors.New("invalid local Java setting")
 	}
+	switch getenv("OJ_LOCAL_PYTHON3") {
+	case "":
+	case "1":
+		aplusb, err = aplusb.WithPython3()
+		if err != nil {
+			return c, err
+		}
+	default:
+		return c, errors.New("invalid local Python setting")
+	}
 	c.ubuntuTextSlot = getenv(ubuntuTextSlotEnv)
 	if c.ubuntuTextSlot != "" {
 		if !aplusb.UsesCachedText() || aplusb.APlusBTier() != experiment.ReferenceAPlusBUbuntu {

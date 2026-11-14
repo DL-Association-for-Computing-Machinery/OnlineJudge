@@ -18,11 +18,16 @@ const (
 	LanguageC17      = "c17"
 	LanguageGNUCPP20 = "gnu++20"
 	LanguageJava21   = "java21"
+	LanguagePython3  = "python3"
 )
 
 // SupportedLanguage identifies the accepted single-file language keys.
 func SupportedLanguage(language string) bool {
-	return language == LanguageGNUCPP17 || language == LanguageC17 || language == LanguageGNUCPP20 || language == LanguageJava21
+	switch language {
+	case LanguageGNUCPP17, LanguageC17, LanguageGNUCPP20, LanguageJava21, LanguagePython3:
+		return true
+	}
+	return false
 }
 
 // MaxSourceBytes bounds single-file source before persistence.

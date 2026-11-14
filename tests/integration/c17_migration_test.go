@@ -79,31 +79,44 @@ func TestGNUCPP20MigrationKeepsHistoryOnBlockedDown(t *testing.T) {
 }
 
 func TestJava21MigrationKeepsHistoryOnBlockedDown(t *testing.T) {
+	testPublishedLanguageDown(t, submission.LanguageJava21, 31)
+}
+
+func TestPython3MigrationKeepsHistoryOnBlockedDown(t *testing.T) {
+	testPublishedLanguageDown(t, submission.LanguagePython3, 32)
+}
+
+func testPublishedLanguageDown(t *testing.T, language string, oldVersion int64) {
+	t.Helper()
 	f := newBacklogFixture(t)
-	_, err := f.provider.Down(f.ctx)
+	_, err := f.provider.DownTo(f.ctx, oldVersion)
 	must(t, err)
 	insert := func() error {
 		_, err := f.a.Exec(f.ctx, `INSERT INTO submissions
 			(id, subject_id, context_id, idempotency_key, request_sha256, material_version, manifest_sha256, language, source_code)
-			SELECT 'java21-migration-test', 'synthetic', 'personal-training', 'java21-migration-key',
-			       repeat('a',64), version_id, manifest_sha256, $1, 'class Main {}'
-			FROM submission_materials WHERE version_id=$2`, submission.LanguageJava21, f.request.MaterialVersion)
+			SELECT 'language-migration-test', 'synthetic', 'personal-training', 'language-migration-key',
+			       repeat('a',64), version_id, manifest_sha256, $1, 'synthetic source'
+			FROM submission_materials WHERE version_id=$2`, language, f.request.MaterialVersion)
 		return err
 	}
 	var check *pgconn.PgError
 	if err := insert(); !errors.As(err, &check) || check.Code != "23514" {
-		t.Fatalf("schema 31 did not reject Java 21: %v", err)
+		t.Fatalf("schema %d did not reject %s: %v", oldVersion, language, err)
 	}
-	_, err = f.provider.Up(f.ctx)
+	_, err = f.provider.UpTo(f.ctx, oldVersion+1)
 	must(t, err)
 	must(t, insert())
 	if _, err := f.provider.Down(f.ctx); err == nil {
-		t.Fatal("rollback removed Java 21 support while history exists")
+		t.Fatalf("rollback removed %s while history exists", language)
 	}
-	must(t, db.CheckSchema(f.ctx, f.a))
-	var language string
-	must(t, f.a.QueryRow(f.ctx, "SELECT language FROM submissions WHERE id=$1", "java21-migration-test").Scan(&language))
-	if language != submission.LanguageJava21 {
+	version, err := f.provider.GetDBVersion(f.ctx)
+	must(t, err)
+	if version != oldVersion+1 {
+		t.Fatalf("blocked rollback changed schema from %d to %d", oldVersion+1, version)
+	}
+	var stored string
+	must(t, f.a.QueryRow(f.ctx, "SELECT language FROM submissions WHERE id=$1", "language-migration-test").Scan(&stored))
+	if stored != language {
 		t.Fatal("blocked rollback did not preserve language")
 	}
 }

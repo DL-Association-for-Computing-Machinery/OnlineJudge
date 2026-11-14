@@ -53,6 +53,7 @@ type Result struct {
 	Points        []Point
 	Max           *Usage
 	runtimeSHA256 string
+	pythonImage   bool
 }
 
 // Runner owns one execution slot. Use one instance per sandbox of capacity one.
@@ -83,8 +84,9 @@ func (r *Runner) Judge(ctx context.Context, d materials.Descriptor, blobs map[st
 	if err != nil {
 		return result, err
 	}
-	if r.fixture.Java21Enabled() {
-		result.runtimeSHA256 = experiment.JavaTextExecutionSHA256(p.Environment)
+	if r.fixture.Java21Enabled() || r.fixture.Python3Enabled() {
+		result.runtimeSHA256 = experiment.TextExecutionSHA256(p.Environment)
+		result.pythonImage = r.fixture.Python3Enabled()
 	}
 	for _, t := range p.Tests {
 		result.Points = append(result.Points, Point{ID: t.ID, Verdict: "NOT_RUN"})

@@ -25,6 +25,9 @@ func cachedProgramName(p experiment.ExecutionProfile) string {
 	if experiment.IsJava21Profile(p) {
 		return "main.jar"
 	}
+	if experiment.IsPython3Profile(p) {
+		return "main.pyc"
+	}
 	return "main"
 }
 

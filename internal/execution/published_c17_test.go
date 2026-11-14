@@ -18,6 +18,7 @@ func TestCachedPublishedProfileCannotWidenLegacyExecutor(t *testing.T) {
 	}{
 		{name: "legacy runner C17", profile: experiment.C17Profile(base)},
 		{name: "legacy runner GNU++20", profile: experiment.GNUCPP20Profile(base)},
+		{name: "legacy runner Python3", enabled: true, profile: experiment.Python3Profile(base)},
 		{name: "legacy runner Java21", enabled: true, profile: experiment.Java21Profile(experiment.JavaTextBase(base))},
 		{name: "changed command", enabled: true, profile: experiment.GNUCPP20Profile(base), change: func(p *experiment.ExecutionProfile) { p.CompileArgs[1] = "-std=gnu++23" }},
 		{name: "changed budget", enabled: true, profile: experiment.C17Profile(base), change: func(p *experiment.ExecutionProfile) { p.Compile.Wall++ }},

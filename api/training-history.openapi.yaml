@@ -82,7 +82,7 @@ paths:
               properties:
                 problem_id: { type: string, pattern: '^[a-f0-9]{32}$' }
                 publication_version: { type: string, pattern: '^[a-f0-9]{64}$' }
-                language: { type: string, enum: ['gnu++17', c17, 'gnu++20', java21], default: 'gnu++17' }
+                language: { type: string, enum: ['gnu++17', c17, 'gnu++20', java21, python3], default: 'gnu++17' }
                 source: { type: string, minLength: 1, maxLength: 65536, description: 最多 65536 个 UTF-8 字节且不含 NUL。 }
       responses:
         '200': { $ref: '#/components/responses/TrainingReceipt' }
@@ -207,7 +207,7 @@ components:
       properties:
         id: { type: string, pattern: '^[a-f0-9]{32}$' }
         material_version: { type: string, minLength: 1, maxLength: 128 }
-        language: { type: string, enum: ['gnu++17', c17, 'gnu++20', java21] }
+        language: { type: string, enum: ['gnu++17', c17, 'gnu++20', java21, python3] }
         created_at: { type: string, format: date-time }
         state: { type: string, enum: [queued, running, finished, failed] }
         verdict:

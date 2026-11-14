@@ -138,6 +138,13 @@ func recoverAPlusBUbuntu(ctx context.Context, args []string, logger *slog.Logger
 	default:
 		return errors.New("invalid local Java setting")
 	}
+	switch os.Getenv("OJ_LOCAL_PYTHON3") {
+	case "":
+	case "1":
+		slot = slot.WithPython3Image()
+	default:
+		return errors.New("invalid local Python setting")
+	}
 	var lock *slotLock
 	if dual {
 		lock, err = lockUbuntuTextDual(slot, true)

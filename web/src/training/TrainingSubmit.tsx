@@ -203,7 +203,9 @@ function TrainingForm({ subject, problemID, version, accountBusy, language, setL
           const value = event.target.value
           if (isTrainingLanguage(value)) setLanguage(value)
         }}>
-        {Object.entries(trainingLanguageLabel).filter(([key]) => key !== 'java21' || import.meta.env.VITE_OJ_LOCAL_JAVA21 === '1')
+        {Object.entries(trainingLanguageLabel).filter(([key]) =>
+          (key !== 'java21' || import.meta.env.VITE_OJ_LOCAL_JAVA21 === '1') &&
+          (key !== 'python3' || import.meta.env.VITE_OJ_LOCAL_PYTHON3 === '1'))
           .map(([key, label]) => <option key={key} value={key}>{label}</option>)}
       </select>
       <p>源码最多 64 KiB</p>
@@ -215,7 +217,7 @@ function TrainingForm({ subject, problemID, version, accountBusy, language, setL
       {source && invalid ? <p role="status">源码含无效字符或超过 64 KiB。</p> : null}
       {!key ? <>
         <label htmlFor="training-source-file">选择源码文件</label>
-        <input id="training-source-file" type="file" accept={language === 'java21' ? '.java' : language === 'c17' ? '.c' : '.cpp,.cc,.cxx'} disabled={editorUnavailable || busy || fileBusy || accountBusy}
+        <input id="training-source-file" type="file" accept={language === 'python3' ? '.py' : language === 'java21' ? '.java' : language === 'c17' ? '.c' : '.cpp,.cc,.cxx'} disabled={editorUnavailable || busy || fileBusy || accountBusy}
           onChange={event => {
             const file = event.target.files?.[0]
             event.target.value = ''

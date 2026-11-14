@@ -35,6 +35,7 @@ type ReferenceTierSlot struct {
 	tier      experiment.ReferenceTier
 	secondary bool
 	java21    bool
+	python3   bool
 }
 
 // ReferenceSlotForTier rejects unknown tiers without returning a usable slot.
@@ -60,6 +61,12 @@ func UbuntuTextSlot(value string) (ReferenceTierSlot, error) {
 // WithJava21Image selects the pinned Java image without changing the slot identity.
 func (s ReferenceTierSlot) WithJava21Image() ReferenceTierSlot {
 	s.java21 = s.IsUbuntuAPlusB()
+	return s
+}
+
+// WithPython3Image selects the combined image without changing slot identity.
+func (s ReferenceTierSlot) WithPython3Image() ReferenceTierSlot {
+	s.python3 = s.IsUbuntuAPlusB()
 	return s
 }
 
@@ -113,7 +120,7 @@ func StartReferenceSlot(ctx context.Context, slot ReferenceTierSlot) (*Host, err
 		return nil, err
 	}
 	if slot.IsUbuntuAPlusB() {
-		return startConfiguredHost(ctx, &Host{run: ubuntuCommand, tier: tier, java21: slot.java21}, name)
+		return startConfiguredHost(ctx, &Host{run: ubuntuCommand, tier: tier, java21: slot.java21, python3: slot.python3}, name)
 	}
 	return startConfiguredSlot(ctx, runCommand, name, tier)
 }
