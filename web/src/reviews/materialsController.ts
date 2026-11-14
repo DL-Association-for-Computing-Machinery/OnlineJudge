@@ -1,11 +1,11 @@
 import type { AccountController } from '../account/controller'
 import { validKey } from '../services/draftManagement'
-import { fetchReviewMaterials, type ReviewMaterials } from '../services/reviewMaterials'
+import { fetchReviewEligibility, fetchReviewMaterials, type ReviewEligibility, type ReviewMaterials } from '../services/reviewMaterials'
 import { requestStatementConfirmation } from '../services/statementConfirmation'
 
 type Confirmation = 'ready' | 'pending' | 'recorded' | 'unavailable'
-interface MaterialsState { data: ReviewMaterials | null; busy: boolean; notice: string; confirmation: Confirmation }
-const empty = (notice: string): MaterialsState => ({ data: null, busy: false, notice, confirmation: 'unavailable' })
+interface MaterialsState { data: ReviewMaterials | null; busy: boolean; notice: string; confirmation: Confirmation; eligibility: ReviewEligibility | null }
+const empty = (notice: string): MaterialsState => ({ data: null, busy: false, notice, confirmation: 'unavailable', eligibility: null })
 
 function journalSlot(owner: string, evidence: ReviewMaterials['evidence']) {
   return ['oj.statement-confirmation.v1', owner, evidence.review_id, evidence.assignment_revision,
@@ -66,13 +66,40 @@ export class ReviewMaterialsController {
         const data = await fetchReviewMaterials(this.id, session.subject_id, abort.signal)
         if (current()) {
           this.authority = { owner: session.subject_id, deadline }
-          this.publish({ data, busy: false, notice: '已读取当前分配的冻结材料。',
+          this.publish({ ...empty('已读取当前分配的冻结材料。'), data,
             confirmation: confirmationStatus(journalSlot(session.subject_id, data.evidence)) })
         }
       } catch {
         if (current()) this.publish(empty('无法读取材料。请核对送审 ID、当前分配及服务状态，再手动重试。'))
       }
     } finally { this.running = false }
+  }
+
+  async readEligibility() {
+    const { data, busy } = this.state
+    const authority = this.authority
+    if (!this.connected || this.running || busy || this.account.getSnapshot().busy || !data || !authority) return
+    const { owner, deadline } = authority
+    if (confirmationExpired(deadline)) { this.clear(); return }
+    const generation = this.generation
+    const abort = new AbortController()
+    this.abort = abort
+    this.running = true
+    this.publish({ ...this.state, busy: true, eligibility: null, notice: '正在读取批准准入状态…' })
+    try {
+      const eligibility = await fetchReviewEligibility(data.evidence, owner, abort.signal)
+      if (generation !== this.generation) return
+      if (confirmationExpired(deadline)) { this.clear(); return }
+      this.publish({ ...this.state, busy: false, eligibility, notice: '已读取本次准入状态。' })
+    } catch {
+      if (generation === this.generation) {
+        this.clear()
+        this.publish(empty('无法核实批准准入状态，请重新检查会话并读取材料。'))
+      }
+    } finally {
+      this.running = false
+      if (this.abort === abort) this.abort = null
+    }
   }
 
   async confirm(action: 'confirm' | 'read', allChecked = false) {
@@ -102,7 +129,7 @@ export class ReviewMaterialsController {
     this.running = true
     const abort = new AbortController()
     this.abort = abort
-    this.publish({ ...this.state, busy: true, confirmation: 'pending' })
+    this.publish({ ...this.state, busy: true, confirmation: 'pending', eligibility: null })
     let recorded = false
     try {
       await requestStatementConfirmation(action, owner, data.evidence, key, abort.signal)

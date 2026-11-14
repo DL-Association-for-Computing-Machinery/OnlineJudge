@@ -14,6 +14,7 @@ assert(ready?.url === info.origin && /^[a-f0-9]{32}$/.test(ready.review_id))
 for (const email of [ready.email, ready.other_email]) assert(/^[a-zA-Z0-9._+-]+@example\.invalid$/.test(email))
 for (const id of [ready.subject_id, ready.other_subject_id]) assert(/^[a-f0-9]{32}$/.test(id))
 const endpoint = `/api/v1/problem-review/${ready.review_id}/materials`
+const eligibilityPath = `/api/v1/problem-review/${ready.review_id}/eligibility`
 const confirmation = `/api/v1/problem-review/${ready.review_id}/statement-confirmation`
 const pagePath = `/review/materials/${ready.review_id}`
 const intakePath = '/api/v1/problem-draft-management/review-submissions'
@@ -65,6 +66,15 @@ async function exercise(browser, viewport, reviewer, select, confirm = false) {
       assert.deepEqual(await page.getByRole('region', { name: '原始样例' }).locator('pre').allTextContents(), ['1 2\n', '3\n'])
       assert(await page.locator('.katex').count() > 0)
       assert.equal(await page.locator('vite-error-overlay').count(), 0)
+      step = 'read current approval blockers'
+      const [eligibility] = await Promise.all([
+        page.waitForResponse(r => r.url() === info.origin + eligibilityPath),
+        page.getByRole('button', { name: '查看当前阻断项' }).click(),
+      ])
+      assert.equal(eligibility.status(), 200)
+      await page.getByText('缺少生产检查器准入证据', { exact: true }).waitFor()
+      await page.getByText('缺少目标运行环境验收证据', { exact: true }).waitFor()
+      assert.deepEqual(reads.at(-1), ['GET', eligibilityPath, ready.other_subject_id])
       step = 'fit viewport'
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
       const screenshot = `reviewer-${viewport.width}.png`
@@ -74,7 +84,8 @@ async function exercise(browser, viewport, reviewer, select, confirm = false) {
       await page.reload()
       await page.getByRole('button', { name: '检查会话并读取材料' }).waitFor()
       assert.equal(await page.getByRole('heading', { name: '冻结标程' }).count(), 0)
-      assert.equal(reads.length, 1)
+      assert.equal(await page.getByText('缺少生产检查器准入证据', { exact: true }).count(), 0)
+      assert.equal(reads.length, 2)
       if (confirm) {
         step = 'confirm four explicit checks'
         await page.getByRole('button', { name: '检查会话并读取材料' }).click()
@@ -123,7 +134,7 @@ async function exercise(browser, viewport, reviewer, select, confirm = false) {
         assert.equal(readback.status(), 200)
         assert.deepEqual(await readback.json(), receipt)
         await page.getByText('已核实这份冻结题面的确认回执。').waitFor()
-        assert.deepEqual(reads.slice(1), [
+        assert.deepEqual(reads.slice(2), [
           ['GET', endpoint, ready.other_subject_id], ['POST', confirmation, ready.other_subject_id],
           ['GET', endpoint, ready.other_subject_id], ['GET', receiptPath, ready.other_subject_id],
         ])
