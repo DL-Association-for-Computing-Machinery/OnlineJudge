@@ -881,7 +881,18 @@ docker --context desktop-linux buildx build --builder desktop-linux \
   --output "type=local,dest=$stage" .
 ```
 
-输出包含 `bin/` 下的 API、Worker、控制器、内嵌迁移工具、材料工具和邮件执行器，以及 `site/` 下的正式前端。开发登录启动器和实验测试二进制不会导出。首次构建需获取已锁定的依赖；目标机接收成品，不重新编译。此目录是[试用离线交付](docs/architecture/operations-design.md#5-发布与回滚)的应用输入，完整发布还要封存运行依赖镜像、模板、校验清单和安装恢复说明；密钥与真实配置单独交接。
+输出包含 `bin/` 下的 API、Worker、控制器、内嵌迁移工具、材料工具和邮件执行器，以及 `site/` 下的正式前端。开发登录启动器和实验测试二进制不会导出。首次构建需获取已锁定的依赖；目标机接收成品，不重新编译。
+
+在发送端用 Python 3.9+ 封存到一个尚不存在的同级目录。通过独立可信渠道传递打印出的清单 SHA-256。接收端保留文件权限、由接收账号持有整个目录，使用可信工作树中的脚本核验；两端核对期间都不修改目录。接收端按目标机架构填写 `--platform`。
+
+```sh
+python3 -B scripts/trial_app_bundle.py pack --export "$stage" \
+  --revision "$(git rev-parse HEAD)" --platform linux/arm64 "${stage}-bundle"
+python3 -B scripts/trial_app_bundle.py verify --manifest-sha256 "$TRUSTED_MANIFEST_SHA256" \
+  --platform linux/arm64 "$RECEIVED_BUNDLE_DIR"
+```
+
+核验成功输出构建方声明的 Git 提交；不执行程序，也不替代构建来源审查。封存失败时，未写出清单的输出目录不可交付，复测使用新目录。此包只覆盖[试用离线交付](docs/architecture/operations-design.md#5-发布与回滚)的应用部分；完整发布还需封存运行依赖镜像、配置模板和安装恢复说明。密钥与真实配置单独交接。
 
 ### 专用 Ubuntu VM 判题实验
 
