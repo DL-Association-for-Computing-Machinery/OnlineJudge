@@ -144,3 +144,18 @@ export async function readAuthorSolution(owner: string, intent: ReviewIntakeInte
   return { id, binding: { import_revision: intent.import_revision, formal_plan_sha256: data.formal_plan_sha256 },
     solution: decodeFrozenSolution(data.standard_solution) }
 }
+
+export async function requestAuthorSolutionConfirmation(
+  action: 'confirm' | 'read', owner: string, intent: ReviewIntakeIntent, version: string,
+  binding: AuthorSolutionBinding, signal: AbortSignal,
+) {
+  if (!validKey(intent.request_key) || !validRevision(intent.import_revision) || binding.import_revision !== intent.import_revision ||
+    !validRevision(binding.formal_plan_sha256)) throw new ImportError()
+  if (action === 'read') await requestReviewIntake('read', owner, intent, version, signal)
+  const data = await request(owner, `/review-submissions/${intent.request_key}/solution-confirmation`, signal,
+    action === 'confirm' ? binding : undefined, 4096)
+  if (!object(data) || Object.keys(data).length !== 4 || data.request_key !== intent.request_key ||
+    data.import_revision !== binding.import_revision || data.formal_plan_sha256 !== binding.formal_plan_sha256 ||
+    typeof data.confirmed_at !== 'string' || !/^\d{4}-\d\d-\d\dT/.test(data.confirmed_at) ||
+    !Number.isFinite(Date.parse(data.confirmed_at))) throw new ImportError()
+}

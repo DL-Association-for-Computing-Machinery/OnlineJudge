@@ -333,8 +333,123 @@ async function authorIntake(browser) {
     assert.deepEqual(await response.json(), receipt)
     await page.getByText(`送审 ID：${receipt.id}。此回执仅表示材料已送审。`, { exact: true }).waitFor()
     assert.deepEqual(calls, [['POST', intakePath], ['GET', lookup], ['GET', lookup]])
+    await authorSolution(page, receipt, calls)
     return { storage: await context.storageState(), receipt }
   } finally { await context.close() }
+}
+
+async function authorSolution(page, receipt, calls) {
+  const intake = intakePath + '/' + receipt.request_key
+  const sourcePath = intake + '/solution'
+  const confirmPath = intake + '/solution-confirmation'
+  const open = page.getByRole('button', { name: '查看该报告的冻结标程' })
+  const submit = page.getByRole('button', { name: '确认这份冻结标程' })
+  const query = page.getByRole('button', { name: '查询原标程确认回执' })
+  const source = page.getByRole('region', { name: '冻结标程' })
+  let from = calls.length
+  step = 'reject frozen source for another import revision'
+  await page.route(info.origin + sourcePath, async route => {
+    const response = await route.fetch({ maxRedirects: 0, maxRetries: 0 })
+    assert.equal(response.status(), 200)
+    const data = await response.json()
+    await route.fulfill({ response, json: { ...data, import_revision: '0'.repeat(64) } })
+  }, { times: 1 })
+  await open.click()
+  await page.getByText('无法核实此报告的冻结标程。', { exact: true }).waitFor()
+  assert.equal(await source.count(), 0)
+  assert.equal(await submit.count(), 0)
+  step = 'view server-bound frozen source without sending a confirmation'
+  const [preview] = await Promise.all([page.waitForResponse(r => r.url() === info.origin + sourcePath), open.click()])
+  assert.equal(preview.status(), 200)
+  const view = await preview.json()
+  const binding = { import_revision: receipt.import_revision, formal_plan_sha256: view.formal_plan_sha256 }
+  await submit.waitFor()
+  assert.equal(await source.locator('pre').first().textContent(), 'synthetic A+B material; not executed by this test\n')
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+  assert.deepEqual(calls.slice(from), [['GET', intake], ['GET', sourcePath], ['GET', intake], ['GET', sourcePath]])
+  const screenshot = 'author-solution-narrow.png'
+  await source.screenshot({ path: path.join(output, screenshot) })
+  report.screenshots.push(screenshot)
+  step = 'leave the confirmation unsent when the browser cannot retain its binding'
+  await page.evaluate(() => { Storage.prototype.setItem = () => { throw new Error('synthetic storage failure') } })
+  await submit.click()
+  await page.getByText('本标签页无法保存或读取原确认记录。', { exact: true }).waitFor()
+  assert.equal(calls.slice(from).some(([method]) => method === 'POST'), false)
+  await page.reload()
+  await page.getByRole('button', { name: '检查会话并打开草稿' }).click()
+  await page.getByRole('button', { name: '查看本机送审记录' }).click()
+  await open.click()
+  await submit.waitFor()
+  from = calls.length
+  step = 'send bound confirmation once and drop the committed response'
+  let serverReceipt
+  await page.route(info.origin + confirmPath, async route => {
+    const request = route.request()
+    assert.equal(request.method(), 'POST')
+    assert.equal(request.headers()['origin'], info.origin)
+    assert.equal(request.headers()['x-oj-expected-subject'], ready.subject_id)
+    assert.deepEqual(request.postDataJSON(), binding)
+    const saved = await page.evaluate(() => Object.entries(sessionStorage).filter(([key]) => key.startsWith('oj.author-solution-confirmation.v1:')))
+    assert.equal(saved.length, 1)
+    assert(saved[0][0].includes(receipt.request_key))
+    assert.deepEqual(JSON.parse(saved[0][1]), binding)
+    const response = await route.fetch({ maxRedirects: 0, maxRetries: 0 })
+    assert.equal(response.status(), 200)
+    serverReceipt = await response.json()
+    await route.abort()
+  }, { times: 1 })
+  await submit.click()
+  await page.getByText(/尚未核实标程确认/).waitFor()
+  step = 'refresh and reject a missing receipt before recovering the same binding'
+  await page.reload()
+  await page.getByRole('button', { name: '检查会话并打开草稿' }).click()
+  await page.getByRole('button', { name: '查看本机送审记录' }).click()
+  await query.waitFor()
+  assert.equal(await source.count(), 0)
+  assert.equal(await submit.count(), 0)
+  await page.route(info.origin + confirmPath, route => route.fulfill({ status: 404, contentType: 'application/problem+json', body: '{}' }), { times: 1 })
+  await query.click()
+  await page.getByText(/尚未核实标程确认/).waitFor()
+  const [recovered] = await Promise.all([page.waitForResponse(r => r.url() === info.origin + confirmPath), query.click()])
+  assert.equal(recovered.status(), 200)
+  assert.deepEqual(await recovered.json(), serverReceipt)
+  await page.getByText('已核实此报告的作者标程确认回执。', { exact: true }).waitFor()
+  assert.equal(await query.count(), 0)
+  assert.deepEqual(calls.slice(from), [
+    ['POST', confirmPath], ['GET', intake], ['GET', confirmPath], ['GET', intake], ['GET', confirmPath],
+  ])
+  step = 'observe another account while a frozen source response is pending'
+  let started, release, finished
+  const responseStarted = new Promise(resolve => { started = resolve })
+  const releaseResponse = new Promise(resolve => { release = resolve })
+  const responseFinished = new Promise(resolve => { finished = resolve })
+  await page.route(info.origin + sourcePath, async route => {
+    const response = await route.fetch({ maxRedirects: 0, maxRetries: 0 })
+    assert.equal(response.status(), 200)
+    started()
+    await releaseResponse
+    try { await route.fulfill({ response }) } catch { /* Account invalidation can cancel the request. */ }
+    finally { finished() }
+  }, { times: 1 })
+  await open.click()
+  await responseStarted
+  const sessionPath = info.origin + '/api/v1/session'
+  await page.route(sessionPath, async route => {
+    const response = await route.fetch({ maxRedirects: 0, maxRetries: 0 })
+    assert.equal(response.status(), 200)
+    const session = await response.json()
+    assert.equal(session.subject_id, ready.subject_id)
+    await route.fulfill({ response, json: { ...session, subject_id: ready.other_subject_id } })
+  }, { times: 1 })
+  await Promise.all([
+    page.waitForResponse(r => r.url() === sessionPath && r.status() === 200),
+    page.getByRole('button', { name: '检查会话并打开草稿' }).click(),
+  ])
+  release()
+  await responseFinished
+  assert.equal(await source.count(), 0)
+  assert.equal(await submit.count(), 0)
+  assert.equal(await query.count(), 0)
 }
 
 async function authorReturn(browser, session) {
@@ -404,6 +519,7 @@ try {
   phase = 'author intake'
   const authorSession = await authorIntake(browser)
   passed('author sends once and reload recovers the original review ID after a new reference request')
+  passed('author previews the frozen solution and recovers one explicit confirmation after a missing receipt')
   phase = 'review return'
   await exercise(browser, { width: 390, height: 844 }, true, false, false, true)
   passed('reviewer returns once and recovers a lost decision by the original key after a missing receipt')
