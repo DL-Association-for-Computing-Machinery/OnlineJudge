@@ -676,6 +676,8 @@ Dockerfile 的 Go、Node、pnpm 与现有配置保持一致，基础镜像固定
 
 ## 显式启用普通会话 API
 
+平台管理员首次授权由受信维护入口管理。迁移后用 `.local/bin/migrate platform-admin inspect --subject <id>` 读取最新修订；用 `.local/bin/migrate platform-admin set --subject <id> --expected-revision <n> --enabled <true|false> --operator <name> --reason <reason>` 授权或撤销。初次修订填 0；结果未知时先 inspect。命令使用私有维护库连接 `OJ_DATABASE_URL`，不发放管理会话；维护操作者名不得以 `platform-admin:` 开头。
+
 维护探针可请求普通会话 API 的 TLS 监听器：`GET /api/v1/readyz`，使用既有受信 CA 和配置的 Host；mTLS 模式经受信代理发起，沿用固定证书和已有转发头。响应 200 表示最近一次会话依赖检查通过，503 表示未就绪；`/api/v1/healthz` 继续只表示进程存活。默认 Compose 不启用会话依赖探针，见[就绪语义](docs/architecture/operations-design.md#会话-api-就绪检查)。
 
 API 镜像的 `/usr/local/bin/oj-api` 在非空 `OJ_SESSION_CONFIG_FILE` 下切换为独立会话 HTTPS 服务；同时必须显式设置 `OJ_API_ADDR`（例如容器内 `:8443`），不能与 `OJ_EXPERIMENT_TOKEN_FILE` 同用。配置文件为绝对规范路径，完整字段及权限见[配置合同](docs/architecture/session-design.md#717-显式会话-api-入口)。未设置配置路径时仍运行现有 bootstrap/实验模式，不尝试连接会话数据库。
@@ -685,6 +687,12 @@ API 镜像的 `/usr/local/bin/oj-api` 在非空 `OJ_SESSION_CONFIG_FILE` 下切�
 启动前须由受信维护流程完成当前 schema 29（邮箱模型始于5、积压准入始于6、私有草稿始于7、列表索引始于8、参考申请始于9、预期计划始于10、参考领取始于11、参考报告始于12、参考调度始于13、卷积对拍预期计划始于14、作者送审始于15、审核资格与分配始于16、审核退回始于17、作者确认标程始于18、审核人确认题面始于19、训练虚拟时间始于20、邮件令牌始于21、邮件全局发送限速始于22、提交历史索引始于23、受控重判审计始于24、审核分配列表索引始于25、平台管理员历史始于26、普通终审批准账本始于27、发布资格历史始于28、发布账本与执行准入记录始于29）、恢复状态开门、共享密钥分发及匹配的限流 marker 初始化；命令只检查，不自动迁移、初始化或修复。schema切换须在维护窗口排空/停止旧API、Worker及维护写入后执行，再启动匹配新版；运行中旧进程不会因版本变化自动停止，不混跑。精确回退条件见[邮件令牌迁移](docs/architecture/session-design.md#123-签发持久化与迁移)、[训练队列迁移](docs/submission-backlog.md#升级与回退)、[参考申请迁移](docs/reference-requests.md#迁移与回退)及[草稿历史迁移](docs/problem-drafts.md#入库版本与迁移)。本次没有迁移现有持久化localdev或部署服务器。配置与公开证书可只读挂载，登录密钥及 TLS 私钥必须满足 0400/0600、root/进程 euid 所有等约束。非 root 容器须能遍历并读取这些文件。不要把完整配置或秘密对象输出到日志。
 
 direct 模式要求客户端直接 TLS；proxy 模式要求同一监听器的已验证客户端证书和允许的叶证书指纹，健康检查也须经 mTLS。现有 Compose/Nginx 的明文 backend 和浏览器页面尚未配置该入口；部署、生产阈值、真实证书/存储 TLS 和完整账号权限另行验收。回退先停服务并移除显式配置环境，不把旧明文路径接到会话 Handler。
+
+可选 `session_devices: true` 启用 [会话管理及满额登录选择](api/session.openapi.yaml)。已登录用户读取不续期，撤销其他会话保留当前 Cookie。已验密的待确认登录在满额时可选择一个旧会话，确认后用原候选替换。移除配置并重启即可关闭，不改变会话数据。
+
+可选 `session_rotation: true` 启用当前会话的同源凭据轮换 API。换发保留原期限和名额，消耗共享登录恢复限额；浏览器界面不自动触发。回执未知时先读取当前会话，失效则重新登录。
+
+可选 `management_sessions: true` 启用[独立平台管理员会话](api/session.openapi.yaml)。管理员以本人密码登录，使用独立的非持久 Cookie，空闲 30 分钟、最长 8 小时；查询不续期，同源活动才续期。启用时共享现有登录限流、密码计算和连接预算；普通会话不能访问管理路由。再显式设置 `management_role_changes: true` 才开放平台角色写入，应用数据库角色须有该历史表的 INSERT 权限。每次写入需重新输入操作者本人密码；首次授权仍由受信维护命令完成，结果未知时先用 `inspect` 查目标修订。
 
 可选的 `password_change` 对象另行启用 `POST /api/v1/account/password`，省略时保持 404。必须显式给定 `minimum_characters`、`blocklist_file` 及 `global`/`source`/`subject` 三个 `{count, window}` 额度；用户已确认至少 15 个 Unicode code point、允许空格、不强制字符组合、拒绝常见弱密码，保留原始字节且不 trim/归一化/截断。最低字符数可配置更高值，KDF 最大密码字节预算至少为最低字符数的四倍。规则文件是至多 1 MiB 的版本 1 JSON 整串 SHA-256 弱密码摘要表，采用与公开证书相同的受控文件读取约束；格式及边界见上述设计。生产字典仍须验证来源、许可与覆盖，不能将合成测试词条当作生产覆盖证明。
 
@@ -726,7 +734,11 @@ python3 -B scripts/test-session-protocol.py --toolchain-image oj-session-protoco
 
 脚本只使用已有本地镜像，检查 Linux/架构，创建带唯一 owner 标签的私有 internal 网络、旧/替换/中断恢复 Redis 和工具链容器；无宿主发布端口或 Docker socket。临时 PostgreSQL 只开放容器内 Unix socket，复制源码白名单并运行真实存储/race 专项。结束检查退出码/OOM 并仅清理自有容器和网络，保留缓存卷。可用 `--redis-image` 指定已核验本地镜像、`--module-cache` 挂载既有只读模块缓存；合并缓存后执行 `go mod verify`，测试使用 `-mod=readonly`。Linux CI 使用 `--context default`；此专项不是完整 AC23、容量或部署验收。
 
-在上述脚本命令末尾加 `--suite email-lifecycle` 可用另一套全新的临时 PostgreSQL 和 Redis 验证邮箱整链路。邮件仅送往容器内回环 TLS 收件器；此选项不启用 API 文件配置的注册或找回入口。
+在上述脚本命令末尾加 `--suite email-lifecycle` 可用另一套全新的临时 PostgreSQL 和 Redis 验证邮箱整链路。专项以配置文件启动两个 API 进程和独立发信进程，邮件只送往容器内回环 TLS 收件器，不发布宿主端口。测试驱动在 Go race 测试计时开始前构建所需入口，保持运行期超时不变。
+
+`--suite archive-recovery` 单独运行同一归档的会话及邮件恢复回归，使用旧、替换及中断恢复 Redis 夹具。该用例也保留在普通会话套件中。
+
+`--suite email-archive-recovery` 另起全新夹具，只还原应用库，保留独立发信额度库。真实邮件进程处理恢复后的队列：旧任务不消耗 SMTP 许可，新邮件到达回环 TLS 收件器后可在另一 API 完成激活。此命令不连接外部邮件服务。
 
 ### 迁移前后回读 schema
 
@@ -887,6 +899,10 @@ Nginx 报告另有每个样本的 `loginPhases`：从驱动发起点击到浏览
 
 产物包含日志、浏览器断言 JSON 与桌面/390px 截图；当前15组保留账号/预览与导入恢复覆盖，另验新浏览器档案/IndexedDB禁用时真实服务器分页发现及本人预览、迟到页隔离、列表不改变pending日志；实际Cookie换账号覆盖四条管理路由。独立journal测试入口仅由此驱动构建到临时assets，生产构建不引用它。驱动分别检查浏览器和夹具结果，结束只清理本轮带 owner 标签的资源。`integration && browser` 夹具只运行 `TestBrowserFixture`，普通 PR CI 不自动执行此手动浏览器专项。生产证书、浏览器兼容矩阵及完整业务验收仍须另做。
 
+加 `--remembered-session` 在同一个临时 Chromium 资料中真实关闭并重开浏览器，对比默认会话、主动保持登录和退出后的表现。专项使用同源 HTTPS 夹具，不导入 Cookie 或 Playwright 存储快照。
+
+加 `--session-devices` 用四个独立浏览器上下文验证同一账号的满额换机与会话撤销。默认用 Chromium；同时传 `--cold-firefox` 则用 Firefox，先验证未信任证书被拒绝，再在临时配置导入测试 CA。第四个上下文在窄屏上列出并替换一条旧会话，再从账号页撤销其他会话，保留当前会话。前端请求及状态回读均通过浏览器访问真实 HTTPS API。
+
 真实 Worker 专项（当前固定 macOS arm64、Docker Desktop LinuxKit 7.0.14）：
 
 ```sh
@@ -923,6 +939,8 @@ Worker 启动完成后，向该 Worker 进程发送 `SIGUSR1`（`kill -USR1 PID`
 启用邮件发送前，维护角色使用同一 `OJ_DATABASE_URL` 执行 `.local/bin/migrate mail-send-rate <spacing-ms>`，按供应商额度指定全局发送许可间隔（100 至 60,000 毫秒）。重复配置不重置限速；缩短间隔不提前释放现有许可，延长间隔保守推迟下一次许可。Down22 后重新升级须再次显式配置。命令不启动发送。
 
 邮件加密额度由独立数据库保存。维护角色将 `OJ_MAIL_BUDGET_DATABASE_URL` 指向独立额度库，执行 `.local/bin/migrate mail-budget-init <预算库名>`。仅对从未使用的密钥，用私有 `OJ_EMAIL_PAYLOAD_KEYS_FILE` 执行 `.local/bin/migrate mail-budget-provision <预算库名> <最大次数> --fresh-key`。不得为旧密钥重新登记丢失的计数。见[邮箱隔离联验](docs/architecture/session-design.md#126-邮箱隔离联验)。
+
+会话 API 省略 `email_intake` 时，注册和找回申请返回 404。启用时同一配置必须包含 `email_limits`、`email_confirmation`，以及 `email_intake` 的 `capacity`、`workers`、`max_age`、绝对路径 `payload_key_file` 和 `budget_database`。额度库用与应用库 `database` 相同的字段，库名须不同；`auth: "env"` 读取专用 `OJ_SESSION_EMAIL_BUDGET_DATABASE_PASSWORD`。预置共享邮件限流 marker、River 迁移及额度账本后才能启动；入口不替代发送器或真实 SMTP 验收。停用时移除 `email_intake` 后重启，已入队邮件和账本保留。
 
 账号邮件使用独立的 `.local/bin/mail-worker`，默认 Compose 不启动。完成应用迁移、River 迁移和共享许可配置后，使用同一 `OJ_DATABASE_URL`、私有 `OJ_EMAIL_PAYLOAD_KEYS_FILE`、可信 HTTPS `OJ_ACCOUNT_PUBLIC_ORIGIN`，以及 `OJ_SMTP_HOST`、`OJ_SMTP_PORT`、`OJ_SMTP_FROM`、`OJ_SMTP_TLS`（`implicit` 或 `starttls`）。供应商要求认证时，同时设 `OJ_SMTP_USER` 和仅所有者可读的 `OJ_SMTP_PASSWORD_FILE`，文件内容是原始密码。发送器不迁移或初始化额度，不向判题 Worker 分发这些凭据。不要在同一队列同时运行 River 的默认 worker。领取、救援或提交遇到存储错误时进程退出，由运行管理器在存储恢复后重启。
 
