@@ -29,6 +29,9 @@ func run(ctx context.Context, logger *slog.Logger, drain <-chan struct{}) error 
 	}
 	if c.fixture.UsesCachedText() {
 		slot, err := workerhost.ReferenceSlotForTier(c.fixture.APlusBTier())
+		if c.ubuntuTextSlot != "" {
+			slot, err = workerhost.UbuntuTextSlot(c.ubuntuTextSlot)
+		}
 		if err != nil {
 			return err
 		}
@@ -40,7 +43,12 @@ func run(ctx context.Context, logger *slog.Logger, drain <-chan struct{}) error 
 				return err
 			}
 		}
-		lock, err := lockReferenceRuntime(slot, false)
+		var lock *slotLock
+		if c.ubuntuTextSlot != "" {
+			lock, err = lockUbuntuTextDual(slot, false)
+		} else {
+			lock, err = lockReferenceRuntime(slot, false)
+		}
 		if err != nil {
 			return err
 		}

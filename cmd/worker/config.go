@@ -14,13 +14,18 @@ import (
 )
 
 type config struct {
-	slot        workerhost.M0Slot
-	fixture     experiment.WorkerFixture
-	endpoint    string
-	roots       *x509.CertPool
-	cert        tls.Certificate
-	startAPlusB bool
+	slot           workerhost.M0Slot
+	fixture        experiment.WorkerFixture
+	endpoint       string
+	roots          *x509.CertPool
+	cert           tls.Certificate
+	startAPlusB    bool
+	ubuntuTextSlot string
 }
+
+// A nonempty value opts into two fixed local slots. The original empty mode
+// remains exclusive and cannot be combined with the M0 experiment.
+const ubuntuTextSlotEnv = "OJ_UBUNTU_TEXT_DUAL_SLOT"
 
 // Configuration errors never echo file paths, endpoints or credential contents.
 func loadConfig(getenv func(string) string) (config, error) {
@@ -40,6 +45,15 @@ func loadConfig(getenv func(string) string) (config, error) {
 	_, aplusb, err := experiment.LoadCachedFixture(getenv)
 	if err != nil {
 		return c, err
+	}
+	c.ubuntuTextSlot = getenv(ubuntuTextSlotEnv)
+	if c.ubuntuTextSlot != "" {
+		if !aplusb.UsesCachedText() || aplusb.APlusBTier() != experiment.ReferenceAPlusBUbuntu {
+			return c, errors.New("dual text slots require a pinned Ubuntu text fixture")
+		}
+		if _, err := workerhost.UbuntuTextSlot(c.ubuntuTextSlot); err != nil {
+			return c, err
+		}
 	}
 	if aplusb.UsesCachedText() {
 		if getenv("OJ_WORKER_M0_SLOT") != "" || getenv(dualModeEnv) != "" || runtime.GOARCH != "arm64" {

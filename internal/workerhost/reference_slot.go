@@ -31,14 +31,29 @@ func StartReference(ctx context.Context) (*Host, error) {
 
 // ReferenceTierSlot is an opaque fixed slot. Its zero value is invalid, unlike
 // the preserved legacy ReferenceSlot zero value, which means the small slot.
-type ReferenceTierSlot struct{ tier experiment.ReferenceTier }
+type ReferenceTierSlot struct {
+	tier      experiment.ReferenceTier
+	secondary bool
+}
 
 // ReferenceSlotForTier rejects unknown tiers without returning a usable slot.
 func ReferenceSlotForTier(tier experiment.ReferenceTier) (ReferenceTierSlot, error) {
 	if _, err := experiment.ResolveReferenceTier(tier); err != nil {
 		return ReferenceTierSlot{}, err
 	}
-	return ReferenceTierSlot{tier}, nil
+	return ReferenceTierSlot{tier: tier}, nil
+}
+
+// UbuntuTextSlot selects a fixed slot on the dedicated Ubuntu experiment VM.
+func UbuntuTextSlot(value string) (ReferenceTierSlot, error) {
+	switch value {
+	case "", "primary":
+		return ReferenceTierSlot{tier: experiment.ReferenceAPlusBUbuntu}, nil
+	case "secondary":
+		return ReferenceTierSlot{tier: experiment.ReferenceAPlusBUbuntu, secondary: true}, nil
+	default:
+		return ReferenceTierSlot{}, errors.New("unsupported Ubuntu text slot")
+	}
 }
 
 func (s ReferenceTierSlot) configuration() (name, lock string, tier experiment.ReferenceTier, err error) {
@@ -46,6 +61,11 @@ func (s ReferenceTierSlot) configuration() (name, lock string, tier experiment.R
 	case experiment.ReferenceSmall:
 		return ReferenceSlot{}.ContainerName(), ReferenceSlot{}.LockName(), s.tier, nil
 	case experiment.ReferenceAPlusBUbuntu:
+		if s.secondary {
+			// Reuse a known ownership lock so even earlier binaries see quarantine.
+			secondary, _ := ParseM0Slot("secondary")
+			return "oj-aplusb-ubuntu-sandbox-secondary", secondary.LockName(), s.tier, nil
+		}
 		return "oj-aplusb-ubuntu-sandbox", ReferenceSlot{}.LockName(), s.tier, nil
 	case experiment.ReferenceConvolution:
 		return "oj-reference-convolution-sandbox", convolutionLock, s.tier, nil
