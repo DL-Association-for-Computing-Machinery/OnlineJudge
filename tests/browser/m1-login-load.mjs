@@ -12,15 +12,16 @@ const strict = Boolean(process.env.OJ_FIREFOX_EXECUTABLE)
 const accounts = info.login_accounts
 const checks = []
 const samples = []
-let browser, deny
+const browsers = []
+let controlBrowser, deny
 
 function passed(check) { checks.push(check) }
 
-async function login(index, target) {
+async function login(browser, browserIndex, index, target) {
   let context, started, clicked
   const sample = { index, startLagMs: null, loginMs: null, statuses: [], outcome: 'client_error' }
   if (info.trial_nginx) sample.loginPhases = []
-  if (strict) sample.dispatchLagMs = null
+  if (strict) Object.assign(sample, { browserIndex, dispatchLagMs: null, beginRequestLagMs: null })
   try {
     context = await browser.newContext({ ignoreHTTPSErrors: !strict, serviceWorkers: 'block' })
     const page = await context.newPage()
@@ -32,7 +33,13 @@ async function login(index, target) {
     }
     const observedRequests = new WeakMap()
     if (info.trial_nginx) page.on('request', request => {
-      if (started !== undefined) observedRequests.set(request, Math.round(performance.now() - started))
+      if (started === undefined) return
+      const now = performance.now()
+      observedRequests.set(request, Math.round(now - started))
+      if (strict && sample.beginRequestLagMs === null && request.method() === 'POST' &&
+          request.url() === info.origin + '/api/v1/session/login/begin') {
+        sample.beginRequestLagMs = Math.round(now - target)
+      }
     })
     page.on('response', response => {
       const url = new URL(response.url())
@@ -144,16 +151,17 @@ try {
       return firefox.launch({ executablePath: process.env.OJ_FIREFOX_EXECUTABLE, headless: true, proxy,
         env, firefoxUserPrefs: { 'security.enterprise_roots.enabled': false } })
     }
-    browser = await launch(false)
-    const control = await browser.newContext({ ignoreHTTPSErrors: false })
+    controlBrowser = await launch(false)
+    const control = await controlBrowser.newContext({ ignoreHTTPSErrors: false })
     const page = await control.newPage()
     await assert.rejects(page.goto(info.origin), { message: /^page\.goto: SEC_ERROR_UNKNOWN_ISSUER(?:\r?\n|$)/ })
-    await browser.close()
-    browser = undefined
+    await controlBrowser.close()
+    controlBrowser = undefined
     checks.push('fresh Firefox rejects the untrusted trial issuer')
-    browser = await launch(true)
+    // Separate Firefox command queues without changing the aggregate click rate.
+    for (let index = 0; index < 4; index++) browsers.push(await launch(true))
   } else {
-    browser = await chromium.launch(process.env.OJ_CHROMIUM_EXECUTABLE ? { executablePath: process.env.OJ_CHROMIUM_EXECUTABLE } : {})
+    browsers.push(await chromium.launch(process.env.OJ_CHROMIUM_EXECUTABLE ? { executablePath: process.env.OJ_CHROMIUM_EXECUTABLE } : {}))
   }
   // Firefox needs more time to prepare isolated pages before the measured clicks.
   const preparationMs = strict ? 4000 : 2000
@@ -161,7 +169,8 @@ try {
   await Promise.all(accounts.map(async (_, index) => {
     const target = start + index * 600
     await delay(Math.max(0, target - preparationMs - performance.now()))
-    samples[index] = await login(index, target)
+    const browserIndex = index % browsers.length
+    samples[index] = await login(browsers[browserIndex], browserIndex, index, target)
   }))
   assert.equal(samples.filter(s => s.startLagMs !== null && Math.abs(s.startLagMs) <= 500).length, 100)
   passed('100 distinct browser attempts started within 500 ms of the uniform schedule')
@@ -169,13 +178,15 @@ try {
   assert(percentile(times, 95) <= 3000 && times.filter(ms => ms <= 10_000).length >= 99)
   passed('browser login p95 at most 3 seconds and at least 99 verified within 10 seconds')
 } finally {
-  await browser?.close()
+  const closed = await Promise.allSettled([...browsers, ...(controlBrowser ? [controlBrowser] : [])].map(browser => browser.close()))
   if (deny?.listening) await new Promise(resolve => deny.close(resolve))
   const times = samples.map(s => s.outcome === 'verified' ? s.loginMs : Infinity).sort((a, b) => a - b)
   await writeFile(path.join(output, 'browser-qa.json'), JSON.stringify({
-    success: checks.length === (strict ? 3 : 2), checks, fixture: 'local TLS with disposable CA, PostgreSQL and Redis',
+    success: checks.length === (strict ? 3 : 2) && closed.every(result => result.status === 'fulfilled'),
+    checks, fixture: 'local TLS with disposable CA, PostgreSQL and Redis',
     browserTLS: strict ? 'strict-firefox' : 'loopback-exception',
     clickClock: strict ? 'trusted-page-event' : 'driver-dispatch',
+    browserProcesses: browsers.length,
     edge: info.trial_nginx ? 'trial-nginx' : 'go-fixture',
     attempted: samples.length, verified: samples.filter(s => s.outcome === 'verified').length,
     within10s: times.filter(ms => ms <= 10_000).length,
