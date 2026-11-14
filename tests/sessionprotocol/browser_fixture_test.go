@@ -43,6 +43,7 @@ func TestBrowserFixture(t *testing.T) {
 	f := setup(t)
 	c := runtimeConfig(t, f, namespace(t), false)
 	c.HTTP.Origin = origin.String()
+	c.SessionDevices = os.Getenv("OJ_BROWSER_SESSION_DEVICES") == "1"
 	loginLoad := os.Getenv("OJ_BROWSER_LOGIN_LOAD") == "1"
 	if loginLoad {
 		c.PasswordPolicy.Current.MemoryKiB = 19 * 1024

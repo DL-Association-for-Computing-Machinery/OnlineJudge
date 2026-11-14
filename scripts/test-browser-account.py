@@ -76,6 +76,7 @@ def arguments():
     mode.add_argument("--m1-login-load", action="store_true", help="measure 100 complete browser logins over 60 seconds on the isolated fixture")
     mode.add_argument("--training-history", action="store_true", help="verify personal training history through ordinary HTTPS sessions")
     mode.add_argument("--remembered-session", action="store_true", help="verify the account UI across Chromium profile restarts")
+    mode.add_argument("--session-devices", action="store_true", help="verify session replacement and revocation through the account UI")
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
     output = args.output_dir.resolve()
@@ -246,6 +247,8 @@ def main():
             script_name, check_count = "training-history-qa.mjs", 5
         if args.remembered_session:
             script_name, check_count = "remembered-session-qa.mjs", 3
+        if args.session_devices:
+            script_name, check_count = "session-devices-qa.mjs", 3
         qa_script = ROOT / "tests/browser" / script_name
         expected_checks = re.findall(r"^\s+passed\('([^'\n]+)'\)", qa_script.read_text(), re.M)
         if len(expected_checks) != check_count or len(set(expected_checks)) != check_count:
@@ -314,6 +317,8 @@ node --input-type=module -e "import {build} from 'vite'; await build({configFile
             cold += ["-e", "OJ_BROWSER_LOGIN_LOAD=1"]
         if args.training_history:
             cold += ["-e", "OJ_BROWSER_TRAINING_HISTORY=1"]
+        if args.session_devices:
+            cold += ["-e", "OJ_BROWSER_SESSION_DEVICES=1"]
         process = subprocess.Popen([*docker.command, "exec", "-e", "OJ_BROWSER_ORIGIN=" + origin, "-e", "OJ_BROWSER_UI_DIR=/browser-assets", *cold, containers["test"], "sh", "/browser-fixture.sh"], stdout=handles[-1], stderr=subprocess.STDOUT)
         ready = wait_ready(process, fixture_log, origin)
         if args.cold_firefox:

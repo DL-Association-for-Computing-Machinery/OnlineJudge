@@ -807,6 +807,8 @@ python3 scripts/test-browser-account.py \
 
 加 `--remembered-session` 在同一个临时 Chromium 资料中真实关闭并重开浏览器，对比默认会话、主动保持登录和退出后的表现。专项使用同源 HTTPS 夹具，不导入 Cookie 或 Playwright 存储快照。
 
+加 `--session-devices` 用四个独立 Chromium 上下文验证同一账号的满额换机与会话撤销。第四个上下文使用原登录尝试列出旧会话，确认替换后仅一个旧会话失效；账号页撤销其他会话时保留当前会话。窄屏执行选择和撤销，前端请求使用真实 HTTPS API。
+
 真实 Worker 专项（当前固定 macOS arm64、Docker Desktop LinuxKit 7.0.14）：
 
 ```sh
