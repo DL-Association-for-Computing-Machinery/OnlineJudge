@@ -2,7 +2,7 @@
 
 2026-11-01：正式身份核心、[普通 Redis 存储协议](#79-普通-redis-会话协议)、[已有会话 HTTPS](#710-已有普通会话的-https-适配)及[两步登录恢复](#711-跨请求登录尝试与-cookie-发放)已有分项实现；[独立会话子实验](../../tests/sessionexperiment/README.md)保留旧 RDB、逻辑回档、轮换及保持登录等历史证据。默认 API 尚未接入账号入口，封装候选不等于服务端 pending 注册表、自动恢复、资源权限或生产准入；下文产品规则保持不变。
 
-日期：2026-11-01。版本：0.22。状态：Session＋Redis、分场景期限、比赛账号、Argon2id、日常邮箱验证注册/找回及可替换 SMTP 接口已确认；SCS＋go-redis、go-mail 及 PostgreSQL 持久化发信任务＋独立受限发送执行器优先验证，Gin sessions 备选。River 开源核心优先验证，专用任务表备选；短期 AES-GCM 载荷、River 仅存业务 ID、独立密钥文件、不考虑付费方案及第 12 节令牌/重发/重试规则已确认；PostgreSQL 会话只作对比，不替换 Redis 基线。身份核心、普通 Redis 协议、两步 HTTPS、显式 TLS API、改密与浏览器账号面板已有分项实现；六会话/改密 OpenAPI 已补齐，默认 Compose 未启用会话，生产参数、邮件/资源权限和完整会话仍待交付，未部署。关联 [总体架构](system-design.md)、[ADR-001](001-go-gin.md)、[需求](../requirements.md)。
+日期：2026-11-01。版本：0.22。状态：Session＋Redis、分场景期限、比赛账号、Argon2id、日常邮箱验证注册/找回及可替换 SMTP 接口已确认；SCS＋go-redis、go-mail 及 PostgreSQL 持久化发信任务＋独立受限发送执行器优先验证，Gin sessions 备选。River 开源核心优先验证，专用任务表备选；短期 AES-GCM 载荷、River 仅存业务 ID、独立密钥文件、不考虑付费方案及第 12 节令牌/重发/重试规则已确认；PostgreSQL 会话只作对比，不替换 Redis 基线。身份核心、普通 Redis 协议、两步 HTTPS、显式 TLS API、改密与浏览器账号面板已有分项实现；六会话/改密 OpenAPI 已补齐，默认 Compose 未启用会话，生产参数、邮件/资源权限和完整会话仍待交付，未部署。关联 [总体架构](system-design.md)、[ADR-001](001-go-gin.md)、[需求](../development/requirements.md)。
 
 保持登录的后续子实验已覆盖默认关闭、主动选择 24 小时/7 天、Cookie 持久化、跨副本共享三名额，以及缩短期限下的续期/过期/迟到保存。SCS `RememberMe` 只控制持久化，期限由请求独立配置和服务端载荷选择；保存、结果核验、放弃共用策略上界，原绝对期限不变。普通 Cookie 改为非持久化，带 Cookie 再登录拒绝，活动参数不能改变登录时选择。仅测试夹具和同进程 TLS API，参赛期限、正式权限提升轮换、浏览器关闭/重开及完整 Gin/CSRF 仍待验证；细节见实验 README。
 
@@ -16,7 +16,7 @@
 
 审计后新增 PostgreSQL 会话对比验证，Redis 仍为既有设计基线，仅在独立实验中验证，未接入正式登录。[普通会话对照](../../tests/sessionexperiment/README.md#postgresql-普通会话名额与撤销对照2026-10-31)已有双 TLS API 三名额、撤销/过期晚保存拒绝、整事务 INSERT 故障回滚和部分索引查询计划证据；后续[账号同事务子项](../../tests/sessionexperiment/README.md#postgresql-账号撤权与同事务回滚2026-10-31)覆盖当前启用状态/认证代次、撤权清载荷与名额、双方向锁等待及 UPDATE 故障整事务回滚。后续全局恢复门禁、同库旧备份及显式绝对过期凭据清理的有限流程和实测统一见[会话实验](../../tests/sessionexperiment/README.md)，不等于完整恢复或生产准入。
 
-显式清理只删绝对到期凭据，主体/账号/门禁继续保留；不验证时钟回拨、自动调度、VACUUM/膨胀或长期容量。同库恢复不修复最新账号封禁/密码/权限事实。相同普通会话守卫的有限 Store 成本采样已完成 42 样本，读取与写入呈不同取舍；方法、逐轮范围及持久化/观测边界见 [M0 成本记录](../m0-experiment.md#普通会话-store-有限成本采样2026-10-31)。继续保留 Redis 基线并推进正式 P3；生产负载/容量、完整恢复/清理准入仍待验收，不据此维护第二份权威存储。比赛专用会话和换机管理随比赛阶段接入；日常邮箱规则不因骨架交付改变，邀请制试用仍待单独确认。引入时机见 [开发与交付计划](../phase-1-development-plan.md)。
+显式清理只删绝对到期凭据，主体/账号/门禁继续保留；不验证时钟回拨、自动调度、VACUUM/膨胀或长期容量。同库恢复不修复最新账号封禁/密码/权限事实。相同普通会话守卫的有限 Store 成本采样已完成 42 样本，读取与写入呈不同取舍；方法、逐轮范围及持久化/观测边界见 [M0 成本记录](../acceptance/m0-experiment.md#普通会话-store-有限成本采样2026-10-31)。继续保留 Redis 基线并推进正式 P3；生产负载/容量、完整恢复/清理准入仍待验收，不据此维护第二份权威存储。比赛专用会话和换机管理随比赛阶段接入；日常邮箱规则不因骨架交付改变，邀请制试用仍待单独确认。引入时机见 [开发与交付计划](../development/phase-1-development-plan.md)。
 
 用户在 Session/JWT 比较后指定 Redis，确定服务端 Session＋Redis 共享会话＋HttpOnly Cookie，随后确认分场景期限、普通三会话、正式线下比赛单参赛会话及独立队伍账号方案。本轮明确“优先验证 SCS＋go-redis，保留 Gin sessions 为备选”；这决定验证顺序，不等于正式准入、依赖安装或兼容性已通过。期限初值保持不变，精确依赖/Redis 版本与部署规格仍未定。
 
@@ -205,7 +205,7 @@ SCS 的官方 goredisstore 文档示例采用 go-redis/v9，默认键含 token�
 
 这些方法**不是公开账号管理或完整登录/自动升级服务**。`enabled` 只是账号开关，不代表邮箱已验证、训练访问或管理权限。`RehashCAS` 无法证明新旧记录属于同一密码：受信用例必须先成功验证旧快照，再以同一密码生成 Current，全部 KDF 在事务/行锁外进行，最后提交 CAS。重置令牌消费、操作人授权、审计、真实发会话前复核及 Redis 撤权联动仍待实现；不能凭旧 `Get`/`State` 结果发放权限。
 
-主体表由迁移 3 引入；API 严格要求匹配 schema，邮箱模型始于5（第 7.7 节），当前版本及回退见[训练队列迁移](../submission-backlog.md#升级与回退)。旧二进制按各自精确版本检查拒绝新schema，不支持滚动混跑。实际启用须停止旧实例、独立迁移、启动匹配新版，本次没有部署。迁移 3 的 Down 仍按身份表→submissions 的固定顺序取得排他表锁；仅当 `identity_credentials` 与 `submissions` 均为空才允许移除主体表，不要求材料表或 Worker 表也为空。迁移 4/5 的回退另受第 7.6/7.7 节保护。跨多个迁移的 `DownTo` 不承诺整体原子，不能用回退现有用户/提交库代替前滚修复。数据库旧备份还会回退账号事实及版本，两代次 CAS 不替代维护隔离、恢复代次与最新安全状态核对。
+主体表由迁移 3 引入；API 严格要求匹配 schema，邮箱模型始于5（第 7.7 节），当前版本及回退见[训练队列迁移](submission-backlog.md#升级与回退)。旧二进制按各自精确版本检查拒绝新schema，不支持滚动混跑。实际启用须停止旧实例、独立迁移、启动匹配新版，本次没有部署。迁移 3 的 Down 仍按身份表→submissions 的固定顺序取得排他表锁；仅当 `identity_credentials` 与 `submissions` 均为空才允许移除主体表，不要求材料表或 Worker 表也为空。迁移 4/5 的回退另受第 7.6/7.7 节保护。跨多个迁移的 `DownTo` 不承诺整体原子，不能用回退现有用户/提交库代替前滚修复。数据库旧备份还会回退账号事实及版本，两代次 CAS 不替代维护隔离、恢复代次与最新安全状态核对。
 
 仅新增主键索引：支持主体读取及版本条件 UPDATE 的点查，代价是每行索引存储及初始化/更新的维护，不为版本字段另建二级索引。两模块从同一权威迁移生成各自的查询包；关闭未使用模型生成，避免将身份私有模型散入提交模块；生成差异检查同时覆盖两包。[PostgreSQL 14 READ COMMITTED](https://www.postgresql.org/docs/14/transaction-iso.html#XACT-READ-COMMITTED) 的等待后条件重查由真实锁实验验证，实际计划与边界结果归交付日志，不据此宣称容量或完整账号验收。
 
@@ -219,7 +219,7 @@ SCS 的官方 goredisstore 文档示例采用 go-redis/v9，默认键含 token�
 
 该上限只属于**一个共享实例**；同一进程的登录、注册、改密、重置和重哈希须使用同一实例才可称进程额度，不能每请求/账号/策略新建一个。各 API 的静态额度之和及 RSS/CPU 仍须按目标主机实测，未自动提供跨进程总预算或 100 人登录容量。持久化/Redis 租约到期无法停止仍在执行的 Argon2，不能据此回收名额；本项也不提供来源/账号速率限制、公平性承诺、防枚举或正式登录授权。
 
-复用已锁定的 [x/sync v0.24.0 semaphore](https://pkg.go.dev/golang.org/x/sync@v0.24.0/semaphore)（BSD-3-Clause），仅将间接依赖标为直接，版本与 go.sum 不变。[对应源码](https://github.com/golang/sync/blob/v0.24.0/semaphore/semaphore.go)的获取失败不转移名额、成功后调用方负责释放合同已核对；排队人数在调用该库前独立限定。验证、失败及环境证据见[交付日志](../delivery-log.md)；尚无生产参数或负载验收。
+复用已锁定的 [x/sync v0.24.0 semaphore](https://pkg.go.dev/golang.org/x/sync@v0.24.0/semaphore)（BSD-3-Clause），仅将间接依赖标为直接，版本与 go.sum 不变。[对应源码](https://github.com/golang/sync/blob/v0.24.0/semaphore/semaphore.go)的获取失败不转移名额、成功后调用方负责释放合同已核对；排队人数在调用该库前独立限定。验证、失败及环境证据见[交付日志](../acceptance/delivery-log.md)；尚无生产参数或负载验收。
 
 ### 7.4 密码验证与条件升级用例
 
@@ -231,7 +231,7 @@ SCS 的官方 goredisstore 文档示例采用 go-redis/v9，默认键含 token�
 
 结果仅描述末次读取时的状态，**不是可复用证明、会话发放或资源授权**。读取之后仍可发生改密/撤权，第 7.5 节提供主体行状态协调原语；正式会话仍须接入完整的恢复、名额、结果确认与使用协议，并在后续请求验证当前账号事实。应用用例不创建会话、不更新 Redis，也没有令牌消费、注册激活或权限管理。
 
-错误和取消返回零结果，但升级可能已经提交：CAS 回执错误、升级后的末次读取失败或撤权、成功返回前取消，都不触发回滚或补偿写入。存储操作错误优先保留，不能用 `ctx.Err()` 丢掉未知写入分类；仅在阶段成功后检查取消并阻止后续工作。零结果中的 Upgraded=false 不说明数据库未升级。已覆盖的真实双池竞争、应用调用前屏障、同密码升级及模拟回执错误见[交付日志](../delivery-log.md)，不将这些用例提升为完整 AC24/AC23 或生产登录通过。
+错误和取消返回零结果，但升级可能已经提交：CAS 回执错误、升级后的末次读取失败或撤权、成功返回前取消，都不触发回滚或补偿写入。存储操作错误优先保留，不能用 `ctx.Err()` 丢掉未知写入分类；仅在阶段成功后检查取消并阻止后续工作。零结果中的 Upgraded=false 不说明数据库未升级。已覆盖的真实双池竞争、应用调用前屏障、同密码升级及模拟回执错误见[交付日志](../acceptance/delivery-log.md)，不将这些用例提升为完整 AC24/AC23 或生产登录通过。
 
 ### 7.5 会话存储操作的主体状态协调
 
@@ -245,7 +245,7 @@ SCS 的官方 goredisstore 文档示例采用 go-redis/v9，默认键含 token�
 
 连接丢失时，数据库锁可能先于回调结束释放；已受控验证旧 backend 退出后另池改密提交，旧回调随后仍可产生外部效果标记，包装器最终报未知结果。该标记是受控回调模拟，不是 Redis 实现或网络故障恢复。新会话候选必须携带核验过的主体/认证代次及第 7.6 节要求的恢复标识；后续使用核对当前事实可拒绝旧会话，却不能撤回已执行的外部操作。正式接入还须会话自身的条件写入、名额、结果确认及使用协议，**不能仅凭此包装器宣称 PostgreSQL/Redis 分布式事务或完整生产会话一致性**。
 
-全局恢复状态及同事务入口已由第 7.6 节提供，保持全局行 → 主体行锁序；不能嵌套调用本节方法假装共用事务。旧备份可能重复主体版本，纯主体原语不解决恢复隔离、权限或回档安全事实。真实双向等待、共享锁、取消/连接丢失和自然主键计划的证据归[交付日志](../delivery-log.md)。
+全局恢复状态及同事务入口已由第 7.6 节提供，保持全局行 → 主体行锁序；不能嵌套调用本节方法假装共用事务。旧备份可能重复主体版本，纯主体原语不解决恢复隔离、权限或回档安全事实。真实双向等待、共享锁、取消/连接丢失和自然主键计划的证据归[交付日志](../acceptance/delivery-log.md)。
 
 ### 7.6 正式全局恢复状态与双层协调
 
@@ -259,7 +259,7 @@ Begin/Finish 是维护原语，**不执行或证明**旧 API 隔离、Redis 清�
 
 恢复代次必须在密码验证**开始前**从 enabled=true 且代次有效的 RecoveryState 捕获，闭门时不启动验证，再随候选贯穿整个验证/升级流程；恢复或冲突后不能读取新代次给旧验证结果重新贴标签。底层 Store 接口不能独自证明调用方遵守顺序，第 7.8 节为个人邮箱密码流程固定该执行路径。真实交错验证了：先捕获 A、密码用例未返回时完成 B、主体两代次不变，A 候选仍拒绝；重新捕获并重启整个验证才可使用 B。这不是完整登录、Redis 名额/条件写入/结果确认或恢复验收。
 
-迁移 4 的 Down 按全局表→主体表→submissions 加排他锁，仅在**确实唯一的空代次闭门占位行**且 credentials/submissions 均空时允许回退；缺失行、已初始化代次（即使已闭门）或任一业务表非空均拒绝，须前滚修复。当前 schema 要求见第 7.7 节；旧 migration-3/4 回归各自固定在版本 3/4，不让新保护掩盖旧保护。完整实测、两种单表保留分支、双向等待及自然单行计划见[交付日志](../delivery-log.md)；未部署，真实 Redis 与生产恢复仍待交付。
+迁移 4 的 Down 按全局表→主体表→submissions 加排他锁，仅在**确实唯一的空代次闭门占位行**且 credentials/submissions 均空时允许回退；缺失行、已初始化代次（即使已闭门）或任一业务表非空均拒绝，须前滚修复。当前 schema 要求见第 7.7 节；旧 migration-3/4 回归各自固定在版本 3/4，不让新保护掩盖旧保护。完整实测、两种单表保留分支、双向等待及自然单行计划见[交付日志](../acceptance/delivery-log.md)；未部署，真实 Redis 与生产恢复仍待交付。
 
 ### 7.7 个人邮箱映射与原子初始化
 
@@ -273,7 +273,7 @@ Begin/Finish 是维护原语，**不执行或证明**旧 API 隔离、Redis 清�
 
 `PersonalByID` 与 `LookupPersonalByEmail` 只返回无密码 State、Email 和 EmailVerified 的时点元数据；通用主体没有邮箱时返回 NotFound。它们不验证密码、不发会话、不授权训练。Enabled 与 EmailVerified 独立，验证不能复活封禁；本次只验证事实分离，未接入“未验证不能提交”的业务门禁，不代表 AC25 已完成。公开注册前仍须解决未验证占位保留/清理、重复注册安全恢复/重发、防枚举、令牌原子消费、邮件任务与最终权限复核，不能直接暴露 InitializePersonal 为 signup。
 
-邮箱模型始于schema5，API 要求[匹配 schema](../submission-backlog.md#升级与回退)（后续[积压准入](../submission-backlog.md)、[私有草稿](../problem-drafts.md#私有草稿入库与本人读取)及[参考申请](../reference-requests.md#迁移与回退)）；旧二进制按各自精确版本检查在启动时拒绝新schema，运行中旧进程不会自动停止，须排空/停旧实例、独立迁移后启动匹配新版，无滚动混跑或部署。迁移不为旧主体补邮箱或角色。Down5按凭据→邮箱顺序加排他表锁并拒绝任何非空映射（包括未验证/禁用），需前滚修复；只有邮箱表为空才可移除，保留既有通用凭据、全局恢复及提交数据。此锁序与初始化一致，避免先锁邮箱再删除外键触发器时反向请求凭据锁；不承诺任意并发读取/DDL无死锁，迁移仍须在维护期协调。多个Down不整体原子，Down5成功不豁免迁移4/3的保护。实际初始化分别在第一写/第二写后等待，与Down的提交/回滚交错、原始显示、唯一竞争和无孤儿证据见[交付日志](../delivery-log.md)。
+邮箱模型始于schema5，API 要求[匹配 schema](submission-backlog.md#升级与回退)（后续[积压准入](submission-backlog.md)、[私有草稿](problem-drafts.md#私有草稿入库与本人读取)及[参考申请](reference-requests.md#迁移与回退)）；旧二进制按各自精确版本检查在启动时拒绝新schema，运行中旧进程不会自动停止，须排空/停旧实例、独立迁移后启动匹配新版，无滚动混跑或部署。迁移不为旧主体补邮箱或角色。Down5按凭据→邮箱顺序加排他表锁并拒绝任何非空映射（包括未验证/禁用），需前滚修复；只有邮箱表为空才可移除，保留既有通用凭据、全局恢复及提交数据。此锁序与初始化一致，避免先锁邮箱再删除外键触发器时反向请求凭据锁；不承诺任意并发读取/DDL无死锁，迁移仍须在维护期协调。多个Down不整体原子，Down5成功不豁免迁移4/3的保护。实际初始化分别在第一写/第二写后等待，与Down的提交/回滚交错、原始显示、唯一竞争和无孤儿证据见[交付日志](../acceptance/delivery-log.md)。
 
 ### 7.8 个人凭据到会话门禁的认证路径
 
@@ -285,7 +285,7 @@ closed/missing 恢复状态在邮箱查找与 KDF 前失败，格式错误恢复
 
 EmailVerified 与 Enabled/密码认证仍分离；本入口供第 7.9 节会话存储受信接入，不决定未验证用户的完整会话产品策略，也不授予训练权限。本层不发布 Cookie；第 7.10/7.11 节的独立 HTTPS 生命周期和两步登录已有分项实现，默认公开 API 尚未挂载。邮件验证或角色/资源权限仍未实现，不能据此宣称 AC01/23/24/25 完整通过。
 
-本次无 SQL、迁移、索引或模块依赖变化，仍精确要求 schema 5；回退需停用依赖此入口的调用方，移除用例即可，数据库无需回退。真实双池验证恢复发生在查找后/验证用例中的 KDF 完成后且末次 State 前/最终门禁前时旧请求均拒绝；应用屏障不冒充数据库锁等待。未知升级用例在真实提交后由 wrapper 注入回执错误，不是真实网络故障。升级/改密/禁用、回调持有全局锁及取消的证据归[交付日志](../delivery-log.md)。未部署，完整登录/恢复与生产容量仍待验收。
+本次无 SQL、迁移、索引或模块依赖变化，仍精确要求 schema 5；回退需停用依赖此入口的调用方，移除用例即可，数据库无需回退。真实双池验证恢复发生在查找后/验证用例中的 KDF 完成后且末次 State 前/最终门禁前时旧请求均拒绝；应用屏障不冒充数据库锁等待。未知升级用例在真实提交后由 wrapper 注入回执错误，不是真实网络故障。升级/改密/禁用、回调持有全局锁及取消的证据归[交付日志](../acceptance/delivery-log.md)。未部署，完整登录/恢复与生产容量仍待验收。
 
 ### 7.9 普通 Redis 会话协议
 
@@ -299,7 +299,7 @@ Redis 只存令牌 SHA-256 摘要。七个 Lua 文件组成六个脚本入口，
 
 客户端锁定 `go-redis/v9 v9.23.0`（BSD-2-Clause），沿用实验锁定版本；所需 cpuid/v2 从 2.3.0 提升至 2.4.0，其他传递版本归 go.mod/go.sum。配置显式超时/物理连接上限，禁止隐式命令重试及额外 pipeline 池，一次拨号，禁用维护通知和身份 SETINFO。相关固定版[选项源码](https://github.com/redis/go-redis/blob/v9.23.0/options.go)、[依赖](https://github.com/redis/go-redis/blob/v9.23.0/go.mod)、[许可证](https://github.com/redis/go-redis/blob/v9.23.0/LICENSE)与 [SETINFO 历史公告](https://github.com/redis/go-redis/security/advisories/GHSA-92cp-5422-2mw7)已核对；完整依赖漏洞检查继续由 CI 执行。调用方共享实例并负责关闭客户端、多 API 总预算及整个调用期限。
 
-构造检查当前服务为 Redis 7.2.x standalone primary、noeviction，持续配置和恢复隔离由运维保证；启动检查不能证明后续自动切换/时钟/回档安全。CI隔离夹具固定Redis7.2.17镜像摘要，真实 PG 迁移到当前 schema，协议本身不新增权威会话表。测试含双客户端并发三名额、精确重试、实际TTL、坏字段/索引、超时/OOM、PG锁等待/连接终止与未知结果，以及私有草稿消费者在材料持久化后重新读取会话；注入丢回执、TIME错误和改写测试脚本后的部分写入须与真实网络故障区分。[参考申请](../reference-requests.md)的服务/PG组合测试使用合成会话观察，不借用这些会话专项结果声称申请已接通真实Redis/HTTP。命令见[README](../../README.md)，实测归[交付记录](../delivery-log.md)。协议回退须先停止依赖调用方并隔离/换代次处理旧会话空间，schema各自按所属合同回退，不盲目复用旧数据。完整HTTP/SCS生命周期、验证邮箱与训练权限、轮换/其他策略、恢复编排、生产容量及完整AC23/M0均待验收。
+构造检查当前服务为 Redis 7.2.x standalone primary、noeviction，持续配置和恢复隔离由运维保证；启动检查不能证明后续自动切换/时钟/回档安全。CI隔离夹具固定Redis7.2.17镜像摘要，真实 PG 迁移到当前 schema，协议本身不新增权威会话表。测试含双客户端并发三名额、精确重试、实际TTL、坏字段/索引、超时/OOM、PG锁等待/连接终止与未知结果，以及私有草稿消费者在材料持久化后重新读取会话；注入丢回执、TIME错误和改写测试脚本后的部分写入须与真实网络故障区分。[参考申请](reference-requests.md)的服务/PG组合测试使用合成会话观察，不借用这些会话专项结果声称申请已接通真实Redis/HTTP。命令见[README](../../README.md)，实测归[交付记录](../acceptance/delivery-log.md)。协议回退须先停止依赖调用方并隔离/换代次处理旧会话空间，schema各自按所属合同回退，不盲目复用旧数据。完整HTTP/SCS生命周期、验证邮箱与训练权限、轮换/其他策略、恢复编排、生产容量及完整AC23/M0均待验收。
 
 ### 7.10 已有普通会话的 HTTPS 适配
 
@@ -313,7 +313,7 @@ POST 在触库前调用标准库 [CrossOriginProtection.Check](https://pkg.go.de
 
 只有 Revoke 返回成功且调用 context 仍有效才返回 204，并以相同名称、`Path=/`、无 Domain、Secure、HttpOnly、SameSite=Lax、Max-Age=0/过去 Expires 清理 Cookie。缺记录不代表确认撤销；任何失败不清 Cookie。两种 ErrStore、恢复闭门、明确未知结果、取消/超时优先 503。排除上述错误后，明确 Redis 失效/缺记录即使带 `ErrGuardedOperation` 也返回 401；401 只表示会话未被接受，不是退出确认或外部效果回滚证明。其他受保护错误保持 503，未受保护的账号失效返回 401；其余未知错误为 503。不自动重试、补偿或泄漏内部错误。合作期限不是强制终止或撤回外部效果。
 
-真实专项复用原私有 Redis/PostgreSQL 夹具和两个 TLS 测试服务器；合成 Cookie 由测试注入，没有浏览器 Cookie jar、跨浏览器关闭/重开、正式反代或公开账号流程验收。HTTP 单元测试覆盖来源/Cookie/方法前置拒绝及错误优先级；真实状态核对轮询不变、显式续期、跨入口退出、实际撤销后适配器丢回执与恢复拒绝。运行命令沿用 README 普通会话专项，证据归[交付记录](../delivery-log.md)。无依赖、SQL、迁移或 schema 变化；回退停用调用方并移除适配，不回滚数据库。未部署，完整 AC01/23/24/25/M0、生产容量与恢复编排继续待验收。
+真实专项复用原私有 Redis/PostgreSQL 夹具和两个 TLS 测试服务器；合成 Cookie 由测试注入，没有浏览器 Cookie jar、跨浏览器关闭/重开、正式反代或公开账号流程验收。HTTP 单元测试覆盖来源/Cookie/方法前置拒绝及错误优先级；真实状态核对轮询不变、显式续期、跨入口退出、实际撤销后适配器丢回执与恢复拒绝。运行命令沿用 README 普通会话专项，证据归[交付记录](../acceptance/delivery-log.md)。无依赖、SQL、迁移或 schema 变化；回退停用调用方并移除适配，不回滚数据库。未部署，完整 AC01/23/24/25/M0、生产容量与恢复编排继续待验收。
 
 ### 7.11 跨请求登录尝试与 Cookie 发放
 
@@ -339,7 +339,7 @@ Begin 已见尝试 Cookie 时拒绝再准备；Begin/Complete 已见有效普通
 
 跨 API/进程重建要求同一 PostgreSQL owner、Redis namespace/连续性、key ring、Origin、策略及 Window；密文不可任意搬到另一配置。平台回档/旧快照/账号事实恢复继续遵守原全局恢复隔离，不凭密文绕过。共享时间配置异常可能使 HTTP 端提前拒发；以 Redis 的冻结窗口和普通期限为最终准入边界。回退先停止新登录调用方，已有普通记录格式及 schema 5 不变，无 SQL/迁移/依赖变更；未完成候选停止恢复，不用数据回退“修复”。
 
-验证命令沿用 README 普通会话专项；两独立 Store/连接池/TLS 入口、真实 Cookie jar、进程内状态丢弃后的 manager 重建、未知回执、执行点截止、墓碑/发放交错、改密/禁用/恢复和输入边界归[交付记录](../delivery-log.md)。Cookie jar 不是浏览器 UI/关闭重开或真实反代验收；默认入口、SCS/Gin 完整生命周期、邮件/资源权限、生产限流阈值/预算/容量和完整 AC01/23/24/25/M0 继续待验，未部署。
+验证命令沿用 README 普通会话专项；两独立 Store/连接池/TLS 入口、真实 Cookie jar、进程内状态丢弃后的 manager 重建、未知回执、执行点截止、墓碑/发放交错、改密/禁用/恢复和输入边界归[交付记录](../acceptance/delivery-log.md)。Cookie jar 不是浏览器 UI/关闭重开或真实反代验收；默认入口、SCS/Gin 完整生命周期、邮件/资源权限、生产限流阈值/预算/容量和完整 AC01/23/24/25/M0 继续待验，未部署。
 
 ### 7.12 登录密钥文件加载
 
@@ -349,7 +349,7 @@ Begin 已见尝试 Cookie 时拒绝再准备；Begin/Complete 已见有效普通
 
 JSON 必须恰有 `version`（整数词法 `1`）、`current`（key ID）、`sealing`（1—4 个 ID 到 key 的对象）、`limiting`（独立稳定 key）。每个 key 为 32 bytes 的规范无 padding base64url；拒绝零值、重复材料/用途复用、未知/重复/缺失/null 字段、坏 Unicode、尾随数据及超限内容。示意仅用占位符，不是可用配置：`{"version":1,"current":"active","sealing":{"active":"<32-byte raw base64url>"},"limiting":"<distinct 32-byte raw base64url>"}`。快照直接值/指针的已支持合法格式脱敏，JSON 无私有字段，完整输出边界见第 7.16 节；内存清理属尽力而为，Go 分配器/GC 不提供密钥完全擦除保证。
 
-封装轮换保留旧 key 并更新 current；限流 HMAC 材料须独立且跨副本/封装轮换稳定，加载器本身不执行限流，共享准入见下节。缺文件/坏权限/坏配置失败关闭，无自动生成、chmod、环境回退或秘密日志。未读取/创建真实生产密钥；生产路径、分发、备份、轮换操作和阈值仍待实际部署准备。无 SQL/迁移/会话记录变化；停用加载调用方即可回退。测试与验证证据见[交付记录](../delivery-log.md)。
+封装轮换保留旧 key 并更新 current；限流 HMAC 材料须独立且跨副本/封装轮换稳定，加载器本身不执行限流，共享准入见下节。缺文件/坏权限/坏配置失败关闭，无自动生成、chmod、环境回退或秘密日志。未读取/创建真实生产密钥；生产路径、分发、备份、轮换操作和阈值仍待实际部署准备。无 SQL/迁移/会话记录变化；停用加载调用方即可回退。测试与验证证据见[交付记录](../acceptance/delivery-log.md)。
 
 ### 7.13 共享登录限流
 
@@ -365,7 +365,7 @@ JSON 必须恰有 `version`（整数词法 `1`）、`current`（key ID）、`sea
 
 全局额度限制成功准入造成的来源/邮箱 key 基数，拒绝不创建或续 TTL，过期自然回收；除单个 config 外无永久记录。不同窗口时，保留量仍须按较长 TTL 内可接受的全局窗口数核算，不把单窗额度当总内存上界。固定窗口边界允许约两倍短时突发；请求额度不替代 BoundedHasher 的单进程计算/排队上限、多 API 总 CPU/内存/连接预算或入口抗 DDoS。校园共享出口、分布式来源、针对目标邮箱耗尽导致的可用性和公平性仍需生产参数/压测；不声称完整防枚举或响应耗时保密。
 
-配置/HMAC 改变会使不一致副本失败关闭，不能用在线 Initialize 重置额度。变更、Redis 丢数据/旧快照/时钟异常或回退须先隔离全部入口并执行明确恢复/重配流程；限流标记不能替代已有持久化账号恢复代次，不能证明旧快照连续。HMAC 更换/namespace 更换及计数清理不自动实施，可能影响既有候选和会话，部署时另验。无 SQL/迁移/会话记录改动；回退须停用新登录，不能以接回未限流入口维持公开登录。合成故障/真实存储、HTTP 证据归[交付记录](../delivery-log.md)。
+配置/HMAC 改变会使不一致副本失败关闭，不能用在线 Initialize 重置额度。变更、Redis 丢数据/旧快照/时钟异常或回退须先隔离全部入口并执行明确恢复/重配流程；限流标记不能替代已有持久化账号恢复代次，不能证明旧快照连续。HMAC 更换/namespace 更换及计数清理不自动实施，可能影响既有候选和会话，部署时另验。无 SQL/迁移/会话记录改动；回退须停用新登录，不能以接回未限流入口维持公开登录。合成故障/真实存储、HTTP 证据归[交付记录](../acceptance/delivery-log.md)。
 
 ### 7.14 单跳受信反向代理
 
@@ -375,9 +375,9 @@ JSON 必须恰有 `version`（整数词法 `1`）、`current`（key ID）、`sea
 
 认证代理必须删除客户端传入的转发头，从实际客户端连接覆写：恰一个 `X-Forwarded-For` 裸 IP（无端口/zone/列表/空白，拒绝 unspecified/multicast）、恰一个 `X-Forwarded-Proto: https`、恰一个与固定 public host 完全相等的 `X-Forwarded-Host`；同时保留经校验的原公开 Host。拒绝任何 `Forwarded`/`X-Real-IP` 字段，不支持多跳追加链或头优先级猜测。IP 归一 IPv4-mapped 地址后仅以请求局部值传入共享限流，不修改 RemoteAddr/TLS 或存入共享 handler 状态。固定 Origin、Sec-Fetch-Site、Cookie scope、两步候选和恢复期限继续按原合同执行。
 
-应用无法独立证明受信代理面向客户端真的使用 HTTPS，持有有效代理私钥者可伪造来源；公开端 HTTPS/Host 校验、后端隔离、CA/证书分发与访问边界须在真实部署另验。协议测试复用标准库 `httputil.ReverseProxy.Rewrite/SetXForwarded`，在 hop-by-hop 清理之后重建可信头，未复制入站 XFF；`SetURL` 后显式恢复已验证 Host，并删除 X-Real-IP。[试用 Nginx 入口](../../README.md#试用同源-https-入口)提供独立配置模板；不支持通用代理协议解析器、CIDR 信任、动态 Origin 或明文 backend。
+应用无法独立证明受信代理面向客户端真的使用 HTTPS，持有有效代理私钥者可伪造来源；公开端 HTTPS/Host 校验、后端隔离、CA/证书分发与访问边界须在真实部署另验。协议测试复用标准库 `httputil.ReverseProxy.Rewrite/SetXForwarded`，在 hop-by-hop 清理之后重建可信头，未复制入站 XFF；`SetURL` 后显式恢复已验证 Host，并删除 X-Real-IP。[试用 Nginx 入口](../operations/trial-release.md#试用同源-https-入口)提供独立配置模板；不支持通用代理协议解析器、CIDR 信任、动态 Origin 或明文 backend。
 
-真实 Redis/PostgreSQL 专项含两个独立 Store、公开 TLS→mTLS backend、两个实际 Linux loopback 客户端来源、同源跨副本限流/异源隔离、恶意转发及 Connection 头、共享 Go Cookie jar 登录/读取/活动/退出，以及同 CA 未授权证书和无证书拒绝。合成 TLS 状态的单元边界与真实握手明确区分；Cookie jar 仍不代表浏览器验收。命令沿用 README 专项，实际结果归[交付记录](../delivery-log.md)。无依赖/SQL/迁移或默认 API 接线；回退先停用代理登录入口，不以接回未限流路径替代。未部署，生产阈值、浏览器/完整账号权限与恢复和完整 M0 仍待验。
+真实 Redis/PostgreSQL 专项含两个独立 Store、公开 TLS→mTLS backend、两个实际 Linux loopback 客户端来源、同源跨副本限流/异源隔离、恶意转发及 Connection 头、共享 Go Cookie jar 登录/读取/活动/退出，以及同 CA 未授权证书和无证书拒绝。合成 TLS 状态的单元边界与真实握手明确区分；Cookie jar 仍不代表浏览器验收。命令沿用 README 专项，实际结果归[交付记录](../acceptance/delivery-log.md)。无依赖/SQL/迁移或默认 API 接线；回退先停用代理登录入口，不以接回未限流路径替代。未部署，生产阈值、浏览器/完整账号权限与恢复和完整 M0 仍待验。
 
 ### 7.15 显式配置与运行时装配
 
@@ -389,13 +389,13 @@ DatabaseConfig 不接受任意 DSN/callback/备用端点：显式 Host/Port/Data
 
 PG/Redis 分别显式选择 PrivateTransport 或 VerifiedTLS。前者要求无 TLS config，仅适用于已验证的受信私网/本地连接，本组件不自动证明网络私密；后者要求 MinVersion 至少 TLS1.2、明确 ServerName、非 InsecureSkipVerify，克隆 TLS 和 RootCAs，无明文 fallback。调用方仍须管理并保持 TLS backing material 不变。Config/DatabaseConfig 的值和指针支持已测试的 16 种合法值格式（含数值动词）及 JSON 固定脱敏；非法 `%w` 等 Go 诊断、反射和主动字段访问不在此保证内，原始 Config 禁止进入日志或无关编码器。公开启动错误为固定配置/密钥/不可用分类或 context 取消/期限，不暴露路径、凭据或 driver cause。
 
-Open 只读检查当前 schema、有效 open 恢复状态、原 Redis 7.2 standalone/primary/noeviction 条件及已存在且匹配的限流 marker；失败释放自有资源，不迁移、不初始化 marker、不 Begin/FinishRecovery、不轮换 key。精确schema切换须在维护窗口排空并停止旧API、Worker及维护写入，不混跑；[Down17](../problem-drafts.md#审核退回与重送)仅允许空退回账本；[Down16](../problem-drafts.md#审核人分配与证据摘要)仅允许空访问历史；[Down15](../problem-drafts.md#作者送审回执)仅允许空送审账本；Down14 仅允许无对拍计划时回退；Down13 仅允许空领取历史回退；Down12 仅允许空报告与终态回退；Down11 仅允许空预留表回退；Down10 仅允许空计划表回退；Down9 仅在参考申请历史与policy均为空时允许，详见[迁移与回退](../reference-requests.md#迁移与回退)。本次没有迁移现有持久化localdev或部署服务器。成功描述启动时的观察，不证明持续可用、备份连续、生产参数或外部恢复隔离；每个请求仍执行原权威/限流门禁。
+Open 只读检查当前 schema、有效 open 恢复状态、原 Redis 7.2 standalone/primary/noeviction 条件及已存在且匹配的限流 marker；失败释放自有资源，不迁移、不初始化 marker、不 Begin/FinishRecovery、不轮换 key。精确schema切换须在维护窗口排空并停止旧API、Worker及维护写入，不混跑；[Down17](problem-drafts.md#审核退回与重送)仅允许空退回账本；[Down16](problem-drafts.md#审核人分配与证据摘要)仅允许空访问历史；[Down15](problem-drafts.md#作者送审回执)仅允许空送审账本；Down14 仅允许无对拍计划时回退；Down13 仅允许空领取历史回退；Down12 仅允许空报告与终态回退；Down11 仅允许空预留表回退；Down10 仅允许空计划表回退；Down9 仅在参考申请历史与policy均为空时允许，详见[迁移与回退](reference-requests.md#迁移与回退)。本次没有迁移现有持久化localdev或部署服务器。成功描述启动时的观察，不证明持续可用、备份连续、生产参数或外部恢复隔离；每个请求仍执行原权威/限流门禁。
 
-可选`PrivateDrafts`使用同一PG池/Redis会话权威组装[私有草稿HTTP](../problem-drafts.md#私有草稿入库与本人读取)，显式预载受信候选与独立来源锁、打开Linux私有材料根；不暴露底层客户端。全部资源随同一Runtime排空后关闭，启动部分失败释放已加载的Prepared/Local。省略能力保持原路由集，不自动授予出题权或创建目录。
+可选`PrivateDrafts`使用同一PG池/Redis会话权威组装[私有草稿HTTP](problem-drafts.md#私有草稿入库与本人读取)，显式预载受信候选与独立来源锁、打开Linux私有材料根；不暴露底层客户端。全部资源随同一Runtime排空后关闭，启动部分失败释放已加载的Prepared/Local。省略能力保持原路由集，不自动授予出题权或创建目录。
 
 Close 在同一 mutex 下停止入口和登记活动请求，503/no-store/无 Cookie 拒绝后续请求，等待**实际 ServeHTTP 返回**后再恰一次关闭资源。运行中 KDF 超过请求期限仍被计入；每个 Close 调用仅用各自 context 等待同一完成信号，超时不提前关资源、不重新开放、不遗弃后台排空。先停止 listener，再等待服务器请求结束并 Close；单独 server.Close 不证明业务/KDF 已退出。零值 Runtime 失败关闭，Handler panic 仍注销活动计数，由服务器/上层既有恢复层处理 panic。
 
-真实 PG/Redis 专项验证双 Runtime/两步 Cookie 生命周期、Legacy 升级、TLS→mTLS 代理、缺失/不匹配 marker、闭门恢复、错 schema/Redis 失败、真实表锁等待后的启动取消/期限、精确 backend 消失及 PG/Redis 连接释放；确定性阻塞 Handler/取消、并发关闭和 panic 以 unit race 验证。数据库 TLS 最终配置有断言，显式命令/文件解析见第 7.17 节；真实存储 TLS 握手、浏览器/生产代理、生产参数/多 API 总预算、完整权限/恢复和 M0 另验，未部署。命令沿用 README backend/会话专项，实际结果归[交付记录](../delivery-log.md)；回退停用装配调用方，无 SQL/迁移/依赖变化。
+真实 PG/Redis 专项验证双 Runtime/两步 Cookie 生命周期、Legacy 升级、TLS→mTLS 代理、缺失/不匹配 marker、闭门恢复、错 schema/Redis 失败、真实表锁等待后的启动取消/期限、精确 backend 消失及 PG/Redis 连接释放；确定性阻塞 Handler/取消、并发关闭和 panic 以 unit race 验证。数据库 TLS 最终配置有断言，显式命令/文件解析见第 7.17 节；真实存储 TLS 握手、浏览器/生产代理、生产参数/多 API 总预算、完整权限/恢复和 M0 另验，未部署。命令沿用 README backend/会话专项，实际结果归[交付记录](../acceptance/delivery-log.md)；回退停用装配调用方，无 SQL/迁移/依赖变化。
 
 ### 7.16 会话敏感对象的输出保护
 
@@ -403,11 +403,11 @@ Close 在同一 mutex 下停止入口和登记活动请求，503/no-store/无 Co
 
 `LoginConfig` 是受信 Go 构造输入，不是备份/导出或密钥文件格式。其值/指针标准 JSON 输出改为固定字符串 `"[redacted login sealing configuration]"`，标准 slice/map/导出结构字段编码同样不暴露 key map；typed nil 保持 `null`。其余五种 opaque 类型保留 `{}`/typed nil `null`。当前仓库没有业务消费 LoginConfig 的 JSON；第 7.12 节私有密钥文件与密封 payload 使用独立结构，格式均不变，无数据迁移或回滚步骤。回退代码会重新暴露旧输出风险，不能据此恢复秘密日志/配置 dump。
 
-范围仅限声明的直接值/指针合法格式和上述 JSON 行为。非法 `%w` 等 Go 诊断、反射、绕过类型方法的重新包装和主动字段/`Value()` 访问不在保证内；任何秘密对象仍禁止进入日志、错误或无关编码器。本保护降低意外输出风险，不提供日志安全隔离或完全内存擦除。回归使用真实 AEAD/admission 的合成对象，逐字检查固定输出及 nil/JSON 容器，并核对原凭证/密文 roundtrip 与 key 未变化；故障信息只含类型/动词，不输出敏感表示。实际 backend/race 与真实协议专项结果见[交付记录](../delivery-log.md)，默认 API、浏览器/生产部署与完整 M0 仍待验。
+范围仅限声明的直接值/指针合法格式和上述 JSON 行为。非法 `%w` 等 Go 诊断、反射、绕过类型方法的重新包装和主动字段/`Value()` 访问不在保证内；任何秘密对象仍禁止进入日志、错误或无关编码器。本保护降低意外输出风险，不提供日志安全隔离或完全内存擦除。回归使用真实 AEAD/admission 的合成对象，逐字检查固定输出及 nil/JSON 容器，并核对原凭证/密文 roundtrip 与 key 未变化；故障信息只含类型/动词，不输出敏感表示。实际 backend/race 与真实协议专项结果见[交付记录](../acceptance/delivery-log.md)，默认 API、浏览器/生产部署与完整 M0 仍待验。
 
 ### 7.17 显式会话 API 入口
 
-`cmd/api` 在非空 `OJ_SESSION_CONFIG_FILE` 下调用 `apiapp.Run`，一个进程只拥有一个 Runtime 和一个 HTTPS listener。必须同时显式配置 `OJ_API_ADDR`（数字端口，可用 0 供隔离测试），与实验 token 模式互斥；这些检查先于配置、秘密和网络访问。未启用时保留 bootstrap/实验模式。启动参数和密码环境合同、镜像入口见 [README](../../README.md#显式启用普通会话-api)。基础能力开放六个会话路径及健康检查；改密、邮件确认、私有草稿及本人训练历史按各自配置启用。
+`cmd/api` 在非空 `OJ_SESSION_CONFIG_FILE` 下调用 `apiapp.Run`，一个进程只拥有一个 Runtime 和一个 HTTPS listener。必须同时显式配置 `OJ_API_ADDR`（数字端口，可用 0 供隔离测试），与实验 token 模式互斥；这些检查先于配置、秘密和网络访问。未启用时保留 bootstrap/实验模式。启动参数和密码环境合同、镜像入口见 [环境配置与恢复维护](../operations/runtime-maintenance.md#显式启用普通会话-api)。基础能力开放六个会话路径及健康检查；改密、邮件确认、私有草稿及本人训练历史按各自配置启用。
 
 `apiconfig.Parse` 是无 I/O 的版本 1 JSON 解析器，不接受 DSN、内联密码/key、任意环境名或回调。文件至多 64 KiB、一个根对象；拒绝未知字段、重复解码字段名（包括转义别名）、非小写 snake_case 名、null、错误 Unicode、整数溢出、尾随内容、深度超过 12、单数组超过 16 项或总字段超过 256。时间必须是显式 Go duration 字符串，数字零不替代遗漏预算。下表列出完整配置层次；空数组仍须显式给定，`tls` 对象不能省略。
 
@@ -424,7 +424,7 @@ Close 在同一 mutex 下停止入口和登记活动请求，503/no-store/无 Co
 | `proxy_fingerprints` | direct 为 `[]`；proxy 为 1—16 个唯一非零、64 字符小写十六进制叶证书 DER SHA-256 |
 | 存储 `tls` | private 模式为 `{}`；tls 模式须有 `ca_file`、`server_name`，可另给成对 `certificate_file`/`key_file`；禁止明文 fallback/跳过校验 |
 | `server` | `read_header_timeout`、`read_timeout`、`write_timeout`、`idle_timeout`、`shutdown_timeout`、`max_header_bytes`；header/read/write/shutdown 为正且至多 1m，idle 至多 10m，read ≥ header，write ≥ HTTP 期限，header 1 KiB—1 MiB |
-| 可选 `private_drafts` | `material_root`、`bundle_directory`、外置`source_lock_file`、1—10唯一`source_ids`、正且至多1m的`timeout`、1—10的`max_in_flight`；write ≥ 草稿调用期限。省略关闭，导入/本人预览共享材料段预算；可选 `reference_requests: true` 单独启用本人申请，不读取材料或自动配置额度。路径/权限见[README](../../README.md#显式启用私有草稿-http) |
+| 可选 `private_drafts` | `material_root`、`bundle_directory`、外置`source_lock_file`、1—10唯一`source_ids`、正且至多1m的`timeout`、1—10的`max_in_flight`；write ≥ 草稿调用期限。省略关闭，导入/本人预览共享材料段预算；可选 `reference_requests: true` 单独启用本人申请，不读取材料或自动配置额度。路径/权限见[私有题库入库与管理](../operations/private-problem-workflow.md#显式启用私有草稿-http) |
 | 可选 `training_history` | 布尔值，省略或 `false` 关闭，`true` 仅启用[本人训练历史列表 GET](../../api/training-history.openapi.yaml)。共用会话的 PostgreSQL 池、Redis 和 `http_timeout`。 |
 | 可选 `training_submission_detail` | 布尔值，省略或 `false` 关闭，`true` 独立启用[本人训练提交详情 GET](../../api/training-history.openapi.yaml)。复用列表的会话、资格与固定范围检查；仅返回本人源码和当前回执。 |
 
@@ -438,7 +438,7 @@ SIGTERM/interrupt 后 listener 停止接收，网络 Shutdown 与 Runtime.Close 
 
 超时退出也不证明远端查询即时结束、事务已回滚或副作用不存在。PG14 默认不在查询执行中轮询客户端连接，[连接检测](https://www.postgresql.org/docs/14/runtime-config-connection.html#GUC-CLIENT-CONNECTION-CHECK-INTERVAL)与[statement_timeout](https://www.postgresql.org/docs/14/runtime-config-client.html#GUC-STATEMENT-TIMEOUT)约束不同；进程直接退出会终止 driver 的异步取消机会。专项保持 blocker 不释放，超时场景按已配置 DB 查询预算加固定观察余量核验精确 backend 消失；正常排空与启动取消仍按原严格连接释放断言。应用退出预算与服务端查询期限须分别配置和监控，不自动增加连接轮询参数或提供强制回滚承诺。
 
-真实命令测试与原协议专项共用隔离 PG/Redis，构建并启动 API 子进程；结果见[交付记录](../delivery-log.md)。默认 Compose/Nginx 和公开 OpenAPI 未启用此模式，真实存储 TLS、生产参数/证书与代理、浏览器、账号权限/恢复及完整 M0 仍待验，未部署。无依赖、SQL、迁移变化；回退停服务后移除显式配置环境，不自动撤销会话或清理存储。
+真实命令测试与原协议专项共用隔离 PG/Redis，构建并启动 API 子进程；结果见[交付记录](../acceptance/delivery-log.md)。默认 Compose/Nginx 和公开 OpenAPI 未启用此模式，真实存储 TLS、生产参数/证书与代理、浏览器、账号权限/恢复及完整 M0 仍待验，未部署。无依赖、SQL、迁移变化；回退停服务后移除显式配置环境，不自动撤销会话或清理存储。
 
 ### 7.18 已登录用户修改密码
 
@@ -460,7 +460,7 @@ Store 保留原共享 work；`redisstore.NewPasswordChange` 仅从同一 Login/s
 
 成功提交后仅返回 204、空体，删除 `__Host-oj_session` 和 `__Host-oj_login` 两个原 scope Cookie，不发放新会话。失败不改 Cookie；429 不披露维度/余量/Retry-After，400 区分新密码规则、当前/新输入长度及未改变，401 拒绝凭据，409 要求重新登录后操作。存储/恢复/取消/未知写入优先 503，结果可能已提交，应重新登录核验；Cookie 清除不能代替持久化改密，进程/网络退出也不保证远端即时回滚。
 
-原 schema 5、密码格式、会话协议和旧配置均兼容，无依赖/迁移变化；SQL 仅新增专用条件 UPDATE。回退先停用并移除可选配置，重启/回退旧二进制，成功密码变更不撤回。真实双客户端竞态/锁序/取消/丢回执、主键 EXPLAIN，以及双 API 进程/代理的拒绝、撤销、Cookie 和重新登录证据见[交付记录](../delivery-log.md)。[浏览器账号](../account-browser.md)已有本机分项验证；其余浏览器、生产字典/预算/证书与存储 TLS、邮箱找回/注册、完整权限恢复及 AC01/23/24/25/M0 继续待验，未部署。
+原 schema 5、密码格式、会话协议和旧配置均兼容，无依赖/迁移变化；SQL 仅新增专用条件 UPDATE。回退先停用并移除可选配置，重启/回退旧二进制，成功密码变更不撤回。真实双客户端竞态/锁序/取消/丢回执、主键 EXPLAIN，以及双 API 进程/代理的拒绝、撤销、Cookie 和重新登录证据见[交付记录](../acceptance/delivery-log.md)。[浏览器账号](../operations/account-browser.md)已有本机分项验证；其余浏览器、生产字典/预算/证书与存储 TLS、邮箱找回/注册、完整权限恢复及 AC01/23/24/25/M0 继续待验，未部署。
 
 ## 8. 注册、找回与账号发放
 
@@ -643,13 +643,13 @@ schema 22 建立空的 `account_mail_send_rate` 表。维护角色须在启用�
 
 可选 HTTP 适配层定义 [邮箱确认 API](../../api/account.openapi.yaml)：激活和找回各有一个同源 HTTPS POST，链接打开页面的 GET 不消费令牌。令牌只从至多 4096 字节的 JSON 请求体读取，拒绝查询参数及重复或未知字段。来源地址取直连客户端或受信 mTLS 代理；确认成功返回 204，不设置 Cookie。提交结果不明时返回 503，客户端应先尝试登录，不自动重发。未配置确认服务时接口保持关闭；申请、重发和实际投递仍需端到端联调。
 
-AC25 增补：完整流程还须用可控时钟验证 24 小时/30 分钟、60 秒、10 分钟边界和最多 6 次尝试；覆盖 A/B 邮件乱序、先旧后新或先新后旧消费、跨 API 并发消费与重发、并发第 4 个链接、达到上限不挤掉旧链接、到期释放名额、清理已投递载荷后链接仍有效，以及已失效任务停止发送、迟到邮件不能恢复旧权限。分项验证见[交付记录](../delivery-log.md)。
+AC25 增补：完整流程还须用可控时钟验证 24 小时/30 分钟、60 秒、10 分钟边界和最多 6 次尝试；覆盖 A/B 邮件乱序、先旧后新或先新后旧消费、跨 API 并发消费与重发、并发第 4 个链接、达到上限不挤掉旧链接、到期释放名额、清理已投递载荷后链接仍有效，以及已失效任务停止发送、迟到邮件不能恢复旧权限。分项验证见[交付记录](../acceptance/delivery-log.md)。
 
 ### 12.5 训练账号资格
 
 受保护训练操作先从普通会话取得当前主体和代次，再在同一权威 PostgreSQL 的业务事务内调用 `LockTrainingAccount`。事务用 READ COMMITTED，按恢复状态 → 账号 → 个人邮箱顺序取得共享锁，再访问业务资源。恢复关闭、代次变化、账号停用、没有个人邮箱或邮箱未验证均拒绝。只使用已有恢复、账号、邮箱主键，无需迁移或新索引。
 
-调用失败必须结束事务，不得返回部分业务数据；锁内不调用 Redis、不读写文件或发送响应。账号资格只在当前事务有效。单会话退出与过期沿用普通会话的在途边界：最终会话读取之后发生的变化不追回已经进入事务的操作，账号撤销与恢复切换仍由数据库锁协调。[本人历史](../submission-backlog.md)在此事务内按会话主体和固定个人训练范围读取；题目发布和后续训练操作仍须各自验证资源权限。
+调用失败必须结束事务，不得返回部分业务数据；锁内不调用 Redis、不读写文件或发送响应。账号资格只在当前事务有效。单会话退出与过期沿用普通会话的在途边界：最终会话读取之后发生的变化不追回已经进入事务的操作，账号撤销与恢复切换仍由数据库锁协调。[本人历史](submission-backlog.md)在此事务内按会话主体和固定个人训练范围读取；题目发布和后续训练操作仍须各自验证资源权限。
 
 ### 12.6 邮箱隔离联验
 
@@ -663,6 +663,6 @@ AC25 增补：完整流程还须用可控时钟验证 24 小时/30 分钟、60 �
 
 PostgreSQL 集成测试还固定了重发先拿到锁的顺序：重发在同一事务写入新令牌和 River 任务后暂停，另一连接池用旧链接重置并实际等待该锁。重发提交后，旧链接仍能完成重置；两个链接随后都失效，新任务已无可投递载荷。该测试只在临时数据库调整令牌时间以越过重发间隔。
 
-真实投递验收需要获授权的测试发件配置、收件箱和 HTTPS 入口。从两个 API 分别发起注册与找回，核对实际收件、链接域名、跨实例确认及重复链接拒绝；找回申请不得让既有会话提前失效。核对邮件任务终态，记录脱敏收件结果和测试编号，不保存 SMTP 密码、完整链接或会话 Cookie。[隔离 Gmail 实测](../delivery-log.md#2026-11-14p3-隔离-gmail-真实投递)已收到激活和找回邮件；目标环境的供应商额度、配置及恢复仍待验收。
+真实投递验收需要获授权的测试发件配置、收件箱和 HTTPS 入口。从两个 API 分别发起注册与找回，核对实际收件、链接域名、跨实例确认及重复链接拒绝；找回申请不得让既有会话提前失效。核对邮件任务终态，记录脱敏收件结果和测试编号，不保存 SMTP 密码、完整链接或会话 Cookie。[隔离 Gmail 实测](../acceptance/delivery-log.md#2026-11-14p3-隔离-gmail-真实投递)已收到激活和找回邮件；目标环境的供应商额度、配置及恢复仍待验收。
 
 依据：[OWASP 找回密码](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html)支持随机、限时、一次性令牌及限流原则；具体数值和旧链接并存策略由本项目确认。后续前端配套及请求/缓存/刷新约定已确认，见 [前端设计](frontend-sandbox-options.md#31-已确认的路由请求缓存与刷新约定)；IndexedDB＋idb 及草稿保存/恢复/清理规则已确认，见前端设计第 3.2 节；题面渲染组件及约定后续已确认，见前端设计第 3.3 节；首期题型与判定原则后续已确认，见 [判题设计](judging-design.md)；题包模型与 2025-09 子集导入验证路线已确认，见 [题包设计](problem-package-design.md)；SPJ 协议与复用路线后续已确认，见判题设计第 4.1 节；浮点比较规则已确认，见判题设计第 3 节，数值实现待验证；测试顺序/提交内串行/首次失败停止已确认，见判题设计第 5.1 节，编排实现待验证；分类、资源、反馈及自测已确认，实施按总体架构和专题文档验证；供应商、密码参数、密钥轮换及其他已列缺口继续保留。

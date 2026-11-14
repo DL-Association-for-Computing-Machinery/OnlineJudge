@@ -1,6 +1,6 @@
 # 比赛、报名与成绩发布设计
 
-日期：2026-10-25。版本：0.1。状态：本轮对话已确认的产品与架构基线；未实现、未联调、未做比赛演练。关联 [需求](../requirements.md)、[总体架构](system-design.md)、[判题](judging-design.md)和 [接口与任务](api-worker-design.md)。
+日期：2026-10-25。版本：0.1。状态：本轮对话已确认的产品与架构基线；未实现、未联调、未做比赛演练。关联 [需求](../development/requirements.md)、[总体架构](system-design.md)、[判题](judging-design.md)和 [接口与任务](api-worker-design.md)。
 
 ## 1. 身份、授权与报名
 
