@@ -153,6 +153,8 @@ OJ_BROWSER_QA_INFO="$FIXTURE_READY_JSON" OJ_BROWSER_QA_OUTPUT="$QA_DIRECTORY" \
 
 该脚本通过浏览器正常账号登录和选题，只上传并提交固定 A+B 源码。它验证文件限制、替换确认、刷新后原键回执、真实判定及账户隔离；不会启动 Worker 或替代隔离检查。验证边界见[交付证据](docs/delivery-evidence/p5-published-training.md)。
 
+同一夹具、参数和已发布题可将脚本替换为 `tests/browser/published-training-drafts-qa.mjs`，验证本地草稿、冲突及退出。该专项不发判题请求，不占用 Worker 槽。
+
 ### A+B 租约链路联验
 
 在上一节清单命令上加 `--expected-manifest "$TRUSTED_JUDGE_MANIFEST_SHA256" --export "$NEW_PRIVATE_DIRECTORY"`，导出 `manifest.json` 及私有对象。核对后固定该运输清单的原始字节 SHA-256。隔离链路的登记、控制端和 Worker 都设置 `OJ_SANDBOX_EXPERIMENT=1`、`OJ_APLUSB_MANIFEST_FILE`（绝对路径）、`OJ_APLUSB_MANIFEST_SHA256`；不同时设置 `OJ_EXPERIMENT_MATERIAL_VERSION`、M0 槽或双槽配置。

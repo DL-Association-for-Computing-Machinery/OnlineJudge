@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import { useCurrentAccount } from '../account/context'
+import { useCodeDraftSession } from '../preview/useCodeDraftSession'
 import { subscribePrivateInvalidation } from '../account/privateInvalidation'
 import { recoverTraining, submitTraining, TrainingIntakeError, type TrainingAttempt } from '../services/trainingIntake'
 import type { SubmissionSummary } from '../services/trainingHistory'
 import { clearTrainingKey, readTrainingKey, reserveTrainingKey, trainingReceiptSlot } from './receiptJournal'
 import { readTrainingSource, validTrainingSource } from './sourceFile'
+import { TrainingDraftControls } from './TrainingDraftControls'
 import './trainingSubmit.css'
 
 export function TrainingSubmit({ problemID, version }: { problemID: string; version: string }) {
@@ -20,7 +22,10 @@ function TrainingForm({ subject, problemID, version, accountBusy }: {
   subject: string; problemID: string; version: string; accountBusy: boolean
 }) {
   const { controller } = useCurrentAccount()
-  const [source, setSource] = useState('')
+  const draftSession = useCodeDraftSession(subject, problemID + ':' + version, '', 'personal-training')
+  const { draft, state: draftState, verifying } = draftSession
+  const source = draftState.code
+  const editorUnavailable = verifying || draftState.phase === 'cleared' || draftState.phase === 'loading'
   const slot = trainingReceiptSlot(subject, problemID)
   const [initialKey] = useState(() => {
     try { return readTrainingKey(slot) }
@@ -49,7 +54,6 @@ function TrainingForm({ subject, problemID, version, accountBusy }: {
     }
     const unsubscribe = subscribePrivateInvalidation(() => {
       clear()
-      setSource('')
       setSelectedFile(null)
       setFileBusy(false)
       setCanRetry(false)
@@ -78,7 +82,7 @@ function TrainingForm({ subject, problemID, version, accountBusy }: {
     let original: string | null
     try {
       original = readTrainingKey(slot)
-      if (!original && !recover && !invalid && window.isSecureContext) {
+      if (!original && !recover && !editorUnavailable && !invalid && !selectedFile && window.isSecureContext) {
         const candidate = crypto.randomUUID()
         if (!reserveTrainingKey(slot, candidate)) return
         original = candidate
@@ -112,7 +116,6 @@ function TrainingForm({ subject, problemID, version, accountBusy }: {
       if (abort.signal.aborted || !stillCurrent()) return
       if (!result) return
       setReceipt(result)
-      setSource('')
       setNotice('已收到提交，可在「我的提交」查看结果。')
       attempt.current = null
       setCanRetry(false)
@@ -164,7 +167,7 @@ function TrainingForm({ subject, problemID, version, accountBusy }: {
 
   async function loadFile(file: File) {
     const snapshot = controller.getSnapshot()
-    if (key || request.current || fileRead.current || snapshot.busy || snapshot.status !== 'authenticated' ||
+    if (editorUnavailable || key || request.current || fileRead.current || snapshot.busy || snapshot.status !== 'authenticated' ||
       snapshot.session?.subject_id !== subject) return
     const abort = new AbortController()
     fileRead.current = abort
@@ -173,8 +176,7 @@ function TrainingForm({ subject, problemID, version, accountBusy }: {
     try {
       const text = await readTrainingSource(file)
       if (abort.signal.aborted || controller.getSnapshot().session?.subject_id !== subject) return
-      setSource(text)
-      setNotice('已载入源码文件，确认后可提交。')
+      setNotice(draft.edit(text) ? '已载入源码文件，确认后可提交。' : '会话正在核对，文件未替换。')
     } catch (error) {
       if (!abort.signal.aborted) setNotice(error instanceof Error ? error.message : '无法读取文件。')
     } finally {
@@ -191,11 +193,12 @@ function TrainingForm({ subject, problemID, version, accountBusy }: {
       <p>语言：GNU++17 · 源码最多 64 KiB</p>
       <label htmlFor="training-source">源码</label>
       <textarea id="training-source" rows={10} maxLength={65_536} spellCheck={false}
-        value={source} readOnly={Boolean(key) || fileBusy} onChange={event => setSource(event.target.value)} />
+        value={editorUnavailable ? '' : source} readOnly={editorUnavailable || Boolean(key) || fileBusy}
+        onChange={event => { draft.edit(event.target.value) }} />
       {source && invalid ? <p role="status">源码含无效字符或超过 64 KiB。</p> : null}
       {!key ? <>
         <label htmlFor="training-source-file">选择源码文件</label>
-        <input id="training-source-file" type="file" accept=".cpp,.cc,.cxx" disabled={busy || fileBusy || accountBusy}
+        <input id="training-source-file" type="file" accept=".cpp,.cc,.cxx" disabled={editorUnavailable || busy || fileBusy || accountBusy}
           onChange={event => {
             const file = event.target.files?.[0]
             event.target.value = ''
@@ -217,7 +220,7 @@ function TrainingForm({ subject, problemID, version, accountBusy }: {
           <button type="button" className="button button-outline" disabled={busy || accountBusy}
             onClick={() => setConfirmForget(true)}>清除本地回执</button>
         </> : <button type="submit" className="button button-neutral"
-          disabled={!journalReady || busy || fileBusy || accountBusy || Boolean(selectedFile) || invalid}>提交判题</button>}
+          disabled={editorUnavailable || !journalReady || busy || fileBusy || accountBusy || Boolean(selectedFile) || invalid}>提交判题</button>}
       </div>
       {key && confirmForget ? <div className="history-controls">
         <p>清除不会取消原请求。请先查看「我的提交」；再次提交可能产生重复记录。</p>
@@ -226,6 +229,7 @@ function TrainingForm({ subject, problemID, version, accountBusy }: {
         <button type="button" className="button button-outline" onClick={() => setConfirmForget(false)}>保留原回执</button>
       </div> : null}
     </form>
+    <TrainingDraftControls session={draftSession} filename={problemID} locked={Boolean(key) || busy || fileBusy || accountBusy} />
     <p role="status">{notice}</p>
     {receipt ? <Link to={'/submissions?submission=' + receipt.id}>查看本次提交</Link> : null}
   </section>

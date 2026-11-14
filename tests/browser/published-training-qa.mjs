@@ -46,6 +46,7 @@ try {
   await page.getByRole('button', { name: '替换编辑区内容', exact: true }).click()
   await page.getByText('已载入源码文件，确认后可提交。', { exact: true }).waitFor()
   assert.equal(await editor.inputValue(), source)
+  await page.getByText('训练草稿已保存到此浏览器。', { exact: true }).waitFor()
   // The request never reaches the API. After reload a 404 must not trigger
   // a new POST, and the user can explicitly discard the uncertain key.
   await page.route(collection, route => route.abort(), { times: 1 })
@@ -57,8 +58,11 @@ try {
   await page.getByRole('button', { name: '清除本地回执', exact: true }).click()
   await page.getByRole('button', { name: '确认清除回执', exact: true }).click()
   await page.getByText(/已清除此标签页的原回执/).waitFor()
+  await page.getByText('训练草稿已保存到此浏览器。', { exact: true }).waitFor()
   await picker.setInputFiles({ name: 'answer.cpp', mimeType: 'text/plain', buffer: Buffer.from(source) })
+  await page.getByRole('button', { name: '替换编辑区内容', exact: true }).click()
   await page.getByText('已载入源码文件，确认后可提交。', { exact: true }).waitFor()
+  await page.getByText('训练草稿已保存到此浏览器。', { exact: true }).waitFor()
   let accepted, key, intent
   await page.route(collection, async route => {
     assert.equal(route.request().method(), 'POST')
@@ -80,7 +84,8 @@ try {
   page.on('request', r => { if (r.method() === 'POST' && r.url() === collection) additionalPosts++ })
   await page.reload()
   await page.getByText('有一笔提交尚未确认。请查询原回执。', { exact: true }).waitFor()
-  assert.equal(await editor.inputValue(), '')
+  await page.getByText('训练草稿已保存到此浏览器。', { exact: true }).waitFor()
+  assert.equal(await editor.inputValue(), source)
   assert.equal(await page.getByRole('button', { name: '重试原提交', exact: true }).count(), 0)
   const [readback] = await Promise.all([
     page.waitForResponse(r => r.url() === recovery),
