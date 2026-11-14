@@ -859,6 +859,8 @@ docker --context desktop-linux build --target host-artifacts --output type=local
 
 `.local/bin/worker` 需要 `OJ_SANDBOX_EXPERIMENT=1`、`OJ_WORKER_CONTROLLER_URL`、`OJ_WORKER_CA_FILE`、`OJ_WORKER_CERT_FILE`、`OJ_WORKER_KEY_FILE`；控制端 `.local/bin/worker-api` 需要 `OJ_WORKER_API_ADDR`、证书文件和 `OJ_DATABASE_URL`，材料目录为 `OJ_MATERIAL_ROOT`。缺失配置拒绝启动，测试脚本自动生成私有临时配置。详见 [M0 契约与历史证据](docs/m0-experiment.md)。
 
+#### Worker 排空下线
+
 Worker 启动完成后，向该 Worker 进程发送 `SIGUSR1`（`kill -USR1 PID`，将 PID 替换为对应进程号）请求排空式下线：每轮领取前检查排空，已通过检查的至多一个在途领取继续完成下载、执行及回报；确认后不再领取。空队列等待可被唤醒；未知回报仍按原令牌/结果最多发送三次，失败保留原错误。`SIGINT`/`SIGTERM` 仍取消当前操作并等待停止确认。排空返回后同样停止沙箱、确认 PID 消失，成功才清正常占用标记；停止不确定继续隔离，不自动重启或解封。排空耗时受现有任务/网络预算影响，不承诺固定下线 SLA；需要中止时仍可发送取消信号。旧版本回退后不再使用新增信号，无数据库迁移。`python3 scripts/test-worker.py report` 包含执行中排空、保留后续排队任务及显式重启复用的真实验证。
 
 邮件密文维护：使用应用库的 `OJ_DATABASE_URL` 执行 `.local/bin/migrate mail-payload-sweep <1-512> [cursor]`。每次只检查一批，输出 JSON `removed` 和 `next_cursor`；非空游标供下一批使用，空游标表示本轮结束。单个维护任务按部署负载限制调用频率与批次数，每轮不传游标起步，以重访此前锁住或后来到期的行。命令只清理超过发送窗口的密文，不撤销有效链接，也不启动发送。
