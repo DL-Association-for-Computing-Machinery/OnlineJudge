@@ -19,3 +19,21 @@ A+B 是首条验收链路，不能代替其余试用题。隔离夹具用于验�
 Docker 29.6.1 是已观察到的客户端版本。标准 Engine socket 对此用户不可用（缺失或不可写），未确认 Engine 版本或容器隔离。现有 [Ubuntu 本地档位](../checker-admission.md#ubuntu-独立判题实验) 固定 arm64、`6.8.0-106-generic`、原生专用 Engine 和固定镜像；它与本机报告不能作为试用节点的档位或证据。盘点没有安装依赖、改权限、创建或启动容器，也未写入题目材料。
 
 现场准备顺序：管理员先确认可执行受控实验的专用节点或隔离客体、容器运行权限与材料/临时路径；在本地锁定 amd64 工具链、执行镜像、内核和运行参数，为固定 17 点材料生成新档位的交接制品，并验证旧档位、错对象或错制品均不能启动。现场仅用已核对的制品执行固定 AC、WA、OLE 对照，保存原容器停止证据及独立检查器观察，再按同一修订复核。不能用共享主机上的普通 Docker 权限代替专用隔离；检查器准入、普通终审与发布仍独立处理。
+
+## A+B amd64 候选镜像
+
+[候选 Dockerfile](../../deploy/experiments/go-judge-aplusb-amd64.Dockerfile) 从原实验 Dockerfile 锁定的两个多架构索引中各选取唯一 `linux/amd64` 子清单，并保留执行器入口参数。原 arm64 镜像和运行档位保持不变。
+
+```sh
+docker --context desktop-linux buildx build --platform linux/amd64 --load \
+  --provenance=false --network none \
+  -f deploy/experiments/go-judge-aplusb-amd64.Dockerfile \
+  -t oj-p4-aplusb-amd64-candidate:local .
+docker --context desktop-linux image inspect --format '{{.Id}} {{.Os}}/{{.Architecture}}' \
+  oj-p4-aplusb-amd64-candidate:local
+docker --context desktop-linux run --rm --pull never --platform linux/amd64 \
+  --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
+  --entrypoint /usr/local/bin/g++ oj-p4-aplusb-amd64-candidate:local -dumpfullversion
+```
+
+本地构建报告的镜像清单摘要为 `sha256:bfb42a2daf3f86c8636e3db883179852f385df1a31fd2b9f4a42d01e7e9f502c`，配置摘要为 `sha256:fe1a97991b090d9232fb8b086139925debe96dce834fe16def8c7f3373a2f4f9`；Docker 回读 `linux/amd64`，GCC 回读 `15.3.0`。这是本机候选镜像构建和版本读回，未验证独立重建、原生节点上的 go-judge 执行或隔离。尚未将候选镜像登记为 Worker 档位，也未传到试用服务器。
