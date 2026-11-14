@@ -16,6 +16,7 @@ import (
 func TestOrdinaryProtocol(t *testing.T) {
 	f := setup(t)
 	t.Run("independent management sessions", func(t *testing.T) { testManagement(t, f) })
+	t.Run("management deadlines and account disable", func(t *testing.T) { testManagementDeadlinesAndDisable(t, f) })
 	t.Run("lost management issue and late touch", func(t *testing.T) { testManagementLostIssueAndLateTouch(t, f) })
 	t.Run("management role changes require fresh authentication", func(t *testing.T) { testManagementRoleChanges(t, f) })
 	t.Run("management role write rechecks after verification", func(t *testing.T) { testManagementRoleWriteFences(t, f) })
