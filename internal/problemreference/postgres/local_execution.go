@@ -9,9 +9,33 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
 	submissionpg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
 	"github.com/jackc/pgx/v5"
 )
+
+// AllowLocalTraining authorizes the exact displayed version against the
+// current local publication and its FK-bound execution admission.
+func (s *ReviewStore) AllowLocalTraining(ctx context.Context, tx pgx.Tx, problemID, version string) error {
+	if s == nil || s.policy() != problemreference.LocalReviewPolicyVersion {
+		return submission.ErrMaterial
+	}
+	id, plan := s.local.ReviewBinding()
+	_, execution, digest := s.local.Binding()
+	var present int
+	err := tx.QueryRow(ctx, `SELECT 1 FROM (
+		SELECT * FROM problem_publications WHERE problem_id=$1 ORDER BY revision DESC LIMIT 1
+	) p JOIN problem_review_submissions r ON r.id=p.review_id
+	JOIN problem_review_approvals a ON a.review_id=p.review_id AND a.assignment_revision=p.assignment_revision
+	WHERE p.version=$2 AND a.policy_version=$3 AND r.source_id=$4
+		AND p.import_revision=$5 AND r.import_revision=$5 AND p.formal_plan_sha256=$6 AND r.formal_plan_sha256=$6
+		AND p.execution_version=$7 AND p.execution_sha256=$8`, problemID, version, problemreference.LocalReviewPolicyVersion,
+		id.SourceID, id.ImportRevision, plan, execution, digest).Scan(&present)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return submission.ErrNotFound
+	}
+	return err
+}
 
 // WithLocalExecution creates a store scoped to one explicit local run.
 func (s *ReviewStore) WithLocalExecution(a problemvalidation.APlusBLocalAdmission) (*ReviewStore, error) {

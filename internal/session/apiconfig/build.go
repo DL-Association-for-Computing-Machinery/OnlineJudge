@@ -21,6 +21,7 @@ func (w document) config() (Config, error) {
 	r.Namespace, r.SecretsFile = w.Namespace, w.SecretsFile
 	r.TrainingHistory = w.TrainingHistory
 	r.TrainingSubmissionDetail = w.TrainingSubmissionDetail
+	r.LocalTrainingIntake = w.LocalTrainingIntake
 	r.SessionDevices = w.SessionDevices
 	r.SessionRotation = w.SessionRotation
 	r.ManagementSessions = w.ManagementSessions

@@ -31,6 +31,7 @@ import (
 	referencepg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference/postgres"
 	protocol "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/redisstore"
 	sessionruntime "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/runtime"
+	submissionpg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/testpki"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/tests/problemfixture"
 )
@@ -81,8 +82,23 @@ func TestBrowserFixture(t *testing.T) {
 	}
 	reviewMode := os.Getenv("OJ_BROWSER_REVIEW_MATERIALS") == "1"
 	localExecution := os.Getenv("OJ_BROWSER_LOCAL_EXECUTION") == "1"
+	trainingIntake := os.Getenv("OJ_BROWSER_LOCAL_TRAINING_INTAKE") == "1"
+	var trainee identity.Personal
+	var trainingObserver identity.Personal
 	if localExecution && (!reviewMode || historyMode || trialNginx) {
 		t.Fatal("local execution requires an isolated review fixture")
+	}
+	if trainingIntake {
+		if !localExecution {
+			t.Fatal("training intake requires the admitted local review fixture")
+		}
+		c.LocalTrainingIntake, c.TrainingHistory, c.TrainingSubmissionDetail = true, true, true
+		trainee = f.subject(t, false)
+		trainingObserver = f.subject(t, false)
+		setHistoryEmailVerified(t, f, trainee.ID, true)
+		setHistoryEmailVerified(t, f, trainingObserver.ID, true)
+		unverified = f.subject(t, false).Email.Original()
+		must(t, submissionpg.ConfigureBacklog(f.ctx, f.pools[0], submissionpg.BacklogLimits{Global: 8, Subject: 4}))
 	}
 	if reviewMode {
 		if c.PrivateDrafts == nil || !c.PrivateDrafts.ReferenceRequests {
@@ -208,17 +224,27 @@ func TestBrowserFixture(t *testing.T) {
 		control.Start()
 		servers = append(servers, control)
 	} else {
-		edge := browserServer(t, "0.0.0.0:9443", edgeHandler)
+		listen := "0.0.0.0"
+		if trainingIntake {
+			listen = "127.0.0.1"
+		}
+		edge := browserServer(t, listen+":9443", edgeHandler)
 		edgeCert, _, _ := ca.Issue(t, "", x509.ExtKeyUsageServerAuth, time.Now().Add(time.Hour))
 		edge.TLS = &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{edgeCert}}
 		edge.StartTLS()
-		plain := browserServer(t, "0.0.0.0:9444", static)
+		plain := browserServer(t, listen+":9444", static)
 		plain.Start()
 		servers = append(servers, edge, plain)
 	}
 	info := map[string]string{"url": origin.String(), "email": subject.Email.Original(), "subject_id": subject.ID, "other_email": otherAuthor.Email.Original(), "other_subject_id": otherAuthor.ID}
-	if historyMode {
+	if historyMode || trainingIntake {
 		info["unverified_email"] = unverified
+	}
+	if trainingIntake {
+		info["training_email"] = trainee.Email.Original()
+		info["training_subject_id"] = trainee.ID
+		info["training_observer_email"] = trainingObserver.Email.Original()
+		info["training_observer_id"] = trainingObserver.ID
 	}
 	if loginLoad {
 		hasher, err := password.New(c.PasswordPolicy, c.PasswordLimits)

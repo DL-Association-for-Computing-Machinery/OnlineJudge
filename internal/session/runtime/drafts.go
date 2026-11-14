@@ -75,6 +75,7 @@ func (c PrivateDraftsConfig) Validate() error {
 }
 
 type draftCapabilities struct {
+	localIntake httptransport.TrainingSubmit
 	importer    *problem.Importer
 	catalog     *httptransport.CatalogReader
 	references  *problemreference.Service
@@ -89,7 +90,7 @@ type draftCapabilities struct {
 	statements  *problemreference.StatementConfirmations
 }
 
-func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore.Store, pool *pgxpool.Pool, secrets *redisstore.LoginSecrets) (*draftCapabilities, func() error, error) {
+func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore.Store, pool *pgxpool.Pool, secrets *redisstore.LoginSecrets, enableLocalIntake bool) (*draftCapabilities, func() error, error) {
 	var prepared []*problem.Prepared
 	var materials *materialstore.Local
 	var preparation *problemreference.Preparation
@@ -167,6 +168,12 @@ func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore
 		reviewer, err = reviewer.WithLocalExecution(admission)
 		if err != nil {
 			return nil, nil, ErrStartup
+		}
+		if enableLocalIntake {
+			result.localIntake, err = localTrainingSubmit(ctx, pool, reviewer, admission)
+			if err != nil {
+				return nil, nil, ErrStartup
+			}
 		}
 	}
 	if c.PublicCatalog {

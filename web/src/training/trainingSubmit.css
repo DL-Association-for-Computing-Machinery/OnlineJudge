@@ -1,0 +1,17 @@
+.training-submit {
+  margin-block: 2rem;
+}
+
+.training-submit label {
+  display: block;
+}
+
+.training-submit textarea {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  margin-block: 0.5rem 1rem;
+  resize: vertical;
+  padding: 0.75rem;
+  font-family: monospace;
+}

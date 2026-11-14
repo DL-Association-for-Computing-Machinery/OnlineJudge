@@ -292,6 +292,9 @@ func entryConfigWithWriteTimeout(t *testing.T, c sessionruntime.Config, ca *test
 	if c.TrainingSubmissionDetail {
 		doc["training_submission_detail"] = true
 	}
+	if c.LocalTrainingIntake {
+		doc["local_training_intake"] = true
+	}
 	if c.SessionDevices {
 		doc["session_devices"] = true
 	}

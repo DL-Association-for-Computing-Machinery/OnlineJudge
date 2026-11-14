@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router'
 import { listCatalog, readCatalog } from '../services/catalog'
 import { Sample } from '../statement/Sample'
 import { StatementMarkdown } from '../statement/StatementMarkdown'
+import { TrainingSubmit } from '../training/TrainingSubmit'
 
 type Page = Awaited<ReturnType<typeof listCatalog>>
 type Detail = NonNullable<Awaited<ReturnType<typeof readCatalog>>>
@@ -68,6 +69,7 @@ function Statement({ id }: { id: string }) {
     {data.examples.length > 0 && <section aria-label="样例"><h2>样例</h2>{data.examples.map(example =>
       <div key={example.id} className="samples"><Sample label="输入" text={example.input} /><Sample label="输出" text={example.output} /></div>
     )}</section>}
+    {data.trainingIntake ? <TrainingSubmit problemID={id} version={data.version} /> : null}
   </>
 }
 

@@ -85,6 +85,8 @@ type Config struct {
 	TrainingHistory bool
 	// TrainingSubmissionDetail independently enables owner-only source and verdict reads.
 	TrainingSubmissionDetail bool
+	// LocalTrainingIntake opens browser submission only for admitted local A+B.
+	LocalTrainingIntake bool
 	// SessionDevices enables listing and revoking the caller's other sessions.
 	SessionDevices bool
 	// SessionRotation enables replacing the caller's personal credential.
@@ -142,6 +144,10 @@ func cloneTLS(mode Security, config *tls.Config) (*tls.Config, error) {
 }
 
 func (c Config) validate() (*password.Hasher, *password.BoundedHasher, error) {
+	if c.LocalTrainingIntake && (!c.TrainingHistory || !c.TrainingSubmissionDetail ||
+		c.PrivateDrafts == nil || !c.PrivateDrafts.PublicCatalog || c.PrivateDrafts.LocalExecution == nil) {
+		return nil, nil, ErrConfig
+	}
 	if c.ManagementRoleChanges && !c.ManagementSessions {
 		return nil, nil, ErrConfig
 	}

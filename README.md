@@ -139,6 +139,20 @@ env -u OJ_WORKER_M0_SLOT -u OJ_WORKER_M0_DUAL_EXPERIMENT OJ_SANDBOX_EXPERIMENT=1
 
 专用本地 Ubuntu arm64 VM 使用同一组命令，在生成清单和执行判题时都加 `--ubuntu-aplusb`，并固定 Ubuntu 清单自己的摘要。Worker 使用客体内的 Linux arm64 构建，以客体 root 运行，并去掉 `OJ_EXPERIMENT_MATERIAL_VERSION`。准备固定停止槽、核验边界和恢复步骤见 [Ubuntu 实验](docs/checker-admission.md#ubuntu-独立判题实验)。
 
+### 本机已发布 A+B 浏览器联验
+
+在[专用 Ubuntu VM](#专用-ubuntu-vm-判题实验)内使用一次性 PostgreSQL、Redis 和 P4 的[本地执行准入](docs/delivery-evidence/p4-trial-publication.md#mac-ubuntu-vm-本地完整流程)。普通 API 的 `local_training_intake: true` 要求同时开启 `training_history`、`training_submission_detail`、本地执行及题库；缺项拒绝启动。此开关默认关闭，仅用于回环 HTTPS 和本地 PostgreSQL Unix socket。
+
+可在同一套 P4 浏览器夹具中加 `OJ_BROWSER_LOCAL_TRAINING_INTAKE=1`。以已核验的 Ubuntu 运输清单启动对应的 Worker 与私有 mTLS 控制端，指向夹具的临时数据库。完成 P4 批准并用 `problem-review publish-aplusb-local` 发布后，在 Mac 执行：
+
+```sh
+OJ_BROWSER_QA_INFO="$FIXTURE_READY_JSON" OJ_BROWSER_QA_OUTPUT="$QA_DIRECTORY" \
+  OJ_PLAYWRIGHT_MODULE="$LOCAL_PLAYWRIGHT_ENTRY" OJ_CHROMIUM_EXECUTABLE="$LOCAL_CHROMIUM" \
+  node tests/browser/published-training-qa.mjs
+```
+
+该脚本通过浏览器正常账号登录和选题，只提交固定 A+B 源码。它等待真实判定并核对原回执重放和账户隔离；不会启动 Worker 或替代隔离检查。验证边界见[交付证据](docs/delivery-evidence/p5-published-training.md)。
+
 ### A+B 租约链路联验
 
 在上一节清单命令上加 `--expected-manifest "$TRUSTED_JUDGE_MANIFEST_SHA256" --export "$NEW_PRIVATE_DIRECTORY"`，导出 `manifest.json` 及私有对象。核对后固定该运输清单的原始字节 SHA-256。隔离链路的登记、控制端和 Worker 都设置 `OJ_SANDBOX_EXPERIMENT=1`、`OJ_APLUSB_MANIFEST_FILE`（绝对路径）、`OJ_APLUSB_MANIFEST_SHA256`；不同时设置 `OJ_EXPERIMENT_MATERIAL_VERSION`、M0 槽或双槽配置。

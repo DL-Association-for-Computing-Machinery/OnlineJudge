@@ -19,6 +19,7 @@ func NewSessionHandler(session http.Handler) http.Handler {
 			httptransport.IsReviewReturnPath(r.URL.Path) || httptransport.IsReviewApprovalPath(r.URL.Path) || httptransport.IsStatementConfirmationPath(r.URL.Path) ||
 			httptransport.IsEmailConfirmationPath(r.URL.Path) || httptransport.IsEmailRequestPath(r.URL.Path) ||
 			httptransport.IsTrainingHistoryPath(r.URL.Path) || httptransport.IsTrainingDetailPath(r.URL.Path) ||
+			httptransport.IsTrainingReceiptPath(r.URL.Path) ||
 			httptransport.IsManagementSessionPath(r.URL.Path) || r.URL.Path == httptransport.ManagementRolePath
 		switch r.URL.Path {
 		case "/api/v1/readyz":

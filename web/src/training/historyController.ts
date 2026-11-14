@@ -52,12 +52,25 @@ export class HistoryController {
   }
 
   openDetail = async (id: string) => {
+    return this.loadDetail(id, false)
+  }
+
+  openLinkedDetail = async (id: string) => {
+    return this.loadDetail(id, true)
+  }
+
+  private async loadDetail(id: string, linked: boolean) {
     const account = this.account.getSnapshot()
     const session = account.session
     if (!this.unsubscribe || account.busy || account.status !== 'authenticated' || !session ||
-      session.subject_id !== this.subject || pageHidden() || !this.state.page?.submissions.some(row => row.id === id)) return
+      pageHidden() || (!linked && (session.subject_id !== this.subject || !this.state.page?.submissions.some(row => row.id === id)))) return
     const deadline = Math.min(Date.parse(session.idle_expires_at), Date.parse(session.absolute_deadline))
     if (!Number.isFinite(deadline) || Date.now() >= deadline) { this.clear(); return }
+    if (linked) {
+      this.clear()
+      this.subject = session.subject_id
+      this.expiry = setTimeout(this.clear, Math.min(deadline - Date.now(), 2_147_483_647))
+    }
     this.cancelDetail()
     const request = new AbortController()
     this.detailRequest = request
