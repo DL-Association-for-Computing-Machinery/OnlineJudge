@@ -22,7 +22,9 @@ func testEntryDevices(t *testing.T, f *fixture, binary string) {
 		return loginCall(e, path, "", cookie, func(r *http.Request) { r.Method = http.MethodGet })
 	}
 	disabled := entryStart(t, binary, entryConfig(t, c, ca, 3*time.Second), "127.0.0.1:0")
-	loginStatus(t, read(entryClient(t, disabled, ca), nil), 404)
+	disabledClient := entryClient(t, disabled, ca)
+	loginStatus(t, read(disabledClient, nil), 404)
+	loginStatus(t, loginCall(disabledClient, path+"/revoke-others", "", nil, nil), 404)
 	disabled.signal(t)
 	disabled.wait(t, true)
 	c.SessionDevices = true
@@ -77,7 +79,8 @@ func testEntryDevices(t *testing.T, f *fixture, binary string) {
 		return id
 	}
 	id := current(initial)
-	if id == current(list(x, two, 3)) || id == current(list(x, alien, 1)) {
+	twoID, alienID := current(list(x, two, 3)), current(list(x, alien, 1))
+	if id == twoID || id == alienID {
 		t.Fatal("device handles are not distinct")
 	}
 	key := tokenKey(c.Namespace, three)
@@ -113,11 +116,41 @@ func testEntryDevices(t *testing.T, f *fixture, binary string) {
 		t.Fatal("listing modified the expired index member")
 	}
 	must(t, f.control.ZAdd(f.ctx, group, redisMember(key, int64(idle))).Err())
-	loginStatus(t, loginCall(y, "/api/v1/session/logout", "", credentialCookies(three), nil), 204)
+	revoke := func(target string, want int) {
+		t.Helper()
+		res := loginCall(y, path+"/revoke", target, credentialCookies(one), nil)
+		loginStatus(t, res, want)
+		if len(res.cookies) != 0 || (want == 204 && len(res.body) != 0) {
+			t.Fatal("device revocation changed cookies or returned a receipt body")
+		}
+	}
+	revoke(id, 404)
+	revoke(alienID, 404)
+	loginStatus(t, loginCall(y, path+"/revoke", twoID, credentialCookies(one), func(r *http.Request) {
+		r.Header.Set("Origin", "https://wrong.invalid")
+	}), 403)
+	if !reflect.DeepEqual(initial, list(x, one, 3)) {
+		t.Fatal("rejected revocation changed the list")
+	}
+	revoke(twoID, 204)
+	revoke(twoID, 404)
+	loginStatus(t, loginCall(x, "/api/v1/session/activity", "", credentialCookies(two), nil), 401)
 	if id != current(list(x, one, 2)) {
 		t.Fatal("revoking a sibling changed the current device handle")
 	}
+	replacement := entryCredential(t, y, p, secret)
+	for range 2 {
+		res := loginCall(y, path+"/revoke-others", "", credentialCookies(one), nil)
+		loginStatus(t, res, 204)
+		if len(res.cookies) != 0 || len(res.body) != 0 {
+			t.Fatal("revoke-others modified current browser credentials")
+		}
+	}
 	loginStatus(t, read(x, credentialCookies(three)), 401)
+	loginStatus(t, read(x, credentialCookies(replacement)), 401)
+	if id != current(list(x, one, 1)) || alienID != current(list(x, alien, 1)) {
+		t.Fatal("revoke-others affected caller or another account")
+	}
 	for _, proc := range []*entryProcess{a, b} {
 		proc.signal(t)
 		proc.wait(t, true)

@@ -3,7 +3,7 @@ info:
   title: OnlineJudge Ordinary Session and Login
   version: 0.1.0
   description: >-
-    描述显式会话 HTTPS 入口；默认 bootstrap/Compose 不启用会话。本人会话列表需配置 session_devices。
+    描述显式会话 HTTPS 入口；默认 bootstrap/Compose 不启用会话。本人会话列表和撤销需配置 session_devices。
     Cookie 身份不授予邮箱所有权、训练、角色或管理权限。所有会话 Handler 响应均为
     Cache-Control=no-store、X-Content-Type-Options=nosniff，不开放跨源 CORS。
     请求必须实际使用 TLS 且 Host 精确匹配配置的公开 HTTPS Origin 的 authority。
@@ -22,6 +22,50 @@ info:
 security:
   - ordinarySession: []
 paths:
+  /api/v1/session/devices/revoke:
+    post:
+      operationId: revokeOrdinarySessionDevice
+      description: 撤销指定的本人其他会话。当前会话须走 logout；未知、过期、其他账号和当前会话的标识均返回 404。结果未知时先重新读取列表。
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/FetchSite'
+      requestBody:
+        required: true
+        description: 请求体为设备列表返回的 64 字节小写十六进制标识，不带空白或引号。
+        content:
+          text/plain:
+            schema: {type: string, pattern: '^[0-9a-f]{64}$'}
+      responses:
+        '204': {description: 撤销已确认，无响应体或 Cookie 变更。}
+        '400': {description: 请求体无法读取或超过 64 字节。}
+        '401':
+          $ref: '#/components/responses/SessionRequired'
+        '403':
+          $ref: '#/components/responses/OriginRejected'
+        '404': {description: 能力未启用或指定项不是本人其他有效会话。}
+        '405':
+          $ref: '#/components/responses/PostOnly'
+        '503':
+          $ref: '#/components/responses/SessionUnavailable'
+  /api/v1/session/devices/revoke-others:
+    post:
+      operationId: revokeOtherOrdinarySessionDevices
+      description: 撤销当次验证的全部本人其他有效会话。保留当前会话；没有其他有效会话时同样返回 204。结果未知时先重新读取列表。
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/FetchSite'
+      responses:
+        '204': {description: 撤销已确认或没有其他会话，无响应体或 Cookie 变更。}
+        '401':
+          $ref: '#/components/responses/SessionRequired'
+        '403':
+          $ref: '#/components/responses/OriginRejected'
+        '404':
+          $ref: '#/components/responses/EntryNotEnabled'
+        '405':
+          $ref: '#/components/responses/PostOnly'
+        '503':
+          $ref: '#/components/responses/SessionUnavailable'
   /api/v1/session/devices:
     get:
       operationId: listOrdinarySessionDevices

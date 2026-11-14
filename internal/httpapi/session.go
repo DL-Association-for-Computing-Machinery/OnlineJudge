@@ -13,13 +13,13 @@ import (
 func NewSessionHandler(session http.Handler) http.Handler {
 	bootstrap := NewHandler()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		optional := httptransport.IsPrivateDraftPath(r.URL.Path) || httptransport.IsReferenceRequestPath(r.URL.Path) ||
+		optional := httptransport.IsDevicePath(r.URL.Path) || httptransport.IsPrivateDraftPath(r.URL.Path) || httptransport.IsReferenceRequestPath(r.URL.Path) ||
 			httptransport.IsReviewIntakePath(r.URL.Path) || httptransport.IsReviewReadPath(r.URL.Path) ||
 			httptransport.IsReviewReturnPath(r.URL.Path) || httptransport.IsStatementConfirmationPath(r.URL.Path) ||
 			httptransport.IsEmailConfirmationPath(r.URL.Path) || httptransport.IsEmailRequestPath(r.URL.Path) ||
 			httptransport.IsTrainingHistoryPath(r.URL.Path) || httptransport.IsTrainingDetailPath(r.URL.Path)
 		switch r.URL.Path {
-		case "/api/v1/session", "/api/v1/session/activity", "/api/v1/session/logout", httptransport.DevicesPath,
+		case "/api/v1/session", "/api/v1/session/activity", "/api/v1/session/logout",
 			"/api/v1/session/login/begin", "/api/v1/session/login/complete", "/api/v1/session/login/abandon", "/api/v1/account/password":
 		default:
 			if !optional {

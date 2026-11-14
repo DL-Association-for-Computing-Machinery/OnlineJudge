@@ -153,7 +153,7 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 		}
 	}
 	if c.SessionDevices {
-		handler, err = httptransport.WithDevices(handler, store.ListDevices)
+		handler, err = httptransport.WithDevices(handler, store)
 		if err != nil {
 			return nil, ErrConfig
 		}

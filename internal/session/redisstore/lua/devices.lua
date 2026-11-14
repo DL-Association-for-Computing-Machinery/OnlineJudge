@@ -5,7 +5,7 @@ if not active(c) then return {2} end
 if not indexed(c) then return {3} end
 local prefix = string.sub(KEYS[1],1,#KEYS[1]-64)
 local members = redis.call('ZRANGE',KEYS[2],0,-1,'WITHSCORES')
-local out = {1}
+local records = {}
 for i=1,#members,2 do
   local key,score = members[i],tonumber(members[i+1])
   if score > now then
@@ -14,7 +14,6 @@ for i=1,#members,2 do
     local found,record = loadRecord(key,d)
     if found ~= 1 or not active(record) or tonumber(record[10]) ~= score or
       record[3] ~= ARGV[2] or record[5] ~= ARGV[4] or record[6] ~= ARGV[5] then return {3} end
-    out[#out+1] = record
+    records[#records+1] = record
   end
 end
-return out

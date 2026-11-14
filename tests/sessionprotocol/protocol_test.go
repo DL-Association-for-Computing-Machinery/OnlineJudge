@@ -15,6 +15,7 @@ import (
 
 func TestOrdinaryProtocol(t *testing.T) {
 	f := setup(t)
+	t.Run("device revoke checks exact active snapshot", func(t *testing.T) { testRevokeDevices(t, f) })
 	t.Run("parallel admission has exactly three slots", func(t *testing.T) {
 		ns := namespace(t)
 		p := f.subject(t, false)

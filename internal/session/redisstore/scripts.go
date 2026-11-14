@@ -26,6 +26,9 @@ var readLua string
 //go:embed lua/devices.lua
 var devicesLua string
 
+//go:embed lua/revoke_devices.lua
+var revokeDevicesLua string
+
 //go:embed lua/touch.lua
 var touchLua string
 
@@ -42,7 +45,9 @@ func luaScript(op string) string {
 	case "read":
 		flags, body = "no-writes,no-cluster", readLua
 	case "devices":
-		flags, body = "no-writes,no-cluster", devicesLua
+		flags, body = "no-writes,no-cluster", devicesLua+"\nreturn {1,unpack(records)}"
+	case "revoke-devices":
+		body = devicesLua + "\n" + revokeDevicesLua
 	case "retry":
 		body = retryLua
 	case "touch":
