@@ -826,10 +826,11 @@ python3 -B scripts/assess-p6-mixed-load.py "$MIXED_LOAD_RECORD" \
 按[过载恢复记录约定](docs/delivery-evidence/p6-trial-acceptance.md#过载恢复记录核对)留存三轮的客户端记录和独立采集的服务端账本：
 
 ```sh
-python3 -B scripts/assess-p6-overload.py "$OVERLOAD_CLIENT_RECORD" "$OVERLOAD_SERVER_LEDGER"
+python3 -B scripts/assess-p6-overload.py "$OVERLOAD_CLIENT_RECORD" "$OVERLOAD_SERVER_LEDGER" \
+  --acceptance "$ROUND_1_ACCEPTANCE" "$ROUND_2_ACCEPTANCE" "$ROUND_3_ACCEPTANCE"
 ```
 
-命令只读核对队列打满、拒绝未写入、原键重放及恢复接收。不发送流量，也不替代对原始记录和现场环境的复核。
+现场核对须提供三份与过载轮次对应的原始主库收件清单。命令用提交 ID 和接收时间核对账本，再检查队列打满、拒绝未写入、原键重放及恢复接收。本地旧记录可省略原始清单，此时报告不含独立收件对账。命令不发送流量，也不替代对原始记录和现场环境的复核。
 
 ### 浏览器账号专项
 

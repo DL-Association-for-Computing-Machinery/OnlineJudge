@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 
 from p6_evidence import SHA, exact, label, number, read, timings
+from p6_training_acceptance import independent_round
 
 
 DAY_MS = 86_400_000
@@ -22,7 +23,7 @@ def rows(value):
     return value
 
 
-def assess_round(client, server, limit):
+def assess_round(client, server, limit, observations, index, seen):
     exact(client, "id started_utc_ms stopped_ms ended_ms attempts")
     exact(server, "id saturated_ms unfinished drain_ms ledger peaks oom_kills abnormal_exits")
     round_id = label(client["id"])
@@ -30,6 +31,7 @@ def assess_round(client, server, limit):
         raise ValueError("round mismatch")
     start = number(client["started_utc_ms"], 1, 10**14)
     end = number(client["ended_ms"], 1, DAY_MS)
+    independent = independent_round(observations, index, start, start + end, seen)
     stop = number(client["stopped_ms"], 1, end)
     full = number(server["saturated_ms"], 0, stop - 1)
     occupied = number(server["unfinished"], 0, MAX_ROWS)
@@ -45,6 +47,7 @@ def assess_round(client, server, limit):
 
     ledger = {}
     seen_ids = set()
+    ledger_offsets = {}
     accepted_times, terminal_times = [], []
     queue_ms = []
     for item in rows(server["ledger"]):
@@ -55,6 +58,7 @@ def assess_round(client, server, limit):
         ledger[key] = item
         seen_ids.add(ident)
         accepted = number(item["accepted_ms"], 0, end)
+        ledger_offsets[ident] = accepted
         accepted_times.append(accepted)
         terminal, read_at, verdict = (item[k] for k in ("terminal_ms", "read_ms", "verdict"))
         queued = item["queued_ms"]
@@ -73,6 +77,21 @@ def assess_round(client, server, limit):
             failures.add("drain_unproven")
     accepted_times.sort()
     terminal_times.sort()
+
+    evidence = None
+    if independent is not None:
+        database, digest = independent
+        evidence = {
+            "sha256": digest,
+            "accepted": len(database),
+            "unreconciled_database_receipts": len(database.keys() - ledger_offsets.keys()),
+            "ledger_receipts_missing_from_database": len(ledger_offsets.keys() - database.keys()),
+            "acceptance_time_mismatches": sum(ledger_offsets[ident] != database[ident].offset_ms
+                                              for ident in ledger_offsets.keys() & database.keys()),
+        }
+        if any(evidence[key] for key in ("unreconciled_database_receipts", "ledger_receipts_missing_from_database",
+                                         "acceptance_time_mismatches")):
+            failures.add("independent_acceptance_reconciliation")
 
     def unfinished_at(at):
         return bisect_right(accepted_times, at) - bisect_right(terminal_times, at)
@@ -159,19 +178,22 @@ def assess_round(client, server, limit):
     return start, start + end, {
         "id": round_id, "recovery_ms": recovery_ms, "drain_after_stop_ms": None if drain is None else drain - stop,
         "longest_queue_ms": max(queue_ms, default=None), "peaks": server["peaks"], "unfinished_at_peak": occupied,
-        "accepted": len(ledger), "unexpected_error_rate": unexpected / total if total else None,
+        "accepted": len(ledger), "independent_acceptance": evidence,
+        "unexpected_error_rate": unexpected / total if total else None,
         "requests_without_response": no_response,
         "timings": {code: timings(values, len(values)) for code, values in latencies.items()},
         "failures": sorted(failures),
     }
 
 
-def assess(client, server, server_digest):
+def assess(client, server, server_digest, observations=()):
     exact(client, "schema origin_scope release_sha256 topology_sha256 config_sha256 ledger_sha256 global_limit rounds")
     exact(server, "schema release_sha256 topology_sha256 config_sha256 rounds")
     if (client["schema"] != "oj.p6-overload.v1" or server["schema"] != "oj.p6-overload-ledger.v1"
             or client["origin_scope"] not in ("local", "trial") or client["ledger_sha256"] != server_digest):
         raise ValueError("unsupported scope or ledger digest mismatch")
+    if len(observations) not in (0, 3) or (client["origin_scope"] == "trial" and len(observations) != 3):
+        raise ValueError("expected three independent observations for trial")
     for key in ("release_sha256", "topology_sha256", "config_sha256"):
         if label(client[key], SHA) != server[key]:
             raise ValueError("release, topology or configuration mismatch")
@@ -179,7 +201,9 @@ def assess(client, server, server_digest):
     client_rounds, server_rounds = rows(client["rounds"]), rows(server["rounds"])
     if len(client_rounds) != 3 or len(server_rounds) != 3:
         raise ValueError("expected three complete rounds")
-    rounds = sorted((assess_round(a, b, limit) for a, b in zip(client_rounds, server_rounds)),
+    seen = set()
+    rounds = sorted((assess_round(a, b, limit, observations, index, seen)
+                     for index, (a, b) in enumerate(zip(client_rounds, server_rounds))),
                     key=lambda result: result[0])
     if (len({report["id"] for _, _, report in rounds}) != 3
             or any(a[1] > b[0] for a, b in zip(rounds, rounds[1:]))):
@@ -195,11 +219,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("client_record", type=Path)
     parser.add_argument("server_ledger", type=Path)
+    parser.add_argument("--acceptance", type=Path, nargs=3, metavar="OBSERVATION",
+                        help="three raw training-acceptance exports in record order; required for trial")
     args = parser.parse_args()
     try:
         client, client_sha = read(args.client_record)
         server, server_sha = read(args.server_ledger)
-        result = assess(client, server, server_sha)
+        result = assess(client, server, server_sha, [read(path) for path in args.acceptance or ()])
     except (OSError, ValueError, RecursionError):
         print("P6 overload assessment refused: invalid or unbound record", file=sys.stderr)
         return 2

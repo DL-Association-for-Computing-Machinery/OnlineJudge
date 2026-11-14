@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 
 from p6_evidence import SHA, exact, label, number, read, timings
-from p6_training_acceptance import acceptance_rows
+from p6_training_acceptance import independent_round
 
 
 WINDOW = 900_000
@@ -101,7 +101,8 @@ def assess_round(record, versions, independent=None):
         failures.append("submission_reconciliation")
     evidence = None
     if independent is not None:
-        database, digest = independent
+        receipts, digest = independent
+        database = {ident: receipt.version for ident, receipt in receipts.items()}
         evidence = {
             "sha256": digest,
             "accepted": len(database),
@@ -153,16 +154,9 @@ def assess(doc, independent=()):
         label(version)
     reports, observed_ids = [], set()
     for index, record in enumerate(rounds):
-        evidence = None
-        if independent:
-            exact(record, "id run_started_utc_ms reads submissions observed_submissions peaks")
-            start = number(record["run_started_utc_ms"], 1, 10**14)
-            observation, digest = independent[index]
-            database = acceptance_rows(observation, start, start + WINDOW)
-            if not observed_ids.isdisjoint(database):
-                raise ValueError("receipt appears in more than one acceptance window")
-            observed_ids.update(database)
-            evidence = database, digest
+        exact(record, "id run_started_utc_ms reads submissions observed_submissions peaks")
+        start = number(record["run_started_utc_ms"], 1, 10**14)
+        evidence = independent_round(independent, index, start, start + WINDOW, observed_ids)
         reports.append(assess_round(record, versions, evidence))
     if len({item["id"] for item in reports}) != 3:
         raise ValueError("round IDs must be distinct")

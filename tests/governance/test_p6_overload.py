@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -33,11 +34,31 @@ def records():
             abnormal_exits=0, peaks=dict(cpu_millicores=1000, memory_bytes=100, disk_bytes=100, connections=4),
             ledger=[accepted("a", "id-a", 2, 150, "AC"), accepted("b", "id-b", 5, 200, "WA"),
                     accepted("c", "id-c", 203, 250, "AC"), accepted("d", "id-d", 300_001, 300_150, "AC")]))
+        for row in client["rounds"][-1]["attempts"] + server["rounds"][-1]["ledger"]:
+            if row["id"] is not None:
+                row["id"] = f"{i}-{row['id']}"
     return client, server
 
 
+def utc(ms):
+    return (datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(milliseconds=ms)).isoformat(
+        timespec="milliseconds").replace("+00:00", "Z")
+
+
+def observations(client, server):
+    result = []
+    for a, b in zip(client["rounds"], server["rounds"]):
+        start = a["started_utc_ms"]
+        until = utc(start + a["ended_ms"])
+        result.append({"schema": "oj.p6-training-acceptance.v1", "from": utc(start), "until": until,
+                       "observed_at": until, "accepted": [
+                           dict(id=r["id"], accepted_at=utc(start + r["accepted_ms"]), material_version="fixture-v1")
+                           for r in b["ledger"]]})
+    return result
+
+
 class OverloadTests(unittest.TestCase):
-    def assess(self, client, server, bind=True):
+    def assess(self, client, server, bind=True, exports=()):
         with tempfile.TemporaryDirectory() as path:
             ledger = Path(path) / "server.json"
             raw = json.dumps(server).encode()
@@ -45,7 +66,13 @@ class OverloadTests(unittest.TestCase):
             client["ledger_sha256"] = hashlib.sha256(raw).hexdigest() if bind else "f" * 64
             record = Path(path) / "client.json"
             record.write_text(json.dumps(client))
-            return subprocess.run([sys.executable, "-B", str(SCRIPT), str(record), str(ledger)],
+            files = []
+            for i, item in enumerate(exports):
+                path_ = Path(path) / f"raw-{i}.json"
+                path_.write_text(json.dumps(item))
+                files.append(str(path_))
+            return subprocess.run([sys.executable, "-B", str(SCRIPT), str(record), str(ledger),
+                                   *(["--acceptance", *files] if files else [])],
                                   capture_output=True, text=True, timeout=10)
 
     def test_three_rounds_pass_at_exact_recovery_deadline(self):
@@ -58,6 +85,7 @@ class OverloadTests(unittest.TestCase):
             self.assertEqual(round_["recovery_ms"], 300_000)
             self.assertEqual(round_["drain_after_stop_ms"], 100)
             self.assertEqual(round_["accepted"], 4)
+            self.assertIsNone(round_["independent_acceptance"])
             self.assertEqual(round_["timings"]["rejected"]["p95_ms"], 5)
 
     def test_early_write_and_hidden_acceptance_cannot_pass_reconciliation(self):
@@ -109,3 +137,34 @@ class OverloadTests(unittest.TestCase):
         self.assertEqual(json.loads(result.stdout)["rounds"][0]["failures"], [
             "missing_controlled_rejection", "missing_rejected_key_recovery", "missing_replay_during_pressure",
         ])
+
+    def test_trial_requires_exact_database_windows(self):
+        client, server = records()
+        client["origin_scope"] = "trial"
+        self.assertEqual(self.assess(client, server).returncode, 2)
+        raw = observations(client, server)
+        raw[0]["accepted"][0]["accepted_at"] = "1970-01-01T00:00:00.003999999Z"
+        result = self.assess(client, server, exports=raw)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        evidence = json.loads(result.stdout)["rounds"][0]["independent_acceptance"]
+        self.assertEqual(evidence["accepted"], 4)
+        self.assertEqual(evidence["sha256"], hashlib.sha256(json.dumps(raw[0]).encode()).hexdigest())
+        self.assertEqual(self.assess(client, server, exports=raw[::-1]).returncode, 2)
+        raw[2]["accepted"][0]["id"] = raw[0]["accepted"][0]["id"]
+        self.assertEqual(self.assess(client, server, exports=raw).returncode, 2)
+
+    def test_raw_receipts_detect_omissions_and_shifted_saturation_times(self):
+        client, server = records()
+        raw = observations(client, server)
+        raw[0]["accepted"].append(dict(raw[0]["accepted"][0], id="unmatched-commit"))
+        raw[1]["accepted"].pop()
+        # Move the first receipt by one millisecond. The client attempt interval
+        # still matches the hand-edited ledger, but raw database time disagrees.
+        raw[2]["accepted"][0]["accepted_at"] = utc(client["rounds"][2]["started_utc_ms"] + 3)
+        result = self.assess(client, server, exports=raw)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        for round_, key in zip(json.loads(result.stdout)["rounds"], (
+                "unreconciled_database_receipts", "ledger_receipts_missing_from_database", "acceptance_time_mismatches")):
+            self.assertEqual(round_["failures"], ["independent_acceptance_reconciliation"])
+            self.assertEqual(round_["independent_acceptance"][key], 1)
+        self.assertNotIn("unmatched-commit", result.stdout)
