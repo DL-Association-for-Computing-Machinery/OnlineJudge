@@ -51,7 +51,7 @@ func (w document) config() (Config, error) {
 	default:
 		return Config{}, ErrConfig
 	}
-	if !listenerMaterial(c.TLS, r.Mode) || w.Database.apply(&c) != nil || w.Redis.apply(&c) != nil ||
+	if !listenerMaterial(c.TLS, r.Mode) || w.Database.apply(&r.Database, &c.DatabaseAuth, &c.DatabaseTLS) != nil || w.Redis.apply(&c) != nil ||
 		w.Password.apply(r) != nil || w.LoginLimits.apply(r) != nil || w.Server.apply(&c) != nil {
 		return Config{}, ErrConfig
 	}
@@ -66,6 +66,9 @@ func (w document) config() (Config, error) {
 			return Config{}, ErrConfig
 		}
 		c.EmailMinimumCharacters, c.EmailBlocklistFile = confirm.MinimumCharacters, confirm.BlocklistFile
+	}
+	if w.EmailIntake != nil && w.EmailIntake.apply(&c) != nil {
+		return Config{}, ErrConfig
 	}
 	if w.PrivateDrafts != nil && w.PrivateDrafts.apply(&c) != nil {
 		return Config{}, ErrConfig
@@ -152,11 +155,10 @@ func durations(fields []durationField) bool {
 	return true
 }
 
-func (w databaseWire) apply(c *Config) error {
+func (w databaseWire) apply(db *sessionruntime.DatabaseConfig, auth *string, tls *Material) error {
 	if w.TLS == nil || !authMode(w.Auth) {
 		return ErrConfig
 	}
-	db := &c.Runtime.Database
 	db.Host, db.Port, db.Database, db.Username = w.Host, w.Port, w.Database, w.Username
 	db.ApplicationName, db.Connections = w.ApplicationName, w.Connections
 	security, ok := storageSecurity(w.Security, *w.TLS)
@@ -172,7 +174,7 @@ func (w databaseWire) apply(c *Config) error {
 		db.MaxLifetime <= 0 || db.MaxIdle <= 0 || db.HealthCheck <= 0 {
 		return ErrConfig
 	}
-	c.DatabaseAuth, c.DatabaseTLS = w.Auth, *w.TLS
+	*auth, *tls = w.Auth, *w.TLS
 	return nil
 }
 

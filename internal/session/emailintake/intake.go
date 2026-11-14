@@ -27,6 +27,15 @@ type Config struct {
 	MaxAge            time.Duration
 }
 
+// Validate requires explicit bounds before any worker starts.
+func (c Config) Validate() error {
+	if c.Workers < 1 || c.Workers > 64 || c.Capacity < c.Workers || c.Capacity > 1024 ||
+		c.MaxAge <= 0 || c.MaxAge > time.Minute {
+		return ErrConfig
+	}
+	return nil
+}
+
 // Intake owns a fixed number of workers. Call Drain before closing dependencies.
 // Do not copy it. Submit and Drain may run concurrently.
 type Intake struct {
@@ -61,8 +70,7 @@ func New(c Config, recovery func(context.Context) (identity.RecoveryState, error
 	admit func(context.Context, netip.Addr, identity.Email) error,
 	process func(context.Context, identity.Email, emailtoken.Purpose, string),
 ) (*Intake, error) {
-	if c.Workers < 1 || c.Workers > 64 || c.Capacity < c.Workers || c.Capacity > 1024 ||
-		c.MaxAge <= 0 || c.MaxAge > time.Minute || recovery == nil || admit == nil || process == nil {
+	if c.Validate() != nil || recovery == nil || admit == nil || process == nil {
 		return nil, ErrConfig
 	}
 	i := &Intake{

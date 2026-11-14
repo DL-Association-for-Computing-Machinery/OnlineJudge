@@ -216,9 +216,7 @@ func entryConfigWithWriteTimeout(t *testing.T, c sessionruntime.Config, ca *test
 	doc := map[string]any{
 		"version": 1, "mode": "direct", "namespace": c.Namespace, "secrets_file": entryPath(t, c.SecretsFile),
 		"origin": c.HTTP.Origin, "login_window": c.LoginWindow.String(), "startup_timeout": c.StartupTimeout.String(), "http_timeout": c.HTTP.Timeout.String(),
-		"database": map[string]any{"host": db.Host, "port": db.Port, "database": db.Database, "username": db.Username,
-			"application_name": db.ApplicationName, "security": "private", "auth": "none", "connections": db.Connections,
-			"timeout": db.Timeout.String(), "max_lifetime": db.MaxLifetime.String(), "max_idle": db.MaxIdle.String(), "health_check": db.HealthCheck.String(), "tls": map[string]any{}},
+		"database": entryDatabase(db),
 		"redis": map[string]any{"address": redis.Addr, "username": redis.Username, "security": "private", "auth": "none",
 			"connections": redis.Connections, "timeout": redis.Timeout.String(), "tls": map[string]any{}},
 		"password": map[string]any{"current": parameter(c.PasswordPolicy.Current), "legacy": legacy,
@@ -258,6 +256,11 @@ func entryConfigWithWriteTimeout(t *testing.T, c sessionruntime.Config, ca *test
 	if c.EmailConfirmation != nil {
 		doc["email_confirmation"] = map[string]any{"minimum_characters": c.EmailConfirmation.MinimumCharacters(), "blocklist_file": blocklist[0]}
 	}
+	if intake := c.EmailIntake; intake != nil {
+		doc["email_intake"] = map[string]any{"capacity": intake.Limits.Capacity, "workers": intake.Limits.Workers,
+			"max_age": intake.Limits.MaxAge.String(), "payload_key_file": entryPath(t, intake.PayloadKeyFile),
+			"budget_database": entryDatabase(intake.BudgetDatabase)}
+	}
 	if d := c.PrivateDrafts; d != nil {
 		doc["private_drafts"] = map[string]any{"material_root": d.MaterialRoot, "bundle_directory": d.BundleDirectory,
 			"source_lock_file": d.SourceLockFile, "source_ids": d.SourceIDs, "timeout": d.Timeout.String(), "max_in_flight": d.MaxInFlight,
@@ -275,6 +278,13 @@ func entryConfigWithWriteTimeout(t *testing.T, c sessionruntime.Config, ca *test
 	path := filepath.Join(t.TempDir(), "entry.json")
 	must(t, os.WriteFile(path, body, 0600))
 	return entryPath(t, path)
+}
+
+func entryDatabase(db sessionruntime.DatabaseConfig) map[string]any {
+	return map[string]any{"host": db.Host, "port": db.Port, "database": db.Database, "username": db.Username,
+		"application_name": db.ApplicationName, "security": "private", "auth": "none", "connections": db.Connections,
+		"timeout": db.Timeout.String(), "max_lifetime": db.MaxLifetime.String(), "max_idle": db.MaxIdle.String(),
+		"health_check": db.HealthCheck.String(), "tls": map[string]any{}}
 }
 
 func entryClient(t *testing.T, p *entryProcess, ca *testpki.Authority) *loginEndpoint {

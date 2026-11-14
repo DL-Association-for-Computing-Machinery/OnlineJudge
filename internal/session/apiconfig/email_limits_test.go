@@ -57,6 +57,40 @@ func TestEmailLimitsConfiguration(t *testing.T) {
 		}
 		limits[name] = old
 	}
+	budget := make(map[string]any)
+	for name, value := range doc["database"].(map[string]any) {
+		budget[name] = value
+	}
+	budget["database"], budget["auth"] = "seal_budget", "env"
+	intake := map[string]any{"capacity": 4, "workers": 2, "max_age": "5s",
+		"payload_key_file": "/config/mail-keys.json", "budget_database": budget}
+	doc["email_intake"] = intake
+	c, err = parse()
+	if err != nil || c.Runtime.EmailIntake == nil || c.EmailBudgetAuth != "env" ||
+		c.Runtime.EmailIntake.BudgetDatabase.Database != "seal_budget" ||
+		c.Runtime.EmailIntake.Limits.Capacity != 4 || c.Runtime.EmailIntake.Limits.Workers != 2 ||
+		c.Runtime.EmailIntake.Limits.MaxAge != 5*time.Second {
+		t.Fatal("explicit email intake settings were not preserved")
+	}
+	confirmation := doc["email_confirmation"]
+	delete(doc, "email_confirmation")
+	if _, err := parse(); err != ErrConfig {
+		t.Fatal("accepted intake without confirmation")
+	}
+	doc["email_confirmation"] = confirmation
+	for field, bad := range map[string]any{"capacity": 1, "workers": 0, "max_age": "61s", "payload_key_file": "relative", "budget_database": nil} {
+		old := intake[field]
+		intake[field] = bad
+		if _, err := parse(); err != ErrConfig {
+			t.Fatalf("accepted invalid intake field %s", field)
+		}
+		intake[field] = old
+	}
+	budget["database"] = doc["database"].(map[string]any)["database"]
+	if _, err := parse(); err != ErrConfig {
+		t.Fatal("accepted the application database as the budget database")
+	}
+	delete(doc, "email_intake")
 	limits["confirm_token"] = map[string]any{"count": 1, "window": "1500us"}
 	if _, err := parse(); err != ErrConfig {
 		t.Fatal("accepted a non-millisecond window")

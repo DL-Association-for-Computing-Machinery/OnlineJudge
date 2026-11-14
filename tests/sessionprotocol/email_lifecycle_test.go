@@ -8,6 +8,8 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,6 +21,7 @@ import (
 	"net/mail"
 	"net/textproto"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -26,7 +29,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/httpapi"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/emailmessage"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/emailtoken"
@@ -38,6 +40,7 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/emailintake"
 	protocol "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/redisstore"
 	sessionruntime "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/runtime"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/testpki"
 )
 
 func TestIsolatedEmailLifecycle(t *testing.T) {
@@ -45,10 +48,9 @@ func TestIsolatedEmailLifecycle(t *testing.T) {
 		t.Skip("requires its own fresh protocol fixture")
 	}
 	f := setup(t)
+	binary := entryBinary(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
-	must(t, mailqueue.MigrateUp(ctx, f.pools[0]))
-	must(t, mailqueue.ConfigureSendRate(ctx, f.pools[0], 100))
 	_, err := f.pools[0].Exec(ctx, "CREATE DATABASE fixture_email_seals")
 	must(t, err)
 	ledgerConfig := f.pools[0].Config()
@@ -56,16 +58,20 @@ func TestIsolatedEmailLifecycle(t *testing.T) {
 	ledger, err := pgxpool.NewWithConfig(ctx, ledgerConfig)
 	must(t, err)
 	t.Cleanup(ledger.Close)
-	keys, err := emailtoken.NewProtector("fixture", map[string][32]byte{"fixture": loginKey(t)})
+	material := loginKey(t)
+	keyFile := writeLifecycleJSON(t, "mail-keys.json", map[string]any{
+		"format": "oj.email-payload-keys.v1", "current": "fixture",
+		"keys": map[string]string{"fixture": base64.RawURLEncoding.EncodeToString(material[:])},
+	})
+	keys, err := emailtoken.LoadProtector(keyFile)
 	must(t, err)
-	must(t, mailbudget.Initialize(ctx, ledger))
-	must(t, mailbudget.Provision(ctx, ledger, keys, 2))
 
 	c := runtimeConfig(t, f, namespace(t), true)
 	bucket := protocol.LoginBucket{Count: 30, Window: time.Hour}
 	c.EmailLimits = &protocol.EmailLimits{RequestGlobal: bucket, RequestSource: bucket, RequestMailbox: bucket,
 		ConfirmGlobal: bucket, ConfirmSource: bucket, ConfirmToken: bucket}
 	weak := sha256.Sum256([]byte("synthetic blocked password"))
+	blocklist := writeLifecycleJSON(t, "weak-passwords.json", map[string]any{"version": 1, "sha256": []string{hex.EncodeToString(weak[:])}})
 	c.EmailConfirmation, err = password.NewAcceptance(15, c.PasswordLimits.MaxPasswordBytes, [][32]byte{weak})
 	must(t, err)
 	secrets, err := protocol.LoadLoginSecrets(c.SecretsFile)
@@ -76,26 +82,52 @@ func TestIsolatedEmailLifecycle(t *testing.T) {
 	const activate, reset = "/api/v1/account/activate", "/api/v1/account/reset-password"
 	const address = "isolated-lifecycle@example.invalid"
 	const signupBody = `{"email":"` + address + `"}`
-	disabled := loginHandlerServer(t, httpapi.NewSessionHandler(openRuntime(t, c)))
-	loginStatus(t, loginCall(disabled, register, signupBody, nil, nil), 404)
-	c.IsolatedEmailIntake = &sessionruntime.IsolatedEmailIntakeConfig{
-		Limits: emailintake.Config{Capacity: 4, Workers: 1, MaxAge: 5 * time.Second}, Protector: keys, Ledger: ledger,
-	}
-	bad := c
-	sameDatabase := *c.IsolatedEmailIntake
-	sameDatabase.Ledger = f.pools[0]
-	bad.IsolatedEmailIntake = &sameDatabase
-	if r, err := sessionruntime.Open(ctx, bad); err == nil {
-		must(t, r.Close(ctx))
-		t.Fatal("email intake accepted the application database as a seal ledger")
-	}
+	ca := testpki.New(t)
+	const shutdown = 4 * time.Second
+	disabled := entryStart(t, binary, entryConfig(t, c, ca, shutdown, blocklist), "127.0.0.1:0")
+	endpoint := entryClient(t, disabled, ca)
+	loginStatus(t, loginCall(endpoint, register, signupBody, nil, nil), 404)
+	loginStatus(t, loginCall(endpoint, recover, signupBody, nil, nil), 404)
+	disabled.signal(t)
+	disabled.wait(t, true)
 	c.Database.ApplicationName = "isolated_email_api_a"
 	c.Database.Timeout = 2 * time.Second
+	budgetDB := c.Database
+	budgetDB.Database, budgetDB.ApplicationName, budgetDB.Connections = "fixture_email_seals", "isolated_email_budget_a", 1
+	c.EmailIntake = &sessionruntime.EmailIntakeConfig{
+		Limits:         emailintake.Config{Capacity: 4, Workers: 1, MaxAge: 5 * time.Second},
+		PayloadKeyFile: keyFile, BudgetDatabase: budgetDB,
+	}
+	refuse := func(cfg sessionruntime.Config) {
+		t.Helper()
+		proc := entryStart(t, binary, entryConfig(t, cfg, ca, shutdown, blocklist), "127.0.0.1:0")
+		proc.wait(t, false)
+		if _, ok := proc.event("API starting"); ok {
+			t.Fatal("API opened a listener with invalid email intake dependencies")
+		}
+	}
+	refuse(c) // No ledger or active-key counter.
+	must(t, mailbudget.Initialize(ctx, ledger))
+	must(t, mailbudget.Provision(ctx, ledger, keys, 3))
+	refuse(c) // Ledger ready, but River schema is absent.
+	must(t, mailqueue.MigrateUp(ctx, f.pools[0]))
+	must(t, mailqueue.ConfigureSendRate(ctx, f.pools[0], 100))
+	badConfig, badIntake := c, *c.EmailIntake
+	badConfig.EmailIntake = &badIntake
+	badIntake.BudgetDatabase.Database = c.Database.Database
+	refuse(badConfig)
+	badIntake.BudgetDatabase = budgetDB
+	badIntake.PayloadKeyFile = writeLifecycleJSON(t, "bad-mail-keys.json", map[string]any{"format": "invalid"})
+	refuse(badConfig)
 	other := c
 	other.Database.ApplicationName = "isolated_email_api_b"
-	apiA, apiB := openRuntime(t, c), openRuntime(t, other)
-	x := loginHandlerServer(t, httpapi.NewSessionHandler(apiA))
-	y := loginHandlerServer(t, httpapi.NewSessionHandler(apiB))
+	otherIntake := *c.EmailIntake
+	otherIntake.BudgetDatabase.ApplicationName = "isolated_email_budget_b"
+	other.EmailIntake = &otherIntake
+	apiA := entryStart(t, binary, entryConfig(t, c, ca, shutdown, blocklist), "127.0.0.1:0")
+	apiB := entryStart(t, binary, entryConfig(t, other, ca, shutdown, blocklist), "127.0.0.1:0")
+	x := entryClient(t, apiA, ca)
+	y := entryClient(t, apiB, ca)
 	loginStatus(t, loginCall(x, register, signupBody, nil, func(r *http.Request) {
 		r.Header.Set("Origin", "https://other.example.invalid")
 	}), 403)
@@ -103,7 +135,7 @@ func TestIsolatedEmailLifecycle(t *testing.T) {
 	must(t, err)
 	from, err := identity.ParseEmail("sender@example.invalid")
 	must(t, err)
-	smtp, receive := lifecycleSMTP(t, from, to, []string{activate, reset})
+	smtp, receive := lifecycleSMTP(t, from, to, []string{activate, reset, reset})
 	renderer, err := emailmessage.New(loginOrigin)
 	must(t, err)
 	worker, err := maildelivery.NewWorker(ctx, f.pools[1], keys, renderer, smtp)
@@ -210,8 +242,8 @@ func TestIsolatedEmailLifecycle(t *testing.T) {
 		loginStatus(t, loginCall(x, "/api/v1/session/login/begin", string(body), nil, nil), 401)
 	}
 	checkSession(x, entryCredential(t, y, p, passwords[winner]), 200)
-	// Move the fixture timestamps together past the resend interval to
-	// distinguish the independent budget from the normal resend gate.
+	// Move both timestamps past the resend interval so the in-flight request
+	// can prove the budget pool stays open through graceful shutdown.
 	_, err = f.pools[0].Exec(ctx, `UPDATE identity_email_tokens
 		SET issued_at=issued_at-interval '61 seconds', expires_at=expires_at-interval '61 seconds'
 		WHERE subject_id=$1 AND purpose=$2`, p.ID, string(emailtoken.Recovery))
@@ -219,23 +251,46 @@ func TestIsolatedEmailLifecycle(t *testing.T) {
 	hold, holder := holdLifecycleAccount(t, ctx, f.pools[0], p.ID)
 	request(x, recover, signupBody)
 	waitLifecycleAccountBlocked(t, ctx, f.pools[0], holder, c.Database.ApplicationName)
-	short, stopClose := context.WithTimeout(ctx, 30*time.Millisecond)
-	err = apiA.Close(short)
-	stopClose()
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatal("API closed before draining the blocked background request")
+	apiA.signal(t)
+	apiA.waitEvent(t, "API stopping")
+	entryListenerClosed(t, apiA.waitEvent(t, "API starting").Address)
+	waitLifecycleAccountBlocked(t, ctx, f.pools[0], holder, c.Database.ApplicationName)
+	select {
+	case <-apiA.done:
+		t.Fatal("API exited before draining a blocked email request")
+	case <-time.After(30 * time.Millisecond):
+		if _, ok := apiA.event("API stopped gracefully"); ok {
+			t.Fatal("API reported graceful shutdown while email work was blocked")
+		}
 	}
-	loginStatus(t, loginCall(x, recover, signupBody, nil, nil), 503)
+	waitLifecycleAccountBlocked(t, ctx, f.pools[0], holder, c.Database.ApplicationName)
 	must(t, hold.Rollback(ctx))
-	must(t, apiA.Close(ctx))
-	must(t, apiB.Close(ctx))
+	apiB.signal(t)
+	for _, proc := range []*entryProcess{apiA, apiB} {
+		proc.wait(t, true)
+		if _, ok := proc.event("API stopped gracefully"); !ok {
+			t.Fatal("API did not confirm a graceful shutdown")
+		}
+	}
+	_ = receive(ctx)
+	waitLifecycleMail(t, ctx, f.pools[0], 3)
+	refuse(c) // A configured but exhausted ledger must not be treated as ready.
 	var charged, jobs, tokens int
 	must(t, ledger.QueryRow(ctx, "SELECT used FROM public.oj_mail_seal_budget").Scan(&charged))
 	must(t, f.pools[0].QueryRow(ctx, "SELECT count(*) FROM river_job").Scan(&jobs))
 	must(t, f.pools[0].QueryRow(ctx, "SELECT count(*) FROM identity_email_tokens WHERE subject_id=$1", p.ID).Scan(&tokens))
-	if charged != 2 || jobs != 2 || tokens != 2 {
+	if charged != 3 || jobs != 3 || tokens != 3 {
 		t.Fatal("mail issuance diverged from the independent budget")
 	}
+}
+
+func writeLifecycleJSON(t *testing.T, name string, data map[string]any) string {
+	t.Helper()
+	body, err := json.Marshal(data)
+	must(t, err)
+	path := filepath.Join(t.TempDir(), name)
+	must(t, os.WriteFile(path, body, 0600))
+	return entryPath(t, path)
 }
 
 func holdLifecycleAccount(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id string) (pgx.Tx, int32) {

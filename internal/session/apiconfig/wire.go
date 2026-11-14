@@ -15,6 +15,7 @@ type document struct {
 	LoginLimits              *limitsWire            `json:"login_limits"`
 	EmailLimits              *emailLimitsWire       `json:"email_limits"`
 	EmailConfirmation        *emailConfirmationWire `json:"email_confirmation"`
+	EmailIntake              *emailIntakeWire       `json:"email_intake"`
 	ProxyFingerprints        []string               `json:"proxy_fingerprints"`
 	TLS                      *Material              `json:"tls"`
 	Server                   *serverWire            `json:"server"`
@@ -22,6 +23,14 @@ type document struct {
 	PrivateDrafts            *privateDraftsWire     `json:"private_drafts"`
 	TrainingHistory          bool                   `json:"training_history"`
 	TrainingSubmissionDetail bool                   `json:"training_submission_detail"`
+}
+
+type emailIntakeWire struct {
+	Capacity       int           `json:"capacity"`
+	Workers        int           `json:"workers"`
+	MaxAge         string        `json:"max_age"`
+	PayloadKeyFile string        `json:"payload_key_file"`
+	BudgetDatabase *databaseWire `json:"budget_database"`
 }
 
 type emailConfirmationWire struct {

@@ -16,8 +16,9 @@ import (
 	submissionpg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
 )
 
-// Open owns one bounded pool, Redis client, identity authority and shared KDF
-// admission. It only checks existing schema/recovery/limit metadata; it never
+// Open owns the application pool, Redis client, identity authority and shared
+// KDF admission, plus a separate budget pool when email intake is enabled.
+// It only checks existing schema/recovery/limit metadata; it never
 // migrates, provisions limits, rotates/opens recovery, starts a server or retries.
 // On failure all created clients are closed. Error text contains no driver cause,
 // credential, path or key; production parameters and TLS listener remain caller-owned.
@@ -179,8 +180,8 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 		}
 	}
 	closeIntake := func() {}
-	if c.IsolatedEmailIntake != nil {
-		handler, closeIntake, err = withIsolatedEmailIntake(startup, handler, authority, store, work, secrets, pool, c)
+	if c.EmailIntake != nil {
+		handler, closeIntake, err = withEmailIntake(startup, handler, authority, store, work, secrets, pool, c)
 		if err != nil {
 			return nil, startupFailure(startup)
 		}
