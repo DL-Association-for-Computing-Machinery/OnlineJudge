@@ -15,15 +15,15 @@ func (l *Login) PendingDevices(ctx context.Context, c Continuation) ([]Device, e
 
 // ReplaceDevice exchanges exactly one selected slot for the original candidate.
 // A lost reply is recovered through Complete, never by evicting a second slot.
-func (l *Login) ReplaceDevice(ctx context.Context, c Continuation, selection string) (Credential, error) {
+func (l *Login) ReplaceDevice(ctx context.Context, c Continuation, selection string) (LoginGrant, error) {
 	if len(selection) != 64 {
-		return Credential{}, ErrInvalid
+		return LoginGrant{}, ErrInvalid
 	}
 	a, _, err := l.pendingDevices(ctx, c, selection)
 	if err != nil {
-		return Credential{}, err
+		return LoginGrant{}, err
 	}
-	return l.store.Check(ctx, a)
+	return l.checkGrant(ctx, a)
 }
 
 func (l *Login) pendingDevices(ctx context.Context, c Continuation, selection string) (*Attempt, []Device, error) {

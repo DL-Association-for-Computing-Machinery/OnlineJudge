@@ -6,7 +6,7 @@ export interface SessionView {
 }
 
 export type AccountOperation = 'read' | 'activity' | 'logout' | 'begin' | 'local-begin' | 'complete' | 'abandon' | 'password' | 'replace-device'
-export type AccountInput = { email: string; password: string } | { current_password: string; new_password: string } | { device: string }
+export type AccountInput = { email: string; password: string; remember?: boolean } | { current_password: string; new_password: string } | { device: string }
 
 const endpoints: Record<AccountOperation, { path: string; method: 'GET' | 'POST'; status: number }> = {
   read: { path: '/api/v1/session', method: 'GET', status: 200 },

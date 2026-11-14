@@ -26,11 +26,13 @@ var (
 
 // Policy bounds ordinary sessions. All stores in a namespace must use the same
 // policy. Shorter intervals support controlled environments; never exceed the
-// confirmed ordinary limits. This does not support remembered/admin profiles.
+// confirmed ordinary limits. Remembered personal sessions use a separate fixed profile.
 type Policy struct{ Idle, Absolute time.Duration }
 
 // OrdinaryPolicy returns the confirmed two-hour idle/twelve-hour absolute limits.
 func OrdinaryPolicy() Policy { return Policy{Idle: 2 * time.Hour, Absolute: 12 * time.Hour} }
+
+var rememberedPolicy = Policy{Idle: 24 * time.Hour, Absolute: 7 * 24 * time.Hour}
 
 func (p Policy) valid() bool {
 	return p.Idle >= time.Millisecond && p.Absolute > p.Idle && p.Idle <= 2*time.Hour && p.Absolute <= 12*time.Hour &&
@@ -84,7 +86,11 @@ func (a *Attempt) valid(namespace string, p Policy) bool {
 	if _, err := ParseCredential(a.credential.token); err != nil {
 		return false
 	}
-	return a.created > 0 && a.absolute < 9007199254740991 && a.absolute-a.created == p.Absolute.Milliseconds() && a.initial-a.created == p.Idle.Milliseconds()
+	return a.created > 0 && a.absolute < 9007199254740991 && (a.matchesPolicy(p) || a.matchesPolicy(rememberedPolicy))
+}
+
+func (a *Attempt) matchesPolicy(p Policy) bool {
+	return a.absolute-a.created == p.Absolute.Milliseconds() && a.initial-a.created == p.Idle.Milliseconds()
 }
 
 // View is a point-in-time identity observation, not a session credential or

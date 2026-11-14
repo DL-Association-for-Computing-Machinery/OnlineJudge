@@ -117,11 +117,11 @@ func (h *handler) serveLogin(w http.ResponseWriter, r *http.Request, source neti
 		h.servePendingDevices(w, r, ctx, c)
 		return
 	}
-	credential, err := h.login.Complete(ctx, c)
-	finishLogin(w, ctx, credential, err)
+	grant, err := h.login.CompleteGrant(ctx, c)
+	finishLogin(w, ctx, grant, err)
 }
 
-func finishLogin(w http.ResponseWriter, ctx context.Context, credential redisstore.Credential, err error) {
+func finishLogin(w http.ResponseWriter, ctx context.Context, grant redisstore.LoginGrant, err error) {
 	if err == nil {
 		err = ctx.Err()
 	}
@@ -129,8 +129,9 @@ func finishLogin(w http.ResponseWriter, ctx context.Context, credential redissto
 		loginError(w, err)
 		return
 	}
-	// Both headers occur only after Retry and a separate successful Check.
-	http.SetCookie(w, &http.Cookie{Name: CookieName, Value: credential.Value(), Path: "/", Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	// Only a verified remembered candidate gives the cookie an absolute expiry.
+	http.SetCookie(w, &http.Cookie{Name: CookieName, Value: grant.Credential.Value(), Path: "/", Secure: true,
+		HttpOnly: true, SameSite: http.SameSiteLaxMode, Expires: grant.PersistentUntil})
 	http.SetCookie(w, clearAttemptCookie())
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -162,7 +163,7 @@ func (h *handler) canLogin(w http.ResponseWriter, r *http.Request, ctx context.C
 }
 
 func (h *handler) beginLogin(w http.ResponseWriter, r *http.Request, ctx context.Context, source netip.Addr) {
-	email, secret, err := loginBody(w, r)
+	email, secret, remember, err := loginBody(w, r)
 	if err != nil {
 		return
 	}
@@ -173,7 +174,7 @@ func (h *handler) beginLogin(w http.ResponseWriter, r *http.Request, ctx context
 	if !h.canLogin(w, r, ctx) {
 		return
 	}
-	c, err := h.login.Prepare(ctx, email, secret)
+	c, err := h.login.PrepareWithPersistence(ctx, email, secret, remember)
 	if err == nil {
 		err = ctx.Err()
 	}

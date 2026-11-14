@@ -165,7 +165,7 @@ paths:
       description: >-
         用当前 Cookie 读取新鲜的完整会话及账号/恢复权威状态；只读，不续期、不设置 Cookie。
         返回恰好四个公开字段，不返回凭据、凭据版本或认证/恢复代次，也不是后续资源访问的可复用授权。
-        显式入口的普通策略为两小时 idle、十二小时 absolute；以返回的原始截止时间和服务端判断为准。
+        默认策略为空闲两小时、最长十二小时；主动保持登录为空闲二十四小时、最长七天。
       responses:
         '200':
           $ref: '#/components/responses/SessionView'
@@ -248,7 +248,7 @@ paths:
       requestBody:
         required: true
         description: >-
-          最多 4096 个请求体字节，恰好两个非空字符串；拒绝未知、重复（包括转义别名）、null、
+          最多 4096 个请求体字节，两个必需的非空字符串及可选布尔值 remember；拒绝未知、重复（包括转义别名）、null、
           非法 UTF-8/未配对 UTF-16 surrogate 及尾随数据。Content-Type 必须为 application/json，可带合法媒体参数。
         content:
           application/json:
@@ -271,6 +271,10 @@ paths:
                   minLength: 1
                   writeOnly: true
                   description: 完整字节长度还须满足该实例显式 KDF 输入上限；不回显或持久化在浏览器存储中。
+                remember:
+                  type: boolean
+                  default: false
+                  description: 主动选择才使用二十四小时空闲及七天绝对期限；选择随原候选冻结。
       responses:
         '202':
           description: 已准备候选；无响应体，恰好一个短期加密登录候选 Cookie，尚未登录。
@@ -441,7 +445,7 @@ components:
     CompletedCookies:
       description: >-
         两个独立 Set-Cookie，不得逗号合并。__Host-oj_session 设置不透明凭据，Secure、HttpOnly、
-        SameSite=Lax、Path=/、无 Domain、无 Expires/Max-Age；__Host-oj_login 以同一属性和
+        SameSite=Lax、Path=/、无 Domain；默认无 Expires/Max-Age，保持登录仅设置原绝对截止的 Expires。__Host-oj_login 以同一属性和
         Max-Age=0、过去的 Expires 删除。普通 Cookie 非持久配置不保证浏览器关闭立即撤销服务端会话。
       schema:
         type: array

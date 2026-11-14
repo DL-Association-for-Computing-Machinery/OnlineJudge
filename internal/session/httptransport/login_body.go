@@ -12,12 +12,12 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/jsoninput"
 )
 
-func loginBody(w http.ResponseWriter, r *http.Request) (identity.Email, []byte, error) {
+func loginBody(w http.ResponseWriter, r *http.Request) (identity.Email, []byte, bool, error) {
 	bad := errors.New("invalid login body")
 	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || media != "application/json" {
 		problem(w, 415, "UNSUPPORTED_MEDIA_TYPE", "请使用 JSON 提交")
-		return identity.Email{}, nil, bad
+		return identity.Email{}, nil, false, bad
 	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 4096))
 	defer clear(body)
@@ -28,18 +28,19 @@ func loginBody(w http.ResponseWriter, r *http.Request) (identity.Email, []byte, 
 		} else {
 			problem(w, 400, "INVALID_LOGIN", "无法读取登录请求")
 		}
-		return identity.Email{}, nil, bad
+		return identity.Email{}, nil, false, bad
 	}
 	if !jsoninput.ValidUnicode(body) {
 		problem(w, 400, "INVALID_LOGIN", "登录请求格式无效")
-		return identity.Email{}, nil, bad
+		return identity.Email{}, nil, false, bad
 	}
 	values := make(map[string]string, 2)
+	var remember *bool
 	dec := json.NewDecoder(bytes.NewReader(body))
 	start, err := dec.Token()
 	if err != nil || start != json.Delim('{') {
 		problem(w, 400, "INVALID_LOGIN", "登录请求格式无效")
-		return identity.Email{}, nil, bad
+		return identity.Email{}, nil, false, bad
 	}
 	for dec.More() {
 		key, err := dec.Token()
@@ -47,8 +48,14 @@ func loginBody(w http.ResponseWriter, r *http.Request) (identity.Email, []byte, 
 			return invalidLoginBody(w, bad)
 		}
 		name, ok := key.(string)
-		if !ok || (name != "email" && name != "password") {
+		if !ok || (name != "email" && name != "password" && name != "remember") {
 			return invalidLoginBody(w, bad)
+		}
+		if name == "remember" {
+			if remember != nil || dec.Decode(&remember) != nil || remember == nil {
+				return invalidLoginBody(w, bad)
+			}
+			continue
 		}
 		if _, exists := values[name]; exists {
 			return invalidLoginBody(w, bad)
@@ -69,10 +76,10 @@ func loginBody(w http.ResponseWriter, r *http.Request) (identity.Email, []byte, 
 	if err != nil || values["password"] == "" {
 		return invalidLoginBody(w, bad)
 	}
-	return email, []byte(values["password"]), nil
+	return email, []byte(values["password"]), remember != nil && *remember, nil
 }
 
-func invalidLoginBody(w http.ResponseWriter, err error) (identity.Email, []byte, error) {
+func invalidLoginBody(w http.ResponseWriter, err error) (identity.Email, []byte, bool, error) {
 	problem(w, 400, "INVALID_LOGIN", "登录请求格式无效")
-	return identity.Email{}, nil, err
+	return identity.Email{}, nil, false, err
 }
