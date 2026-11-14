@@ -113,6 +113,10 @@ func TestReviewApprovalLedgerBindsAssignmentAndRetainsAudit(t *testing.T) {
 	assertCode(write(1, "approval-different-key"), "23505")
 	_, err = f.provider.DownTo(f.ctx, 25)
 	assertCode(err, "P0001")
+	// The empty publisher ledger can roll back before the protected approval
+	// migration refuses. Restore the current schema before testing startup.
+	_, err = f.provider.Up(f.ctx)
+	must(t, err)
 	must(t, db.CheckSchema(f.ctx, f.a))
 	var count int
 	must(t, f.a.QueryRow(f.ctx, `SELECT count(*) FROM problem_review_approvals`).Scan(&count))

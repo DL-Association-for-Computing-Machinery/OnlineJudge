@@ -29,7 +29,7 @@ const (
 	rollbackVersion       = experiment.PinnedVersion
 	rollbackCurrent       = "../../.local/bin"
 	rollbackBaseSchema    = 20
-	rollbackCurrentSchema = 26
+	rollbackCurrentSchema = 27
 )
 
 type rollbackFixture struct {
