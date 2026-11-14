@@ -924,6 +924,15 @@ python3 -B scripts/cold_trial_images.py "$RUNTIME_ARCHIVE" --sha256 "$TRUSTED_AR
 
 接收命令拒绝常用系统 socket、数据目录不匹配或已有镜像、容器、卷的引擎；不清空镜像库。导入后核对完整镜像集合，禁止拉取并验证 Nginx 程序、临时 PostgreSQL 查询及临时 Redis 写读。脚本不创建或停止 Docker 引擎，结束后由实验操作者停止自建引擎；镜像保留在该实验数据目录。此步骤不验证应用与镜像的联合冷启动，也不运行判题镜像。
 
+在**同一隔离 arm64 接收环境**做联合冷启动时，把前一条接收命令的标准输出保存为 `$IMAGE_REPORT`，并以 root 持有收到的应用包（保留权限）。临时引擎根目录应为 `/tmp/oj-p6-*/engine.*` 下的 root 私有目录，Unix socket 为该目录的 `docker.sock`，Docker 数据目录为其 `data/`。在启动独立引擎的同一私有挂载和网络空间中运行：
+
+```sh
+bash scripts/smoke-cold-trial.sh "$COLD_DOCKER_SOCKET" "$COLD_ENGINE_DIR" \
+  "$RECEIVED_BUNDLE_DIR" "$TRUSTED_MANIFEST_SHA256" "$IMAGE_REPORT" deploy/trial/nginx.conf.example
+```
+
+此专项在封闭的回环网络中用临时 PostgreSQL、Redis、测试证书和合成配置验证空库迁移、会话门禁开启、HTTPS 就绪、前端和正常退出；不接收真实配置、不创建账号、不启动判题。不要在现场引擎运行此夹具。
+
 ### 试用同源 HTTPS 入口
 
 用[独立 Nginx 模板](deploy/trial/nginx.conf.example)准备试用入口。将 `oj.example.invalid` 的所有出现处替换为同一个公开域名；本模板对应公开端口 443，映射至 Nginx 的 8443。把已核验应用制品的 `site/` 以只读方式挂载至 `/srv/oj/site`；应让 Nginx 运行账号读取安装后的文件，同时保持原接收包不变。
