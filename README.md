@@ -934,6 +934,29 @@ python3 -B scripts/verify_trial_images.py "$RUNTIME_ARCHIVE" --sha256 "$TRUSTED_
 
 命令只读核对归档、每个引用 blob、目标平台和可导入镜像集合，不解包、不调用 Docker。通过后仍需在受控的空镜像库验证导入、回读身份和禁拉取启动。可选判题镜像仍须单独满足目标节点的运行准入。
 
+### 核对同一批试用制品
+
+发送端从审查记录取应用包摘要、运行镜像归档摘要和各角色配置摘要，将应用、内置 Nginx 模板和运行镜像绑定在一份发布清单中。清单只创建新文件；如归档还包含判题镜像，封存时追加 `--sandbox "$SANDBOX_CONFIG_DIGEST"`。
+
+```sh
+python3 -B scripts/trial_release.py pack "$RELEASE_MANIFEST" \
+  --revision "$RELEASE_COMMIT" --platform linux/arm64 \
+  --app "$APP_BUNDLE_DIR" --app-sha256 "$APP_MANIFEST_SHA256" \
+  --runtime "$RUNTIME_ARCHIVE" --runtime-sha256 "$RUNTIME_ARCHIVE_SHA256" \
+  --nginx "$NGINX_CONFIG_DIGEST" --postgres "$POSTGRES_CONFIG_DIGEST" --redis "$REDIS_CONFIG_DIGEST"
+```
+
+接收端在导入或启动前，用独立可信渠道取得的发布清单 SHA-256 和可信工作树中的脚本重新核验两份制品。保持清单、应用目录和归档静止，导入时沿用报告中的平台、归档摘要和配置摘要。
+
+```sh
+python3 -B scripts/trial_release.py verify "$RELEASE_MANIFEST" \
+  --sha256 "$TRUSTED_RELEASE_SHA256" --app "$RECEIVED_BUNDLE_DIR" --runtime "$RUNTIME_ARCHIVE"
+```
+
+校验仅证明两份制品符合可信清单。现场配置、密钥、版本来源审查和试用验收仍分别保留。负载观测中的 `release_sha256` 使用这份发布清单的摘要。
+
+### 从空引擎导入并联验试用制品
+
 在专用实验 VM 内，先准备无外网路由的网络空间、独立 Docker Unix socket、全新的 Docker 和 containerd 数据目录，并确认 containerd 内容库为空。保持归档和其父目录由操作员控制，验证、导入期间不替换文件。使用相同的信任参数运行：
 
 ```sh

@@ -12,21 +12,25 @@ SCRIPT = Path(__file__).resolve().parents[2] / "scripts/trial_app_bundle.py"
 REVISION = "1" * 40
 
 
+def app_export(source):
+    (source / "bin").mkdir(parents=True)
+    (source / "site/assets").mkdir(parents=True)
+    (source / "templates").mkdir(parents=True)
+    elf = bytearray(64)
+    elf[:7] = b"\x7fELF\x02\x01\x01"
+    elf[16:20] = b"\x02\x00\xb7\x00"
+    for name in ("api", "worker", "worker-api", "migrate", "materialstore", "mail-worker"):
+        (source / "bin" / name).write_bytes(elf)
+    for name in ("site/index.html", "site/THIRD-PARTY-NOTICES.txt", "site/assets/index-a.js"):
+        (source / name).write_text("synthetic\n")
+    (source / "templates/nginx.conf.example").write_text("worker_processes 1;\n")
+
+
 class TrialAppBundleTests(unittest.TestCase):
     def setUp(self):
         root = Path(self.enterContext(tempfile.TemporaryDirectory()))
         self.source, self.bundle, self.received = (root / name for name in ("export", "bundle", "received"))
-        (self.source / "bin").mkdir(parents=True)
-        (self.source / "site/assets").mkdir(parents=True)
-        (self.source / "templates").mkdir(parents=True)
-        elf = bytearray(64)
-        elf[:7] = b"\x7fELF\x02\x01\x01"
-        elf[16:20] = b"\x02\x00\xb7\x00"
-        for name in ("api", "worker", "worker-api", "migrate", "materialstore", "mail-worker"):
-            (self.source / "bin" / name).write_bytes(elf)
-        for name in ("site/index.html", "site/THIRD-PARTY-NOTICES.txt", "site/assets/index-a.js"):
-            (self.source / name).write_text("synthetic\n")
-        (self.source / "templates/nginx.conf.example").write_text("worker_processes 1;\n")
+        app_export(self.source)
 
     def invoke(self, *args):
         return subprocess.run([sys.executable, "-B", str(SCRIPT), *args],
