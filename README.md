@@ -901,7 +901,7 @@ docker --context desktop-linux buildx build --builder desktop-linux \
   --output "type=local,dest=$stage" .
 ```
 
-输出包含 `bin/` 下的 API、Worker、控制器、内嵌迁移工具、材料工具和邮件执行器，以及 `site/` 下的正式前端。开发登录启动器和实验测试二进制不会导出。首次构建需获取已锁定的依赖；目标机接收成品，不重新编译。
+输出包含 `bin/` 下的 API、Worker、控制器、内嵌迁移工具、材料工具和邮件执行器，`site/` 下的正式前端，以及 `templates/nginx.conf.example`。开发登录启动器、实验测试二进制、真实配置和证书不会导出。首次构建需获取已锁定的依赖；目标机接收成品，不重新编译。
 
 在发送端用 Python 3.9+ 封存到一个尚不存在的同级目录。通过独立可信渠道传递打印出的清单 SHA-256。接收端保留文件权限、由接收账号持有整个目录，使用可信工作树中的脚本核验；两端核对期间都不修改目录。接收端按目标机架构填写 `--platform`。
 
@@ -912,7 +912,7 @@ python3 -B scripts/trial_app_bundle.py verify --manifest-sha256 "$TRUSTED_MANIFE
   --platform linux/arm64 "$RECEIVED_BUNDLE_DIR"
 ```
 
-核验成功输出构建方声明的 Git 提交；不执行程序，也不替代构建来源审查。封存失败时，未写出清单的输出目录不可交付，复测使用新目录。此包只覆盖[试用离线交付](docs/architecture/operations-design.md#5-发布与回滚)的应用部分；完整发布还需封存运行依赖镜像、配置模板和安装恢复说明。密钥与真实配置单独交接。
+核验成功输出构建方声明的 Git 提交；不执行程序，也不替代构建来源审查。应用包 v2 要求同时封存 Nginx 模板；不含模板的 v1 旧包须重新导出封存后再做此联验。封存失败时，未写出清单的输出目录不可交付，复测使用新目录。完整[试用离线交付](docs/architecture/operations-design.md#5-发布与回滚)还需运行依赖镜像、其他现场配置及安装恢复说明。密钥与真实配置单独交接。
 
 ### 核验试用运行镜像
 
@@ -948,16 +948,16 @@ python3 -B scripts/cold_trial_images.py "$RUNTIME_ARCHIVE" --sha256 "$TRUSTED_AR
 
 ```sh
 bash scripts/smoke-cold-trial.sh "$COLD_DOCKER_SOCKET" "$COLD_ENGINE_DIR" \
-  "$RECEIVED_BUNDLE_DIR" "$TRUSTED_MANIFEST_SHA256" "$IMAGE_REPORT" deploy/trial/nginx.conf.example
+  "$RECEIVED_BUNDLE_DIR" "$TRUSTED_MANIFEST_SHA256" "$IMAGE_REPORT"
 ```
 
-此专项在封闭的回环网络中用临时 PostgreSQL、Redis、测试证书和合成配置验证空库迁移、会话门禁开启、HTTPS 就绪、前端和正常退出；不接收真实配置、不创建账号、不启动判题。不要在现场引擎运行此夹具。
+此专项在封闭的回环网络中，从核验过的应用包复制 Nginx 模板，配合临时 PostgreSQL、Redis、测试证书和合成配置验证空库迁移、会话门禁开启、HTTPS 就绪、前端和正常退出；不接收外部模板或真实配置，不创建账号、不启动判题。不要在现场引擎运行此夹具。
 
 如需在同一冷接收环境追加固定合成判题，先按下文[专用 Ubuntu VM 判题实验](#专用-ubuntu-vm-判题实验)用**同一 Git 提交**制作实验判题包。接收端须保证判题包及各级祖先目录由 root 控制。仍在同一个专用 VM 的私有挂载和无外网路由的网络空间、且只导入了试用运行镜像时执行：
 
 ```sh
 bash scripts/smoke-cold-trial-judge.sh "$COLD_DOCKER_SOCKET" "$COLD_ENGINE_DIR" \
-  "$RECEIVED_BUNDLE_DIR" "$TRUSTED_MANIFEST_SHA256" "$IMAGE_REPORT" deploy/trial/nginx.conf.example \
+  "$RECEIVED_BUNDLE_DIR" "$TRUSTED_MANIFEST_SHA256" "$IMAGE_REPORT" \
   "$JUDGE_BUNDLE_DIR" "$TRUSTED_JUDGE_MANIFEST_SHA256"
 ```
 

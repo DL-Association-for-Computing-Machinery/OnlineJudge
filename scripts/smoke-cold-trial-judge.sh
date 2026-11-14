@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Combine two verified fixtures in the same disposable Ubuntu receiver.
 set -Eeuo pipefail
-[[ $# == 8 && $(id -u) == 0 ]]
-socket=$1 root=$2 app=$3 app_pin=$4 image_report=$5 template=$6 judge=$7 judge_pin=$8
+[[ $# == 7 && $(id -u) == 0 ]]
+socket=$1 root=$2 app=$3 app_pin=$4 image_report=$5 judge=$6 judge_pin=$7
 [[ $socket == "$root/docker.sock" && $root == /tmp/oj-p6-*/engine.* && -S $socket ]]
 [[ $(realpath -e "$root") == "$root" && $(stat -c '%u:%a' "$root") == 0:700 ]]
 [[ $(findmnt -n -o PROPAGATION -T /run) == private ]]
@@ -18,7 +18,7 @@ app_revision=$(python3 -B "$scripts/trial_app_bundle.py" verify --platform linux
 judge_result=$(python3 -B "$scripts/offline_judge_bundle.py" verify --manifest-sha256 "$judge_pin" "$judge")
 [[ $judge_result == "Verified offline judging bundle: $app_revision" ]]
 
-bash "$scripts/smoke-cold-trial.sh" "$socket" "$root" "$app" "$app_pin" "$image_report" "$template"
+bash "$scripts/smoke-cold-trial.sh" "$socket" "$root" "$app" "$app_pin" "$image_report"
 [[ -z $("${docker[@]}" ps -aq) && -z $("${docker[@]}" volume ls -q) ]]
 
 # The Ubuntu Worker checks the standard socket path. Redirect it only inside

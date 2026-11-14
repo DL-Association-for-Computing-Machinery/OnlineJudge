@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Run only in the private, no-egress network namespace of a disposable receiver.
 set -Eeuo pipefail
-[[ $# == 6 && $(id -u) == 0 ]]
-socket=$1 root=$2 app=$3 digest=$4 image_report=$5 template=$6
+[[ $# == 5 && $(id -u) == 0 ]]
+socket=$1 root=$2 app=$3 digest=$4 image_report=$5
 [[ $socket == "$root/docker.sock" && $root == /tmp/oj-p6-*/engine.* && -S $socket ]]
 [[ $(realpath -e "$root") == "$root" && $(stat -c '%u:%a' "$root") == 0:700 ]]
 [[ -z $(ip route show default) && -z $(ip -6 route show default) ]]
@@ -129,12 +129,13 @@ for file in public-chain.pem public-key.pem proxy-chain.pem proxy-key.pem api-ca
 done
 chown -R 101:101 "$stage/edge"
 cp -R "$app/site" "$stage/site"
+install -m 0644 "$app/templates/nginx.conf.example" "$stage/nginx.conf"
 find "$stage/site" -type d -exec chmod 755 {} +
 find "$stage/site" -type f -exec chmod 644 {} +
 nginx=$("${docker[@]}" run "${common[@]}" --user 101:101 \
     --mount "type=bind,src=$stage/edge,dst=/run/oj-edge,readonly" \
     --mount "type=bind,src=$stage/site,dst=/srv/oj/site,readonly" \
-    --mount "type=bind,src=$template,dst=/trial.conf,readonly" \
+    --mount "type=bind,src=$stage/nginx.conf,dst=/trial.conf,readonly" \
     --entrypoint sh "${images[2]}" -ec 'nginx -t -c /trial.conf; exec nginx -c /trial.conf -g "daemon off;"')
 containers+=("$nginx")
 edge() {

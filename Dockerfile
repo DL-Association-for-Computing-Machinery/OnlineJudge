@@ -124,6 +124,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 FROM scratch AS trial-artifacts
 COPY --from=trial-build /out/ /bin/
 COPY --from=frontend-build /src/web/dist/ /site/
+COPY deploy/trial/nginx.conf.example /templates/nginx.conf.example
 
 # The local account environment is a separate opt-in image. Production API and
 # frontend images do not contain this launcher or its development-only UI.

@@ -11,10 +11,11 @@ import stat
 import sys
 
 
-SCHEMA = "oj.trial-application.v1"
+SCHEMA = "oj.trial-application.v2"
 MANIFEST = "manifest.json"
 PROGRAMS = {"api", "worker", "worker-api", "migrate", "materialstore", "mail-worker"}
 SITE = {"index.html", "THIRD-PARTY-NOTICES.txt"}
+TEMPLATE = "nginx.conf.example"
 ASSET = re.compile(r"[A-Za-z0-9_-][A-Za-z0-9_.-]{0,199}\.(js|css|ttf|woff2?)")
 MACHINE = {"linux/amd64": 62, "linux/arm64": 183}
 MAX_ASSETS = 512
@@ -41,18 +42,18 @@ def names(path, limit):
 
 
 def layout(root, sealed):
-    for folder in ("", "bin", "site", "site/assets"):
+    for folder in ("", "bin", "site", "site/assets", "templates"):
         require_directory(root / folder, sealed)
-    top = {"bin", "site"} | ({MANIFEST} if sealed else set())
-    if names(root, 3) != top or names(root / "bin", len(PROGRAMS)) != PROGRAMS \
-            or names(root / "site", 3) != SITE | {"assets"}:
+    top = {"bin", "site", "templates"} | ({MANIFEST} if sealed else set())
+    if (names(root, len(top)) != top or names(root / "bin", len(PROGRAMS)) != PROGRAMS
+            or names(root / "site", 3) != SITE | {"assets"} or names(root / "templates", 1) != {TEMPLATE}):
         raise ValueError("unexpected application file set")
     assets = names(root / "site/assets", MAX_ASSETS)
     if not assets or not all(ASSET.fullmatch(name) for name in assets) or not any(
             name.endswith(".js") for name in assets):
         raise ValueError("unexpected static assets")
     return sorted([*(f"bin/{name}" for name in PROGRAMS), *(f"site/{name}" for name in SITE),
-                   *(f"site/assets/{name}" for name in assets)])
+                   *(f"site/assets/{name}" for name in assets), f"templates/{TEMPLATE}"])
 
 
 def open_file(path, limit, sealed_mode=None):
@@ -126,7 +127,7 @@ def pack(source, revision, platform, output):
         raise ValueError("bundle output must be outside the export")
     paths = layout(source, sealed=False)
     output.mkdir(mode=0o700)
-    for folder in ("bin", "site", "site/assets"):
+    for folder in ("bin", "site", "site/assets", "templates"):
         (output / folder).mkdir(mode=0o700)
     data = encode(revision, platform, inventory(source, paths, platform, output))
     if len(data) > MAX_MANIFEST:

@@ -18,6 +18,7 @@ class TrialAppBundleTests(unittest.TestCase):
         self.source, self.bundle, self.received = (root / name for name in ("export", "bundle", "received"))
         (self.source / "bin").mkdir(parents=True)
         (self.source / "site/assets").mkdir(parents=True)
+        (self.source / "templates").mkdir(parents=True)
         elf = bytearray(64)
         elf[:7] = b"\x7fELF\x02\x01\x01"
         elf[16:20] = b"\x02\x00\xb7\x00"
@@ -25,6 +26,7 @@ class TrialAppBundleTests(unittest.TestCase):
             (self.source / "bin" / name).write_bytes(elf)
         for name in ("site/index.html", "site/THIRD-PARTY-NOTICES.txt", "site/assets/index-a.js"):
             (self.source / name).write_text("synthetic\n")
+        (self.source / "templates/nginx.conf.example").write_text("worker_processes 1;\n")
 
     def invoke(self, *args):
         return subprocess.run([sys.executable, "-B", str(SCRIPT), *args],
@@ -80,3 +82,17 @@ class TrialAppBundleTests(unittest.TestCase):
                              "--platform", "linux/arm64", self.received)
         self.assert_refused(result)
         self.assertFalse(self.received.exists())
+
+    def test_edge_template_is_required_and_bound_to_the_manifest(self):
+        digest = self.receive()
+        template = self.received / "templates/nginx.conf.example"
+        original = template.read_bytes()
+        template.write_bytes(original.replace(b"1", b"2"))
+        self.assert_refused(self.verify(digest))
+        template.unlink()
+        self.assert_refused(self.verify(digest))
+        source = self.source / "templates/nginx.conf.example"
+        source.rename(source.with_suffix(".local"))
+        result = self.invoke("pack", "--export", self.source, "--revision", REVISION,
+                             "--platform", "linux/arm64", self.source.parent / "missing-template")
+        self.assert_refused(result)
