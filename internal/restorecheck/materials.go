@@ -15,6 +15,7 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materials"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materialstore"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
+	referencepg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference/postgres"
 	submissionpg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
 )
 
@@ -89,6 +90,14 @@ func CheckMaterialReferences(ctx context.Context, tx pgx.Tx, judge func(context.
 		return zero, err
 	}
 	if err := verifyPlans(ctx, tx, &objects, &summary); err != nil {
+		return zero, err
+	}
+	if err := referencepg.VisitPublishedStatements(ctx, tx, func(ctx context.Context, object materialstore.Object) error {
+		if err := objects.check(ctx, object, &summary); err != nil {
+			return fmt.Errorf("published statement: %w", err)
+		}
+		return nil
+	}); err != nil {
 		return zero, err
 	}
 	return summary, nil
