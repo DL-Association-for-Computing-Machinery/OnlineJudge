@@ -6,6 +6,8 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"time"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
@@ -152,6 +154,13 @@ func (c Config) validate() (*password.Hasher, *password.BoundedHasher, error) {
 	}
 	if c.PrivateDrafts != nil && c.PrivateDrafts.Validate() != nil {
 		return nil, nil, ErrConfig
+	}
+	if c.PrivateDrafts != nil && c.PrivateDrafts.LocalExecution != nil {
+		origin, err := url.Parse(c.HTTP.Origin)
+		if err != nil || !net.ParseIP(origin.Hostname()).IsLoopback() ||
+			!c.PrivateDrafts.LocalExecution.Valid() || c.Database.Host == "" || c.Database.Host[0] != '/' {
+			return nil, nil, ErrConfig
+		}
 	}
 	if c.StartupTimeout <= 0 || c.StartupTimeout > time.Minute || c.SecretsFile == "" || c.HTTP.Validate() != nil ||
 		redisstore.ValidateSetup(c.Namespace, redisstore.OrdinaryPolicy(), c.HTTP.Origin, c.LoginWindow, c.LoginLimits) != nil {

@@ -13,7 +13,7 @@ import (
 func NewSessionHandler(session http.Handler) http.Handler {
 	bootstrap := NewHandler()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		optional := httptransport.IsDevicePath(r.URL.Path) || httptransport.IsPendingDevicePath(r.URL.Path) ||
+		optional := httptransport.IsCatalogPath(r.URL.Path) || httptransport.IsDevicePath(r.URL.Path) || httptransport.IsPendingDevicePath(r.URL.Path) ||
 			httptransport.IsPrivateDraftPath(r.URL.Path) || httptransport.IsReferenceRequestPath(r.URL.Path) ||
 			httptransport.IsReviewIntakePath(r.URL.Path) || httptransport.IsReviewReadPath(r.URL.Path) ||
 			httptransport.IsReviewReturnPath(r.URL.Path) || httptransport.IsReviewApprovalPath(r.URL.Path) || httptransport.IsStatementConfirmationPath(r.URL.Path) ||

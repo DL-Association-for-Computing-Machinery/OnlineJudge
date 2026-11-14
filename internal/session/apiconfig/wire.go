@@ -1,5 +1,7 @@
 package apiconfig
 
+import "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
+
 type document struct {
 	Version                  int                    `json:"version"`
 	Mode                     string                 `json:"mode"`
@@ -52,18 +54,20 @@ type emailLimitsWire struct {
 }
 
 type privateDraftsWire struct {
-	MaterialRoot           string   `json:"material_root"`
-	BundleDirectory        string   `json:"bundle_directory"`
-	SourceLockFile         string   `json:"source_lock_file"`
-	SourceIDs              []string `json:"source_ids"`
-	Timeout                string   `json:"timeout"`
-	MaxInFlight            int      `json:"max_in_flight"`
-	ReferenceRequests      bool     `json:"reference_requests"`
-	ReviewIntake           bool     `json:"review_intake"`
-	ReviewAccess           bool     `json:"review_access"`
-	ReviewReturns          bool     `json:"review_returns"`
-	ReviewApprovals        bool     `json:"review_approvals"`
-	StatementConfirmations bool     `json:"statement_confirmations"`
+	MaterialRoot           string                                       `json:"material_root"`
+	BundleDirectory        string                                       `json:"bundle_directory"`
+	SourceLockFile         string                                       `json:"source_lock_file"`
+	SourceIDs              []string                                     `json:"source_ids"`
+	Timeout                string                                       `json:"timeout"`
+	MaxInFlight            int                                          `json:"max_in_flight"`
+	ReferenceRequests      bool                                         `json:"reference_requests"`
+	ReviewIntake           bool                                         `json:"review_intake"`
+	ReviewAccess           bool                                         `json:"review_access"`
+	ReviewReturns          bool                                         `json:"review_returns"`
+	ReviewApprovals        bool                                         `json:"review_approvals"`
+	PublicCatalog          bool                                         `json:"public_catalog"`
+	StatementConfirmations bool                                         `json:"statement_confirmations"`
+	LocalExecution         *problemvalidation.APlusBLocalAdmissionInput `json:"aplusb_local_execution"`
 }
 
 type passwordChangeWire struct {

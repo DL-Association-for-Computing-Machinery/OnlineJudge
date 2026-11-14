@@ -34,7 +34,7 @@ func (s *ReviewStore) ReviewEligibilitySnapshot(ctx context.Context, actor ident
 	if err := lockReviewMaterial(ctx, q, item.materialDigest()); err != nil {
 		return zero, storageError{err}
 	}
-	snapshot, err := loadReviewEligibilitySnapshot(ctx, q, item)
+	snapshot, err := s.loadReviewEligibilitySnapshot(ctx, tx, q, item)
 	if err != nil {
 		return zero, err
 	}
@@ -49,9 +49,10 @@ func (s *ReviewStore) ReviewEligibilitySnapshot(ctx context.Context, actor ident
 
 // loadReviewEligibilitySnapshot must run after locking the current identity and
 // assignment and taking the same material lock as returns and statement confirmations.
-func loadReviewEligibilitySnapshot(ctx context.Context, q *referencedb.Queries, item assignedReview) (problemreference.ReviewEligibilitySnapshot, error) {
+func (s *ReviewStore) loadReviewEligibilitySnapshot(ctx context.Context, tx pgx.Tx, q *referencedb.Queries, item assignedReview) (problemreference.ReviewEligibilitySnapshot, error) {
 	var zero problemreference.ReviewEligibilitySnapshot
-	if _, err := loadHistoricalReviewEvidence(ctx, q, item.owner, item.evidence); err != nil {
+	frozen, err := loadHistoricalReviewEvidence(ctx, q, item.owner, item.evidence)
+	if err != nil {
 		return zero, storageError{err}
 	}
 	statement, err := q.StatementConfirmationByAssignment(ctx, referencedb.StatementConfirmationByAssignmentParams{
@@ -82,6 +83,20 @@ func loadReviewEligibilitySnapshot(ctx context.Context, q *referencedb.Queries, 
 	case err != nil && !errors.Is(err, pgx.ErrNoRows):
 		return zero, storageError{err}
 	}
-	return problemreference.ReviewEligibilitySnapshot{Evidence: item.evidence, Returned: returned, SolutionConfirmed: confirmed,
-		StatementConfirmed: statementConfirmed && !returned}, nil
+	snapshot := problemreference.ReviewEligibilitySnapshot{Evidence: item.evidence, Returned: returned, SolutionConfirmed: confirmed,
+		StatementConfirmed: statementConfirmed && !returned}
+	if s.local.Match(frozen.bound, item.evidence.FormalPlanSHA256, item.evidence.ProfileSHA256) {
+		_, version, execution := s.local.Binding()
+		var evidence string
+		err := tx.QueryRow(ctx, `SELECT execution_sha256 FROM problem_execution_admissions WHERE
+			import_revision=$1 AND formal_plan_sha256=$2 AND execution_version=$3 AND execution_sha256=$4 FOR SHARE`,
+			frozen.bound.ImportRevision, item.evidence.FormalPlanSHA256, version, execution).Scan(&evidence)
+		switch {
+		case err == nil:
+			snapshot.LocalExecution = s.local
+		case !errors.Is(err, pgx.ErrNoRows):
+			return zero, storageError{err}
+		}
+	}
+	return snapshot, nil
 }

@@ -26,6 +26,40 @@ function passed(name) { report.checks.push(name); console.log('PASS ' + name) }
 let step = 'setup'
 let status
 
+async function contestantCatalog(browser) {
+  const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 390, height: 844 } })
+  try {
+    const page = await context.newPage()
+    await page.goto(info.origin + '/')
+    step = 'load anonymous catalog from the real API'
+    const [catalog] = await Promise.all([
+      page.waitForResponse(r => r.url() === info.origin + '/api/v1/problems', { timeout: 8000 }),
+      page.getByRole('link', { name: '查看已发布题库', exact: true }).click(),
+    ])
+    status = catalog.status()
+    assert.equal(status, 200)
+    const listed = await catalog.json()
+    assert.deepEqual(listed, { problems: [{ id: ready.catalog_fixture_id, version: listed.problems[0].version, title: listed.problems[0].title }], next: '' })
+    await page.getByRole('searchbox', { name: '题目名称' }).fill('no matching title')
+    await page.getByRole('button', { name: '搜索', exact: true }).click()
+    await page.getByText('没有匹配的已发布题目。', { exact: true }).waitFor()
+    await page.getByRole('searchbox', { name: '题目名称' }).fill(listed.problems[0].title)
+    await page.getByRole('button', { name: '搜索', exact: true }).click()
+    await page.getByRole('link', { name: listed.problems[0].title, exact: true }).click()
+    await page.getByRole('heading', { name: 'Browser statement', exact: true }).waitFor()
+    assert.deepEqual(await page.getByRole('region', { name: '样例' }).locator('pre').allTextContents(), ['1 2\n', '3\n'])
+    assert.match(await page.getByRole('img', { name: '授权的本题示意图' }).getAttribute('src'), /^data:image\/png;base64,/)
+    assert.equal(await page.getByRole('heading', { name: '冻结标程' }).count(), 0)
+    await page.reload()
+    await page.getByRole('heading', { name: 'Browser statement', exact: true }).waitFor()
+    const response = await context.request.get(info.origin + '/api/v1/problems/' + ready.review_draft_id)
+    assert.equal(response.status(), 404)
+    assert.equal(response.headers()['set-cookie'], undefined)
+    await page.goto(info.origin + '/problems/' + ready.review_draft_id)
+    await page.getByText('找不到这道已发布题目。', { exact: true }).waitFor()
+  } finally { await context.close() }
+}
+
 async function exercise(browser, viewport, reviewer, select, confirm = false, doReturn = false, approve = false) {
   status = undefined
   const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport })
@@ -189,6 +223,7 @@ async function reviewerApproval(page, reads) {
   const submit = page.getByRole('button', { name: '确认批准', exact: true })
   const query = page.getByRole('button', { name: '查询原批准回执' })
   const reason = page.getByLabel('批准理由')
+  let postedSnapshot
 
   // Exercise the passing UI without changing the real, blocked policy.
   await page.route(info.origin + eligibilityPath, async route => {
@@ -196,6 +231,7 @@ async function reviewerApproval(page, reads) {
     assert.equal(response.status(), 200)
     const actual = await response.json()
     assert.equal(actual.eligible, false)
+    postedSnapshot = actual.snapshot_sha256
     await route.fulfill({ status: 200, json: { ...actual, eligible: true, blockers: [] } })
   })
   step = 'passing UI and definitive refusal from the real API'
@@ -209,7 +245,10 @@ async function reviewerApproval(page, reads) {
   const [blocked] = await Promise.all([page.waitForResponse(r => r.url() === info.origin + approvalPath), submit.click()])
   status = blocked.status()
   assert.equal(blocked.status(), 409)
-  assert.equal((await blocked.json()).code, 'REVIEW_APPROVAL_BLOCKED')
+  assert.equal(blocked.request().postDataJSON().snapshot_sha256, postedSnapshot)
+  const refusal = (await blocked.json()).code
+  if (refusal !== 'REVIEW_APPROVAL_BLOCKED') step += ' (' + refusal + ')'
+  assert.equal(refusal, 'REVIEW_APPROVAL_BLOCKED')
   await page.getByText(/本次批准未写入/).waitFor()
   assert.equal(await query.count(), 0)
   assert.equal(await page.getByRole('heading', { name: '冻结标程', exact: true }).count(), 0)
@@ -582,6 +621,9 @@ async function authorReturn(browser, session) {
 
 try {
   browser = await chromium.launch({ headless: true, executablePath: process.env.OJ_CHROMIUM_EXECUTABLE })
+  phase = 'anonymous contestant catalog'
+  await contestantCatalog(browser)
+  passed('anonymous contestant searches and renders the historical publication but cannot open the private draft')
   phase = 'desktop reviewer'
   await exercise(browser, { width: 1280, height: 960 }, true, true)
   passed('assigned reviewer discovers and opens frozen materials by keyboard on desktop')

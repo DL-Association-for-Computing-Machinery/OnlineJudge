@@ -71,11 +71,11 @@ func (s *ReviewStore) LockPublicationReview(ctx context.Context, tx pgx.Tx, id s
 	if err != nil {
 		return zero, err
 	}
-	snapshot, err := loadReviewEligibilitySnapshot(ctx, q, item)
+	snapshot, err := s.loadReviewEligibilitySnapshot(ctx, tx, q, item)
 	if err != nil {
 		return zero, err
 	}
-	if receipt.Binding.PolicyVersion != problemreference.ReviewPolicyVersion {
+	if receipt.Binding.PolicyVersion != s.policy() {
 		return zero, problemreference.ErrReviewChanged
 	}
 	if err := problemreference.CheckReviewApprovalSnapshot(actor, snapshot, receipt.SnapshotSHA256); err != nil {

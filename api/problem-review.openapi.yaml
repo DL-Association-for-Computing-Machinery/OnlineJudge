@@ -392,7 +392,10 @@ components:
       required: [evidence, policy_version, snapshot_sha256, eligible, blockers]
       properties:
         evidence: { $ref: '#/components/schemas/ReviewEvidence' }
-        policy_version: { const: 'oj.review-approval.v14' }
+        policy_version: { enum: ['oj.review-approval.v14', 'oj.review-approval.aplusb-local.v1'] }
+        local_execution_sha256:
+          $ref: '#/components/schemas/SHA256'
+          description: 仅回环 A+B 功能验收策略返回，对应本地报告绑定；不提供生产准入。
         snapshot_sha256:
           $ref: '#/components/schemas/SHA256'
           description: 绑定当前账号代次、分配、固定证据及本次策略结果，用于比较状态；不授予批准或发布权限。

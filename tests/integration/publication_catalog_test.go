@@ -6,18 +6,30 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/httpapi"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materialstore"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
 	referencepg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference/postgres"
+	transport "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/httptransport"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/redisstore"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type missingPublicationObjects struct{}
+
+type unusedCatalogSession struct{ transport.Store }
+
+func (unusedCatalogSession) Read(context.Context, redisstore.Credential) (redisstore.View, error) {
+	panic("public catalog consulted session state")
+}
 
 func (missingPublicationObjects) Open(context.Context, materialstore.Object) (*materialstore.Snapshot, error) {
 	return nil, errors.New("fixture object missing")
@@ -44,6 +56,34 @@ func TestPublicationCatalogLocalChain(t *testing.T) {
 	must(t, err)
 	display, err := problem.ReadSealedPublicationStatement(f.ctx, f.materials, sealed)
 	must(t, err)
+	const origin = "https://catalog.example.test"
+	const path = "/api/v1/problems"
+	base, err := transport.New(unusedCatalogSession{}, transport.Config{Origin: origin, Timeout: time.Second})
+	must(t, err)
+	h, err := transport.WithCatalog(base, transport.CatalogReader{
+		List: func(ctx context.Context, after, query string) ([]transport.CatalogEntry, string, error) {
+			rows, next, err := f.reviews.ListPublished(ctx, after, query)
+			entries := make([]transport.CatalogEntry, 0, len(rows))
+			for _, row := range rows {
+				entries = append(entries, transport.CatalogEntry{ID: row.ID, Version: row.Version, Title: row.Title})
+			}
+			return entries, next, err
+		},
+		Detail: func(ctx context.Context, id string) (problem.PublicationStatement, error) {
+			return f.reviews.ReadPublished(ctx, f.materials, id)
+		},
+	})
+	must(t, err)
+	api := httpapi.NewSessionHandler(h)
+	readHTTP := func(suffix string, status int) string {
+		t.Helper()
+		w := httptest.NewRecorder()
+		api.ServeHTTP(w, httptest.NewRequest(http.MethodGet, origin+path+suffix, nil))
+		if w.Code != status || w.Header().Get("Cache-Control") != "no-store" || w.Header().Get("Set-Cookie") != "" {
+			t.Fatalf("catalog HTTP %s: status=%d, headers=%v", suffix, w.Code, w.Header())
+		}
+		return strings.TrimSpace(w.Body.String())
+	}
 
 	intent := referencepg.PublicationIntent{Materials: sealed, ReviewID: e.ReviewID, ReviewerID: e.Reviewer,
 		AssignmentRevision: e.AssignmentRevision, PublisherRevision: 1, RequestKey: "local-publication-chain",
@@ -67,6 +107,11 @@ func TestPublicationCatalogLocalChain(t *testing.T) {
 	if len(page) != 0 || next != "" {
 		t.Fatal("failed publication made the draft visible")
 	}
+	if readHTTP("", 200) != `{"problems":[],"next":""}` {
+		t.Fatal("failed publication appeared in HTTP catalog")
+	}
+	readHTTP("/"+publicID, 404)
+	readHTTP("/"+e.DraftID, 404)
 	_, err = f.reviews.ReadPublished(f.ctx, f.materials, publicID)
 	requireReviewError(t, err, problemreference.ErrNotFound)
 
@@ -114,6 +159,26 @@ func TestPublicationCatalogLocalChain(t *testing.T) {
 		strings.Contains(string(gotJSON), e.FormalPlanSHA256) || strings.Contains(string(gotJSON), "synthetic expected plan source") {
 		t.Fatal("catalog exposed more than the sealed display")
 	}
+	if readHTTP("/"+publicID, 200) != string(wantJSON) {
+		t.Fatal("catalog HTTP changed the sealed display")
+	}
+	if !strings.Contains(readHTTP("", 200), publicID) {
+		t.Fatal("history row did not enter catalog HTTP")
+	}
+	readHTTP("/"+e.DraftID, 404)
+	// A restored local-authorized row remains hidden in ordinary mode.
+	_, err = f.a.Exec(f.ctx, `UPDATE problem_review_approvals SET policy_version=$1
+		WHERE review_id=$2 AND assignment_revision=$3`, problemreference.LocalReviewPolicyVersion, e.ReviewID, e.AssignmentRevision)
+	must(t, err)
+	if readHTTP("", 200) != `{"problems":[],"next":""}` {
+		t.Fatal("ordinary catalog exposed a local publication")
+	}
+	readHTTP("/"+publicID, 404)
+	_, err = f.reviews.PublishProblem(f.ctx, f.access, f.actor, f.materials, plan, intent)
+	requireReviewError(t, err, problemreference.ErrNotFound)
+	_, err = f.a.Exec(f.ctx, `UPDATE problem_review_approvals SET policy_version=$1
+		WHERE review_id=$2 AND assignment_revision=$3`, problemreference.ReviewPolicyVersion, e.ReviewID, e.AssignmentRevision)
+	must(t, err)
 	missing, err := f.reviews.ReadPublished(f.ctx, missingPublicationObjects{}, publicID)
 	requireReviewError(t, err, problemreference.ErrStore)
 	if missing.ProblemID != "" || missing.Markdown != "" {

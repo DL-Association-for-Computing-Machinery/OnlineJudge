@@ -45,6 +45,7 @@ type handler struct {
 	emailConfirmation      EmailConfirmation
 	emailRequest           EmailRequest
 	drafts                 Drafts
+	catalog                *CatalogReader
 	draftTimeout           time.Duration
 	references             ReferenceRequests
 	preparation            ReferencePreparation
@@ -104,6 +105,10 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == ManagementRolePath {
 		h.serveManagementRole(w, r, source)
+		return
+	}
+	if IsCatalogPath(r.URL.Path) {
+		h.serveCatalog(w, r)
 		return
 	}
 	method := ""

@@ -13,10 +13,17 @@ const catalogProblem = `-- name: CatalogProblem :one
 SELECT p.problem_id, p.revision, p.version, p.title, p.statement_sha256, p.statement_size,
        r.source_id, r.content_version, r.import_revision, r.source_lock_sha256, r.formal_plan_sha256
 FROM problem_publications p JOIN problem_review_submissions r ON r.id = p.review_id
+JOIN problem_review_approvals a ON a.review_id=p.review_id AND a.assignment_revision=p.assignment_revision
 WHERE p.problem_id = $1
+  AND (a.policy_version = 'oj.review-approval.aplusb-local.v1') = $2::boolean
   AND p.import_revision = r.import_revision AND p.formal_plan_sha256 = r.formal_plan_sha256
   AND p.revision = (SELECT max(h.revision) FROM problem_publications h WHERE h.problem_id = p.problem_id)
 `
+
+type CatalogProblemParams struct {
+	ProblemID string
+	LocalOnly bool
+}
 
 type CatalogProblemRow struct {
 	ProblemID        string
@@ -32,8 +39,8 @@ type CatalogProblemRow struct {
 	FormalPlanSha256 string
 }
 
-func (q *Queries) CatalogProblem(ctx context.Context, problemID string) (CatalogProblemRow, error) {
-	row := q.db.QueryRow(ctx, catalogProblem, problemID)
+func (q *Queries) CatalogProblem(ctx context.Context, arg CatalogProblemParams) (CatalogProblemRow, error) {
+	row := q.db.QueryRow(ctx, catalogProblem, arg.ProblemID, arg.LocalOnly)
 	var i CatalogProblemRow
 	err := row.Scan(
 		&i.ProblemID,
@@ -54,15 +61,18 @@ func (q *Queries) CatalogProblem(ctx context.Context, problemID string) (Catalog
 const catalogProblems = `-- name: CatalogProblems :many
 SELECT p.problem_id, p.version, p.title
 FROM problem_publications p JOIN problem_review_submissions r ON r.id = p.review_id
+JOIN problem_review_approvals a ON a.review_id=p.review_id AND a.assignment_revision=p.assignment_revision
 WHERE p.problem_id > $1
+  AND (a.policy_version = 'oj.review-approval.aplusb-local.v1') = $2::boolean
   AND p.revision = (SELECT max(h.revision) FROM problem_publications h WHERE h.problem_id = p.problem_id)
   AND p.import_revision = r.import_revision AND p.formal_plan_sha256 = r.formal_plan_sha256
-  AND strpos(lower(p.title), lower($2::text)) > 0
+  AND strpos(lower(p.title), lower($3::text)) > 0
 ORDER BY p.problem_id LIMIT 21
 `
 
 type CatalogProblemsParams struct {
 	AfterID    string
+	LocalOnly  bool
 	TitleQuery string
 }
 
@@ -73,7 +83,7 @@ type CatalogProblemsRow struct {
 }
 
 func (q *Queries) CatalogProblems(ctx context.Context, arg CatalogProblemsParams) ([]CatalogProblemsRow, error) {
-	rows, err := q.db.Query(ctx, catalogProblems, arg.AfterID, arg.TitleQuery)
+	rows, err := q.db.Query(ctx, catalogProblems, arg.AfterID, arg.LocalOnly, arg.TitleQuery)
 	if err != nil {
 		return nil, err
 	}

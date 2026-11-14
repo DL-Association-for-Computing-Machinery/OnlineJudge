@@ -26,6 +26,7 @@ export function LibraryPage() {
   return (
     <section className="library-page page-width" aria-labelledby="library-title">
       <h1 id="library-title">题库</h1>
+      <p><Link to="/problems">查看已发布题库</Link> · 下方为示例题目</p>
       <div className="library-tools">
         <div className="search-field"><Icon name="search" /><input type="search" aria-label="搜索示例题目" placeholder="搜索题号或题目名称" maxLength={80} value={query} onChange={event => update('q', event.target.value)} /></div>
         <details className="filters">

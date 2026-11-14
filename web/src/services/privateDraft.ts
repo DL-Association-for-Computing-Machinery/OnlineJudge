@@ -55,13 +55,7 @@ export function decodeDraftPreview(value: unknown, id: string): DraftPreview {
   return value as unknown as DraftPreview
 }
 
-export async function fetchDraftPreview(id: string, signal: AbortSignal): Promise<DraftPreview> {
-  if (!validDraftID(id) || globalThis.location.protocol !== 'https:') throw invalid()
-  try {
-    const response = await fetch(`/api/v1/problem-drafts/${id}/preview`, {
-      method: 'GET', mode: 'same-origin', credentials: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer',
-      headers: { Accept: 'application/json' }, signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
-    })
+export async function readBoundedJSON(response: Response, limit: number): Promise<unknown> {
     if (response.status !== 200 || response.headers.get('Content-Type')?.split(';')[0].trim() !== 'application/json' || !response.body) {
       await response.body?.cancel().catch(() => undefined)
       throw invalid()
@@ -75,7 +69,7 @@ export async function fetchDraftPreview(id: string, signal: AbortSignal): Promis
         if (done) break
         size += value.byteLength
         // JSON escaping can expand the API's 1 MiB raw text ceiling sixfold.
-        if (size > 7 * 1024 * 1024) throw invalid()
+        if (size > limit) throw invalid()
         chunks.push(value)
       }
     } finally {
@@ -85,6 +79,16 @@ export async function fetchDraftPreview(id: string, signal: AbortSignal): Promis
     const body = new Uint8Array(size)
     let offset = 0
     for (const chunk of chunks) { body.set(chunk, offset); offset += chunk.byteLength }
-    return decodeDraftPreview(JSON.parse(decoder.decode(body)) as unknown, id)
+    return JSON.parse(decoder.decode(body)) as unknown
+}
+
+export async function fetchDraftPreview(id: string, signal: AbortSignal): Promise<DraftPreview> {
+  if (!validDraftID(id) || globalThis.location.protocol !== 'https:') throw invalid()
+  try {
+    const response = await fetch(`/api/v1/problem-drafts/${id}/preview`, {
+      method: 'GET', mode: 'same-origin', credentials: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer',
+      headers: { Accept: 'application/json' }, signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
+    })
+    return decodeDraftPreview(await readBoundedJSON(response, 7 * 1024 * 1024), id)
   } catch { throw invalid() }
 }

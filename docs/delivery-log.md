@@ -1,5 +1,9 @@
 # 工程交付记录
 
+## 2026-11-14：P4 功能验收完成
+
+项目负责人采纳 [Mac Ubuntu VM 的 A+B 双账号闭环](delivery-evidence/p4-trial-publication.md#mac-ubuntu-vm-本地完整流程)作为 P4 验收结果。[#300](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/300)覆盖本地真实判题报告准入、不同账号批准与发布、原键回读及匿名选手查看新题。未连接试用服务器，也未在试用环境启用执行档位或发布题目。
+
 ## 2026-11-14：P4 发布开发成果与 P3 迁移整合
 
 [#299](https://github.com/DL-Association-for-Computing-Machinery/OnlineJudge/pull/299) 保留主线 schema 26 的平台管理员历史，将普通批准、发布资格、发布与执行准入依次安排到 27–29。Docker Desktop 临时 PostgreSQL 14 的 18 项 race 专项通过，覆盖旧主线 26 升级、空账本回退和非空审计保护；已有管理员历史在 26 与 29 之间往返保持不变。旧 P4 分支临时库须重建。合并仅交付开发成果，未部署或迁移持久数据库；[P4 正式准入、非作者终审、发布和选手端联验](delivery-evidence/p4-trial-publication.md)仍待完成。
