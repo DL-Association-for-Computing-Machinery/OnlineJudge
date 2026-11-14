@@ -3,6 +3,7 @@
 set -eu
 case "$#:${1:-ordinary}" in
     0:ordinary|1:ordinary) oj_pattern='^TestOrdinaryProtocol$' ;;
+    1:training-overload) oj_pattern='^TestTrainingOverloadRecovery$' ;;
     1:email-lifecycle)
         export OJ_ISOLATED_EMAIL_LIFECYCLE=1
         oj_pattern='^TestIsolatedEmailLifecycle$' ;;
