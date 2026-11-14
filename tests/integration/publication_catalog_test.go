@@ -138,6 +138,11 @@ func TestPublicationCatalogLocalChain(t *testing.T) {
 	must(t, err)
 	_, err = f.a.Exec(f.ctx, insert, args...)
 	must(t, err)
+	current, err := referencepg.ResolveTrainingPublication(f.ctx, f.a, publicID, sealed.Version)
+	requireReviewError(t, err, problemreference.ErrNotFound)
+	if current != (referencepg.TrainingPublication{}) {
+		t.Fatal("ordinary publication exposed a local training binding")
+	}
 	replay, err := f.reviews.PublishProblem(f.ctx, f.access, f.actor, f.materials, plan, intent)
 	must(t, err)
 	if replay.ID != publicID || replay.Version != sealed.Version {
@@ -170,6 +175,13 @@ func TestPublicationCatalogLocalChain(t *testing.T) {
 	_, err = f.a.Exec(f.ctx, `UPDATE problem_review_approvals SET policy_version=$1
 		WHERE review_id=$2 AND assignment_revision=$3`, problemreference.LocalReviewPolicyVersion, e.ReviewID, e.AssignmentRevision)
 	must(t, err)
+	current, err = referencepg.ResolveTrainingPublication(f.ctx, f.a, publicID, sealed.Version)
+	must(t, err)
+	if current.MaterialVersion != intent.ExecutionVersion || current.MaterialDigest != intent.ExecutionSHA256 {
+		t.Fatal("local publication resolved a different execution binding")
+	}
+	_, err = referencepg.ResolveTrainingPublication(f.ctx, f.a, publicID, strings.Repeat("f", 64))
+	requireReviewError(t, err, problemreference.ErrNotFound)
 	if readHTTP("", 200) != `{"problems":[],"next":""}` {
 		t.Fatal("ordinary catalog exposed a local publication")
 	}

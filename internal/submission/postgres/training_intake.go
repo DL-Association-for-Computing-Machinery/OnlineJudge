@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"regexp"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -13,6 +15,9 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres/submissiondb"
 )
+
+var materialVersionPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,128}$`)
+var hexDigestPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 // AcceptTraining atomically rechecks a fresh ordinary account and enqueues
 // personal training work using this server-selected immutable material version.
@@ -27,20 +32,46 @@ func (s *Store) AcceptTraining(ctx context.Context, actor identity.TrainingActor
 		func(ctx context.Context, tx pgx.Tx) error { return identitypg.LockTrainingAccount(ctx, tx, actor) })
 }
 
+// PublishedMaterial identifies the registered immutable execution material.
+type PublishedMaterial struct {
+	Version, Digest string
+}
+
+// ResolvePublication resolves the current publication inside the acceptance
+// transaction. It must reject stale versions and unadmitted material.
+type ResolvePublication func(context.Context, pgx.Tx, string, string) (PublishedMaterial, error)
+
 // AcceptPublishedTraining binds a key to the displayed publication as well as
-// the immutable material. The supplied authorization uses the same transaction.
-func (s *Store) AcceptPublishedTraining(ctx context.Context, actor identity.TrainingActor, key, problemID, version, source string, allow func(context.Context, pgx.Tx) error) (submission.Receipt, bool, error) {
-	if s == nil || s.pool == nil || ctx == nil || !actor.Valid() || allow == nil {
+// the immutable material. Authorization, resolution and enqueue share one transaction.
+func AcceptPublishedTraining(ctx context.Context, pool *pgxpool.Pool, actor identity.TrainingActor, key, problemID, version, source string, resolve ResolvePublication) (submission.Receipt, bool, error) {
+	if pool == nil || ctx == nil || !actor.Valid() || resolve == nil || !identity.ValidID(problemID) ||
+		!hexDigestPattern.MatchString(version) ||
+		submission.Validate(actor.SubjectID, submission.PersonalTrainingScope, key, submission.Request{
+			MaterialVersion: version, Language: "gnu++17", Source: source,
+		}) != nil {
 		return submission.Receipt{}, false, submission.ErrInvalid
 	}
-	req := submission.Request{MaterialVersion: s.version, Language: "gnu++17", Source: source}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if err != nil {
+		return submission.Receipt{}, false, err
+	}
+	defer rollback(tx)
+	if err := identitypg.LockTrainingAccount(ctx, tx, actor); err != nil {
+		return submission.Receipt{}, false, err
+	}
+	m, err := resolve(ctx, tx, problemID, version)
+	if err != nil {
+		return submission.Receipt{}, false, err
+	}
+	if !materialVersionPattern.MatchString(m.Version) || !hexDigestPattern.MatchString(m.Digest) {
+		return submission.Receipt{}, false, submission.ErrMaterial
+	}
+	queue := Store{version: m.Version, manifestHash: m.Digest}
+	req := submission.Request{MaterialVersion: m.Version, Language: "gnu++17", Source: source}
 	sum := sha256.Sum256([]byte("published-training\x00" + problemID + "\x00" + version + "\x00" + submission.Digest(req)))
-	return s.accept(ctx, actor.SubjectID, submission.PersonalTrainingScope, key, req, hex.EncodeToString(sum[:]), func(ctx context.Context, tx pgx.Tx) error {
-		if err := identitypg.LockTrainingAccount(ctx, tx, actor); err != nil {
-			return err
-		}
-		return allow(ctx, tx)
-	})
+	return queue.acceptInTx(ctx, tx, actor.SubjectID, submission.PersonalTrainingScope, key, req, hex.EncodeToString(sum[:]))
 }
 
 // ReadTrainingReceipt recovers the original key in the currently authorized
