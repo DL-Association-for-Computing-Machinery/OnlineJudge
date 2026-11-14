@@ -26,6 +26,18 @@ type WorkerFixture struct {
 	aplusb        string
 	aplusbVersion string
 	aplusbTier    ReferenceTier
+	localText     bool
+}
+
+// IsLocalText reports that the worker owns an admitted bounded text fixture.
+func (f WorkerFixture) IsLocalText() bool { return f.localText }
+
+// MaterialLimits keeps the legacy transport budgets separate from local text.
+func (f WorkerFixture) MaterialLimits() (file, total int) {
+	if f.localText {
+		return materials.LocalTextFileBytes, materials.LocalTextTotalBytes
+	}
+	return materials.MaxFileBytes, 4 << 20
 }
 
 // APlusBFixture enables only the explicit, independently pinned transport
@@ -75,8 +87,11 @@ func aplusbRuntimeDigest(config ReferenceConfiguration) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// IsAPlusB identifies the isolated cached execution profile.
-func (f WorkerFixture) IsAPlusB() bool { return f.aplusb != "" }
+// IsAPlusB identifies the original isolated A+B execution profile.
+func (f WorkerFixture) IsAPlusB() bool { return f.UsesCachedText() && !f.IsLocalText() }
+
+// UsesCachedText identifies a text fixture using the bounded cached executor.
+func (f WorkerFixture) UsesCachedText() bool { return f.aplusb != "" }
 
 // APlusBTier returns zero for fixtures outside the A+B lease experiment.
 func (f WorkerFixture) APlusBTier() ReferenceTier { return f.aplusbTier }
@@ -95,7 +110,7 @@ func ParseWorkerFixture(version string) (WorkerFixture, error) {
 
 // Version is the version on the controller's queue and material record.
 func (f WorkerFixture) Version() string {
-	if f.IsAPlusB() {
+	if f.UsesCachedText() {
 		return f.aplusbVersion
 	}
 	if f.ubuntu {
@@ -106,7 +121,7 @@ func (f WorkerFixture) Version() string {
 
 // Profile returns a fresh copy of the built-in runtime definition.
 func (f WorkerFixture) Profile() ExecutionProfile {
-	if f.IsAPlusB() {
+	if f.UsesCachedText() {
 		config, _ := ResolveReferenceTier(f.aplusbTier)
 		return config.Runtime
 	}
@@ -120,7 +135,7 @@ func (f WorkerFixture) Profile() ExecutionProfile {
 
 // Manifest returns the canonical bytes for this execution fixture.
 func (f WorkerFixture) Manifest() []byte {
-	if f.IsAPlusB() {
+	if f.UsesCachedText() {
 		return []byte(f.aplusb)
 	}
 	return manifest(f.Version(), f.Profile())

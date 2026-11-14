@@ -14,7 +14,7 @@ import (
 	submissionpg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
 )
 
-func localTrainingSubmit(ctx context.Context, pool *pgxpool.Pool, reviews *referencepg.ReviewStore, admission problemvalidation.APlusBLocalAdmission) (httptransport.TrainingSubmit, error) {
+func localTrainingSubmit(ctx context.Context, pool *pgxpool.Pool, reviews *referencepg.ReviewStore, admission problemvalidation.LocalExecutionAdmission) (httptransport.TrainingSubmit, error) {
 	_, version, _ := admission.Binding()
 	queue, err := submissionpg.New(pool, version, admission.Manifest())
 	if err != nil {

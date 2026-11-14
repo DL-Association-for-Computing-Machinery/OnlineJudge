@@ -38,6 +38,11 @@ type PrivateDraftsConfig struct {
 	PublicCatalog                                 bool
 	StatementConfirmations                        bool
 	LocalExecution                                *problemvalidation.APlusBLocalAdmissionInput
+	LocalTextExecution                            *problemvalidation.LocalTextAdmissionInput
+}
+
+func (c PrivateDraftsConfig) hasLocalExecution() bool {
+	return c.LocalExecution != nil || c.LocalTextExecution != nil
 }
 
 // Validate checks bounded lexical configuration without accessing files.
@@ -49,6 +54,10 @@ func (c PrivateDraftsConfig) Validate() error {
 		return ErrConfig
 	}
 	if c.LocalExecution != nil && (!c.ReviewApprovals || !c.PublicCatalog || len(c.SourceIDs) != 1 || c.SourceIDs[0] != "library-checker:aplusb") {
+		return ErrConfig
+	}
+	if c.LocalTextExecution != nil && (c.LocalExecution != nil || !c.ReviewApprovals || !c.PublicCatalog ||
+		!c.LocalTextExecution.Valid() || len(c.SourceIDs) != 1 || c.SourceIDs[0] != c.LocalTextExecution.SourceID) {
 		return ErrConfig
 	}
 	for _, path := range []string{c.MaterialRoot, c.BundleDirectory, c.SourceLockFile} {
@@ -160,8 +169,13 @@ func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore
 	if err != nil {
 		return nil, nil, ErrStartup
 	}
-	if c.LocalExecution != nil {
-		admission, err := problemvalidation.ReadAPlusBLocalAdmission(ctx, *c.LocalExecution)
+	if c.hasLocalExecution() {
+		var admission problemvalidation.LocalExecutionAdmission
+		if c.LocalTextExecution != nil {
+			admission, err = problemvalidation.ReadLocalTextAdmission(ctx, *c.LocalTextExecution, sources[c.LocalTextExecution.SourceID])
+		} else {
+			admission, err = problemvalidation.ReadAPlusBLocalAdmission(ctx, *c.LocalExecution)
+		}
 		if err != nil {
 			return nil, nil, ErrStartup
 		}

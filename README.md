@@ -155,9 +155,34 @@ OJ_BROWSER_QA_INFO="$FIXTURE_READY_JSON" OJ_BROWSER_QA_OUTPUT="$QA_DIRECTORY" \
 
 同一夹具、参数和已发布题可将脚本替换为 `tests/browser/published-training-drafts-qa.mjs`，验证本地草稿、冲突及退出。该专项不发判题请求，不占用 Worker 槽。
 
+### 本机文本题验题与提交
+
+这个档位支持源锁校验通过、有单文件 GNU++17 标程、使用 UTF-8 文本 token 比较的完整题包：最多 64 个正式点，单输入最多 4 MiB，单答案最多 256 KiB，测试数据合计最多 48 MiB。并查集是已联验的代表题。
+
+按 [Ubuntu 隔离流程](#ab-租约链路联验)准备同一个固定断网槽。在槽停止时执行下列命令，自动检查冻结题包及全部答案、编译标程并运行每个正式点。只有全部 AC 且确认槽停止后，报告才能用于准入。可用新的报告目录追加 `--wrong-solution "$PRIVATE_CPP" --expected-verdict WA` 核对已有错解；退出码体现预期是否满足，错解报告不用于准入。
+
+```sh
+OJ_SANDBOX_EXPERIMENT=1 worker validate-checker-candidate --local-text \
+  --source-id "$SOURCE_ID" --bundle "$PRIVATE_BUNDLE" --source-lock "$SOURCE_LOCK" \
+  --output "$COMPLETED_REPORT" --start-stopped-slot
+umask 077
+checker-candidate export-local-text --source-id "$SOURCE_ID" --bundle "$PRIVATE_BUNDLE" \
+  --source-lock "$SOURCE_LOCK" --report-dir "$COMPLETED_REPORT" \
+  --expected-report "$REPORT_SHA256" --review-profile "$REVIEW_PROFILE_SHA256" \
+  --export "$NEW_PRIVATE_DIRECTORY" > "$PRIVATE_ADMISSION_CONFIG"
+```
+
+从可信运行取得 `report.json` 的 SHA-256，审核档位摘要来自该题对应的 P4 正式参考记录。冻结题包、报告和清单均须位于可信本机目录，报告目录不得有 `INCOMPLETE`。执行验题不授予发布权限，题目已有的 P4 质量和发布审核继续适用。
+
+核对导出清单摘要；登记材料、控制端和 Worker 均使用 `OJ_SANDBOX_EXPERIMENT=1`、`OJ_LOCAL_TEXT_MANIFEST_FILE` 和 `OJ_LOCAL_TEXT_MANIFEST_SHA256`，不得与 `OJ_APLUSB_*` 材料配置混用。`migrate fixture` 与控制端另需 `OJ_MATERIAL_ROOT` 指向导出目录。Worker 只在固定 Ubuntu 槽使用 `OJ_APLUSB_START_STOPPED=1`；这两个版本不得共占槽。
+
+回环会话 API 的 `private_drafts.local_text_execution` 使用上一步输出，配置冻结题包、源锁及对应的唯一来源，并开启本机训练提交、历史与详情。`migrate fixture` 后，用 `problem-review register-text-local --bundle "$PRIVATE_BUNDLE" --source-lock "$SOURCE_LOCK" --admission-file "$PRIVATE_ADMISSION_CONFIG" --database-socket "$PRIVATE_SOCKET" --database-user "$LOCAL_USER"` 校验并登记本地执行准入，再由作者、审核员与发布员走现有分工。发布使用 `problem-review publish-text-local`，参数与 `publish-aplusb-local` 一致，另传 `--bundle` 和 `--source-lock`。浏览器专项见 `tests/browser/local-text-training-qa.mjs`，沿用 A+B 专项的 Playwright 参数；夹具另设 `OJ_BROWSER_LOCAL_TEXT=1`。
+
+该路径限定本机回环 HTTPS、Unix socket 数据库、固定断网 Worker 槽和运维显式 pin。未开放生产、混合题队列或任意题包。[P5 联验证据](docs/delivery-evidence/p5-published-training.md)记录实际运行和未覆盖项。
+
 ### A+B 租约链路联验
 
-在上一节清单命令上加 `--expected-manifest "$TRUSTED_JUDGE_MANIFEST_SHA256" --export "$NEW_PRIVATE_DIRECTORY"`，导出 `manifest.json` 及私有对象。核对后固定该运输清单的原始字节 SHA-256。隔离链路的登记、控制端和 Worker 都设置 `OJ_SANDBOX_EXPERIMENT=1`、`OJ_APLUSB_MANIFEST_FILE`（绝对路径）、`OJ_APLUSB_MANIFEST_SHA256`；不同时设置 `OJ_EXPERIMENT_MATERIAL_VERSION`、M0 槽或双槽配置。
+在 [A+B 固定材料清单命令](#ab-固定材料隔离判题)上加 `--expected-manifest "$TRUSTED_JUDGE_MANIFEST_SHA256" --export "$NEW_PRIVATE_DIRECTORY"`，导出 `manifest.json` 及私有对象。核对后固定该运输清单的原始字节 SHA-256。隔离链路的登记、控制端和 Worker 都设置 `OJ_SANDBOX_EXPERIMENT=1`、`OJ_APLUSB_MANIFEST_FILE`（绝对路径）、`OJ_APLUSB_MANIFEST_SHA256`；不同时设置 `OJ_EXPERIMENT_MATERIAL_VERSION`、M0 槽或双槽配置。
 
 登记进程和控制端另设 `OJ_MATERIAL_ROOT` 为该导出目录。在已迁移的临时 PostgreSQL 上执行 `migrate fixture` 和显式的积压策略配置，再按现有私有 mTLS 方式启动 `worker-api`。Desktop arm64 `worker` 可使用已启动的固定断网小型参考槽，或设置 `OJ_APLUSB_START_STOPPED=1` 让它持槽锁启动已停止的参考槽。普通 API 不启用此版本。真实联验使用 sandbox 标签的 `TestAPlusBLeasedLoop`，须显式设置 `OJ_SANDBOX_APLUSB=1`、空的临时 `OJ_TEST_DATABASE_URL` 并准备同一 worktree 的 `.local/bin/{migrate,worker,worker-api}` 宿主构建产物；测试从停止的参考槽开始，自行登记材料和临时 mTLS 身份。AC 走已验证账号的训练存储入口与本人回读；WA、OLE 仍走固定实验入口。账号由测试夹具提供，真实 Redis 登录由普通会话专项另验。不得指向试用库或正在使用的参考槽。见[判题契约](docs/checker-admission.md#ab-租约链路联验)。
 

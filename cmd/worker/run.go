@@ -27,7 +27,7 @@ func run(ctx context.Context, logger *slog.Logger, drain <-chan struct{}) error 
 	if err != nil {
 		return err
 	}
-	if c.fixture.IsAPlusB() {
+	if c.fixture.UsesCachedText() {
 		slot, err := workerhost.ReferenceSlotForTier(c.fixture.APlusBTier())
 		if err != nil {
 			return err
@@ -133,7 +133,7 @@ func runSlot(ctx context.Context, c config, logger *slog.Logger, lock *slotLock,
 	}
 	sandbox := execution.NewGoJudge(host, host.Verify)
 	var runner *execution.LeasedRunner
-	if c.fixture.IsAPlusB() {
+	if c.fixture.UsesCachedText() {
 		files, ok := host.(execution.FileTransport)
 		if !ok {
 			return errors.New("A+B cached transport required")
@@ -145,7 +145,7 @@ func runSlot(ctx context.Context, c config, logger *slog.Logger, lock *slotLock,
 		if err := factory().Verify(startup, c.fixture.Profile()); err != nil {
 			return errors.New("A+B sandbox protocol preflight failed; no task claimed")
 		}
-		runner, err = execution.NewLeasedAPlusB(factory, renewer.Renew, stop, c.fixture)
+		runner, err = execution.NewLeasedCachedText(factory, renewer.Renew, stop, c.fixture)
 		if err != nil {
 			return err
 		}
@@ -163,6 +163,9 @@ func runSlot(ctx context.Context, c config, logger *slog.Logger, lock *slotLock,
 	mode := "m0-single-slot"
 	if c.fixture.IsAPlusB() {
 		mode = "isolated-aplusb-single-slot"
+	}
+	if c.fixture.IsLocalText() {
+		mode = "isolated-local-text-single-slot"
 	}
 	logger.Info("Worker 已就绪", "mode", mode)
 	err = w.RunWithDrain(ctx, drain)

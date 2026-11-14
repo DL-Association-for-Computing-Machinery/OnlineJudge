@@ -69,6 +69,7 @@ type privateDraftsWire struct {
 	PublicCatalog          bool                                         `json:"public_catalog"`
 	StatementConfirmations bool                                         `json:"statement_confirmations"`
 	LocalExecution         *problemvalidation.APlusBLocalAdmissionInput `json:"aplusb_local_execution"`
+	LocalTextExecution     *problemvalidation.LocalTextAdmissionInput   `json:"local_text_execution"`
 }
 
 type passwordChangeWire struct {

@@ -198,12 +198,16 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		aplusb, aplusbFixture, err := experiment.LoadAPlusBFixture(os.Getenv)
+		aplusb, aplusbFixture, err := experiment.LoadCachedFixture(os.Getenv)
 		if err != nil {
 			return err
 		}
-		if aplusbFixture.IsAPlusB() {
-			reader, err := materials.OpenLocal(os.Getenv("OJ_MATERIAL_ROOT"))
+		if aplusbFixture.UsesCachedText() {
+			open := materials.OpenLocal
+			if aplusbFixture.IsLocalText() {
+				open = materials.OpenLocalText
+			}
+			reader, err := open(os.Getenv("OJ_MATERIAL_ROOT"))
 			if err != nil {
 				return err
 			}
@@ -222,7 +226,7 @@ func run() error {
 			if err := store.RegisterFixture(ctx); err != nil {
 				return err
 			}
-			fmt.Println("A+B isolated materials registered:", aplusb.Version)
+			fmt.Println("Isolated cached materials registered:", aplusb.Version)
 			return nil
 		}
 		store, err := postgres.New(pool, version, manifest)

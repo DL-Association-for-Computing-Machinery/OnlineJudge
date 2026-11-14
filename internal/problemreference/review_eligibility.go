@@ -23,7 +23,7 @@ type ReviewEligibilitySnapshot struct {
 	Returned           bool
 	SolutionConfirmed  bool
 	StatementConfirmed bool
-	LocalExecution     problemvalidation.APlusBLocalAdmission
+	LocalExecution     problemvalidation.LocalExecutionAdmission
 }
 
 // ReviewEligibility explains what blocks approval at the time of the read.

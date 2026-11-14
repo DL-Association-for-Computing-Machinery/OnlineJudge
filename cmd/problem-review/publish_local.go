@@ -24,7 +24,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func publishAPlusBLocal(parent context.Context, args []string, out io.Writer) error {
+func publishLocal(parent context.Context, args []string, out io.Writer, text bool) error {
 	f := flag.NewFlagSet("publish-aplusb-local", flag.ContinueOnError)
 	f.SetOutput(io.Discard)
 	review := f.String("review", "", "review ID")
@@ -35,6 +35,8 @@ func publishAPlusBLocal(parent context.Context, args []string, out io.Writer) er
 	material := f.String("material-root", "", "private material directory")
 	admissionFile := f.String("admission-file", "", "operator-pinned local acceptance config")
 	socket := f.String("database-socket", "", "local PostgreSQL Unix socket directory")
+	bundle := f.String("bundle", "", "private local text bundle")
+	lock := f.String("source-lock", "", "trusted source lock")
 	username := f.String("database-user", "", "local maintenance database identity")
 	assignmentRev := f.Int64("assignment-revision", 0, "expected assignment revision")
 	publisherRev := f.Int64("publisher-revision", 0, "expected publisher grant revision")
@@ -51,26 +53,29 @@ func publishAPlusBLocal(parent context.Context, args []string, out io.Writer) er
 	if err != nil {
 		return problemreference.ErrInvalid
 	}
-	var in problemvalidation.APlusBLocalAdmissionInput
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
-	if dec.Decode(&in) != nil || dec.Decode(new(any)) != io.EOF {
-		return problemreference.ErrInvalid
+	var admission problemvalidation.LocalExecutionAdmission
+	if text {
+		var in problemvalidation.LocalTextAdmissionInput
+		if dec.Decode(&in) != nil || dec.Decode(new(any)) != io.EOF || !in.Valid() || !filepath.IsAbs(*bundle) || !filepath.IsAbs(*lock) {
+			return problemreference.ErrInvalid
+		}
+		admission, err = loadLocalText(ctx, in, *bundle, *lock)
+		if err != nil {
+			return err
+		}
+	} else {
+		var in problemvalidation.APlusBLocalAdmissionInput
+		if dec.Decode(&in) != nil || dec.Decode(new(any)) != io.EOF || *bundle != "" || *lock != "" {
+			return problemreference.ErrInvalid
+		}
+		admission, err = problemvalidation.ReadAPlusBLocalAdmission(ctx, in)
 	}
-	admission, err := problemvalidation.ReadAPlusBLocalAdmission(ctx, in)
 	if err != nil {
 		return err
 	}
-	// Select only the named local socket; do not inherit a remote DSN or
-	// pgx failover hosts from the environment.
-	c, err := pgxpool.ParseConfig("host=/tmp port=5432 dbname=postgres user=postgres sslmode=disable")
-	if err != nil {
-		return err
-	}
-	c.ConnConfig.Host, c.ConnConfig.User = *socket, *username
-	c.ConnConfig.Fallbacks = nil
-	c.ConnConfig.Password = ""
-	pool, err := pgxpool.NewWithConfig(ctx, c)
+	pool, err := openPublicationSocket(ctx, *socket, *username)
 	if err != nil {
 		return err
 	}
@@ -120,4 +125,16 @@ func publishAPlusBLocal(parent context.Context, args []string, out io.Writer) er
 		return err
 	}
 	return json.NewEncoder(out).Encode(published)
+}
+
+func openPublicationSocket(ctx context.Context, socket, username string) (*pgxpool.Pool, error) {
+	// Do not inherit a remote DSN or failover hosts from the environment.
+	c, err := pgxpool.ParseConfig("host=/tmp port=5432 dbname=postgres user=postgres sslmode=disable")
+	if err != nil {
+		return nil, err
+	}
+	c.ConnConfig.Host, c.ConnConfig.User = socket, username
+	c.ConnConfig.Fallbacks = nil
+	c.ConnConfig.Password = ""
+	return pgxpool.NewWithConfig(ctx, c)
 }

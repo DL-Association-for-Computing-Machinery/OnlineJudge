@@ -81,7 +81,13 @@ func parse(args []string) (command, error) {
 
 func run(parent context.Context, args []string, out io.Writer) error {
 	if len(args) > 0 && args[0] == "publish-aplusb-local" {
-		return publishAPlusBLocal(parent, args[1:], out)
+		return publishLocal(parent, args[1:], out, false)
+	}
+	if len(args) > 0 && args[0] == "publish-text-local" {
+		return publishLocal(parent, args[1:], out, true)
+	}
+	if len(args) > 0 && args[0] == "register-text-local" {
+		return registerLocalText(parent, args[1:], out)
 	}
 	c, err := parse(args)
 	if err != nil || os.Getenv("OJ_DATABASE_URL") == "" {

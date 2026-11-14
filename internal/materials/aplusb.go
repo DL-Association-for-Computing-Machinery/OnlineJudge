@@ -13,30 +13,36 @@ import (
 const APlusBOrigin = "isolated-aplusb-gnu17-v1"
 const APlusBOutputBytes = 262144
 
-// APlusBManifest is the registered transport projection of an independently
+// TextTransportManifest is the registered transport projection of an independently
 // reviewed judge manifest. Its own digest pins every transported object.
-type APlusBManifest struct {
-	Checker       string        `json:"checker"`
-	JudgeSHA256   string        `json:"judge_sha256"`
-	Language      string        `json:"language"`
-	Origin        string        `json:"origin"`
-	RuntimeSHA256 string        `json:"runtime_sha256"`
-	Tests         []APlusBPoint `json:"tests"`
-	TokenBytes    int           `json:"token_bytes"`
-	Version       string        `json:"version"`
+type TextTransportManifest struct {
+	Checker       string               `json:"checker"`
+	JudgeSHA256   string               `json:"judge_sha256"`
+	Language      string               `json:"language"`
+	Origin        string               `json:"origin"`
+	RuntimeSHA256 string               `json:"runtime_sha256"`
+	Tests         []TextTransportPoint `json:"tests"`
+	TokenBytes    int                  `json:"token_bytes"`
+	Version       string               `json:"version"`
 }
 
-// APlusBPoint contains only the public shape of two private object identities.
-type APlusBPoint struct {
+// TextTransportPoint contains two private object identities without their bytes.
+type TextTransportPoint struct {
 	Answer string `json:"answer_sha256"`
 	ID     string `json:"id"`
 	Input  string `json:"input_sha256"`
 }
 
+// APlusBManifest retains the name of the original fixed text transport.
+type APlusBManifest = TextTransportManifest
+
+// APlusBPoint retains the original name for its private object references.
+type APlusBPoint = TextTransportPoint
+
 var aplusbVersion = regexp.MustCompile(`^aplusb-[a-f0-9]{64}$`)
 
 // Canonical matches the key ordering of the JSONB readback encoder.
-func (m APlusBManifest) Canonical() []byte {
+func (m TextTransportManifest) Canonical() []byte {
 	raw, _ := json.Marshal(m)
 	return raw
 }

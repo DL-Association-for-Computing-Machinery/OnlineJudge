@@ -4,7 +4,7 @@ info:
   version: 0.4.0
   description: >-
     普通会话 HTTPS 下的可选能力。列表和详情分别由 training_history 和 training_submission_detail 启用；
-    local_training_intake 仅为已准入的本机 A+B 启用提交及原键回执。
+    local_training_intake 仅为显式配置并已准入的本机执行队列启用提交及原键回执。
     沿用普通会话的固定 Host、直连 TLS 或单跳 mTLS 代理。响应不缓存、不设置 Cookie。
 security:
   - ordinarySession: []
@@ -65,7 +65,7 @@ paths:
     post:
       operationId: submitLocalPublishedTraining
       description: >-
-        仅启用本机 A+B 时接受同源普通会话。服务端验证账号和当前发布记录，
+        仅启用本机执行队列时接受同源普通会话。服务端验证账号和当前发布记录，
         自行绑定已准入的执行材料。请求键在本人训练范围内绑定题目、发布版本、
         执行材料、GNU++17 和原始源码。接收回执可能已包含终态；响应未知时查询原键。
       parameters:

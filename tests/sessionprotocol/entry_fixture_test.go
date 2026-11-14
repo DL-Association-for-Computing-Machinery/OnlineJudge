@@ -285,6 +285,9 @@ func entryConfigWithWriteTimeout(t *testing.T, c sessionruntime.Config, ca *test
 		if d.LocalExecution != nil {
 			doc["private_drafts"].(map[string]any)["aplusb_local_execution"] = d.LocalExecution
 		}
+		if d.LocalTextExecution != nil {
+			doc["private_drafts"].(map[string]any)["local_text_execution"] = d.LocalTextExecution
+		}
 	}
 	if c.TrainingHistory {
 		doc["training_history"] = true

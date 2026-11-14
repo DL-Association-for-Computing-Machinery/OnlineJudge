@@ -13,6 +13,44 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materials"
 )
 
+func TestLocalTextFixtureRequiresExplicitUbuntuPin(t *testing.T) {
+	hash := strings.Repeat("a", 64)
+	m := materials.APlusBManifest{Origin: materials.LocalTextOrigin, Version: "local-text-" + hash, JudgeSHA256: hash,
+		RuntimeSHA256: APlusBRuntimeSHA256ForTier(ReferenceAPlusBUbuntu), Checker: judging.LibraryCheckerTextVersion,
+		Language: "gnu++17", TokenBytes: 4096, Tests: []materials.APlusBPoint{{ID: "case-1", Input: hash, Answer: hash}}}
+	for _, name := range []string{"valid", "wrong-profile", "wrong-pin", "mixed", "missing-opt-in"} {
+		t.Run(name, func(t *testing.T) {
+			manifest := m
+			if name == "wrong-profile" {
+				manifest.RuntimeSHA256 = APlusBRuntimeSHA256()
+			}
+			raw := manifest.Canonical()
+			sum := sha256.Sum256(raw)
+			path := filepath.Join(t.TempDir(), "manifest.json")
+			if err := os.WriteFile(path, raw, 0600); err != nil {
+				t.Fatal(err)
+			}
+			env := map[string]string{"OJ_SANDBOX_EXPERIMENT": "1", "OJ_LOCAL_TEXT_MANIFEST_FILE": path,
+				"OJ_LOCAL_TEXT_MANIFEST_SHA256": hex.EncodeToString(sum[:])}
+			switch name {
+			case "wrong-pin":
+				env["OJ_LOCAL_TEXT_MANIFEST_SHA256"] = hash
+			case "mixed":
+				env["OJ_APLUSB_MANIFEST_FILE"] = path
+			case "missing-opt-in":
+				delete(env, "OJ_SANDBOX_EXPERIMENT")
+			}
+			_, fixture, err := LoadCachedFixture(func(k string) string { return env[k] })
+			if (err == nil) != (name == "valid") || fixture.IsLocalText() != (name == "valid") {
+				t.Fatalf("unexpected fixture result: %v", err)
+			}
+			if fixture.IsLocalText() && (fixture.Version() != m.Version || fixture.APlusBTier() != ReferenceAPlusBUbuntu) {
+				t.Fatal("wrong runtime or material version")
+			}
+		})
+	}
+}
+
 func TestAPlusBFixtureBindsCheckerAndRuntime(t *testing.T) {
 	identity := strings.Repeat("a", 64)
 	base := materials.APlusBManifest{Checker: judging.LibraryCheckerTextVersion, RuntimeSHA256: APlusBRuntimeSHA256(),

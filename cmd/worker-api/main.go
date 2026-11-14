@@ -65,7 +65,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	if err := db.CheckSchema(startup, pool); err != nil {
 		return err
 	}
-	aplusb, aplusbFixture, err := experiment.LoadAPlusBFixture(os.Getenv)
+	aplusb, aplusbFixture, err := experiment.LoadCachedFixture(os.Getenv)
 	if err != nil {
 		return err
 	}
@@ -73,7 +73,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	enabled := aplusbFixture.IsAPlusB()
+	enabled := aplusbFixture.UsesCachedText()
 	if enabled {
 		if os.Getenv("OJ_MATERIAL_ROOT") == "" || referenceNodeID != "" || referenceRoot != "" {
 			return errors.New("A+B controller requires a material root and no reference request service")
@@ -91,7 +91,11 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	}
 	var materialService *materials.Service
 	if path := os.Getenv("OJ_MATERIAL_ROOT"); path != "" {
-		reader, err := materials.OpenLocal(path)
+		open := materials.OpenLocal
+		if aplusbFixture.IsLocalText() {
+			open = materials.OpenLocalText
+		}
+		reader, err := open(path)
 		if err != nil {
 			return err
 		}
@@ -117,7 +121,11 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	}
 	if enabled {
 		if aplusbFixture.APlusBTier() == experiment.ReferenceAPlusBUbuntu {
-			base = workerapi.NewUbuntuAPlusBHandler(store, tlsConfig.ClientCAs, materialService, aplusb.Version, os.Getenv("OJ_APLUSB_MANIFEST_SHA256"))
+			pin := os.Getenv("OJ_APLUSB_MANIFEST_SHA256")
+			if aplusbFixture.IsLocalText() {
+				pin = os.Getenv("OJ_LOCAL_TEXT_MANIFEST_SHA256")
+			}
+			base = workerapi.NewUbuntuAPlusBHandler(store, tlsConfig.ClientCAs, materialService, aplusb.Version, pin)
 		} else {
 			base = workerapi.NewAPlusBHandler(store, tlsConfig.ClientCAs, materialService, aplusb)
 		}

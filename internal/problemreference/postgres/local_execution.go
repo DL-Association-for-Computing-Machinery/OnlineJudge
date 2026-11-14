@@ -38,7 +38,7 @@ func (s *ReviewStore) AllowLocalTraining(ctx context.Context, tx pgx.Tx, problem
 }
 
 // WithLocalExecution creates a store scoped to one explicit local run.
-func (s *ReviewStore) WithLocalExecution(a problemvalidation.APlusBLocalAdmission) (*ReviewStore, error) {
+func (s *ReviewStore) WithLocalExecution(a problemvalidation.LocalExecutionAdmission) (*ReviewStore, error) {
 	if s == nil || !a.ValidateManifest() || s.policy() != problemreference.ReviewPolicyVersion {
 		return nil, problemreference.ErrInvalid
 	}

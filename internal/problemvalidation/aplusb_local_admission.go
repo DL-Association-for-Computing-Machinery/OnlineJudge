@@ -21,12 +21,17 @@ type APlusBLocalAdmissionInput struct {
 	ReportSHA256      [3]string           `json:"report_sha256"`
 }
 
-// APlusBLocalAdmission is sealed by the report verifier. It represents only
-// a local functional run, and conveys no authority over production.
-type APlusBLocalAdmission struct {
+// LocalExecutionAdmission is sealed by the corresponding report verifier.
+// It conveys no authority over production.
+type LocalExecutionAdmission struct {
 	digest, version, transport string
 	raw                        string
+	textImport                 problem.ImportIdentity
+	textPlan, textProfile      string
 }
+
+// APlusBLocalAdmission is the legacy name for the local evidence value.
+type APlusBLocalAdmission = LocalExecutionAdmission
 
 // Valid checks the lexical bounds before any filesystem access.
 func (in APlusBLocalAdmissionInput) Valid() bool {
@@ -85,24 +90,30 @@ func ReadAPlusBLocalAdmission(ctx context.Context, in APlusBLocalAdmissionInput)
 	if err != nil || ctx.Err() != nil {
 		return zero, errHandoff
 	}
-	return APlusBLocalAdmission{handoffDigest(binding), "aplusb-" + h.Judge, h.Transport, string(transport.raw)}, nil
+	return APlusBLocalAdmission{digest: handoffDigest(binding), version: "aplusb-" + h.Judge, transport: h.Transport, raw: string(transport.raw)}, nil
 }
 
 // Match returns the local proof only for the exact previously reviewed A+B evidence.
-func (a APlusBLocalAdmission) Match(id problem.ImportIdentity, plan, profile string) bool {
+func (a LocalExecutionAdmission) Match(id problem.ImportIdentity, plan, profile string) bool {
+	if a.textPlan != "" {
+		return a.digest != "" && id == a.textImport && plan == a.textPlan && profile == a.textProfile
+	}
 	return a.digest != "" && matchesReviewedApPlusBPlan(id, plan, profile)
 }
 
 // Binding gives the proof identity and immutable registered execution tuple.
-func (a APlusBLocalAdmission) Binding() (proof, version, execution string) {
+func (a LocalExecutionAdmission) Binding() (proof, version, execution string) {
 	return a.digest, a.version, a.transport
 }
 
 // Manifest returns a detached copy for explicit maintenance registration.
-func (a APlusBLocalAdmission) Manifest() []byte { return []byte(a.raw) }
+func (a LocalExecutionAdmission) Manifest() []byte { return []byte(a.raw) }
 
 // ReviewBinding returns the frozen import and formal plan for a verified run.
-func (a APlusBLocalAdmission) ReviewBinding() (problem.ImportIdentity, string) {
+func (a LocalExecutionAdmission) ReviewBinding() (problem.ImportIdentity, string) {
+	if a.textPlan != "" {
+		return a.textImport, a.textPlan
+	}
 	if a.digest == "" {
 		return problem.ImportIdentity{}, ""
 	}
@@ -110,7 +121,11 @@ func (a APlusBLocalAdmission) ReviewBinding() (problem.ImportIdentity, string) {
 }
 
 // ValidateManifest checks the id, profile and digest of the pinned transport.
-func (a APlusBLocalAdmission) ValidateManifest() bool {
-	m, err := materials.ParseAPlusB(a.Manifest(), a.transport)
+func (a LocalExecutionAdmission) ValidateManifest() bool {
+	parse := materials.ParseAPlusB
+	if a.textPlan != "" {
+		parse = materials.ParseLocalText
+	}
+	m, err := parse(a.Manifest(), a.transport)
 	return a.digest != "" && err == nil && m.Version == a.version
 }

@@ -112,7 +112,7 @@ func (w privateDraftsWire) apply(c *Config) error {
 		SourceLockFile: w.SourceLockFile, SourceIDs: append([]string(nil), w.SourceIDs...), MaxInFlight: w.MaxInFlight,
 		ReferenceRequests: w.ReferenceRequests, ReviewIntake: w.ReviewIntake, ReviewAccess: w.ReviewAccess,
 		ReviewReturns: w.ReviewReturns, ReviewApprovals: w.ReviewApprovals, PublicCatalog: w.PublicCatalog,
-		StatementConfirmations: w.StatementConfirmations, LocalExecution: w.LocalExecution}
+		StatementConfirmations: w.StatementConfirmations, LocalExecution: w.LocalExecution, LocalTextExecution: w.LocalTextExecution}
 	if !durations([]durationField{{w.Timeout, &d.Timeout}}) || d.Validate() != nil || c.Server.WriteTimeout < d.Timeout {
 		return ErrConfig
 	}

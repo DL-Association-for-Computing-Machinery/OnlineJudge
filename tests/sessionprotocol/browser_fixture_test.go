@@ -111,7 +111,11 @@ func TestBrowserFixture(t *testing.T) {
 		c.PrivateDrafts.StatementConfirmations = true
 		c.PrivateDrafts.PublicCatalog = true
 		if localExecution {
-			browserLocalExecution(t, f, &c)
+			if os.Getenv("OJ_BROWSER_LOCAL_TEXT") == "1" {
+				browserLocalText(t, f, &c)
+			} else {
+				browserLocalExecution(t, f, &c)
+			}
 		}
 	}
 	access, err := identitypg.NewProblemAccess(f.pools[0])

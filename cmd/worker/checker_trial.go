@@ -41,12 +41,17 @@ func runCheckerCommand(ctx context.Context, args []string, logger *slog.Logger, 
 	plan := f.String("expected-plan", "", "trusted formal plan SHA-256")
 	candidate := f.String("expected-candidate", "", "trusted candidate SHA-256")
 	var manifest, sourcePath, sourceSHA string
-	var ubuntu bool
+	var wrongPath, wrongVerdict string
+	var ubuntu, localText bool
 	if isolatedJudge {
 		f.BoolVar(&ubuntu, "ubuntu-aplusb", false, "use the fixed standalone Ubuntu guest runtime")
 		f.StringVar(&manifest, "expected-manifest", "", "independently reviewed judge manifest SHA-256")
 		f.StringVar(&sourcePath, "submission", "", "absolute path to the private UTF-8 GNU++17 submission")
 		f.StringVar(&sourceSHA, "expected-submission", "", "trusted submission byte SHA-256")
+	} else {
+		f.BoolVar(&localText, "local-text", false, "verify a complete source-locked bundle in the fixed local Ubuntu profile")
+		f.StringVar(&wrongPath, "wrong-solution", "", "optional private wrong solution for the local text profile")
+		f.StringVar(&wrongVerdict, "expected-verdict", "", "expected wrong solution verdict (WA, RE, TLE, MLE or OLE)")
 	}
 	caps := judging.TextLimits{}
 	f.IntVar(&caps.Bytes, "bytes", 0, "explicit candidate answer and stdout cap")
@@ -54,10 +59,28 @@ func runCheckerCommand(ctx context.Context, args []string, logger *slog.Logger, 
 	start := f.Bool("start-stopped-slot", false, "explicitly start the fixed stopped reference slot")
 	if f.Parse(args) != nil || f.NArg() != 0 || !*start || !canonicalAbsolute(*bundle) ||
 		!canonicalAbsolute(*lockPath) || !canonicalAbsolute(*output) || !referenceOutputOutside(*bundle, *output) ||
-		(isolatedJudge && (!canonicalAbsolute(sourcePath) || !problem.ValidImportRevision(manifest) || !problem.ValidImportRevision(sourceSHA))) {
+		(isolatedJudge && (!canonicalAbsolute(sourcePath) || !problem.ValidImportRevision(manifest) || !problem.ValidImportRevision(sourceSHA))) ||
+		(localText && (*plan != "" || *candidate != "" || caps != (judging.TextLimits{}))) {
 		return errors.New("invalid checker trial arguments")
 	}
-	lockBytes, err := readValidationLock(*lockPath)
+	if wrongPath != "" || wrongVerdict != "" {
+		switch wrongVerdict {
+		case "WA", "RE", "TLE", "MLE", "OLE":
+			if localText && canonicalAbsolute(wrongPath) {
+				break
+			}
+			fallthrough
+		default:
+			return errors.New("invalid local text wrong solution check")
+		}
+	}
+	loadLock := readValidationLock
+	if localText {
+		// The local catalog operator supplies the trusted lock, as in export
+		// and API startup. The legacy trials retain their checked-in SHA pin.
+		loadLock = func(path string) ([]byte, error) { return checkedfile.ReadPublic(path, 1<<20) }
+	}
+	lockBytes, err := loadLock(*lockPath)
 	if err != nil {
 		return err
 	}
@@ -79,6 +102,17 @@ func runCheckerCommand(ctx context.Context, args []string, logger *slog.Logger, 
 			trial, err = problemvalidation.PrepareAPlusBJudgeForTier(preflightCtx, prepared, *plan, *candidate, manifest, sourceSHA, string(source), caps, tier)
 		}
 		if err == nil && ubuntu {
+			err = workerhost.CheckUbuntuAPlusBHost(preflightCtx)
+		}
+	} else if localText {
+		var source []byte
+		if wrongPath != "" {
+			source, err = checkedfile.ReadSecret(wrongPath, submission.MaxSourceBytes)
+		}
+		if err == nil {
+			trial, err = problemvalidation.PrepareLocalTextTrial(preflightCtx, ctx, prepared, source)
+		}
+		if err == nil {
 			err = workerhost.CheckUbuntuAPlusBHost(preflightCtx)
 		}
 	} else {
@@ -118,8 +152,16 @@ func runCheckerCommand(ctx context.Context, args []string, logger *slog.Logger, 
 	if writeErr := persistPrivateValidationReport(*output, report, report.Complete); writeErr != nil {
 		return errors.New("checker trial report persistence failed")
 	}
-	if err != nil || (!isolatedJudge && report.Verdict != "AC") {
+	expected := "AC"
+	if wrongVerdict != "" {
+		expected = wrongVerdict
+	}
+	if err != nil || (!isolatedJudge && report.Verdict != expected) {
 		return errors.New("checker trial did not pass; inspect the private report")
+	}
+	if wrongVerdict != "" {
+		logger.Info("本机文本错解判定符合预期", "verdict", report.Verdict)
+		return nil
 	}
 	if isolatedJudge {
 		logger.Info("A+B 隔离判题完成", "judge_manifest_sha256", report.JudgeManifestSHA256, "verdict", report.Verdict)

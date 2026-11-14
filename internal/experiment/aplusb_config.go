@@ -3,6 +3,7 @@ package experiment
 import (
 	"errors"
 
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/checkedfile"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materials"
 )
 
@@ -30,4 +31,28 @@ func LoadAPlusBFixture(getenv func(string) string) (materials.APlusBManifest, Wo
 	}
 	f, err := aplusbFixtureForTier(raw, getenv("OJ_APLUSB_MANIFEST_SHA256"), tier)
 	return m, f, err
+}
+
+// LoadCachedFixture accepts one explicit legacy or local text queue. Local
+// text reuses the pinned Ubuntu sandbox; it cannot supply a runtime profile.
+func LoadCachedFixture(getenv func(string) string) (materials.TextTransportManifest, WorkerFixture, error) {
+	path, pin := getenv("OJ_LOCAL_TEXT_MANIFEST_FILE"), getenv("OJ_LOCAL_TEXT_MANIFEST_SHA256")
+	if path == "" && pin == "" {
+		return LoadAPlusBFixture(getenv)
+	}
+	var m materials.TextTransportManifest
+	var f WorkerFixture
+	if getenv("OJ_SANDBOX_EXPERIMENT") != "1" || getenv("OJ_EXPERIMENT_MATERIAL_VERSION") != "" ||
+		getenv("OJ_APLUSB_MANIFEST_FILE") != "" || getenv("OJ_APLUSB_MANIFEST_SHA256") != "" || getenv("OJ_APLUSB_RUNTIME") != "" {
+		return m, f, materials.ErrUnavailable
+	}
+	raw, err := checkedfile.ReadSecret(path, 16384)
+	if err != nil {
+		return m, f, err
+	}
+	m, err = materials.ParseLocalText(raw, pin)
+	if err != nil || m.RuntimeSHA256 != APlusBRuntimeSHA256ForTier(ReferenceAPlusBUbuntu) {
+		return m, f, materials.ErrUnavailable
+	}
+	return m, WorkerFixture{aplusb: string(raw), aplusbVersion: m.Version, aplusbTier: ReferenceAPlusBUbuntu, localText: true}, nil
 }
