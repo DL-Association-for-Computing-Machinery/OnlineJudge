@@ -2,10 +2,13 @@
 package experiment
 
 import (
+	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materials"
 )
@@ -38,6 +41,16 @@ func (f WorkerFixture) MaterialLimits() (file, total int) {
 		return materials.LocalTextFileBytes, materials.LocalTextTotalBytes
 	}
 	return materials.MaxFileBytes, 4 << 20
+}
+
+// MaterialFileBudget limits one read against both its role and the total
+// transport budget. Every manifest reference counts, including repeats.
+func (f WorkerFixture) MaterialFileBudget(kind string, consumed int) int {
+	file, total := f.MaterialLimits()
+	if f.IsLocalText() && kind == "answer" {
+		file = min(file, materials.APlusBOutputBytes)
+	}
+	return min(file, total-consumed)
 }
 
 // APlusBFixture enables only the explicit, independently pinned transport
@@ -139,6 +152,61 @@ func (f WorkerFixture) Manifest() []byte {
 		return []byte(f.aplusb)
 	}
 	return manifest(f.Version(), f.Profile())
+}
+
+// ManifestSHA256 identifies the exact bytes admitted by this fixture.
+func (f WorkerFixture) ManifestSHA256() string {
+	sum := sha256.Sum256(f.Manifest())
+	return hex.EncodeToString(sum[:])
+}
+
+// MatchesMaterial compares an archived registration with the admitted fixture.
+func (f WorkerFixture) MatchesMaterial(version, digest string, manifest []byte) bool {
+	return version == f.Version() && digest == f.ManifestSHA256() && bytes.Equal(manifest, f.Manifest())
+}
+
+// OpenMaterials applies the same file budget as the Worker transport.
+func (f WorkerFixture) OpenMaterials(path string) (*materials.Local, error) {
+	if f.IsLocalText() {
+		return materials.OpenLocalText(path)
+	}
+	return materials.OpenLocal(path)
+}
+
+// VerifyMaterials reads each unique object named by the admitted fixture.
+// Registration and historical rejudge use it before making work available.
+func (f WorkerFixture) VerifyMaterials(ctx context.Context, path string) error {
+	digests, err := materials.ManifestDigests(f.Version(), f.ManifestSHA256(), f.Manifest())
+	if err != nil {
+		return err
+	}
+	reader, err := f.OpenMaterials(path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = reader.Close() }()
+	sizes := make(map[string]int, len(digests))
+	total := 0
+	for i, digest := range digests {
+		size, ok := sizes[digest]
+		if !ok {
+			n, err := reader.CopyVerified(ctx, digest, io.Discard)
+			if err != nil {
+				return err
+			}
+			size = int(n) // The local reader enforces a much smaller limit.
+			sizes[digest] = size
+		}
+		kind := "input"
+		if i%2 != 0 { // ManifestDigests enumerates each input before its answer.
+			kind = "answer"
+		}
+		if size > f.MaterialFileBudget(kind, total) {
+			return materials.ErrUnavailable
+		}
+		total += size
+	}
+	return nil
 }
 
 // SelectFixture accepts only built-in fixtures; empty preserves the legacy default.

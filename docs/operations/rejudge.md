@@ -1,6 +1,6 @@
 # 维护者重判
 
-维护命令可将**单条已完成的个人训练提交**按原源码、GNU++17、材料版本和清单重新排队。首次成功后，个人历史会显示新代次的排队、执行及最终结果；旧判定仍保留在尝试历史。当前支持固定 Desktop／Ubuntu M0 档位及已固定的隔离 A+B 材料。命令不启用公开提交、题目发布或比赛重判。
+维护命令可将**单条已完成的个人训练提交**按原源码、原语言、原材料版本和清单重新排队。提交的绑定不变；当前主线的已发布训练执行档位是 GNU++17。首次成功后，个人历史会显示新代次的排队、执行及最终结果；旧判定仍保留在尝试历史。支持固定 Desktop／Ubuntu M0 档位、隔离 A+B 和已固定的本机通用文本题包。命令不启用公开提交、题目发布或比赛重判。
 
 操作员须连接已升级的专用维护数据库凭据。数据库管理员在目标数据库为每位操作员配置独立的 PostgreSQL LOGIN，并直接授予 `oj_rejudge_operator`。命令使用数据库认证的 `session_user`，不接收自报操作员；间接成员或 `SET ROLE` 不代替直接授权。不要给运行 API/Worker 的账号授权，不向维护登录授予超级用户、创建角色或转授权权限。保留登录名以便回读，禁止改名或将旧名称重新分配给他人。
 
@@ -28,6 +28,8 @@ GRANT USAGE ON SEQUENCE training_enqueue_order TO oj_rejudge_operator;
 
 Ubuntu A+B 入队还须显式设置 `OJ_SANDBOX_EXPERIMENT=1`、`OJ_APLUSB_RUNTIME=ubuntu-arm64`、`OJ_APLUSB_MANIFEST_FILE`、`OJ_APLUSB_MANIFEST_SHA256`，与恢复库中的原版本、摘要、清单字节逐一核对，并重新核验恢复目录中的所有原对象。档位和可信摘要由维护端独立配置。Desktop A+B 原命令仍可用，状态回读不需要清单。
 
+通用文本题包入队使用与控制端、Worker 相同的 `OJ_SANDBOX_EXPERIMENT=1`、`OJ_LOCAL_TEXT_MANIFEST_FILE` 和 `OJ_LOCAL_TEXT_MANIFEST_SHA256`。不能混用 A+B 或固定 M0 配置。维护端核对注册版本、可信摘要和清单原字节，用同一档位的输入、答案及总字节预算核验对象。缺失、损坏、超出材料预算或档位不符时不入队、不新增审计。回执重放和状态查询仍按原维护登录及请求键读取。
+
 ```sh
 .local/bin/migrate rejudge enqueue "$DATABASE" "$SUBMISSION_ID" "$OLD_GENERATION" \
   "$MATERIAL_VERSION" "$MANIFEST_SHA256" "$REQUEST_KEY" "verify restored result" --confirm-rejudge
@@ -41,3 +43,5 @@ Schema 24 追加一张审计表，无历史回填。两个唯一索引分别支�
 隔离 PostgreSQL 竞态回归覆盖同键／不同键并发、积压拒绝、文件核验期间撤权、非训练范围、旧租约拒绝及非空审计表回退拒绝。原键回读的 `EXPLAIN (ANALYZE, BUFFERS)` 在关闭顺序扫描的夹具中使用主键索引，全程访问两个缓存块；不作为容量数据。`aplusb-restore-loop` 在两个临时 PostgreSQL 14.24 容器和断网参考槽实测：间接成员和缺失材料被拒，专用登录入队并按原键读回，真实 Worker 在还原材料上完成第二个 AC，旧证据不变。该专项在同一宿主，未验证现场独立故障域。
 
 [Ubuntu 本地恢复与重判](../acceptance/delivery-evidence/aplusb-restored-rejudge.md#ubuntu-arm64-专用客体)还验证未设档位、同版本不同运输摘要均拒绝且无新增审计或尝试；合法请求在同一提交上完成第二个 AC。现场独立故障域仍待验证。
+
+本机并查集专项（2026-11-15）复用 [20 点冻结材料](../acceptance/delivery-evidence/p5-published-training.md#并查集本机文本准入)，在一次性 PostgreSQL/Redis 与断网 Ubuntu 槽完成非作者批准、发布、浏览器提交、真实首判和维护重判。最终复验的两代各完成一次 AC；第一代结果和提交语言、源码、材料版本及清单摘要未变。间接授权、错误摘要、混用档位和缺材料均未改变任务或写入审计；重放与状态查询读回同一条审计。本人能在浏览器读回结果，另一账号被拒。此专项未做归档恢复或试用部署。
