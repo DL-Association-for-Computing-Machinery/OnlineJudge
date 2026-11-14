@@ -228,3 +228,76 @@ it('drops a confirmation receipt that arrives after private invalidation', async
   expect(f.journal.size).toBe(1)
   f.stop()
 })
+
+const returnPath = `/api/v1/problem-review/${review}/return`
+
+it('drops a late return receipt on account change and preserves only the original account’s request key', async () => {
+  const f = await setup()
+  try {
+    await f.controller.load()
+    let release!: () => void
+    let original!: string
+    f.fetch.mockImplementationOnce((target, options) => new Promise(resolve => {
+      expect(target).toBe(returnPath)
+      expect(new Headers(options?.headers).get('X-OJ-Expected-Subject')).toBe(owner)
+      if (typeof options?.body !== 'string') throw new Error('Expected a JSON request body')
+      const intent = JSON.parse(options.body) as { request_key: string; reason: string }
+      original = intent.request_key
+      release = () => resolve(Response.json({ ...intent, review_id: review, returned_at: new Date().toISOString() }))
+    }))
+    const pending = f.controller.returnReview('Please correct the example.')
+    const other = { ...session(), subject_id: draft }
+    f.fetch.mockResolvedValueOnce(Response.json(other))
+    await f.account.run('check')
+    release()
+    await pending
+    expect(f.controller.getSnapshot()).toMatchObject({ data: null, returnStatus: 'unavailable' })
+    f.fetch.mockResolvedValueOnce(Response.json(other))
+    await f.controller.load()
+    expect(f.controller.getSnapshot().returnStatus).toBe('ready')
+    await f.controller.returnReview()
+    expect(f.fetch.mock.calls.filter(([url]) => typeof url === 'string' && url.startsWith(returnPath)).map(([url]) => url)).toEqual([returnPath])
+    expect([...f.journal.values()]).toEqual([JSON.stringify({ key: original, assignment: 1 })])
+  } finally { f.stop() }
+})
+
+it('requires durable storage before sending a return decision', async () => {
+  const f = await setup()
+  try {
+    await f.controller.load()
+    vi.stubGlobal('sessionStorage', { getItem: () => null, setItem: () => { throw new Error('storage blocked') } })
+    await f.controller.returnReview('Please correct the example.')
+    expect(f.controller.getSnapshot().returnStatus).toBe('unavailable')
+    expect(f.fetch.mock.calls.some(([url]) => url === returnPath)).toBe(false)
+  } finally { f.stop() }
+})
+
+it('checks the original assignment after the same reviewer is reassigned', async () => {
+  const f = await setup()
+  try {
+    await f.controller.load()
+    let intent!: { request_key: string }
+    f.fetch.mockImplementationOnce((_, options) => {
+      if (typeof options?.body !== 'string') throw new Error('Expected a JSON request body')
+      intent = JSON.parse(options.body) as { request_key: string }
+      return Promise.reject(new TypeError('response lost'))
+    })
+    await f.controller.returnReview('Please correct the example.')
+    const data = material()
+    f.fetch.mockResolvedValueOnce(Response.json(session()))
+      .mockResolvedValueOnce(Response.json({ ...data, evidence: { ...data.evidence, assignment_revision: 2 } }))
+    await f.controller.load()
+    expect(f.controller.getSnapshot().returnStatus).toBe('pending')
+    const receipt = { ...intent, review_id: review, returned_at: new Date().toISOString() }
+    f.fetch.mockResolvedValueOnce(Response.json({ ...receipt, assignment_revision: 2 })).mockResolvedValueOnce(Response.json(receipt))
+    const start = f.fetch.mock.calls.length
+    await f.controller.returnReview()
+    expect(f.controller.getSnapshot().returnStatus).toBe('pending')
+    await f.controller.returnReview('A new reason must not start a new write.')
+    await f.controller.returnReview()
+    expect(f.controller.getSnapshot().returnStatus).toBe('recorded')
+    expect(f.fetch.mock.calls.slice(start).map(([url, options]) => [url, options?.method])).toEqual([
+      [`${returnPath}/${intent.request_key}`, 'GET'], [`${returnPath}/${intent.request_key}`, 'GET'],
+    ])
+  } finally { f.stop() }
+})

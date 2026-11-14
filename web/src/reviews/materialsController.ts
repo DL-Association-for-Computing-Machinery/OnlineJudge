@@ -1,11 +1,20 @@
 import type { AccountController } from '../account/controller'
 import { validKey } from '../services/draftManagement'
 import { fetchReviewEligibility, fetchReviewMaterials, type ReviewEligibility, type ReviewMaterials } from '../services/reviewMaterials'
+import { requestReviewReturn, type ReviewReturnKey } from '../services/reviewReturn'
+import { validReturnReason } from '../services/reviewReturnReason'
 import { requestStatementConfirmation } from '../services/statementConfirmation'
+import { originalReturn, reserveReturn, returnSlot } from './returnJournal'
 
 type Confirmation = 'ready' | 'pending' | 'recorded' | 'unavailable'
-interface MaterialsState { data: ReviewMaterials | null; busy: boolean; notice: string; confirmation: Confirmation; eligibility: ReviewEligibility | null }
-const empty = (notice: string): MaterialsState => ({ data: null, busy: false, notice, confirmation: 'unavailable', eligibility: null })
+type ReturnStatus = 'ready' | 'pending' | 'recorded' | 'unavailable'
+interface MaterialsState {
+  data: ReviewMaterials | null; busy: boolean; notice: string; confirmation: Confirmation
+  eligibility: ReviewEligibility | null; returnStatus: ReturnStatus
+}
+const empty = (notice: string): MaterialsState => ({
+  data: null, busy: false, notice, confirmation: 'unavailable', eligibility: null, returnStatus: 'unavailable',
+})
 
 function journalSlot(owner: string, evidence: ReviewMaterials['evidence']) {
   return ['oj.statement-confirmation.v1', owner, evidence.review_id, evidence.assignment_revision,
@@ -18,7 +27,10 @@ function confirmationStatus(slot: string): Confirmation {
     return key === null ? 'ready' : validKey(key) ? 'pending' : 'unavailable'
   } catch { return 'unavailable' }
 }
-const confirmationExpired = (deadline: number) => Date.now() >= deadline || document.visibilityState === 'hidden'
+function returnStatus(slot: string): ReturnStatus {
+  try { return originalReturn(slot) === null ? 'ready' : 'pending' } catch { return 'unavailable' }
+}
+const authorityExpired = (deadline: number) => Date.now() >= deadline || document.visibilityState === 'hidden'
 
 export class ReviewMaterialsController {
   private state = empty('请检查会话并读取分配给当前账号的审核材料。')
@@ -67,7 +79,8 @@ export class ReviewMaterialsController {
         if (current()) {
           this.authority = { owner: session.subject_id, deadline }
           this.publish({ ...empty('已读取当前分配的冻结材料。'), data,
-            confirmation: confirmationStatus(journalSlot(session.subject_id, data.evidence)) })
+            confirmation: confirmationStatus(journalSlot(session.subject_id, data.evidence)),
+            returnStatus: returnStatus(returnSlot(session.subject_id, data.evidence)) })
         }
       } catch {
         if (current()) this.publish(empty('无法读取材料。请核对送审 ID、当前分配及服务状态，再手动重试。'))
@@ -80,7 +93,7 @@ export class ReviewMaterialsController {
     const authority = this.authority
     if (!this.connected || this.running || busy || this.account.getSnapshot().busy || !data || !authority) return
     const { owner, deadline } = authority
-    if (confirmationExpired(deadline)) { this.clear(); return }
+    if (authorityExpired(deadline)) { this.clear(); return }
     const generation = this.generation
     const abort = new AbortController()
     this.abort = abort
@@ -89,7 +102,7 @@ export class ReviewMaterialsController {
     try {
       const eligibility = await fetchReviewEligibility(data.evidence, owner, abort.signal)
       if (generation !== this.generation) return
-      if (confirmationExpired(deadline)) { this.clear(); return }
+      if (authorityExpired(deadline)) { this.clear(); return }
       this.publish({ ...this.state, busy: false, eligibility, notice: '已读取本次准入状态。' })
     } catch {
       if (generation === this.generation) {
@@ -103,12 +116,13 @@ export class ReviewMaterialsController {
   }
 
   async confirm(action: 'confirm' | 'read', allChecked = false) {
-    const { data, confirmation, busy } = this.state
+    const { data, confirmation, busy, returnStatus, eligibility } = this.state
     const authority = this.authority
-    if (!this.connected || this.running || busy || !data || !authority ||
+    if (!this.connected || this.running || busy || !data || !authority || returnStatus === 'recorded' ||
+      returnStatus === 'pending' || eligibility?.blockers.includes('materials_returned') ||
       (action === 'confirm' ? !allChecked || confirmation !== 'ready' : confirmation !== 'pending')) return
     const { owner, deadline } = authority
-    if (confirmationExpired(deadline)) { this.clear(); return }
+    if (authorityExpired(deadline)) { this.clear(); return }
     const generation = this.generation
     const slot = journalSlot(owner, data.evidence)
     let key: string
@@ -139,10 +153,58 @@ export class ReviewMaterialsController {
     } finally {
       this.running = false
       if (generation === this.generation) {
-        if (confirmationExpired(deadline)) this.clear()
+        if (authorityExpired(deadline)) this.clear()
         else {
           this.abort = null
           this.publish({ ...this.state, busy: false, confirmation: recorded ? 'recorded' : 'pending' })
+        }
+      }
+    }
+  }
+
+  async returnReview(reason?: string) {
+    const { data, busy, returnStatus, eligibility } = this.state
+    const authority = this.authority
+    const write = reason !== undefined
+    if (!this.connected || this.running || busy || this.account.getSnapshot().busy || !data || !authority ||
+      (write ? returnStatus !== 'ready' || !validReturnReason(reason) ||
+        eligibility?.blockers.includes('materials_returned') : returnStatus !== 'pending')) return
+    const { owner, deadline } = authority
+    if (authorityExpired(deadline)) { this.clear(); return }
+    const slot = returnSlot(owner, data.evidence)
+    let original: ReviewReturnKey
+    try {
+      const saved = originalReturn(slot)
+      if (write && saved === null) original = reserveReturn(slot, data.evidence.assignment_revision)
+      else if (saved && !write) original = saved
+      else {
+        this.publish({ ...this.state, returnStatus: saved ? 'pending' : 'unavailable' })
+        return
+      }
+    } catch {
+      this.publish({ ...this.state, returnStatus: 'unavailable' })
+      return
+    }
+    const generation = this.generation
+    const abort = new AbortController()
+    this.abort = abort
+    this.running = true
+    this.publish({ ...this.state, busy: true, returnStatus: 'pending', eligibility: null,
+      notice: write ? '正在提交这份材料的退回决定…' : '正在查询原退回回执…' })
+    let recorded = false
+    try {
+      await requestReviewReturn(owner, data.evidence, original, abort.signal, reason)
+      recorded = true
+    } catch {
+      // Absence or an invalid response cannot establish that no decision was committed.
+    } finally {
+      this.running = false
+      if (generation === this.generation) {
+        if (authorityExpired(deadline)) this.clear()
+        else {
+          this.abort = null
+          this.publish({ ...this.state, busy: false, returnStatus: recorded ? 'recorded' : 'pending',
+            notice: recorded ? '已核实这份材料的退回回执。' : '尚未核实本次退回。' })
         }
       }
     }

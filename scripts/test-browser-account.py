@@ -238,7 +238,7 @@ def main():
         if args.cold_firefox:
             script_name, check_count = "cold-https-qa.mjs", 5
         if args.review_materials:
-            script_name, check_count = "review-materials-qa.mjs", 5
+            script_name, check_count = "review-materials-qa.mjs", 7
         if args.m1_login_load:
             script_name, check_count = "m1-login-load.mjs", 2
         if args.training_history:
