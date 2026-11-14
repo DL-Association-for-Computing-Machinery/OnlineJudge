@@ -8,8 +8,8 @@ const { chromium } = await import(pathToFileURL(process.env.OJ_PLAYWRIGHT_MODULE
 const browser = await chromium.launch({ executablePath: process.env.OJ_CHROMIUM_EXECUTABLE })
 const collection = info.url + '/api/v1/training/submissions'
 const language = process.env.OJ_BROWSER_TRAINING_LANGUAGE ?? 'c17'
-assert(['c17', 'gnu++20', 'java21'].includes(language))
-const label = { c17: 'C17', 'gnu++20': 'GNU++20', java21: 'Java 21' }[language]
+assert(['c17', 'gnu++20', 'java21', 'python3'].includes(language))
+const label = { c17: 'C17', 'gnu++20': 'GNU++20', java21: 'Java 21', python3: 'Python 3.14' }[language]
 const cpp20Guard = '#if __cplusplus < 202002L\n#error GNU++20 required\n#endif\n'
 const correct = '#include <stdio.h>\nint main(void){long long a,b;if(scanf("%lld%lld",&a,&b)!=2)return 1;printf("%lld\\n",a+b);}'
 // CPU cost per point keeps both leases observable without changing sandbox limits.
@@ -61,7 +61,23 @@ public class Main {
 }`, 'MLE'],
   ],
 }
-const sources = language === 'java21' ? javaSources : nativeSources
+const pythonSum = iterations => `import sys
+assert sys.version_info[:2] == (3, 14)
+a, b = map(int, sys.stdin.buffer.read().split())
+for _ in range(${iterations}):
+    pass
+print(a + b)
+`
+const pythonSources = {
+  overlap: [[pythonSum(2_000_000), 'AC'], [pythonSum(2_000_000), 'AC']],
+  fault: [[pythonSum(12_000_000), 'AC']],
+  limits: [
+    ['while True:\n    pass\n', 'TLE'],
+    ['data = bytearray(144 << 20)\nfor index in range(0, len(data), 4096):\n    data[index] = 1\nprint(len(data))\n', 'MLE'],
+    ['import sys\nsys.stdout.buffer.write(b"x" * 400000)\n', 'OLE'],
+  ],
+}
+const sources = language === 'java21' ? javaSources : language === 'python3' ? pythonSources : nativeSources
 function sourceForLanguage(source, verdict) {
   if (language !== 'gnu++20') return source
   // C++ requires an explicit conversion from malloc's void pointer.

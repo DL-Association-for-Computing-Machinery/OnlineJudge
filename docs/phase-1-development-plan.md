@@ -78,7 +78,7 @@
 | P4 题库与发布 | P1、P2 受限验证、P3 权限 | M1 | 功能验收完成：负责人采纳 Mac Ubuntu VM 的 A+B 准入、双账号审核、独立发布权限和选手读回闭环；十题题源和历史验证见[验收记录](delivery-evidence/p4-trial-publication.md)。试用节点和正式开放另行安排。 |
 | P5 训练前端 | P3、P4 和真实提交接口 | M1 | 本机功能验收完成，#302 已合入；A+B、并查集和未预登记的数列极差闭环见 [P5 证据](delivery-evidence/p5-published-training.md) |
 | P6 试用运行与验收 | 日志及预算随 P1/P2 建立；发布验收依赖 P3—P5 | M1，M2 回归 | #296 开发成果已合入；本机证据及待完成的上线检查见 [P6 清单](delivery-evidence/p6-trial-acceptance.md) |
-| P7 完整训练补齐 | M1 训练闭环、各语言与检查器准入 | M2 | [C17](delivery-evidence/p7-c17.md)、[GNU++20](delivery-evidence/p7-gnu-cpp20.md) 已通过已发布题的本机浏览器、超限、退出接管、重判及双 Worker 联验 |
+| P7 完整训练补齐 | M1 训练闭环、各语言与检查器准入 | M2 | [C17](delivery-evidence/p7-c17.md)、[GNU++20](delivery-evidence/p7-gnu-cpp20.md)、[Java 21](delivery-evidence/p7-java21.md)、[CPython 3.14](delivery-evidence/p7-python3.md) 已通过各自的本机专项；仍须完成下文剩余工作和整阶段回归 |
 
 核心路径为 P1 → P2 → P4 → P5 → P6 → P7。P3 的会话验证可与判题实验交错推进，生产身份权限必须在题目和训练接口开放前接入。P0 的事项按使用节点解决，不要求等待正式比赛全部环境信息才能开发训练功能。
 
@@ -334,7 +334,7 @@ GNU++20 复用同一已发布文本环境，固定 `g++ -std=gnu++20`。本机 A
 
 [Java 21](delivery-evidence/p7-java21.md) 使用单文件 `Main.java`、固定 JDK 制品和逐点 JVM。已发布 A+B 的浏览器提交、真实 Worker AC/WA/CE 与本人结果通过，C17、GNU++17、GNU++20 同镜像回归通过。另已验证 JVM 堆耗尽为 RE、沙箱总内存超限为 MLE，以及同机双 Worker 一致性、SIGTERM 后自然接管和历史重判。
 
-[CPython 3.14](delivery-evidence/p7-python3.md) 使用单文件 `.py`、固定 CPython 3.14.10 和逐点解释器。已发布 A+B 的浏览器提交、真实 Worker AC/WA/CE/RE 与本人回读通过，C17、GNU++17、GNU++20 和 Java 21 同镜像回归通过。Python 超限、自然接管、历史重判和同机双 Worker 一致性待验。
+[CPython 3.14](delivery-evidence/p7-python3.md) 使用单文件 `.py`、固定 CPython 3.14.10 和逐点解释器。已发布 A+B 的浏览器提交、真实 Worker AC/WA/CE/RE 与本人回读通过，C17、GNU++17、GNU++20 和 Java 21 同镜像回归通过。Python TLE/MLE/OLE、同机双 Worker 一致性、SIGTERM 后自然接管和历史重判均通过。
 
 - 浮点验证逐题绝对/相对容差及 OR、等于边界、零与负数、科学计数法、非法/非有限值、混合文本；非法标准答案或配置阻止发布。
 - SPJ 必须支持 Testlib C++ 检查器，保留既定 ICPC 统一协议，通过显式适配接入洛谷文档所示的 `checker.cpp`、`#include "testlib.h"`、`registerTestlibCmd` 及三文件接口。首批仍使用 GNU++17，不由外部示例改成 C++14；检查器崩溃、超时、非法协议归 SE，诊断按权限提供。
