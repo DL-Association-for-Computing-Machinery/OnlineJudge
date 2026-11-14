@@ -38,7 +38,7 @@ mkdir "$oj_protocol_dir/workspace"
 cp /workspace/go.mod /workspace/go.sum "$oj_protocol_dir/workspace/"
 cp -R /workspace/db /workspace/internal /workspace/tests "$oj_protocol_dir/workspace/"
 mkdir "$oj_protocol_dir/workspace/cmd"
-cp -R /workspace/cmd/api /workspace/cmd/migrate "$oj_protocol_dir/workspace/cmd/"
+cp -R /workspace/cmd/api /workspace/cmd/migrate /workspace/cmd/mail-worker "$oj_protocol_dir/workspace/cmd/"
 cd "$oj_protocol_dir/workspace"
 if [ -d /verified-module-cache ]; then
     # The image cache may be read-only to the fixture user.
@@ -53,4 +53,12 @@ if [ -d /verified-module-cache ]; then
 fi
 go mod verify
 golangci-lint run --config /workspace/.golangci.yml --build-tags=integration ./tests/sessionprotocol/...
+# Cold compilation is already bounded by the Docker driver. Keep it outside
+# the Go test timer so the integration budget measures the running fixtures.
+export OJ_PROTOCOL_ENTRY_BIN_DIR="$oj_protocol_dir/bin"
+mkdir "$OJ_PROTOCOL_ENTRY_BIN_DIR"
+go build -mod=readonly -race -o "$OJ_PROTOCOL_ENTRY_BIN_DIR/" ./cmd/api ./cmd/migrate
+if [ "${1:-ordinary}" = email-lifecycle ]; then
+    go build -mod=readonly -race -o "$OJ_PROTOCOL_ENTRY_BIN_DIR/mail-worker" ./cmd/mail-worker
+fi
 go test -mod=readonly -race -count=1 -timeout=120s -tags=integration ./tests/sessionprotocol -run "$oj_pattern" -v

@@ -717,7 +717,7 @@ python3 -B scripts/test-session-protocol.py --toolchain-image oj-session-protoco
 
 脚本只使用已有本地镜像，检查 Linux/架构，创建带唯一 owner 标签的私有 internal 网络、旧/替换/中断恢复 Redis 和工具链容器；无宿主发布端口或 Docker socket。临时 PostgreSQL 只开放容器内 Unix socket，复制源码白名单并运行真实存储/race 专项。结束检查退出码/OOM 并仅清理自有容器和网络，保留缓存卷。可用 `--redis-image` 指定已核验本地镜像、`--module-cache` 挂载既有只读模块缓存；合并缓存后执行 `go mod verify`，测试使用 `-mod=readonly`。Linux CI 使用 `--context default`；此专项不是完整 AC23、容量或部署验收。
 
-在上述脚本命令末尾加 `--suite email-lifecycle` 可用另一套全新的临时 PostgreSQL 和 Redis 验证邮箱整链路。专项以配置文件启动两个 API 进程，邮件只送往容器内回环 TLS 收件器，不发布宿主端口。
+在上述脚本命令末尾加 `--suite email-lifecycle` 可用另一套全新的临时 PostgreSQL 和 Redis 验证邮箱整链路。专项以配置文件启动两个 API 进程和独立发信进程，邮件只送往容器内回环 TLS 收件器，不发布宿主端口。测试驱动在 Go race 测试计时开始前构建所需入口，保持运行期超时不变。
 
 `--suite archive-recovery` 单独运行同一归档的会话及邮件恢复回归，使用旧、替换及中断恢复 Redis 夹具。该用例也保留在普通会话套件中。
 

@@ -7,10 +7,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -21,8 +21,11 @@ import (
 	"net/mail"
 	"net/textproto"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -30,13 +33,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity"
-	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/emailmessage"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/emailtoken"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/identity/password"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/mailbudget"
-	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/maildelivery"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/mailqueue"
-	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/mailtransport"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/emailintake"
 	protocol "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/redisstore"
 	sessionruntime "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/runtime"
@@ -49,6 +49,7 @@ func TestIsolatedEmailLifecycle(t *testing.T) {
 	}
 	f := setup(t)
 	binary := entryBinary(t)
+	workerBinary := entryProgram(t, "mail-worker")
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	_, err := f.pools[0].Exec(ctx, "CREATE DATABASE fixture_email_seals")
@@ -135,23 +136,9 @@ func TestIsolatedEmailLifecycle(t *testing.T) {
 	must(t, err)
 	from, err := identity.ParseEmail("sender@example.invalid")
 	must(t, err)
-	smtp, receive := lifecycleSMTP(t, from, to, []string{activate, reset, reset})
-	renderer, err := emailmessage.New(loginOrigin)
-	must(t, err)
-	worker, err := maildelivery.NewWorker(ctx, f.pools[1], keys, renderer, smtp)
-	must(t, err)
-	sendCtx, stop := context.WithCancel(ctx)
-	done := make(chan error, 1)
-	go func() { done <- worker.Run(sendCtx) }()
-	t.Cleanup(func() {
-		stop()
-		select {
-		case err := <-done:
-			must(t, err)
-		case <-time.After(6 * time.Second):
-			t.Error("mail worker failed to stop")
-		}
-	})
+	port, trustFile, receive := lifecycleSMTP(t, to, []string{activate, reset, reset})
+	stopWorker := startLifecycleWorker(t, workerBinary, keyFile, trustFile, from, port)
+	defer stopWorker()
 
 	request := func(e *loginEndpoint, path, body string) {
 		t.Helper()
@@ -351,19 +338,16 @@ func waitLifecycleMail(t *testing.T, ctx context.Context, pool *pgxpool.Pool, wa
 	}
 }
 
-func lifecycleSMTP(t *testing.T, from, to identity.Email, links []string) (*mailtransport.Sender, func(context.Context) string) {
+func lifecycleSMTP(t *testing.T, to identity.Email, links []string) (int, string, func(context.Context) string) {
 	t.Helper()
 	fixture := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	config := &tls.Config{Certificates: fixture.TLS.Certificates, MinVersion: tls.VersionTLS12}
-	roots := x509.NewCertPool()
-	roots.AddCert(fixture.Certificate())
+	trustFile := filepath.Join(t.TempDir(), "receipt-fixture.pem")
+	must(t, os.WriteFile(trustFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: fixture.Certificate().Raw}), 0600))
 	fixture.Close()
 	listener, err := net.ListenTCP("tcp4", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	must(t, err)
 	t.Cleanup(func() { _ = listener.Close() })
-	sender, err := mailtransport.New(mailtransport.Config{Host: "127.0.0.1", Port: listener.Addr().(*net.TCPAddr).Port,
-		TLS: mailtransport.ImplicitTLS, From: from, Timeout: 3 * time.Second, RootCAs: roots}, "", "")
-	must(t, err)
 	type result struct {
 		token string
 		err   error
@@ -378,7 +362,7 @@ func lifecycleSMTP(t *testing.T, from, to identity.Email, links []string) (*mail
 			}
 		}
 	}()
-	return sender, func(ctx context.Context) string {
+	return listener.Addr().(*net.TCPAddr).Port, trustFile, func(ctx context.Context) string {
 		t.Helper()
 		select {
 		case message := <-inbox:
@@ -389,6 +373,43 @@ func lifecycleSMTP(t *testing.T, from, to identity.Email, links []string) (*mail
 		case <-ctx.Done():
 			t.Fatal("timed out waiting for local SMTP")
 			return ""
+		}
+	}
+}
+
+func startLifecycleWorker(t *testing.T, workerBinary, keyFile, trustFile string, from identity.Email, port int) func() {
+	t.Helper()
+	cmd := exec.Command(workerBinary)
+	cmd.Env = []string{
+		"OJ_DATABASE_URL=" + os.Getenv("OJ_PROTOCOL_DATABASE_URL"),
+		"OJ_EMAIL_PAYLOAD_KEYS_FILE=" + keyFile, "SSL_CERT_FILE=" + trustFile,
+		"OJ_ACCOUNT_PUBLIC_ORIGIN=" + loginOrigin,
+		"OJ_SMTP_HOST=127.0.0.1", "OJ_SMTP_PORT=" + strconv.Itoa(port),
+		"OJ_SMTP_TLS=implicit", "OJ_SMTP_FROM=" + from.Original(),
+	}
+	must(t, cmd.Start())
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	return func() {
+		t.Helper()
+		select {
+		case err := <-done:
+			t.Errorf("mail worker exited before shutdown: %v", err)
+			return
+		default:
+		}
+		if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
+			t.Error("mail worker could not be signalled")
+		}
+		select {
+		case err := <-done:
+			must(t, err)
+		case <-time.After(6 * time.Second):
+			if err := cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+				t.Errorf("could not stop mail worker: %v", err)
+				return
+			}
+			t.Errorf("mail worker exceeded its shutdown deadline (wait result: %v)", <-done)
 		}
 	}
 }

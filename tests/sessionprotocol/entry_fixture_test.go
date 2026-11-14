@@ -50,6 +50,17 @@ func entryBinary(t *testing.T) string {
 
 func entryProgram(t *testing.T, name string) string {
 	t.Helper()
+	if dir := os.Getenv("OJ_PROTOCOL_ENTRY_BIN_DIR"); dir != "" {
+		if os.Getenv("OJ_PROTOCOL_FIXTURE") != "1" || !filepath.IsAbs(dir) || (name != "api" && name != "migrate" && name != "mail-worker") {
+			t.Fatal("invalid prebuilt entry fixture")
+		}
+		path := filepath.Join(dir, name)
+		info, err := os.Lstat(path)
+		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0100 == 0 {
+			t.Fatal("prebuilt race fixture binary unavailable")
+		}
+		return path
+	}
 	path := filepath.Join(t.TempDir(), name)
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
