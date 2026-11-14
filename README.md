@@ -933,6 +933,16 @@ bash scripts/smoke-cold-trial.sh "$COLD_DOCKER_SOCKET" "$COLD_ENGINE_DIR" \
 
 此专项在封闭的回环网络中用临时 PostgreSQL、Redis、测试证书和合成配置验证空库迁移、会话门禁开启、HTTPS 就绪、前端和正常退出；不接收真实配置、不创建账号、不启动判题。不要在现场引擎运行此夹具。
 
+如需在同一冷接收环境追加固定合成判题，先按下文[专用 Ubuntu VM 判题实验](#专用-ubuntu-vm-判题实验)用**同一 Git 提交**制作实验判题包。接收端须保证判题包及各级祖先目录由 root 控制。仍在同一个专用 VM 的私有挂载和无外网路由的网络空间、且只导入了试用运行镜像时执行：
+
+```sh
+bash scripts/smoke-cold-trial-judge.sh "$COLD_DOCKER_SOCKET" "$COLD_ENGINE_DIR" \
+  "$RECEIVED_BUNDLE_DIR" "$TRUSTED_MANIFEST_SHA256" "$IMAGE_REPORT" deploy/trial/nginx.conf.example \
+  "$JUDGE_BUNDLE_DIR" "$TRUSTED_JUDGE_MANIFEST_SHA256"
+```
+
+脚本在启动服务前核对两份独立摘要及提交号，先验证正式前端和会话 API 的冷启动与退出，再在同一引擎导入固定判题镜像，使用独立临时库运行合成 HTTP 判题和过载恢复。判题入口是实验接口；没有把普通账号的训练提交接入这次验收，也没有用实际试用配置。
+
 ### 试用同源 HTTPS 入口
 
 用[独立 Nginx 模板](deploy/trial/nginx.conf.example)准备试用入口。将 `oj.example.invalid` 的所有出现处替换为同一个公开域名；本模板对应公开端口 443，映射至 Nginx 的 8443。把已核验应用制品的 `site/` 以只读方式挂载至 `/srv/oj/site`；应让 Nginx 运行账号读取安装后的文件，同时保持原接收包不变。
