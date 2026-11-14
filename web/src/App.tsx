@@ -14,6 +14,8 @@ import { PreviewDraftProvider } from './preview/PreviewDraftProvider'
 import './account/account.css'
 
 const ProblemPage = lazy(() => import('./preview/ProblemPage'))
+const CatalogPage = lazy(() => import('./pages/CatalogPage').then(m => ({ default: m.CatalogPage })))
+const ReleasedProblemPage = lazy(() => import('./pages/CatalogPage').then(m => ({ default: m.ReleasedProblemPage })))
 const DraftPreviewPage = lazy(() => import('./drafts/DraftPreviewPage'))
 const DraftManagementPage = lazy(() => import('./drafts/DraftManagementPage'))
 const ReviewMaterialsPage = lazy(() => import('./reviews/ReviewMaterialsPage'))
@@ -28,6 +30,8 @@ export function App() {
         <RouteFocus />
         <Routes>
           <Route path="/" element={<LibraryPage />} />
+          <Route path="/problems" element={<Suspense fallback={<p role="status">正在加载题库…</p>}><CatalogPage /></Suspense>} />
+          <Route path="/problems/:id" element={<Suspense fallback={<p role="status">正在加载题面…</p>}><ReleasedProblemPage /></Suspense>} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/account/register" element={<EmailRequestPage key="registration" kind="registration" />} />
           <Route path="/account/forgot-password" element={<EmailRequestPage key="recovery" kind="recovery" />} />

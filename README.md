@@ -588,6 +588,8 @@ OJ_SANDBOX_EXPERIMENT=1 python3 -B tests/integration/live_reference.py \
 
 普通终审批准 HTTP 入口默认关闭；`"review_approvals": true` 需要 `review_access`。启用仍必须通过服务端准入检查，并不会发布题目；见[批准准入状态](docs/problem-drafts.md#批准准入状态)。
 
+需要读取已发布题目时，在 `private_drafts` 中显式设置 `"public_catalog": true`。匿名选手访问 `/problems`，其同源 HTTPS API 只读发布账本和封存题面；示例题仍在首页。见[选手题库只读入口](docs/problem-drafts.md#选手题库只读入口)。
+
 发布资格单独维护，默认无授权。使用相同的私有数据库连接及当前 schema：
 
 ```sh

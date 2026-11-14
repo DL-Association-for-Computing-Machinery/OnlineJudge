@@ -63,6 +63,7 @@ type privateDraftsWire struct {
 	ReviewAccess           bool     `json:"review_access"`
 	ReviewReturns          bool     `json:"review_returns"`
 	ReviewApprovals        bool     `json:"review_approvals"`
+	PublicCatalog          bool     `json:"public_catalog"`
 	StatementConfirmations bool     `json:"statement_confirmations"`
 }
 

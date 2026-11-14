@@ -89,6 +89,7 @@ func TestBrowserFixture(t *testing.T) {
 		c.PrivateDrafts.ReviewReturns = true
 		c.PrivateDrafts.ReviewApprovals = true
 		c.PrivateDrafts.StatementConfirmations = true
+		c.PrivateDrafts.PublicCatalog = true
 	}
 	access, err := identitypg.NewProblemAccess(f.pools[0])
 	must(t, err)
@@ -232,7 +233,7 @@ func TestBrowserFixture(t *testing.T) {
 		info["login_accounts"] = string(raw)
 	}
 	if reviewMode {
-		info["review_id"], info["review_draft_id"] = seedBrowserReview(t, f, origin, ca.Roots, subject, otherAuthor, access)
+		info["review_id"], info["review_draft_id"], info["catalog_fixture_id"] = seedBrowserReview(t, f, origin, ca.Roots, subject, otherAuthor, access, c.PrivateDrafts.MaterialRoot)
 		info["review_reference_key"] = entryTerminalReferenceKey
 	}
 	if os.Getenv("OJ_BROWSER_COLD_TLS") == "1" {
@@ -377,7 +378,8 @@ func browserStatic(directory string) http.Handler {
 		}
 		// Mirror the production SPA fallback for the explicit UI routes only.
 		if r.URL.Path == "/login" || r.URL.Path == "/account" || r.URL.Path == "/submissions" || r.URL.Path == "/author/drafts" || strings.HasPrefix(r.URL.Path, "/author/drafts/") || strings.HasPrefix(r.URL.Path, "/preview/problems/") ||
-			r.URL.Path == "/review/materials" || strings.HasPrefix(r.URL.Path, "/review/materials/") {
+			r.URL.Path == "/review/materials" || strings.HasPrefix(r.URL.Path, "/review/materials/") ||
+			r.URL.Path == "/problems" || strings.HasPrefix(r.URL.Path, "/problems/") {
 			r = r.Clone(r.Context())
 			r.URL.Path = "/"
 			r.URL.RawPath = ""

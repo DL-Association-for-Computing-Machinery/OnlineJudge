@@ -280,7 +280,8 @@ func entryConfigWithWriteTimeout(t *testing.T, c sessionruntime.Config, ca *test
 		doc["private_drafts"] = map[string]any{"material_root": d.MaterialRoot, "bundle_directory": d.BundleDirectory,
 			"source_lock_file": d.SourceLockFile, "source_ids": d.SourceIDs, "timeout": d.Timeout.String(), "max_in_flight": d.MaxInFlight,
 			"reference_requests": d.ReferenceRequests, "review_intake": d.ReviewIntake, "review_access": d.ReviewAccess,
-			"review_returns": d.ReviewReturns, "review_approvals": d.ReviewApprovals, "statement_confirmations": d.StatementConfirmations}
+			"review_returns": d.ReviewReturns, "review_approvals": d.ReviewApprovals, "statement_confirmations": d.StatementConfirmations,
+			"public_catalog": d.PublicCatalog}
 	}
 	if c.TrainingHistory {
 		doc["training_history"] = true

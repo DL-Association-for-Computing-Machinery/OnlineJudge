@@ -111,12 +111,14 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 	if err != nil {
 		return nil, ErrConfig
 	}
+	var catalog *httptransport.CatalogReader
 	if c.PrivateDrafts != nil {
 		drafts, cleanup, err := openDrafts(startup, *c.PrivateDrafts, store, pool, secrets)
 		if err != nil {
 			return nil, err
 		}
 		closeDrafts = cleanup
+		catalog = drafts.catalog
 		handler, err = httptransport.WithPrivateDrafts(handler, drafts.importer, c.PrivateDrafts.Timeout)
 		if err != nil {
 			return nil, ErrConfig
@@ -226,6 +228,12 @@ func Open(ctx context.Context, c Config) (*Runtime, error) {
 		handler, closeIntake, err = withEmailIntake(startup, handler, authority, store, work, secrets, pool, c)
 		if err != nil {
 			return nil, startupFailure(startup)
+		}
+	}
+	if catalog != nil {
+		handler, err = httptransport.WithCatalog(handler, *catalog)
+		if err != nil {
+			return nil, ErrConfig
 		}
 	}
 	if err := startup.Err(); err != nil {
