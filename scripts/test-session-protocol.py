@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 import time
 import uuid
 
@@ -84,6 +85,56 @@ def start_redis(docker, prefix, network, image, alias, instances):
     raise RuntimeError(f"Redis fixture {alias} did not become ready")
 
 
+def trial_tls(root):
+    # Only disposable keys enter the two local containers. The enclosing host
+    # directory stays private; fixture users inside the containers differ.
+    mount = root / "mount"
+    mount.mkdir(mode=0o755)
+
+    def openssl(*args):
+        subprocess.run(["openssl", *args], check=True, cwd=root, capture_output=True, timeout=15)
+
+    openssl("req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-subj", "/CN=Trial Fixture",
+            "-keyout", "ca.key", "-out", "mount/api-ca.pem")
+    (mount / "public-ca.pem").write_bytes((mount / "api-ca.pem").read_bytes())
+    for role, extension in (
+        ("public", "subjectAltName=DNS:oj.example.invalid\nextendedKeyUsage=serverAuth"),
+        ("backend", "subjectAltName=DNS:oj-api.internal\nextendedKeyUsage=serverAuth"),
+        ("proxy", "extendedKeyUsage=clientAuth"),
+    ):
+        (root / "extension").write_text(extension + "\n")
+        openssl("req", "-new", "-newkey", "rsa:2048", "-nodes", "-subj", "/CN=Trial " + role,
+                "-keyout", f"mount/{role}-key.pem", "-out", "leaf.csr")
+        openssl("x509", "-req", "-in", "leaf.csr", "-CA", "mount/api-ca.pem", "-CAkey", "ca.key",
+                "-CAcreateserial", "-days", "1", "-extfile", "extension", "-out", f"mount/{role}-chain.pem")
+    for path in mount.iterdir():
+        path.chmod(0o644)
+    return mount
+
+
+def run_trial_edge(docker, options, toolchain, nginx, assets, prefix):
+    with tempfile.TemporaryDirectory(prefix="oj-trial-edge-") as tmp:
+        tls = trial_tls(Path(tmp))
+        test = docker.create(*options, "--mount", f"type=bind,src={tls},dst=/trial-tls,readonly",
+                             "--entrypoint", "sleep", toolchain, "infinity")
+        docker.run("start", test)
+        edge = docker.create("--name", prefix + "-edge", "--network", f"container:{test}",
+                             "--read-only", "--tmpfs", "/tmp:rw,size=16m,mode=1777",
+                             "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+                             "--mount", f"type=bind,src={tls},dst=/run/oj-edge,readonly",
+                             "--mount", f"type=bind,src={assets},dst=/srv/oj/site,readonly",
+                             "--mount", f"type=bind,src={ROOT}/deploy/trial/nginx.conf.example,dst=/trial.conf,readonly",
+                             "--entrypoint", "sh", nginx, "-ec",
+                             'nginx -t -c /trial.conf; exec nginx -c /trial.conf -g "daemon off;"')
+        docker.run("start", edge)
+        docker.run("exec", test, "sh", "/workspace/scripts/test-session-protocol.sh", "trial-edge",
+                   timeout=300, capture=False)
+        check_state(docker, test, True)
+        check_state(docker, edge, True)
+        docker.run("stop", "--signal", "SIGQUIT", "--time", "5", edge, timeout=15)
+        check_state(docker, edge, False)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--context", default="desktop-linux", help="Docker context (default: desktop-linux); empty string uses the CLI default")
@@ -91,9 +142,15 @@ def main():
     parser.add_argument("--redis-image", default="redis:7.2.17@sha256:0312984fbfeb2ff1d4382ecef45b50e7d65478a6a58cf12ce28d6de7a4142e45", help="Existing local Redis image; never pulled")
     parser.add_argument("--build-cache-volume", default="onlinejudge_toolchain-cache", help="Existing Go build cache volume; empty string uses container /tmp")
     parser.add_argument("--module-cache", type=Path, help="Optional existing checksum-verified Go module cache; mounted read-only")
-    parser.add_argument("--suite", choices=("ordinary", "email-lifecycle"), default="ordinary",
+    parser.add_argument("--suite", choices=("ordinary", "email-lifecycle", "trial-edge"), default="ordinary",
                         help="Select one suite per fresh PostgreSQL and Redis fixture")
+    parser.add_argument("--nginx-image", help="Existing local non-root Nginx image for trial-edge")
+    parser.add_argument("--trial-site", type=Path, help="Exported production frontend site directory for trial-edge")
     args = parser.parse_args()
+    trial = args.suite == "trial-edge"
+    if (trial and not (args.nginx_image and args.trial_site)) or (
+            not trial and (args.nginx_image or args.trial_site)):
+        parser.error("trial-edge requires --nginx-image and --trial-site")
     if "," in str(ROOT) or (args.build_cache_volume and not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_.-]*", args.build_cache_volume)):
         parser.error("invalid bind path or cache volume name")
     owner = uuid.uuid4().hex
@@ -108,6 +165,11 @@ def main():
         host_arch = {"x86_64": "amd64", "aarch64": "arm64"}.get(host_arch, host_arch)
         if tool_arch != redis_arch or tool_arch != host_arch:
             raise ValueError(f"image/daemon architecture mismatch: {tool_arch}, {redis_arch}, {host_arch}")
+        if trial:
+            nginx, nginx_arch = image_info(docker, args.nginx_image)
+            assets = args.trial_site.resolve(strict=True)
+            if nginx_arch != host_arch or "," in str(assets) or not (assets / "index.html").is_file():
+                raise ValueError("invalid trial frontend or Nginx platform")
         if args.build_cache_volume:
             docker.run("volume", "inspect", args.build_cache_volume)
         network = docker.network(prefix)
@@ -125,9 +187,12 @@ def main():
             if not cache.is_dir() or "," in str(cache):
                 raise ValueError("invalid existing module cache directory")
             options += ["--mount", f"type=bind,src={cache},dst=/verified-module-cache,readonly"]
-        test = docker.create(*options, "--entrypoint", "sh", toolchain, "/workspace/scripts/test-session-protocol.sh", args.suite)
-        docker.run("start", "-a", test, timeout=300, capture=False)
-        check_state(docker, test, False)
+        if trial:
+            run_trial_edge(docker, options, toolchain, nginx, assets, prefix)
+        else:
+            test = docker.create(*options, "--entrypoint", "sh", toolchain, "/workspace/scripts/test-session-protocol.sh", args.suite)
+            docker.run("start", "-a", test, timeout=300, capture=False)
+            check_state(docker, test, False)
         for ident in redis:
             check_state(docker, ident, True)
             docker.run("stop", "--time", "5", ident, timeout=15)

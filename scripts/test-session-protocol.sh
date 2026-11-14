@@ -6,6 +6,9 @@ case "$#:${1:-ordinary}" in
     1:email-lifecycle)
         export OJ_ISOLATED_EMAIL_LIFECYCLE=1
         oj_pattern='^TestIsolatedEmailLifecycle$' ;;
+    1:trial-edge)
+        export OJ_TRIAL_EDGE_FIXTURE=1
+        oj_pattern='^TestTrialEdge$' ;;
     *) echo "Invalid session protocol suite" >&2; exit 2 ;;
 esac
 umask 077

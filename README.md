@@ -904,6 +904,16 @@ python3 -B scripts/trial_app_bundle.py verify --manifest-sha256 "$TRUSTED_MANIFE
 
 切换前先用安装后的配置执行 `nginx -t`，再从信任公开 CA 的干净客户端检查静态资源、`/api/v1/readyz`、登录及退出；错误公开 Host 和错误后端证书必须被拒绝。模板关闭访问日志以免记录敏感请求，现场的值守采样与告警另行配置。此模板不改变默认 Compose，也不配置校内 DNS、证书分发或发布服务。
 
+本地可复跑真实 API 与 Nginx 联验。准备普通会话专项的工具链、Redis 镜像和模块缓存，另用本地非 root Nginx 镜像及导出的正式 `site/`。宿主机需要已有的 `openssl`：
+
+```sh
+python3 -B scripts/test-session-protocol.py --suite trial-edge \
+  --toolchain-image oj-session-protocol-toolchain --build-cache-volume '' \
+  --nginx-image "$LOCAL_NGINX_IMAGE" --trial-site "$TRIAL_SITE"
+```
+
+专项用临时 CA、合成账号、真实 PostgreSQL／Redis 和独立 API 进程；Nginx 和 API 共用私有网络空间，不发布宿主端口。Go HTTPS 客户端验证信任链、静态入口、就绪、两步登录、转发头覆盖、Cookie 及退出后旧会话失效。此专项不替代现场浏览器、DNS 或独立故障域验收。
+
 ### 专用 Ubuntu VM 判题实验
 
 仅供无宿主共享目录的本地 Ubuntu 24.04 arm64 实验 VM。固定 Linux `6.8.0-106-generic`、Apple 虚拟化、go-judge/GCC 镜像及原生 Docker Unix socket。提交 API、控制器和 Worker 同时显式设置 `OJ_EXPERIMENT_MATERIAL_VERSION=m0-sum-ubuntu-arm64-v1`；运行和恢复只用 VM 内同一专用 root 账号的主槽。错误版本在领取前返回 412，不消耗尝试。禁止双槽、参考执行及浏览器模式；Desktop 默认仍用 `m0-sum-v3`。
