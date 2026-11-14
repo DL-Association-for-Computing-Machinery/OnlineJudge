@@ -4,18 +4,19 @@
 import argparse
 import json
 from pathlib import Path
+import platform
 import subprocess
 import sys
 import tarfile
 
-from cold_trial_images import receiver
+from cold_trial_images import linux_platform, receiver
 from trial_release import verify
 
 
 def receive_release(manifest, digest, app, archive, socket, data_root):
     release = verify(manifest, digest, app, archive)
-    if release["platform"] != "linux/arm64":
-        raise ValueError("the cold trial rehearsal requires linux/arm64")
+    if platform.system() != "Linux" or linux_platform(platform.machine()) != release["platform"]:
+        raise ValueError("host platform does not match the release")
     # Recheck the archive at import; no role, platform or archive pin is
     # supplied independently of the verified release.
     report = receiver(socket, data_root, archive, release["runtime_sha256"],

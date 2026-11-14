@@ -23,7 +23,8 @@ class TrialImagesTests(unittest.TestCase):
     def setUp(self):
         self.archive = Path(self.enterContext(tempfile.TemporaryDirectory())) / "runtime.tar"
 
-    def export(self, *, tagged=False, damaged=False, extra=False, duplicate=False, alternate_layers=False, generation=1):
+    def export(self, *, tagged=False, damaged=False, extra=False, duplicate=False,
+               alternate_layers=False, generation=1, architecture="arm64"):
         files, rows, entries, roles = {}, [], [], {}
 
         def blob(raw, media=""):
@@ -32,7 +33,7 @@ class TrialImagesTests(unittest.TestCase):
             return {"digest": "sha256:" + digest, "size": len(raw), "mediaType": media}
 
         for role in ("nginx", "postgres", "redis", *(("unexpected",) if extra else ())):
-            config = blob(json.dumps({"os": "linux", "architecture": "arm64", "fixture": role,
+            config = blob(json.dumps({"os": "linux", "architecture": architecture, "fixture": role,
                                       "generation": generation}).encode())
             layer = blob(role.encode(), "application/vnd.oci.image.layer.v1.tar")
             manifest = {"schemaVersion": 2, "config": config, "layers": [layer]}
@@ -96,12 +97,74 @@ class TrialImagesTests(unittest.TestCase):
         digest = hashlib.sha256(self.archive.read_bytes()).hexdigest()
         with (patch.object(Path, "lstat") as lstat, patch.object(module.subprocess, "run") as run):
             lstat.return_value.st_mode = 0o140000
-            run.side_effect = [subprocess.CompletedProcess([], 0, str(root), ""),
+            run.side_effect = [subprocess.CompletedProcess([], 0, f"linux/aarch64\n{root}", ""),
                                subprocess.CompletedProcess([], 0, roles["nginx"], "")]
             with self.assertRaisesRegex(ValueError, "must start with empty"):
                 module.receiver(socket, root, self.archive, digest, "linux/arm64", roles)
             self.assertEqual([call.args[0][3:5] for call in run.call_args_list],
                              [("info", "--format"), ("image", "ls")])
+
+    def test_cold_receiver_refuses_wrong_engine_before_loading(self):
+        roles = self.export(architecture="amd64")
+        root = self.archive.parent / "engine"
+        with patch.object(sys, "path", [str(SCRIPT.parent), *sys.path]):
+            import cold_trial_images as module
+        with patch.object(Path, "lstat") as lstat, patch.object(module.subprocess, "run") as run:
+            lstat.return_value.st_mode = 0o140000
+            run.return_value = subprocess.CompletedProcess([], 0, f"linux/aarch64\n{root}", "")
+            with self.assertRaisesRegex(ValueError, "engine platform"):
+                module.receiver(root / "docker.sock", root, self.archive,
+                                hashlib.sha256(self.archive.read_bytes()).hexdigest(), "linux/amd64", roles)
+            self.assertEqual([call.args[0][3] for call in run.call_args_list], ["info"])
+
+    def test_cold_receiver_loads_and_smokes_native_amd64_images(self):
+        roles = self.export(architecture="amd64")
+        root = self.archive.parent / "engine"
+        with patch.object(sys, "path", [str(SCRIPT.parent), *sys.path]):
+            import cold_trial_images as module
+        with patch.object(Path, "lstat") as lstat, patch.object(module.subprocess, "run") as run:
+            lstat.return_value.st_mode = 0o140000
+            run.side_effect = [subprocess.CompletedProcess([], 0, output, "") for output in (
+                f"linux/x86_64\n{root}", "", "", "", "", "\n".join(roles.values()),
+                *(ident + " linux/amd64" for ident in roles.values()), "", "", "", "", "",
+            )]
+            report = module.receiver(root / "docker.sock", root, self.archive,
+                                     hashlib.sha256(self.archive.read_bytes()).hexdigest(), "linux/amd64", roles)
+        self.assertEqual(report["image_ids"], roles)
+        self.assertEqual(report["initial_images"], 0)
+        commands = [call.args[0][3:] for call in run.call_args_list]
+        self.assertEqual([args for args in commands if args[:2] == ("image", "load")],
+                         [("image", "load", "--platform", "linux/amd64", "--input", str(self.archive))])
+        smoke = [args for args in commands if args[0] == "run"]
+        self.assertEqual(len(smoke), 3)
+        self.assertTrue(all("--pull=never" in args for args in smoke))
+
+    def test_amd64_release_requires_native_host_before_import(self):
+        roles = self.export(architecture="amd64")
+        root = self.archive.parent
+        source, app, release = (root / name for name in ("source", "app", "release.json"))
+        app_export(source, machine=62)
+        with patch.object(sys, "path", [str(SCRIPT.parent), *sys.path]):
+            import cold_trial_release as module
+            import trial_app_bundle
+            import trial_release
+        platform = "linux/amd64"
+        app_pin = trial_app_bundle.pack(source, REVISION, platform, app)
+        runtime_pin = hashlib.sha256(self.archive.read_bytes()).hexdigest()
+        pin = trial_release.pack(dict(schema=trial_release.SCHEMA, revision=REVISION, platform=platform,
+                                      application_sha256=app_pin, runtime_sha256=runtime_pin,
+                                      image_configurations=roles), release, app, self.archive)
+        data, socket = root / "data", root / "socket"
+        with (patch("platform.system", return_value="Linux"),
+              patch("platform.machine", return_value="aarch64") as machine,
+              patch.object(module, "receiver", return_value={"platform": platform}) as receiver):
+            with self.assertRaisesRegex(ValueError, "host platform"):
+                module.receive_release(release, pin, app, self.archive, socket, data)
+            receiver.assert_not_called()
+            machine.return_value = "x86_64"
+            report = module.receive_release(release, pin, app, self.archive, socket, data)
+            receiver.assert_called_once_with(socket, data, self.archive, runtime_pin, platform, roles)
+            self.assertEqual(report["application_sha256"], app_pin)
 
     def test_release_rejects_valid_artifacts_from_another_release(self):
         root = self.archive.parent

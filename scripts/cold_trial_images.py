@@ -13,6 +13,11 @@ import sys
 from verify_trial_images import ROLES, verify
 
 
+def linux_platform(architecture):
+    return {"aarch64": "linux/arm64", "arm64": "linux/arm64",
+            "x86_64": "linux/amd64", "amd64": "linux/amd64"}.get(architecture)
+
+
 def receiver(socket, data_root, archive, digest, platform, roles):
     if (not socket.is_absolute() or not data_root.is_absolute()
             or not stat.S_ISSOCK(socket.lstat().st_mode)
@@ -31,8 +36,11 @@ def receiver(socket, data_root, archive, digest, platform, roles):
         return set(values)
 
     result = verify(archive, digest, platform, roles)
-    if docker("info", "--format", "{{.DockerRootDir}}") != str(data_root):
+    info = docker("info", "--format", "{{.OSType}}/{{.Architecture}}\n{{.DockerRootDir}}").splitlines()
+    if len(info) != 2 or info[1] != str(data_root):
         raise ValueError("engine data root does not match")
+    if not info[0].startswith("linux/") or linux_platform(info[0][6:]) != platform:
+        raise ValueError("engine platform does not match the release")
     if inventory() or docker("ps", "-aq") or docker("volume", "ls", "-q"):
         raise ValueError("receiver must start with empty images, containers and volumes")
     docker("image", "load", "--platform", platform, "--input", str(archive), timeout=180)

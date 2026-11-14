@@ -2,6 +2,11 @@
 # Run only in the private, no-egress network namespace of a disposable receiver.
 set -Eeuo pipefail
 [[ $(id -u) == 0 ]]
+case "$(uname -s)/$(uname -m)" in
+    Linux/aarch64|Linux/arm64) platform=linux/arm64;;
+    Linux/x86_64|Linux/amd64) platform=linux/amd64;;
+    *) printf 'Cold trial requires native Linux arm64 or amd64\n' >&2; exit 2;;
+esac
 release_mode=false
 if [[ ${1:-} == --release ]]; then
     [[ $# == 7 ]]
@@ -27,12 +32,12 @@ if "$release_mode"; then
         --runtime "$archive" --socket "$socket" --data-root "$root/data" > "$image_report"
     digest=$(python3 -c 'import json, sys; print(json.load(sys.stdin)["application_sha256"])' < "$image_report")
 fi
-python3 -B "$scripts/trial_app_bundle.py" verify --platform linux/arm64 --manifest-sha256 "$digest" "$app"
+python3 -B "$scripts/trial_app_bundle.py" verify --platform "$platform" --manifest-sha256 "$digest" "$app"
 
-image_list=$(python3 - "$image_report" <<'PY'
+image_list=$(python3 - "$image_report" "$platform" <<'PY'
 import json, re, sys
 report = json.load(open(sys.argv[1]))
-assert report["platform"] == "linux/arm64" and report["initial_images"] == 0
+assert report["platform"] == sys.argv[2] and report["initial_images"] == 0
 for role in ("postgres", "redis", "nginx"):
     ident = report["image_ids"][role]
     assert re.fullmatch(r"sha256:[a-f0-9]{64}", ident)
@@ -42,7 +47,7 @@ PY
 mapfile -t images <<< "$image_list"
 [[ ${#images[@]} == 3 ]]
 for image in "${images[@]}"; do
-    [[ $("${docker[@]}" image inspect --format '{{.Id}} {{.Os}}/{{.Architecture}}' "$image") == "$image linux/arm64" ]]
+    [[ $("${docker[@]}" image inspect --format '{{.Id}} {{.Os}}/{{.Architecture}}' "$image") == "$image $platform" ]]
 done
 
 stage=$(mktemp -d "$root/fixture.XXXXXX")

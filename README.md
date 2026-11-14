@@ -1006,7 +1006,7 @@ python3 -B scripts/trial_release.py verify "$RELEASE_MANIFEST" \
 
 ### 从空引擎导入并联验试用制品
 
-在专用 arm64 实验 VM 内，先准备无外网路由的网络空间、独立 Docker Unix socket、全新的 Docker 和 containerd 数据目录，并确认 containerd 内容库为空。临时引擎根目录应为 `/tmp/oj-p6-*/engine.*` 下的 root 私有目录，socket 为其中的 `docker.sock`，Docker 数据目录为其 `data/`。应用包由 root 持有并保留权限。用独立交接的发布摘要执行联合冷启动，应用和镜像使用同一清单：
+在专用原生 Linux 实验 VM 内，先准备无外网路由的网络空间、独立 Docker Unix socket、全新的 Docker 和 containerd 数据目录，并确认 containerd 内容库为空。支持 arm64 和 amd64；发布清单、应用二进制、运行镜像、客体及引擎须使用同一架构，架构不符在导入前拒绝。临时引擎根目录应为 `/tmp/oj-p6-*/engine.*` 下的 root 私有目录，socket 为其中的 `docker.sock`，Docker 数据目录为其 `data/`。应用包由 root 持有并保留权限，传输时不要附带 macOS 的 `._*` 元数据文件。用独立交接的发布摘要执行联合冷启动，应用和镜像使用同一清单：
 
 ```sh
 bash scripts/smoke-cold-trial.sh --release "$COLD_DOCKER_SOCKET" "$COLD_ENGINE_DIR" \
@@ -1023,7 +1023,7 @@ python3 -B scripts/cold_trial_images.py "$RUNTIME_ARCHIVE" --sha256 "$TRUSTED_AR
 
 接收命令拒绝常用系统 socket、数据目录不匹配或已有镜像、容器、卷的引擎；不清空镜像库。导入后核对完整镜像集合，禁止拉取并验证 Nginx 程序、临时 PostgreSQL 查询及临时 Redis 写读。脚本不创建或停止 Docker 引擎，结束后由实验操作者停止自建引擎；镜像保留在该实验数据目录。此步骤不验证应用与镜像的联合冷启动，也不运行判题镜像。
 
-在**同一隔离 arm64 接收环境**做联合冷启动时，把前一条接收命令的标准输出保存为 `$IMAGE_REPORT`，并以 root 持有收到的应用包（保留权限）。临时引擎根目录应为 `/tmp/oj-p6-*/engine.*` 下的 root 私有目录，Unix socket 为该目录的 `docker.sock`，Docker 数据目录为其 `data/`。在启动独立引擎的同一私有挂载和网络空间中运行：
+在**同一隔离接收环境**做联合冷启动时，将前一条命令的 `--platform` 设置为接收引擎对应的架构，把标准输出保存为 `$IMAGE_REPORT`，并以 root 持有收到的应用包（保留权限）。临时引擎根目录应为 `/tmp/oj-p6-*/engine.*` 下的 root 私有目录，Unix socket 为该目录的 `docker.sock`，Docker 数据目录为其 `data/`。在启动独立引擎的同一私有挂载和网络空间中运行：
 
 ```sh
 bash scripts/smoke-cold-trial.sh "$COLD_DOCKER_SOCKET" "$COLD_ENGINE_DIR" \
@@ -1032,7 +1032,7 @@ bash scripts/smoke-cold-trial.sh "$COLD_DOCKER_SOCKET" "$COLD_ENGINE_DIR" \
 
 此专项在封闭的回环网络中，从核验过的应用包复制 Nginx 模板，配合临时 PostgreSQL、Redis、测试证书和合成配置验证空库迁移、会话门禁开启、HTTPS 就绪、前端和正常退出。`--release` 还使用包内工具和仅能读取账本的登录核对 schema，并以暂停状态启动入口，验证 HTTPS 读取及解除暂停后恢复转发。夹具不接收外部模板或真实配置，不创建账号、不启动判题。不要在现场引擎运行。
 
-如需在同一冷接收环境追加固定合成判题，先按下文[专用 Ubuntu VM 判题实验](#专用-ubuntu-vm-判题实验)用**同一 Git 提交**制作实验判题包。接收端须保证判题包及各级祖先目录由 root 控制。仍在同一个专用 VM 的私有挂载和无外网路由的网络空间、且只导入了试用运行镜像时执行：
+追加固定合成判题仍只支持专用 arm64 档位。先按下文[专用 Ubuntu VM 判题实验](#专用-ubuntu-vm-判题实验)用**同一 Git 提交**制作实验判题包。接收端须保证判题包及各级祖先目录由 root 控制。仍在同一个专用 VM 的私有挂载和无外网路由的网络空间、且只导入了试用运行镜像时执行：
 
 ```sh
 bash scripts/smoke-cold-trial-judge.sh "$COLD_DOCKER_SOCKET" "$COLD_ENGINE_DIR" \

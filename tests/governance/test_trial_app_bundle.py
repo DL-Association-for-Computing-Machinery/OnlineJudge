@@ -12,13 +12,13 @@ SCRIPT = Path(__file__).resolve().parents[2] / "scripts/trial_app_bundle.py"
 REVISION = "1" * 40
 
 
-def app_export(source):
+def app_export(source, machine=183):
     (source / "bin").mkdir(parents=True)
     (source / "site/assets").mkdir(parents=True)
     (source / "templates").mkdir(parents=True)
     elf = bytearray(64)
     elf[:7] = b"\x7fELF\x02\x01\x01"
-    elf[16:20] = b"\x02\x00\xb7\x00"
+    elf[16:20] = b"\x02\x00" + machine.to_bytes(2, "little")
     for name in ("api", "worker", "worker-api", "migrate", "materialstore", "mail-worker"):
         (source / "bin" / name).write_bytes(elf)
     for name in ("site/index.html", "site/THIRD-PARTY-NOTICES.txt", "site/assets/index-a.js"):
