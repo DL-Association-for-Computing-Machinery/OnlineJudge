@@ -29,7 +29,7 @@ const (
 	rollbackVersion       = experiment.PinnedVersion
 	rollbackCurrent       = "../../.local/bin"
 	rollbackBaseSchema    = 20
-	rollbackCurrentSchema = 25
+	rollbackCurrentSchema = 26
 )
 
 type rollbackFixture struct {
@@ -102,12 +102,12 @@ func TestCompatibleRollbackLoop(t *testing.T) {
 	f.counts(t, ctx, 2, migrationRows+rollbackCurrentSchema-rollbackBaseSchema, rollbackCurrentSchema)
 
 	start := time.Now()
-	// Check each boundary before going further. Down25 only removes the
-	// discovery index; Down24 and Down21 retain their empty-ledger guards.
+	// Down26 needs an empty approval ledger but leaves the discovery index
+	// intact until Down25. Earlier empty-ledger guards remain in effect.
 	for next := rollbackCurrentSchema - 1; next >= rollbackBaseSchema; next-- {
 		runFixtureMigration(t, ctx, rollbackCurrent, f.database.dsn, f.root, rollbackVersion, []string{"down"})
 		f.counts(t, ctx, 2, migrationRows+next-rollbackBaseSchema, next)
-		f.checkDiscoveryIndex(t, ctx, false)
+		f.checkDiscoveryIndex(t, ctx, next >= 25)
 	}
 	f.checkIncompatibleAPI(t, ctx, rollbackCurrent)
 	restartDrainedSandbox(t, slot)
