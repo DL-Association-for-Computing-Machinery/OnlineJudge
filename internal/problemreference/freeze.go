@@ -21,13 +21,17 @@ func (r Request) FreezeDraft(ctx context.Context, draft problem.Draft, store pro
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	profile, _, err := problemvalidation.ResolveSource(r.Specification.Identity.SourceID)
+	local := r.Specification.ProfileSHA256 == problemvalidation.LocalTextProfile().Digest()
+	profile, _, err := problemvalidation.ResolveReferenceProfile(r.Specification.Identity.SourceID, local)
 	if err != nil {
 		return nil, ErrSourceChanged
 	}
 	raw, err := json.Marshal(profile)
 	if err != nil || !bytes.Equal(raw, r.Specification.ProfileJSON) {
 		return nil, ErrSourceChanged
+	}
+	if local {
+		return draft.FreezeLocalTextReference(ctx, r.DraftID, r.Owner, r.Specification.Identity, store)
 	}
 	return draft.FreezeReference(ctx, r.DraftID, r.Owner, r.Specification.Identity, store)
 }

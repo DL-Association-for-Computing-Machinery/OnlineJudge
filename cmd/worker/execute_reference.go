@@ -21,6 +21,26 @@ func executeReference(ctx context.Context, args []string, logger *slog.Logger) e
 		return errors.New("usage: worker run-reference <request-id> <source-id> <expected-plan-sha256>; shared single host slot required")
 	}
 	input := problemreference.ClaimInput{RequestID: args[0], SourceID: args[1], PlanSHA256: args[2]}
+	if sourceLock := os.Getenv("OJ_LOCAL_REFERENCE_LOCK_SHA256"); sourceLock != "" {
+		if !input.Valid() || !problem.ValidImportRevision(sourceLock) || os.Getenv("OJ_LOCAL_REFERENCE_SOURCE") != input.SourceID ||
+			os.Getenv("OJ_SANDBOX_EXPERIMENT") != "1" {
+			return problemreference.ErrInvalid
+		}
+		if err := workerhost.CheckUbuntuAPlusBHost(ctx); err != nil {
+			return err
+		}
+		slot, err := workerhost.ReferenceSlotForTier(experiment.ReferenceAPlusBUbuntu)
+		if err != nil {
+			return err
+		}
+		return executeReferenceSelection(ctx, slot.LockName(), logger, func(ctx context.Context, client *workerclient.Acquirer) (*problemreference.WorkerClaim, error) {
+			claim, err := client.ClaimReference(ctx, input)
+			return &claim, err
+		}, sourceLock)
+	}
+	if os.Getenv("OJ_LOCAL_REFERENCE_SOURCE") != "" {
+		return problemreference.ErrInvalid
+	}
 	slot, err := referenceClaimSlot(input)
 	if err != nil {
 		return err
@@ -56,7 +76,7 @@ func executeNextReference(ctx context.Context, args []string, logger *slog.Logge
 }
 
 func executeReferenceSelection(ctx context.Context, slot string, logger *slog.Logger,
-	selectClaim func(context.Context, *workerclient.Acquirer) (*problemreference.WorkerClaim, error)) error {
+	selectClaim func(context.Context, *workerclient.Acquirer) (*problemreference.WorkerClaim, error), localLock ...string) error {
 	c, err := loadConfig(os.Getenv)
 	if err != nil {
 		return err
@@ -73,12 +93,18 @@ func executeReferenceSelection(ctx context.Context, slot string, logger *slog.Lo
 	}
 	defer renewal.Close()
 	fetch := func(ctx context.Context, claim problemreference.WorkerClaim) (referenceExecutionMaterials, error) {
-		materials, err := client.FetchReferenceForExecution(ctx, claim)
+		var materials *workerclient.VerifiedReference
+		var err error
+		if len(localLock) == 1 {
+			materials, err = client.FetchLocalReferenceForExecution(ctx, claim, localLock[0])
+		} else {
+			materials, err = client.FetchReferenceForExecution(ctx, claim)
+		}
 		if err != nil {
 			return referenceExecutionMaterials{}, err
 		}
 		frozen := referenceExecutionMaterials{snapshot: materials.ReferenceSnapshot, close: materials.Close}
-		if claim.SourceID == problemvalidation.ConvolutionSourceID {
+		if len(localLock) == 0 && claim.SourceID == problemvalidation.ConvolutionSourceID {
 			comparison, err := client.FetchDifferential(ctx, claim)
 			switch {
 			case err == nil:
@@ -92,10 +118,16 @@ func executeReferenceSelection(ctx context.Context, slot string, logger *slog.Lo
 		}
 		return frozen, nil
 	}
+	start := startClaimedReference
+	if len(localLock) == 1 {
+		start = func(ctx context.Context, _ string) (validationHost, error) {
+			return startClaimedReferenceTier(ctx, experiment.ReferenceAPlusBUbuntu)
+		}
+	}
 	return runSelectionUnderSlot(ctx, func() (*slotLock, error) { return lockSlotMode(slot, false) },
 		func(ctx context.Context) (*problemreference.WorkerClaim, error) { return selectClaim(ctx, client) },
 		func(ctx context.Context, lock *slotLock, claim problemreference.WorkerClaim) error {
-			err := runClaimedReference(ctx, lock, claim, logger, fetch, renewal.RenewReference, startClaimedReference, client.ReportReference)
+			err := runClaimedReference(ctx, lock, claim, logger, fetch, renewal.RenewReference, start, client.ReportReference, localLock...)
 			if err == nil {
 				logger.Info("参考执行通过，停止已确认，报告已接纳")
 			}
@@ -126,6 +158,11 @@ func startClaimedReference(ctx context.Context, sourceID string) (validationHost
 	if err != nil {
 		return nil, err
 	}
+	return startClaimedReferenceTier(ctx, tier)
+}
+
+func startClaimedReferenceTier(ctx context.Context, tier experiment.ReferenceTier) (validationHost, error) {
+	var err error
 	var host *workerhost.Host
 	if tier == 0 {
 		host, err = workerhost.StartM0Slot(ctx, workerhost.M0Slot{})
@@ -152,8 +189,8 @@ func runClaimedReference(ctx context.Context, lock *slotLock, claim problemrefer
 	fetch func(context.Context, problemreference.WorkerClaim) (referenceExecutionMaterials, error),
 	renew func(context.Context, problemreference.WorkerClaim) error,
 	start func(context.Context, string) (validationHost, error),
-	send func(context.Context, problemreference.WorkerReportInput) error) error {
-	profile, tier, err := problemvalidation.ResolveSource(claim.SourceID)
+	send func(context.Context, problemreference.WorkerReportInput) error, localLock ...string) error {
+	profile, tier, err := problemvalidation.ResolveReferenceProfile(claim.SourceID, len(localLock) == 1)
 	if err != nil {
 		return err
 	}
@@ -216,7 +253,12 @@ func runClaimedReference(ctx context.Context, lock *slotLock, claim problemrefer
 			ctx, done = context.WithTimeout(ctx, profile.Wall)
 			defer done()
 		}
-		report, err = problemvalidation.New(g).ValidateFrozen(ctx, materials.snapshot, claim.SourceID, claim.PlanSHA256)
+		runner := problemvalidation.New(g)
+		if len(localLock) == 1 {
+			report, err = runner.ValidateFrozenForProfile(ctx, materials.snapshot, claim.SourceID, claim.PlanSHA256, localLock[0], true)
+		} else {
+			report, err = runner.ValidateFrozen(ctx, materials.snapshot, claim.SourceID, claim.PlanSHA256)
+		}
 		if err != nil || report.Verdict != "AC" || materials.comparison == nil {
 			return err
 		}

@@ -9,6 +9,7 @@ const { chromium } = await import(pathToFileURL(process.env.OJ_PLAYWRIGHT_MODULE
 const browser = await chromium.launch({ executablePath: process.env.OJ_CHROMIUM_EXECUTABLE })
 const output = process.env.OJ_BROWSER_QA_OUTPUT
 const endpoint = ready.url + '/api/v1/training/submissions'
+const title = process.env.OJ_BROWSER_TRAINING_TITLE ?? '并查集'
 const ac = `#include <iostream>
 #include <numeric>
 #include <vector>
@@ -54,7 +55,7 @@ try {
   const errors = []
   page.on('pageerror', e => errors.push(e.name))
   await page.goto(ready.url + '/problems')
-  await page.getByRole('link', { name: '并查集', exact: true }).click()
+  await page.getByRole('link', { name: title, exact: true }).click()
   const problem = page.url()
   const copy = page.getByRole('button', { name: /^复制样例/ }).first()
   const original = await copy.locator('../..').locator('pre').textContent()
@@ -80,9 +81,10 @@ try {
   await other.getByText('正在读取训练提交…', { exact: true }).waitFor()
   unblock()
   await other.getByText('没有可显示的训练提交。', { exact: true }).waitFor()
-  for (const [source, verdict] of [[ac, 'AC'], [wa, 'WA'], [ole, 'OLE']]) {
+  const sourceAC = process.env.OJ_BROWSER_TRAINING_AC_FILE ? await readFile(process.env.OJ_BROWSER_TRAINING_AC_FILE, 'utf8') : ac
+  for (const [source, verdict] of [[sourceAC, 'AC'], [wa, 'WA'], [ole, 'OLE']]) {
     if (records.length) await page.goto(problem)
-    await page.getByRole('heading', { name: '并查集', exact: true }).waitFor()
+    await page.getByRole('heading', { name: title, exact: true }).waitFor()
     await page.getByLabel('源码', { exact: true }).fill(source)
     const [response] = await Promise.all([
       page.waitForResponse(r => r.request().method() === 'POST' && r.url() === endpoint),
@@ -102,7 +104,7 @@ try {
     await page.getByRole('button', { name: '读取本次提交', exact: true }).click()
     await page.getByText('已判定 · ' + verdict, { exact: true }).waitFor({ timeout: 70_000 })
     assert.equal(await page.getByLabel('提交时的源码').textContent(), source)
-    await page.screenshot({ path: join(output, 'union-find-' + verdict.toLowerCase() + '.png'), fullPage: true })
+    await page.screenshot({ path: join(output, 'local-text-' + verdict.toLowerCase() + '.png'), fullPage: true })
     records.push({ id: receipt.id, version: receipt.material_version, verdict })
   }
   await other.goto(page.url())
@@ -114,7 +116,7 @@ try {
   await logout(page)
   await writeFile(join(output, 'local-text-qa.json'), JSON.stringify({ records, separateAccount: true, wrongVersionRejected: true,
     keyboardFocus: true, sampleCopy: true, historyFailureLoadingEmpty: true, narrowViewport: true }) + '\n')
-  console.log('PASS published Union Find → actual Worker AC, WA and OLE → owner only')
+  console.log('PASS published local text → actual Worker AC, WA and OLE → owner only')
 } finally {
   await browser.close()
 }

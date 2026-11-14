@@ -30,6 +30,11 @@ type LocalTextAdmissionInput struct {
 	ReportSHA256        string `json:"report_sha256"`
 	ReviewProfileSHA256 string `json:"review_profile_sha256"`
 	ManifestSHA256      string `json:"manifest_sha256"`
+	PackageReview       bool   `json:"package_review,omitempty"`
+	QualityDirectory    string `json:"quality_directory,omitempty"`
+	QualitySHA256       string `json:"quality_sha256,omitempty"`
+	RenderingFile       string `json:"rendering_file,omitempty"`
+	RenderingSHA256     string `json:"rendering_sha256,omitempty"`
 }
 
 // Valid bounds trusted local configuration before filesystem access.
@@ -38,24 +43,35 @@ func (in LocalTextAdmissionInput) Valid() bool {
 }
 
 func (in LocalTextAdmissionInput) validEvidence() bool {
-	return in.SourceID != "" && absoluteLocalPath(in.ReportDirectory) && problem.ValidImportRevision(in.ReportSHA256) &&
-		problem.ValidImportRevision(in.ReviewProfileSHA256)
+	if in.SourceID == "" || !absoluteLocalPath(in.ReportDirectory) || !problem.ValidImportRevision(in.ReportSHA256) ||
+		!problem.ValidImportRevision(in.ReviewProfileSHA256) {
+		return false
+	}
+	if in.PackageReview {
+		return in.ReviewProfileSHA256 == LocalTextProfile().Digest() && absoluteLocalPath(in.QualityDirectory) &&
+			problem.ValidImportRevision(in.QualitySHA256) && absoluteLocalPath(in.RenderingFile) && problem.ValidImportRevision(in.RenderingSHA256)
+	}
+	return in.QualityDirectory == "" && in.QualitySHA256 == "" && in.RenderingFile == "" && in.RenderingSHA256 == ""
+}
+
+// LocalTextProfile is the fixed GNU++17 Ubuntu maintenance profile.
+func LocalTextProfile() Profile {
+	c, _ := experiment.ResolveReferenceTier(experiment.ReferenceAPlusBUbuntu)
+	return Profile{ID: "p5-local-text-reference-v1", Runtime: c.Runtime, Files: c.Files, Materials: problem.LocalTextReferenceLimits(),
+		Checker: judging.LibraryCheckerTextVersion, Text: localTextLimits, Wall: localTextTrialWall, Diagnostics: experiment.ReferenceDiagnosticBytes}
 }
 
 // PrepareLocalTextTrial derives the formal plan and fixed checker configuration
 // from the source-locked bundle. It has no per-problem profile overrides.
-func PrepareLocalTextTrial(ctx, lifetime context.Context, prepared *problem.Prepared, wrongSource []byte) (_ *CheckerTrial, err error) {
+func PrepareLocalTextTrial(ctx, lifetime context.Context, prepared *problem.Prepared, wrongSource []byte, packageReview bool) (_ *CheckerTrial, err error) {
 	if len(wrongSource) > submission.MaxSourceBytes || !utf8.Valid(wrongSource) || bytes.IndexByte(wrongSource, 0) >= 0 {
 		return nil, ErrCheckerCandidateBinding
 	}
-	const tier = experiment.ReferenceAPlusBUbuntu
-	c, err := experiment.ResolveReferenceTier(tier)
-	if err != nil {
-		return nil, err
+	freeze := prepared.PrepareLocalTextReference
+	if packageReview {
+		freeze = prepared.PrepareLocalTextReviewReference
 	}
-	profile := Profile{ID: "p5-local-text-reference-v1", Runtime: c.Runtime, Files: c.Files, Materials: problem.LocalTextReferenceLimits(),
-		Checker: judging.LibraryCheckerTextVersion, Text: localTextLimits, Wall: localTextTrialWall, Diagnostics: experiment.ReferenceDiagnosticBytes}
-	snapshot, err := prepared.PrepareLocalTextReference(ctx, lifetime)
+	snapshot, err := freeze(ctx, lifetime)
 	if err != nil {
 		return nil, err
 	}
@@ -76,8 +92,9 @@ func PrepareLocalTextTrial(ctx, lifetime context.Context, prepared *problem.Prep
 	if err := checkCandidateAnswers(ctx, plan, snapshot, planSHA, localTextLimits); err != nil {
 		return nil, err
 	}
+	profile := LocalTextProfile()
 	candidate := checkerCandidateFor(plan, planSHA, profile.Checker, localTextLimits)
-	trial := &CheckerTrial{plan: plan, materials: snapshot, profile: profile, tier: tier, candidateSHA: candidate.Digest()}
+	trial := &CheckerTrial{plan: plan, materials: snapshot, profile: profile, tier: experiment.ReferenceAPlusBUbuntu, candidateSHA: candidate.Digest()}
 	if len(wrongSource) != 0 {
 		trial.submissionSource, trial.submissionSHA = bytes.Clone(wrongSource), handoffDigest(wrongSource)
 	}
@@ -93,7 +110,7 @@ func VerifyLocalText(ctx context.Context, prepared *problem.Prepared, in LocalTe
 		return zero, ErrCheckerCandidateBinding
 	}
 	id, err := prepared.ImportIdentity()
-	if err != nil || id.SourceID != in.SourceID {
+	if err != nil || id.SourceID != in.SourceID || in.PackageReview && id.SourceID == ConvolutionSourceID {
 		return zero, ErrCheckerCandidateBinding
 	}
 	checkComplete := func() bool {
@@ -107,7 +124,7 @@ func VerifyLocalText(ctx context.Context, prepared *problem.Prepared, in LocalTe
 	if err != nil {
 		return zero, err
 	}
-	trial, err := PrepareLocalTextTrial(ctx, ctx, prepared, nil)
+	trial, err := PrepareLocalTextTrial(ctx, ctx, prepared, nil, in.PackageReview)
 	if err != nil {
 		return zero, err
 	}
@@ -146,8 +163,16 @@ func VerifyLocalText(ctx context.Context, prepared *problem.Prepared, in LocalTe
 	if _, err := materials.ParseLocalText(wire, pin); err != nil || !checkComplete() || ctx.Err() != nil {
 		return zero, ErrCheckerTrialEvidence
 	}
-	return LocalExecutionAdmission{digest: digest(proof), version: m.Version, transport: pin, raw: string(wire),
-		textImport: id, textPlan: proof.FormalPlanSHA, textProfile: in.ReviewProfileSHA256}, nil
+	verified := LocalExecutionAdmission{digest: digest(proof), version: m.Version, transport: pin, raw: string(wire),
+		textImport: id, textPlan: proof.FormalPlanSHA, textProfile: in.ReviewProfileSHA256, packageReview: in.PackageReview}
+	if in.PackageReview {
+		verified.quality, err = verifyPackageQuality(ctx, prepared, trial.plan, in)
+		if err != nil {
+			return zero, err
+		}
+		verified.digest = digest([3]string{verified.digest, in.QualitySHA256, in.RenderingSHA256})
+	}
+	return verified, nil
 }
 
 // ReadLocalTextAdmission accepts only the explicit, rederived transport pin.

@@ -81,6 +81,7 @@ func TestBrowserFixture(t *testing.T) {
 		browserDrafts(t, f, &c, subject.ID)
 	}
 	reviewMode := os.Getenv("OJ_BROWSER_REVIEW_MATERIALS") == "1"
+	packageMode := os.Getenv("OJ_BROWSER_PACKAGE") == "1"
 	localExecution := os.Getenv("OJ_BROWSER_LOCAL_EXECUTION") == "1"
 	trainingIntake := os.Getenv("OJ_BROWSER_LOCAL_TRAINING_INTAKE") == "1"
 	var trainee identity.Personal
@@ -270,13 +271,21 @@ func TestBrowserFixture(t *testing.T) {
 		info["login_accounts"] = string(raw)
 	}
 	if reviewMode {
-		info["review_id"], info["review_draft_id"], info["catalog_fixture_id"] = seedBrowserReview(t, f, origin, ca.Roots, subject, otherAuthor, access, c.PrivateDrafts.MaterialRoot, localExecution)
-		info["review_reference_key"] = entryTerminalReferenceKey
+		if !packageMode {
+			info["review_id"], info["review_draft_id"], info["catalog_fixture_id"] = seedBrowserReview(t, f, origin, ca.Roots, subject, otherAuthor, access, c.PrivateDrafts.MaterialRoot, localExecution)
+			info["review_reference_key"] = entryTerminalReferenceKey
+		} else {
+			_, err = access.SetReviewerRole(f.ctx, identity.ProblemRoleChange{SubjectID: otherAuthor.ID, Enabled: true, Operator: "browser-fixture", Reason: "isolated package reviewer"})
+			must(t, err)
+		}
 		if localExecution {
 			info["publisher_id"] = browserLocalPublisher(t, f, access)
 			info["database_directory"] = c.Database.Host
 			info["material_directory"] = c.PrivateDrafts.MaterialRoot
 		}
+	}
+	if packageMode {
+		info["source_id"] = c.PrivateDrafts.SourceIDs[0]
 	}
 	if os.Getenv("OJ_BROWSER_COLD_TLS") == "1" {
 		publicCA, err := os.ReadFile(ca.CAFile)
@@ -333,7 +342,16 @@ func browserDrafts(t *testing.T, f *fixture, c *sessionruntime.Config, subjectID
 	t.Helper()
 	root := filepath.Join(t.TempDir(), "materials")
 	must(t, os.Mkdir(root, 0700))
-	if os.Getenv("OJ_BROWSER_LC_DRAFTS") == "1" {
+	if os.Getenv("OJ_BROWSER_PACKAGE") == "1" {
+		source := os.Getenv("OJ_BROWSER_PACKAGE_SOURCE")
+		if source == "" {
+			t.Fatal("local package source required")
+		}
+		c.PrivateDrafts = &sessionruntime.PrivateDraftsConfig{MaterialRoot: root, BundleDirectory: "/local-evidence/bundle",
+			SourceLockFile: "/local-evidence/library-checker.json", SourceIDs: []string{source},
+			Timeout: 45 * time.Second, MaxInFlight: 1, ReferenceRequests: os.Getenv("OJ_BROWSER_LOCAL_EXECUTION") == "1"}
+		must(t, referencepg.Configure(f.ctx, f.pools[0], problemreference.Limits{Global: 4, Owner: 1}))
+	} else if os.Getenv("OJ_BROWSER_LC_DRAFTS") == "1" {
 		const lockPath = "/workspace/config/problem-sources/library-checker.json"
 		raw, err := os.ReadFile(lockPath)
 		must(t, err)

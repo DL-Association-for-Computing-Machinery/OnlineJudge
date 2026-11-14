@@ -7,7 +7,6 @@ import (
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference/postgres/referencedb"
-	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
 	"github.com/jackc/pgx/v5"
 )
@@ -23,7 +22,7 @@ func (c *ReferenceClaimer) DispatchReference(ctx context.Context, node submissio
 	if node.ID != c.nodeID || node.CredentialVersion < 1 {
 		return zero, submission.ErrNode
 	}
-	if _, _, err := problemvalidation.ResolveSource(input.SourceID); err != nil {
+	if _, err := c.resolveProfile(input.SourceID); err != nil {
 		return zero, problemreference.ErrClaimUnavailable
 	}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)

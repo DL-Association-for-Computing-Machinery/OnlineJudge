@@ -24,6 +24,11 @@ func exportLocalText(parent context.Context, args []string, out, diagnostics io.
 	source := f.String("source-id", "", "source ID from the pinned bundle")
 	reportSHA := f.String("expected-report", "", "trusted report SHA-256")
 	reviewProfile := f.String("review-profile", "", "formal reference profile SHA-256 of the publication review")
+	packageReview := f.Bool("package-review", false, "use the fixed local package review profile")
+	qualityDir := f.String("quality-dir", "", "completed package quality directory")
+	qualitySHA := f.String("expected-quality", "", "trusted quality report SHA-256")
+	rendering := f.String("rendering-file", "", "completed package rendering receipt")
+	renderingSHA := f.String("expected-rendering", "", "trusted rendering receipt SHA-256")
 	dest := f.String("export", "", "new private material directory")
 	if f.Parse(args) != nil || f.NArg() != 0 || !filepath.IsAbs(*bundle) || !filepath.IsAbs(*lock) ||
 		!filepath.IsAbs(*report) || !filepath.IsAbs(*dest) || filepath.Clean(*dest) != *dest || !exportOutsideInputs(*dest, *bundle, *report) {
@@ -34,7 +39,11 @@ func exportLocalText(parent context.Context, args []string, out, diagnostics io.
 		return err
 	}
 	in := problemvalidation.LocalTextAdmissionInput{
-		SourceID: *source, ReportDirectory: *report, ReportSHA256: *reportSHA, ReviewProfileSHA256: *reviewProfile,
+		SourceID: *source, ReportDirectory: *report, ReportSHA256: *reportSHA, ReviewProfileSHA256: *reviewProfile, PackageReview: *packageReview,
+		QualityDirectory: *qualityDir, QualitySHA256: *qualitySHA, RenderingFile: *rendering, RenderingSHA256: *renderingSHA,
+	}
+	if in.PackageReview && *reviewProfile == "" {
+		in.ReviewProfileSHA256 = problemvalidation.LocalTextProfile().Digest()
 	}
 	prepared, err := problem.LoadBundle(*bundle, in.SourceID, raw)
 	if err != nil {

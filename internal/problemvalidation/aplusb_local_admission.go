@@ -28,6 +28,18 @@ type LocalExecutionAdmission struct {
 	raw                        string
 	textImport                 problem.ImportIdentity
 	textPlan, textProfile      string
+	packageReview              bool
+	quality                    PackageQualityEvidence
+}
+
+// PackageReview matches the fixed profile only for a verified local package.
+func (a LocalExecutionAdmission) PackageReview(id problem.ImportIdentity) bool {
+	return a.packageReview && a.digest != "" && a.textImport == id
+}
+
+// PackageQuality projects only the exact package's verified evidence.
+func (a LocalExecutionAdmission) PackageQuality(id problem.ImportIdentity, plan, profile string) (PackageQualityEvidence, bool) {
+	return a.quality, a.PackageReview(id) && a.Match(id, plan, profile)
 }
 
 // APlusBLocalAdmission is the legacy name for the local evidence value.

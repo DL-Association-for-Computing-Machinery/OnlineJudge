@@ -48,6 +48,20 @@ func UnionFindProfile() Profile {
 	return p
 }
 
+// ResolveReferenceProfile selects a fixed profile. Only an explicitly
+// configured local caller may pass packageReview.
+func ResolveReferenceProfile(sourceID string, packageReview bool) (Profile, experiment.ReferenceTier, error) {
+	if packageReview {
+		// The separately reviewed differential protocol must not be replaced
+		// by small-oracle evidence for the known convolution source.
+		if sourceID == ConvolutionSourceID {
+			return Profile{}, 0, ErrCheckerCandidateBinding
+		}
+		return LocalTextProfile(), experiment.ReferenceAPlusBUbuntu, nil
+	}
+	return ResolveSource(sourceID)
+}
+
 // ResolveSource binds the closed set of maintenance sources to exact profiles.
 // Tier zero is only the legacy A+B/M0 entry; reference tier factories reject it.
 func ResolveSource(sourceID string) (Profile, experiment.ReferenceTier, error) {

@@ -39,7 +39,19 @@ func (a *Acquirer) FetchReferenceForExecution(ctx context.Context, claim problem
 	return a.fetchReference(ctx, claim, true)
 }
 
+// FetchLocalReferenceForExecution keeps the package source lock independently pinned.
+func (a *Acquirer) FetchLocalReferenceForExecution(ctx context.Context, claim problemreference.WorkerClaim, lock string) (*VerifiedReference, error) {
+	if !problem.ValidImportRevision(lock) {
+		return nil, ErrMaterials
+	}
+	return a.fetchReferenceWithProfile(ctx, claim, true, lock, true)
+}
+
 func (a *Acquirer) fetchReference(ctx context.Context, claim problemreference.WorkerClaim, supervised bool) (*VerifiedReference, error) {
+	return a.fetchReferenceWithProfile(ctx, claim, supervised, problemvalidation.SourceLockSHA256, false)
+}
+
+func (a *Acquirer) fetchReferenceWithProfile(ctx context.Context, claim problemreference.WorkerClaim, supervised bool, lock string, local bool) (*VerifiedReference, error) {
 	input := problemreference.MaterialInput{ClaimInput: problemreference.ClaimInput{RequestID: claim.RequestID, SourceID: claim.SourceID, PlanSHA256: claim.PlanSHA256}, Token: claim.Token}
 	if a == nil || ctx == nil || !claim.ValidFor(input.ClaimInput) || !input.Valid() {
 		return nil, problemreference.ErrInvalid
@@ -63,7 +75,8 @@ func (a *Acquirer) fetchReference(ctx context.Context, claim problemreference.Wo
 		return nil, ErrMaterials
 	}
 	raw, err := json.Marshal(plan)
-	if err != nil || !bytes.Equal(raw, d.Encoding) || plan.SourceID != input.SourceID || plan.SourceLockSHA256 != problemvalidation.SourceLockSHA256 || plan.ValidateMaterials() != nil {
+	if err != nil || !bytes.Equal(raw, d.Encoding) || plan.SourceID != input.SourceID || plan.LocalText != local ||
+		plan.SourceLockSHA256 != lock || plan.ValidateMaterials() != nil {
 		return nil, ErrMaterials
 	}
 	deadline := start.Add(time.Duration(d.RemainingMS) * time.Millisecond)

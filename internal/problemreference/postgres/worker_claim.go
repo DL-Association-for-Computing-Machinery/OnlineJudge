@@ -23,10 +23,11 @@ var errReferenceReservationBusy = fmt.Errorf("%w: active reservation", problemre
 
 // ReferenceClaimer binds a single trusted node and source lock to the ledger.
 type ReferenceClaimer struct {
-	store      *Store
-	lockNode   func(context.Context, pgx.Tx, submission.NodeIdentity) error
-	nodeID     string
-	sourceLock string
+	store         *Store
+	lockNode      func(context.Context, pgx.Tx, submission.NodeIdentity) error
+	nodeID        string
+	sourceLock    string
+	packageSource string
 }
 
 // NewReferenceClaimer uses explicit trusted configuration, not Worker input.
@@ -34,7 +35,22 @@ func NewReferenceClaimer(s *Store, lockNode func(context.Context, pgx.Tx, submis
 	if s == nil || lockNode == nil || !problemreference.ValidReferenceNodeID(nodeID) || !problem.ValidImportRevision(sourceLock) {
 		return nil, problemreference.ErrInvalid
 	}
-	return &ReferenceClaimer{s, lockNode, nodeID, sourceLock}, nil
+	return &ReferenceClaimer{store: s, lockNode: lockNode, nodeID: nodeID, sourceLock: sourceLock}, nil
+}
+
+// WithLocalPackage restricts this dedicated local node to one explicit source.
+func (c *ReferenceClaimer) WithLocalPackage(source string) *ReferenceClaimer {
+	next := *c
+	next.packageSource = source
+	return &next
+}
+
+func (c *ReferenceClaimer) resolveProfile(source string) (problemvalidation.Profile, error) {
+	if c.packageSource != "" && source != c.packageSource {
+		return problemvalidation.Profile{}, problemreference.ErrClaimUnavailable
+	}
+	p, _, err := problemvalidation.ResolveReferenceProfile(source, c.packageSource != "")
+	return p, err
 }
 
 // ClaimReference locks node, author, draft, request, plan and reservation in
@@ -51,7 +67,7 @@ func (c *ReferenceClaimer) claimReference(ctx context.Context, node submission.N
 	if node.ID != c.nodeID || node.CredentialVersion < 1 {
 		return zero, submission.ErrNode
 	}
-	profile, _, err := problemvalidation.ResolveSource(input.SourceID)
+	profile, err := c.resolveProfile(input.SourceID)
 	if err != nil {
 		return zero, problemreference.ErrClaimUnavailable
 	}
@@ -177,6 +193,9 @@ func (c *ReferenceClaimer) lockReferenceRequest(ctx context.Context, tx pgx.Tx, 
 		!bytes.Equal(current.Specification.ProfileJSON, original.Specification.ProfileJSON) ||
 		draft.ID != current.DraftID || draft.Owner != actor.SubjectID || draft.SourceID != i.SourceID ||
 		draft.Version != i.Version || draft.ImportRevision != i.ImportRevision {
+		return zero, problemreference.ErrClaimUnavailable
+	}
+	if c.packageSource != "" && (i.SourceID != c.packageSource || i.SourceLockSHA256 != c.sourceLock || !bytes.Equal(current.Specification.ProfileJSON, profile)) {
 		return zero, problemreference.ErrClaimUnavailable
 	}
 	if reporting && current.State == problemreference.Reported {

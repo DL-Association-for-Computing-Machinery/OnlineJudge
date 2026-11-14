@@ -34,9 +34,9 @@ func (d Draft) PrepareReviewMaterials(id, owner string, bound ImportIdentity, pl
 	if err != nil {
 		return zero, err
 	}
-	admission, err := referenceDiskAdmission(bound.SourceID)
-	if bound.SourceID == "library-checker:aplusb" {
-		admission, err = diskReferenceAdmission{path: "sample/aplusb", limits: SmallReferenceLimits()}, nil
+	admission, err := admissionForPlan(plan)
+	if err == nil && admission.localText {
+		admission, err = localTextDiskAdmission(content)
 	}
 	if err != nil {
 		return zero, ErrStore
@@ -45,6 +45,7 @@ func (d Draft) PrepareReviewMaterials(id, owner string, bound ImportIdentity, pl
 	if err != nil {
 		return zero, ErrStore
 	}
+	derived.LocalText = admission.localText
 	if _, err := bindReferenceDependencies(&derived, doc, admission); err != nil || derived.Digest() != plan.Digest() {
 		return zero, ErrStore
 	}

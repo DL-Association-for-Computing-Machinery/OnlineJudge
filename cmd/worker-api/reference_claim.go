@@ -26,7 +26,9 @@ func referenceExecutionEnabled(value, nodeID, root string) (bool, error) {
 	return true, nil
 }
 
-func configureReferenceClaims(next http.Handler, pool *pgxpool.Pool, roots *x509.CertPool, nodeID string, objects problem.ReferenceObjectReader, execution, dispatch bool) (http.Handler, error) {
+type localReferenceConfig struct{ source, lock string }
+
+func configureReferenceClaims(next http.Handler, pool *pgxpool.Pool, roots *x509.CertPool, nodeID string, objects problem.ReferenceObjectReader, execution, dispatch bool, local ...localReferenceConfig) (http.Handler, error) {
 	if dispatch && !execution || execution && (!problemreference.ValidReferenceNodeID(nodeID) || objects == nil) {
 		return nil, problemreference.ErrInvalid
 	}
@@ -36,7 +38,7 @@ func configureReferenceClaims(next http.Handler, pool *pgxpool.Pool, roots *x509
 	if !problemreference.ValidReferenceNodeID(nodeID) {
 		return nil, problemreference.ErrInvalid
 	}
-	claims, err := referenceClaimer(pool, nodeID)
+	claims, err := referenceClaimer(pool, nodeID, local...)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +58,7 @@ func configureReferenceClaims(next http.Handler, pool *pgxpool.Pool, roots *x509
 	return workerapi.WithReferenceClaims(next, claims, roots, materials), nil
 }
 
-func referenceClaimer(pool *pgxpool.Pool, nodeID string) (*referencepg.ReferenceClaimer, error) {
+func referenceClaimer(pool *pgxpool.Pool, nodeID string, local ...localReferenceConfig) (*referencepg.ReferenceClaimer, error) {
 	author, err := identitypg.NewProblemAccess(pool)
 	if err != nil {
 		return nil, err
@@ -68,6 +70,13 @@ func referenceClaimer(pool *pgxpool.Pool, nodeID string) (*referencepg.Reference
 	store, err := referencepg.New(pool, access)
 	if err != nil {
 		return nil, err
+	}
+	if len(local) == 1 && local[0].source != "" {
+		claimer, err := referencepg.NewReferenceClaimer(store, submissionpg.LockReferenceNode, nodeID, local[0].lock)
+		if err != nil {
+			return nil, err
+		}
+		return claimer.WithLocalPackage(local[0].source), nil
 	}
 	return referencepg.NewReferenceClaimer(store, submissionpg.LockReferenceNode, nodeID, problemvalidation.SourceLockSHA256)
 }

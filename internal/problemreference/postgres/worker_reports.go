@@ -11,7 +11,6 @@ import (
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference/postgres/referencedb"
-	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission"
 	"github.com/jackc/pgx/v5"
 )
@@ -30,7 +29,7 @@ func (c *ReferenceClaimer) ReportReference(ctx context.Context, node submission.
 		return err
 	}
 	var rawProfile []byte
-	if profile, _, err := problemvalidation.ResolveSource(input.SourceID); err == nil {
+	if profile, err := c.resolveProfile(input.SourceID); err == nil {
 		rawProfile, err = json.Marshal(profile)
 		if err != nil {
 			return storageError{err}
@@ -72,7 +71,7 @@ func (c *ReferenceClaimer) ReportReference(ctx context.Context, node submission.
 	if plan.SHA256 != input.PlanSHA256 || !evidence.ValidFor(request.Specification, plan) {
 		return problemreference.ErrClaimUnavailable
 	}
-	if evidence.Verdict == "AC" && request.Specification.Identity.SourceID == problemvalidation.ConvolutionSourceID {
+	if evidence.Verdict == "AC" && request.ExpectsDifferential() {
 		if err := loadCurrentComparison(ctx, q, request, &plan); err != nil {
 			return err
 		}

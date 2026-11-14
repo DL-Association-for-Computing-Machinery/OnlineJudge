@@ -169,8 +169,8 @@ func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore
 	if err != nil {
 		return nil, nil, ErrStartup
 	}
+	var admission problemvalidation.LocalExecutionAdmission
 	if c.hasLocalExecution() {
-		var admission problemvalidation.LocalExecutionAdmission
 		if c.LocalTextExecution != nil {
 			admission, err = problemvalidation.ReadLocalTextAdmission(ctx, *c.LocalTextExecution, sources[c.LocalTextExecution.SourceID])
 		} else {
@@ -254,7 +254,7 @@ func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore
 		}
 	}
 	if c.ReferenceRequests {
-		catalog, err := problemreference.NewCatalog(sources)
+		catalog, err := problemreference.NewCatalogWithLocalPackage(sources, admission)
 		if err != nil {
 			return nil, nil, ErrStartup
 		}

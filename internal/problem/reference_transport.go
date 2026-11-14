@@ -12,10 +12,7 @@ import (
 // ValidateMaterials checks fixed source layout and budgets before any object I/O.
 // The caller must separately authenticate the canonical plan digest/source lock.
 func (p ReferencePlan) ValidateMaterials() error {
-	a, err := referenceDiskAdmission(p.SourceID)
-	if p.SourceID == "library-checker:aplusb" {
-		a, err = diskReferenceAdmission{path: "sample/aplusb", limits: SmallReferenceLimits()}, nil
-	}
+	a, err := admissionForPlan(p)
 	if err != nil || !validHash(p.Version) || !validHash(p.ImportRevision) || !validHash(p.SourceLockSHA256) ||
 		p.SourcePath != a.entry || len(p.Dependencies) != len(a.dependencies) || len(p.Cases) == 0 || len(p.Cases) > a.limits.Cases || p.SourceData != nil {
 		return ErrReferenceUnsupported
@@ -42,10 +39,14 @@ func (p ReferencePlan) ValidateMaterials() error {
 		}
 		source += d.Object.Size
 	}
+	beforePoints := total
 	for i, c := range p.Cases {
 		if c.ID != fmt.Sprintf("case-%04d", i+1) || c.InputData != nil || c.AnswerData != nil || !check(c.Input, a.limits.InputBytes) || !check(c.Answer, a.limits.AnswerBytes) {
 			return ErrReferenceUnsupported
 		}
+	}
+	if p.LocalText && total-beforePoints > 48<<20 {
+		return ErrReferenceUnsupported
 	}
 	return nil
 }

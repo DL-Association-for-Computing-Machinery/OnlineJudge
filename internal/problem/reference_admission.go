@@ -5,6 +5,22 @@ type diskReferenceAdmission struct {
 	limits       ReferenceLimits
 	entry        string
 	dependencies []referenceDependencyAdmission
+	localText    bool
+}
+
+func admissionForPlan(p ReferencePlan) (diskReferenceAdmission, error) {
+	if p.LocalText {
+		return diskReferenceAdmission{limits: LocalTextReferenceLimits(), localText: true}, nil
+	}
+	if p.SourceID == "library-checker:aplusb" {
+		return diskReferenceAdmission{path: "sample/aplusb", limits: SmallReferenceLimits()}, nil
+	}
+	return referenceDiskAdmission(p.SourceID)
+}
+
+func localTextDiskAdmission(c Content) (diskReferenceAdmission, error) {
+	d, err := parseDocument(c.Document, c.SourceID)
+	return diskReferenceAdmission{path: d.Provenance.SourcePath, limits: LocalTextReferenceLimits(), localText: true}, err
 }
 
 type referenceDependencyAdmission struct{ original, target string }

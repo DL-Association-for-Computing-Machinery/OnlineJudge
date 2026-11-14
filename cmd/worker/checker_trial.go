@@ -42,7 +42,7 @@ func runCheckerCommand(ctx context.Context, args []string, logger *slog.Logger, 
 	candidate := f.String("expected-candidate", "", "trusted candidate SHA-256")
 	var manifest, sourcePath, sourceSHA string
 	var wrongPath, wrongVerdict string
-	var ubuntu, localText bool
+	var ubuntu, localText, packageReview bool
 	if isolatedJudge {
 		f.BoolVar(&ubuntu, "ubuntu-aplusb", false, "use the fixed standalone Ubuntu guest runtime")
 		f.StringVar(&manifest, "expected-manifest", "", "independently reviewed judge manifest SHA-256")
@@ -50,6 +50,7 @@ func runCheckerCommand(ctx context.Context, args []string, logger *slog.Logger, 
 		f.StringVar(&sourceSHA, "expected-submission", "", "trusted submission byte SHA-256")
 	} else {
 		f.BoolVar(&localText, "local-text", false, "verify a complete source-locked bundle in the fixed local Ubuntu profile")
+		f.BoolVar(&packageReview, "package-review", false, "bind the report to the local package review profile")
 		f.StringVar(&wrongPath, "wrong-solution", "", "optional private wrong solution for the local text profile")
 		f.StringVar(&wrongVerdict, "expected-verdict", "", "expected wrong solution verdict (WA, RE, TLE, MLE or OLE)")
 	}
@@ -60,7 +61,7 @@ func runCheckerCommand(ctx context.Context, args []string, logger *slog.Logger, 
 	if f.Parse(args) != nil || f.NArg() != 0 || !*start || !canonicalAbsolute(*bundle) ||
 		!canonicalAbsolute(*lockPath) || !canonicalAbsolute(*output) || !referenceOutputOutside(*bundle, *output) ||
 		(isolatedJudge && (!canonicalAbsolute(sourcePath) || !problem.ValidImportRevision(manifest) || !problem.ValidImportRevision(sourceSHA))) ||
-		(localText && (*plan != "" || *candidate != "" || caps != (judging.TextLimits{}))) {
+		(packageReview && !localText) || (localText && (*plan != "" || *candidate != "" || caps != (judging.TextLimits{}))) {
 		return errors.New("invalid checker trial arguments")
 	}
 	if wrongPath != "" || wrongVerdict != "" {
@@ -110,7 +111,7 @@ func runCheckerCommand(ctx context.Context, args []string, logger *slog.Logger, 
 			source, err = checkedfile.ReadSecret(wrongPath, submission.MaxSourceBytes)
 		}
 		if err == nil {
-			trial, err = problemvalidation.PrepareLocalTextTrial(preflightCtx, ctx, prepared, source)
+			trial, err = problemvalidation.PrepareLocalTextTrial(preflightCtx, ctx, prepared, source, packageReview)
 		}
 		if err == nil {
 			err = workerhost.CheckUbuntuAPlusBHost(preflightCtx)

@@ -17,6 +17,15 @@ type ReferenceObjectReader interface {
 // trusted import before reading any object. The caller must Close the returned
 // snapshot and recheck live authority before using its result. No program runs.
 func (d Draft) FreezeReference(ctx context.Context, id, owner string, expected ImportIdentity, store ReferenceObjectReader) (*ReferenceSnapshot, error) {
+	return d.freezeReference(ctx, id, owner, expected, store, false)
+}
+
+// FreezeLocalTextReference freezes a previously authorized local text draft.
+func (d Draft) FreezeLocalTextReference(ctx context.Context, id, owner string, expected ImportIdentity, store ReferenceObjectReader) (*ReferenceSnapshot, error) {
+	return d.freezeReference(ctx, id, owner, expected, store, true)
+}
+
+func (d Draft) freezeReference(ctx context.Context, id, owner string, expected ImportIdentity, store ReferenceObjectReader, localText bool) (*ReferenceSnapshot, error) {
 	if ctx == nil || store == nil {
 		return nil, ErrInvalid
 	}
@@ -28,7 +37,12 @@ func (d Draft) FreezeReference(ctx context.Context, id, owner string, expected I
 		return nil, err
 	}
 	var admission diskReferenceAdmission
-	if c.SourceID == "library-checker:aplusb" {
+	if localText {
+		admission, err = localTextDiskAdmission(c)
+		if err != nil {
+			return nil, err
+		}
+	} else if c.SourceID == "library-checker:aplusb" {
 		admission = diskReferenceAdmission{path: "sample/aplusb", limits: SmallReferenceLimits()}
 	} else {
 		admission, err = referenceDiskAdmission(c.SourceID)

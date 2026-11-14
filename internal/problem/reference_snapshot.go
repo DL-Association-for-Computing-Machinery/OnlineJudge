@@ -83,6 +83,19 @@ func (p *Prepared) PrepareLocalTextReference(ctx, lifetime context.Context) (*Re
 		diskReferenceAdmission{path: d.Provenance.SourcePath, limits: LocalTextReferenceLimits()})
 }
 
+// PrepareLocalTextReviewReference identifies the fixed package profile in the
+// plan so historical review and publication can reconstruct its material scope.
+func (p *Prepared) PrepareLocalTextReviewReference(ctx, lifetime context.Context) (*ReferenceSnapshot, error) {
+	if p == nil || ctx == nil || lifetime == nil {
+		return nil, ErrInvalid
+	}
+	a, err := localTextDiskAdmission(p.content)
+	if err != nil {
+		return nil, err
+	}
+	return p.prepareDiskReferenceWithLifetime(ctx, lifetime, p.content.SourceID, a)
+}
+
 func (p *Prepared) prepareDiskReference(ctx context.Context, sourceID string, admission diskReferenceAdmission) (*ReferenceSnapshot, error) {
 	return p.prepareDiskReferenceWithLifetime(ctx, ctx, sourceID, admission)
 }
@@ -100,6 +113,7 @@ func freezeReferenceSnapshot(ctx, lifetime context.Context, content Content, sou
 		if err != nil {
 			return plan, nil, err
 		}
+		plan.LocalText = admission.localText
 		dependencies, err := bindReferenceDependencies(&plan, d, admission)
 		if err != nil {
 			return plan, nil, err

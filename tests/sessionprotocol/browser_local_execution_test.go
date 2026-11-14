@@ -54,11 +54,7 @@ func browserLocalText(t *testing.T, f *fixture, c *sessionruntime.Config) {
 	admission, err := problemvalidation.ReadLocalTextAdmission(t.Context(), in, prepared)
 	must(t, err)
 	id, plan := admission.ReviewBinding()
-	wrongProfile := in
-	wrongProfile.ReviewProfileSHA256 = strings.Repeat("0", 64)
-	wrong, err := problemvalidation.ReadLocalTextAdmission(t.Context(), wrongProfile, prepared)
-	must(t, err)
-	if !admission.Match(id, plan, in.ReviewProfileSHA256) || wrong.Match(id, plan, in.ReviewProfileSHA256) {
+	if !admission.Match(id, plan, in.ReviewProfileSHA256) || admission.Match(id, plan, strings.Repeat("0", 64)) {
 		t.Fatal("local execution evidence matched the wrong publication reference profile")
 	}
 	_, version, _ := admission.Binding()
