@@ -155,6 +155,57 @@ paths:
         '405': { $ref: '#/components/responses/Failure' }
         '409': { $ref: '#/components/responses/Failure' }
         '503': { $ref: '#/components/responses/Failure' }
+  /api/v1/problem-review/{review_id}/approve:
+    parameters:
+      - $ref: './problem-draft-management.openapi.yaml#/components/parameters/ExpectedSubject'
+      - $ref: '#/components/parameters/ReviewID'
+    post:
+      operationId: approveAssignedReview
+      description: 需要显式启用 review_approvals、同源请求及当前非作者分配。按服务端证据重算；阻断时不写入。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [request_key, assignment_revision, snapshot_sha256, reason]
+              properties:
+                request_key: { type: string, pattern: '^[A-Za-z0-9_-]{16,128}$' }
+                assignment_revision: { type: integer, minimum: 1 }
+                snapshot_sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+                reason: { type: string, minLength: 1, maxLength: 512, description: 最多 512 个 UTF-8 字节，首尾无空白，无控制字符 }
+      responses:
+        '200': { $ref: '#/components/responses/ApprovalReceipt' }
+        '400': { $ref: '#/components/responses/Failure' }
+        '401': { $ref: '#/components/responses/Failure' }
+        '403': { $ref: '#/components/responses/Failure' }
+        '404': { $ref: '#/components/responses/Failure' }
+        '405': { $ref: '#/components/responses/Failure' }
+        '409': { $ref: '#/components/responses/Failure' }
+        '413': { $ref: '#/components/responses/Failure' }
+        '415': { $ref: '#/components/responses/Failure' }
+        '503': { $ref: '#/components/responses/Failure' }
+  /api/v1/problem-review/{review_id}/approve/{request_key}:
+    parameters:
+      - $ref: './problem-draft-management.openapi.yaml#/components/parameters/ExpectedSubject'
+      - $ref: '#/components/parameters/ReviewID'
+      - name: request_key
+        in: path
+        required: true
+        schema: { type: string, pattern: '^[A-Za-z0-9_-]{16,128}$' }
+    get:
+      operationId: getAssignedReviewApprovalReceipt
+      description: 仅当前原分配下的审核人按原键回读。404 不证明批准写入已回退。
+      responses:
+        '200': { $ref: '#/components/responses/ApprovalReceipt' }
+        '400': { $ref: '#/components/responses/Failure' }
+        '401': { $ref: '#/components/responses/Failure' }
+        '403': { $ref: '#/components/responses/Failure' }
+        '404': { $ref: '#/components/responses/Failure' }
+        '405': { $ref: '#/components/responses/Failure' }
+        '409': { $ref: '#/components/responses/Failure' }
+        '503': { $ref: '#/components/responses/Failure' }
   /api/v1/problem-review/{review_id}/return:
     parameters:
       - $ref: './problem-draft-management.openapi.yaml#/components/parameters/ExpectedSubject'
@@ -259,6 +310,20 @@ components:
       required: true
       schema: { $ref: '#/components/schemas/ID' }
   responses:
+    ApprovalReceipt:
+      description: 原批准的审计回执，不代表发布资格。
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [review_id, request_key, assignment_revision, snapshot_sha256, approved_at]
+            properties:
+              review_id: { type: string, pattern: '^[a-f0-9]{32}$' }
+              request_key: { type: string, pattern: '^[A-Za-z0-9_-]{16,128}$' }
+              assignment_revision: { type: integer, minimum: 1 }
+              snapshot_sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+              approved_at: { type: string, format: date-time }
     Failure: { $ref: './problem-draft-imports.openapi.yaml#/components/responses/Failure' }
     StatementConfirmationReceipt:
       description: 已提交的原分配确认回执

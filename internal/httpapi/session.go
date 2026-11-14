@@ -15,7 +15,7 @@ func NewSessionHandler(session http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		optional := httptransport.IsPrivateDraftPath(r.URL.Path) || httptransport.IsReferenceRequestPath(r.URL.Path) ||
 			httptransport.IsReviewIntakePath(r.URL.Path) || httptransport.IsReviewReadPath(r.URL.Path) ||
-			httptransport.IsReviewReturnPath(r.URL.Path) || httptransport.IsStatementConfirmationPath(r.URL.Path) ||
+			httptransport.IsReviewReturnPath(r.URL.Path) || httptransport.IsReviewApprovalPath(r.URL.Path) || httptransport.IsStatementConfirmationPath(r.URL.Path) ||
 			httptransport.IsEmailConfirmationPath(r.URL.Path) || httptransport.IsEmailRequestPath(r.URL.Path) ||
 			httptransport.IsTrainingHistoryPath(r.URL.Path) || httptransport.IsTrainingDetailPath(r.URL.Path)
 		switch r.URL.Path {

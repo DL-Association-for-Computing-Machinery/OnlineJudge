@@ -586,6 +586,8 @@ OJ_SANDBOX_EXPERIMENT=1 python3 -B tests/integration/live_reference.py \
 
 如需记录当前指定非作者对冻结题面的人工核对，启用 `"statement_confirmations": true`（需要 `review_access`，默认关闭）。写入与原键回执见[审核人确认题面语义](docs/problem-drafts.md#审核人确认题面语义)。
 
+普通终审批准 HTTP 入口默认关闭；`"review_approvals": true` 需要 `review_access`。启用仍必须通过服务端准入检查，并不会发布题目；见[批准准入状态](docs/problem-drafts.md#批准准入状态)。
+
 `GET /api/v1/problem-drafts/草稿ID/preview`返回本人已入库版本的`markdown`、有序`examples`（id/input/output）和可选`images`，不依赖当前候选版本；仍须有效普通会话和当前出题权。先核对全部引用与总预算，再逐份验证快照，读取后复核同一凭据和PG授权，失败不返回部分结果。原始markdown/input/output/显式原图合计至多1MiB，重复对象按返回次数计数；图片完整解码后限长重编码为静态PNG，输出PNG与原文/样例另限1MiB。图片角色/格式/像素/路径及回退限制见[图片合同](docs/problem-drafts.md#显式题面图片)。JSON文本转义至多六倍，图片base64另加元数据。文本严格UTF-8，保留空格、CRLF及末尾换行，不替换或截断。它是管理页数据，不提供一般材料下载或发布；正式测试与程序源码不进入预览。最终会话读取之后的退出及最终PG授权之后的撤权沿已接受在途合同，不能原子撤回已经开始发送的响应。关闭整个`private_drafts`能力即可停止入口，已入库资料保留。
 
 浏览器可从 `/author/drafts` 的本人列表选择已提交草稿，或在 `/author/drafts/open` 输入ID，再显式检查会话并打开本人预览。Markdown/GFM/数学公式使用共享组件和本地KaTeX字体，样例原文复制；清单图片精确匹配后使用静态PNG数据，其他图片占位且无源地址请求，审核和发布尚未开放。账号操作、页面恢复/隐藏或期限到达会清除题面和图片，再次显示须重新检查；无持久缓存。预算与隐私边界见[前端设计](docs/frontend-design.md#共享题面与本人预览)。默认HTTP Compose及未启用private_drafts的账号环境不提供草稿能力。
