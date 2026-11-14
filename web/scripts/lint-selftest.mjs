@@ -63,3 +63,23 @@ test('TSX event handlers reject promise-returning callbacks', async () => {
   assert.equal(result.fatalErrorCount, 0, JSON.stringify(result.messages))
   assert.ok(result.messages.some(message => message.ruleId === '@typescript-eslint/no-misused-promises'))
 })
+
+test('catalog and training cannot import the private draft service', async () => {
+  for (const name of ['catalog', 'trainingIntake', 'trainingHistory']) {
+    const [result] = await eslint.lintText("export { fetchDraftPreview } from './privateDraft'", {
+      filePath: `src/services/${name}.ts`,
+    })
+    assert.equal(result.fatalErrorCount, 0, JSON.stringify(result.messages))
+    assert.ok(result.messages.some(message => message.ruleId === 'no-restricted-imports' && message.severity === 2),
+      JSON.stringify(result.messages))
+  }
+})
+
+test('catalog and training may import the shared transport', async () => {
+  for (const name of ['catalog', 'trainingIntake', 'trainingHistory']) {
+    const [result] = await eslint.lintText("export { readBoundedJSON } from '../transport/json'", {
+      filePath: `src/services/${name}.ts`,
+    })
+    assert.equal(result.errorCount, 0, JSON.stringify(result.messages))
+  }
+})
