@@ -1,6 +1,9 @@
 -- name: ReviewApprovalByReviewerKey :one
 SELECT * FROM problem_review_approvals WHERE reviewer_subject_id = @reviewer_subject_id AND request_key = @request_key;
 
+-- name: ReviewApprovalByAssignment :one
+SELECT * FROM problem_review_approvals WHERE review_id = @review_id AND assignment_revision = @assignment_revision;
+
 -- name: HasReviewApprovalForMaterial :one
 SELECT EXISTS (
     SELECT 1

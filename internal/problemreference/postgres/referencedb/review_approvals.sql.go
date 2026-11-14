@@ -97,6 +97,35 @@ func (q *Queries) InsertReviewApproval(ctx context.Context, arg InsertReviewAppr
 	return i, err
 }
 
+const reviewApprovalByAssignment = `-- name: ReviewApprovalByAssignment :one
+SELECT review_id, assignment_revision, reviewer_subject_id, reviewer_revision, request_key, material_sha256, snapshot_sha256, policy_version, reason, auth_generation, recovery_id, approved_at FROM problem_review_approvals WHERE review_id = $1 AND assignment_revision = $2
+`
+
+type ReviewApprovalByAssignmentParams struct {
+	ReviewID           string
+	AssignmentRevision int64
+}
+
+func (q *Queries) ReviewApprovalByAssignment(ctx context.Context, arg ReviewApprovalByAssignmentParams) (ProblemReviewApproval, error) {
+	row := q.db.QueryRow(ctx, reviewApprovalByAssignment, arg.ReviewID, arg.AssignmentRevision)
+	var i ProblemReviewApproval
+	err := row.Scan(
+		&i.ReviewID,
+		&i.AssignmentRevision,
+		&i.ReviewerSubjectID,
+		&i.ReviewerRevision,
+		&i.RequestKey,
+		&i.MaterialSha256,
+		&i.SnapshotSha256,
+		&i.PolicyVersion,
+		&i.Reason,
+		&i.AuthGeneration,
+		&i.RecoveryID,
+		&i.ApprovedAt,
+	)
+	return i, err
+}
+
 const reviewApprovalByReviewerKey = `-- name: ReviewApprovalByReviewerKey :one
 SELECT review_id, assignment_revision, reviewer_subject_id, reviewer_revision, request_key, material_sha256, snapshot_sha256, policy_version, reason, auth_generation, recovery_id, approved_at FROM problem_review_approvals WHERE reviewer_subject_id = $1 AND request_key = $2
 `
