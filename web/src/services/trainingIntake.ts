@@ -1,4 +1,4 @@
-import { readBoundedJSON } from './privateDraft'
+import { readBoundedJSON, sameOriginJSONOptions } from '../transport/json'
 import { decodeSummary, type TrainingLanguage } from './trainingHistory'
 
 export interface TrainingReceiptKey {
@@ -28,21 +28,17 @@ export function recoverTraining(key: TrainingReceiptKey, signal: AbortSignal) {
 }
 
 async function requestTraining(attempt: TrainingReceiptKey, signal: AbortSignal, body?: string) {
+  const options = sameOriginJSONOptions(signal, 'same-origin')
   const response = await fetch(body === undefined ? '/api/v1/training/receipt' : '/api/v1/training/submissions', {
+    ...options,
     method: body === undefined ? 'GET' : 'POST',
     headers: {
-      Accept: 'application/json',
+      ...options.headers,
       'X-OJ-Expected-Subject': attempt.subject,
       'Idempotency-Key': attempt.key,
       ...(body !== undefined && { 'Content-Type': 'application/json' }),
     },
     body,
-    credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer',
-    signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
   })
-  if (response.status !== 200) {
-    await response.body?.cancel().catch(() => undefined)
-    throw new TrainingIntakeError(response.status)
-  }
-  return decodeSummary(await readBoundedJSON(response, 4096))
+  return decodeSummary(await readBoundedJSON(response, 4096, status => new TrainingIntakeError(status ?? 0)))
 }

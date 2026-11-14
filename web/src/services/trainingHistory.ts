@@ -1,3 +1,5 @@
+import { readBoundedJSON, sameOriginJSONOptions } from '../transport/json'
+
 const path = '/api/v1/training/submissions'
 const idPattern = /^[a-f0-9]{32}$/
 const cursorPattern = /^[A-Za-z0-9_-]{80}$/
@@ -92,30 +94,10 @@ export async function fetchTrainingStatus(subject: string, id: string, signal: A
 
 async function readTrainingJSON(url: string, subject: string, signal: AbortSignal, limit: number): Promise<unknown> {
   if (location.protocol !== 'https:' || !idPattern.test(subject)) throw new HistoryError()
+  const options = sameOriginJSONOptions(signal, 'same-origin')
   const response = await fetch(url, {
-    credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer',
-    headers: { Accept: 'application/json', 'X-OJ-Expected-Subject': subject },
-    signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
+    ...options,
+    headers: { ...options.headers, 'X-OJ-Expected-Subject': subject },
   })
-  if (response.status !== 200 || response.headers.get('Content-Type')?.split(';')[0].trim() !== 'application/json' || !response.body) {
-    await response.body?.cancel().catch(() => undefined)
-    throw new HistoryError(response.status)
-  }
-  const reader = response.body.getReader()
-  let size = 0
-  const decoder = new TextDecoder('utf-8', { fatal: true })
-  let text = ''
-  try {
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      size += value.byteLength
-      if (size > limit) throw new HistoryError()
-      text += decoder.decode(value, { stream: true })
-    }
-    return JSON.parse(text + decoder.decode()) as unknown
-  } finally {
-    await reader.cancel().catch(() => undefined)
-    reader.releaseLock()
-  }
+  return readBoundedJSON(response, limit, status => new HistoryError(status), false)
 }

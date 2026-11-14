@@ -130,7 +130,7 @@ MediumBulk的共享槽/原tier保留、两端256/512MiB累计额度及失败清�
 
 停止阶段预算回归验证枚举子期限到期后实际受信本地命令仍可启动一次、父context不被子取消、短父期限/已过期期限不延长、kill子期限失败、枚举失败不能转为停止成功。既有drain/生命周期失败零信号、PID确认、owner隔离与原整体期限耗尽诊断继续执行。使用固定可信shell及替身，不制造真实Docker故障；真实正常停止兼容性另由专用沙箱验证。
 
-前端 `frontend-check` 的 `pnpm lint` 包含类型感知 ESLint 及实际配置的六项正反例自测，失败阻断现有 frontend 门禁；未引入独立外部服务或改变保护规则。范围与成本见[代码质量检查](engineering-checks.md#代码质量)。
+前端 `frontend-check` 的 `pnpm lint` 包含类型感知 ESLint 和导入边界自测，后端继续在现有 Go 质量检查中运行 Depguard 及其正反例。失败阻断相应门禁；未新增 CI 任务或更改保护规则。范围与成本见[代码质量检查](engineering-checks.md#代码质量)。
 
 普通 CI 包含治理、Go 静态分析/race/构建、前端、真实 PostgreSQL 集成、Compose 冒烟及安全扫描。Go 静态分析及检测器正反例由 `toolchain backend` 执行，覆盖独立会话模块和 sandbox 标签源码，范围见[代码质量检查](engineering-checks.md#代码质量)。`containers` 在 backend 或 frontend 受影响时执行页面/代理、容器权限、重建与启停验证，结果传递到必需门禁。工具链与基础镜像由 Dockerfile/锁文件固定，宿主不需要 Go、Node 或 Make。
 

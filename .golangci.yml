@@ -5,10 +5,25 @@ run:
 linters:
   default: none
   enable:
+    - depguard
     - staticcheck
     - errcheck
     - ineffassign
     - unused
+  settings:
+    depguard:
+      rules:
+        business-does-not-wire-api:
+          files:
+            - "${config-path}/internal/{identity,problem,problemreference,problemvalidation,submission}/*.go"
+            - "${config-path}/internal/{identity,problem,problemreference,problemvalidation,submission}/**/*.go"
+          deny:
+            - pkg: github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/runtime$
+              desc: API assembly belongs in the application entry point
+            - pkg: github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/apiconfig$
+              desc: API configuration belongs in the application entry point
+            - pkg: github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/apiapp$
+              desc: Business packages must not import the API application
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
