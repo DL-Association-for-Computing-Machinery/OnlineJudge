@@ -715,6 +715,16 @@ python3 -B scripts/test-session-protocol.py --toolchain-image oj-session-protoco
 
 在上述脚本命令末尾加 `--suite email-lifecycle` 可用另一套全新的临时 PostgreSQL 和 Redis 验证邮箱整链路。邮件仅送往容器内回环 TLS 收件器；此选项不启用 API 文件配置的注册或找回入口。
 
+### 迁移前后回读 schema
+
+将独立的 `OJ_SCHEMA_STATUS_DATABASE_URL` 指向已确认的端点。用只有账本读取权限的登录，显式传入库名和应用迁移账本所在的 schema（标准安装为 `public`）：
+
+```sh
+.local/bin/migrate schema-status "$EXPECTED_DATABASE" public
+```
+
+成功输出账本当前版本、此二进制要求的版本和 `matches_runtime`。较旧或较新的版本也会输出结果；切换前须核对值，不能只看退出码。库名不符、账本缺失、权限不足或超时均失败。命令只读，不执行迁移；库名匹配不等于端点已确认，账本读数也不能证明没有在途迁移、数据完整或所有进程已排空。
+
 ### 判题运维快照
 
 值守人员可从维护工作站发起一次只读采样。由既有凭据分发渠道注入专用只读 `OJ_JUDGE_SNAPSHOT_DATABASE_URL`；连接角色和网络访问由现场维护者配置。命令显式接受期望数据库名和 1–60 分钟的接收窗口，例如：

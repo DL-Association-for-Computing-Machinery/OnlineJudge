@@ -21,6 +21,13 @@ import (
 var errRestoredDatabaseURL = errors.New("OJ_RESTORED_DATABASE_URL is required")
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "schema-status" {
+		if err := runSchemaStatus(os.Args[2:], os.Getenv, os.Stdout); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "judge-snapshot" {
 		if err := runJudgeSnapshot(os.Args[2:], os.Getenv, os.Stdout); err != nil {
 			fmt.Fprintln(os.Stderr, err)
