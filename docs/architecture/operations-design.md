@@ -73,7 +73,9 @@ Docker Desktop arm64 的 PostgreSQL 14 隔离验证使用 50,001 笔合成提交
 
 记录文件 `format` 为 `oj.m1-restore-evidence.v1`，包括 `source_domain`、`backup_domain`、`restore_domain`（使用稳定的实际故障域标识）、独立渠道保存的 `manifest_sha256`、`offsite_verified_at`、`fault_declared_at`，以及 `checks`。`checks` 必须包含 `source_isolated`、`materials_verified`、`old_credentials_rejected`、`service_restored` 和 `historical_submission_rejudged`；每项填写 `passed`（布尔）、`at`（UTC ISO 时间）和 `evidence_sha256`（独立留存的脱敏记录摘要）。`old_credentials_rejected` 按部署能力覆盖旧 Cookie、邮件令牌及 Worker 租约；`historical_submission_rejudged` 核对历史提交标识、原结果保留及新判题结果，不用新提交替代。
 
-在原始快照与观测记录均可回读后，运行 [计时核对命令](../../README.md#核对-m1-恢复证据)。它验证清单原始摘要、时序、观测项和数值门槛，输出是否具备人工复核条件；不同名称不证明故障域独立，哈希字段也不证明观测已经真实发生。负责人须核对原始证据、主机隔离、复判及恢复条件后再确认验收。同机试跑只作预演。
+每项脱敏观测单独保存为 `<观测项>.txt`（例如 `source_isolated.txt`），每份非空且最多 1 MiB，计算原始字节的 SHA-256 后填入对应条目。同一份记录不得复制给多个检查项。确认旧凭据被拒绝后才能将恢复服务交还用户；可先在仍隔离的服务上验证。观察文件和汇总记录在核对时保持静止。
+
+在原始快照与观测记录均可回读后，运行 [计时核对命令](../../README.md#核对-m1-恢复证据)。它验证清单与五份观察文件的摘要、时序和数值门槛，输出是否具备人工复核条件。负责人仍须核对证据来源和内容、实际故障域、源主机隔离及复判结果后再确认验收。同机试跑只作预演。
 
 ### 恢复提交租约
 

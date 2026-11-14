@@ -16,6 +16,8 @@ class RestoreEvidenceTest(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.manifest = Path(directory.name) / "manifest.json"
         self.record_file = Path(directory.name) / "evidence.json"
+        self.observations = Path(directory.name) / "observations"
+        self.observations.mkdir()
         self.record = {
             "format": "oj.m1-restore-evidence.v1",
             "source_domain": "source-host",
@@ -23,7 +25,7 @@ class RestoreEvidenceTest(unittest.TestCase):
             "restore_domain": "restore-host",
             "offsite_verified_at": "2026-11-12T13:00:00Z",
             "fault_declared_at": "2026-11-13T12:00:00Z",
-            "checks": {key: {"passed": True, "at": at, "evidence_sha256": "a" * 64}
+            "checks": {key: {"passed": True, "at": at}
                        for key, at in {
                            "source_isolated": "2026-11-13T11:59:59Z",
                            "materials_verified": "2026-11-13T14:00:00Z",
@@ -32,6 +34,10 @@ class RestoreEvidenceTest(unittest.TestCase):
                            "historical_submission_rejudged": "2026-11-13T16:00:00Z",
                        }.items()},
         }
+        for key, check in self.record["checks"].items():
+            raw = f"synthetic observation: {key}\n".encode()
+            (self.observations / (key + ".txt")).write_bytes(raw)
+            check["evidence_sha256"] = hashlib.sha256(raw).hexdigest()
         self.snapshot("2026-11-12T12:00:00Z")
 
     def snapshot(self, captured):
@@ -40,7 +46,8 @@ class RestoreEvidenceTest(unittest.TestCase):
 
     def invoke(self):
         self.record_file.write_text(json.dumps(self.record))
-        return subprocess.run([sys.executable, str(SCRIPT), str(self.record_file), str(self.manifest)],
+        return subprocess.run([sys.executable, str(SCRIPT), str(self.record_file), str(self.manifest),
+                               str(self.observations)],
                               check=False, capture_output=True, text=True, timeout=5)
 
     def test_exact_limits_are_eligible_for_review(self):
@@ -82,3 +89,29 @@ class RestoreEvidenceTest(unittest.TestCase):
         result = self.invoke()
         self.assertEqual(result.returncode, 2)
         self.assertEqual(result.stdout, "")
+
+    def test_mismatched_missing_and_redirected_observations_are_refused(self):
+        path = self.observations / "materials_verified.txt"
+        original = path.read_bytes()
+        for case in ("tampered", "missing", "symlink", "reused"):
+            with self.subTest(case=case):
+                path.unlink(missing_ok=True)
+                if case == "tampered":
+                    path.write_bytes((self.observations / "source_isolated.txt").read_bytes())
+                elif case == "symlink":
+                    copy = self.observations / "copy.txt"
+                    copy.write_bytes(original)
+                    path.symlink_to(copy)
+                elif case == "reused":
+                    duplicate = (self.observations / "source_isolated.txt").read_bytes()
+                    path.write_bytes(duplicate)
+                    self.record["checks"]["materials_verified"]["evidence_sha256"] = hashlib.sha256(duplicate).hexdigest()
+                result = self.invoke()
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(result.stdout, "")
+
+    def test_old_credentials_must_be_checked_before_return_to_service(self):
+        self.record["checks"]["old_credentials_rejected"]["at"] = "2026-11-13T15:00:00.000000001Z"
+        result = self.invoke()
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["failures"], ["old_credentials_checked_after_restore"])

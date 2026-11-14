@@ -29,14 +29,19 @@ def unique_pairs(pairs):
     return result
 
 
-def read_json(path, limit):
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+def read_file(path, limit, *, dir_fd=None):
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dir_fd)
     with os.fdopen(fd, "rb") as stream:
         if not stat.S_ISREG(os.fstat(fd).st_mode):
             raise ValueError("expected regular local file")
         raw = stream.read(limit + 1)
-    if len(raw) > limit:
-        raise ValueError("oversized evidence file")
+    if not 0 < len(raw) <= limit:
+        raise ValueError("empty or oversized evidence file")
+    return raw
+
+
+def read_json(path, limit):
+    raw = read_file(path, limit)
     value = json.loads(raw, object_pairs_hook=unique_pairs)
     if not isinstance(value, dict):
         raise ValueError("expected JSON object")
@@ -57,7 +62,7 @@ def valid(value, pattern):
     return isinstance(value, str) and pattern.fullmatch(value) is not None
 
 
-def assess(record, manifest, manifest_sha):
+def assess(record, manifest, manifest_sha, evidence_dir):
     expected = {"format", "source_domain", "backup_domain", "restore_domain", "manifest_sha256",
                 "offsite_verified_at", "fault_declared_at", "checks"}
     if set(record) != expected or record["format"] != "oj.m1-restore-evidence.v1":
@@ -79,12 +84,18 @@ def assess(record, manifest, manifest_sha):
     if not isinstance(checks, dict) or set(checks) != set(CHECKS):
         raise ValueError("all five observations are required")
     checked_at = {}
+    evidence_digests = set()
     failures = []
     for name in CHECKS:
         check = checks[name]
         if (not isinstance(check, dict) or set(check) != {"passed", "at", "evidence_sha256"}
                 or type(check["passed"]) is not bool or not valid(check["evidence_sha256"], SHA)):
             raise ValueError("invalid observation")
+        raw = read_file(name + ".txt", 1 << 20, dir_fd=evidence_dir)
+        digest = hashlib.sha256(raw).hexdigest()
+        if digest != check["evidence_sha256"] or digest in evidence_digests:
+            raise ValueError("mismatched or reused observation")
+        evidence_digests.add(digest)
         at = timestamp(check["at"])
         if name != "source_isolated" and at < fault:
             raise ValueError("observations must follow the fault declaration")
@@ -98,6 +109,8 @@ def assess(record, manifest, manifest_sha):
         failures.append("source_isolation_too_late")
     if checked_at["materials_verified"] > checked_at["service_restored"] or checked_at["service_restored"] > checked_at["historical_submission_rejudged"]:
         failures.append("restore_observations_out_of_order")
+    if checked_at["old_credentials_rejected"] > checked_at["service_restored"]:
+        failures.append("old_credentials_checked_after_restore")
     rpo = fault - captured
     rto = max(checked_at.values()) - fault
     if rpo > 24 * 60 * 60 * SECOND:
@@ -113,11 +126,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("record", type=Path)
     parser.add_argument("manifest", type=Path)
+    parser.add_argument("observations", type=Path, help="directory holding the five original, sanitized observation files")
     args = parser.parse_args()
     try:
         _, record = read_json(args.record, 64 << 10)
         raw, manifest = read_json(args.manifest, 16 << 10)
-        result = assess(record, manifest, hashlib.sha256(raw).hexdigest())
+        evidence_dir = os.open(args.observations, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            result = assess(record, manifest, hashlib.sha256(raw).hexdigest(), evidence_dir)
+        finally:
+            os.close(evidence_dir)
     except (OSError, ValueError, RecursionError):
         print("M1 restore assessment refused: invalid or inconsistent evidence", file=sys.stderr)
         return 2
