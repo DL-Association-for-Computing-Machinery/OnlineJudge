@@ -12,7 +12,6 @@ import (
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/db"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
-	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materials"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
 	referencepg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference/postgres"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
@@ -198,35 +197,22 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		aplusb, aplusbFixture, err := experiment.LoadCachedFixture(os.Getenv)
+		_, aplusbFixture, err := experiment.LoadCachedFixture(os.Getenv)
 		if err != nil {
 			return err
 		}
 		if aplusbFixture.UsesCachedText() {
-			open := materials.OpenLocal
-			if aplusbFixture.IsLocalText() {
-				open = materials.OpenLocalText
-			}
-			reader, err := open(os.Getenv("OJ_MATERIAL_ROOT"))
-			if err != nil {
+			if err := aplusbFixture.VerifyMaterials(ctx, os.Getenv("OJ_MATERIAL_ROOT")); err != nil {
 				return err
 			}
-			defer func() { _ = reader.Close() }()
-			for _, point := range aplusb.Tests {
-				for _, hash := range []string{point.Input, point.Answer} {
-					if err := reader.Verify(ctx, hash); err != nil {
-						return err
-					}
-				}
-			}
-			store, err := postgres.New(pool, aplusb.Version, aplusbFixture.Manifest())
+			store, err := postgres.New(pool, aplusbFixture.Version(), aplusbFixture.Manifest())
 			if err != nil {
 				return err
 			}
 			if err := store.RegisterFixture(ctx); err != nil {
 				return err
 			}
-			fmt.Println("Isolated cached materials registered:", aplusb.Version)
+			fmt.Println("Isolated cached materials registered:", aplusbFixture.Version())
 			return nil
 		}
 		store, err := postgres.New(pool, version, manifest)
