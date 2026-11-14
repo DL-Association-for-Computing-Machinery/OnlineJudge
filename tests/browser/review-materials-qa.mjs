@@ -17,6 +17,7 @@ const endpoint = `/api/v1/problem-review/${ready.review_id}/materials`
 const assignments = '/api/v1/problem-review/assignments'
 const eligibilityPath = `/api/v1/problem-review/${ready.review_id}/eligibility`
 const confirmation = `/api/v1/problem-review/${ready.review_id}/statement-confirmation`
+const returnPath = `/api/v1/problem-review/${ready.review_id}/return`
 const pagePath = `/review/materials/${ready.review_id}`
 const intakePath = '/api/v1/problem-draft-management/review-submissions'
 const report = { success: false, checks: [], screenshots: [] }
@@ -24,7 +25,7 @@ function passed(name) { report.checks.push(name); console.log('PASS ' + name) }
 let step = 'setup'
 let status
 
-async function exercise(browser, viewport, reviewer, select, confirm = false) {
+async function exercise(browser, viewport, reviewer, select, confirm = false, doReturn = false) {
   status = undefined
   const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport })
   try {
@@ -160,6 +161,7 @@ async function exercise(browser, viewport, reviewer, select, confirm = false) {
           ['GET', endpoint, ready.other_subject_id], ['GET', receiptPath, ready.other_subject_id],
         ])
       }
+      if (doReturn) await reviewerReturn(page, reads)
     } else {
       step = 'render denial'
       await page.getByText('无法读取材料。请核对送审 ID、当前分配及服务状态，再手动重试。', { exact: true }).waitFor()
@@ -170,6 +172,77 @@ async function exercise(browser, viewport, reviewer, select, confirm = false) {
     assert.deepEqual(errors, [])
     assert.deepEqual(foreign, [])
   } finally { await context.close() }
+}
+
+async function reviewerReturn(page, reads) {
+  step = 'validate reason and lose the real return response after commit'
+  const load = page.getByRole('button', { name: '检查会话并读取材料' })
+  const query = page.getByRole('button', { name: '查询原退回回执' })
+  const submit = page.getByRole('button', { name: '确认退回材料' })
+  const reasons = '请更新样例解释。'
+  await load.click()
+  await page.getByText('填写退回理由', { exact: true }).click()
+  const field = page.getByLabel('退回理由', { exact: true })
+  assert(await submit.isDisabled())
+  await field.fill('题'.repeat(171))
+  assert(await submit.isDisabled())
+  await field.fill(reasons)
+  assert(!await submit.isDisabled())
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+  assert.equal(reads.filter(([method]) => method === 'POST').length, 0)
+  let receipt
+  await page.route(info.origin + returnPath, async route => {
+    const req = route.request()
+    assert.equal(req.method(), 'POST')
+    assert.equal(req.headers()['origin'], info.origin)
+    assert.equal(req.headers()['x-oj-expected-subject'], ready.other_subject_id)
+    const body = req.postDataJSON()
+    const saved = await page.evaluate(() => Object.entries(sessionStorage).filter(([key]) => key.startsWith('oj.review-return.v1:')))
+    assert.equal(saved.length, 1)
+    assert(saved[0][0].includes(ready.other_subject_id))
+    assert.deepEqual(JSON.parse(saved[0][1]), { key: body.request_key, assignment: body.assignment_revision })
+    assert.equal(body.reason, reasons)
+    const response = await route.fetch({ maxRedirects: 0, maxRetries: 0 })
+    assert.equal(response.status(), 200)
+    receipt = await response.json()
+    assert.equal(receipt.request_key, body.request_key)
+    await route.abort()
+  })
+  await submit.click()
+  await page.getByText('尚未核实本次退回。', { exact: true }).waitFor()
+  assert.equal(await submit.count(), 0)
+  assert.equal(await page.getByRole('button', { name: '记录题意确认' }).count(), 0)
+  const before = reads.length
+  step = 'reload, keep missing receipt pending, then recover without another POST'
+  await page.reload()
+  await load.waitFor()
+  assert.equal(reads.length, before)
+  await load.click()
+  await query.waitFor()
+  assert.equal(await submit.count(), 0)
+  const receiptPath = `${returnPath}/${receipt.request_key}`
+  await page.route(info.origin + receiptPath, route => route.fulfill({ status: 404, contentType: 'application/problem+json', body: '{}' }), { times: 1 })
+  await query.click()
+  await page.getByText('尚未核实本次退回。', { exact: true }).waitFor()
+  assert(await query.isEnabled())
+  const [readback] = await Promise.all([
+    page.waitForResponse(r => r.url() === info.origin + receiptPath),
+    query.click(),
+  ])
+  assert.equal(readback.status(), 200)
+  assert.deepEqual(await readback.json(), receipt)
+  await page.getByText('已核实这份材料的退回回执。', { exact: true }).waitFor()
+  assert.equal(await query.count(), 0)
+  await page.getByRole('button', { name: '查看当前阻断项' }).click()
+  await page.getByText('同一修订的材料已被退回', { exact: true }).waitFor()
+  assert.deepEqual(reads.slice(2), [
+    ['GET', endpoint, ready.other_subject_id], ['POST', returnPath, ready.other_subject_id],
+    ['GET', endpoint, ready.other_subject_id], ['GET', receiptPath, ready.other_subject_id],
+    ['GET', receiptPath, ready.other_subject_id], ['GET', eligibilityPath, ready.other_subject_id],
+  ])
+  const screenshot = 'review-return-narrow.png'
+  await page.screenshot({ path: path.join(output, screenshot), fullPage: true })
+  report.screenshots.push(screenshot)
 }
 
 let browser, phase = 'launch'
@@ -260,6 +333,59 @@ async function authorIntake(browser) {
     assert.deepEqual(await response.json(), receipt)
     await page.getByText(`送审 ID：${receipt.id}。此回执仅表示材料已送审。`, { exact: true }).waitFor()
     assert.deepEqual(calls, [['POST', intakePath], ['GET', lookup], ['GET', lookup]])
+    return { storage: await context.storageState(), receipt }
+  } finally { await context.close() }
+}
+
+async function authorReturn(browser, session) {
+  const receipt = session.receipt
+  step = 'reopen with the existing author session'
+  const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 390, height: 844 }, storageState: session.storage })
+  try {
+    const page = await context.newPage()
+    const errors = [], calls = []
+    page.on('pageerror', error => errors.push(error.name))
+    page.on('request', request => {
+      if (request.url().startsWith(info.origin + intakePath)) {
+        calls.push([request.method(), new URL(request.url()).pathname, request.headers()['x-oj-expected-subject']])
+      }
+    })
+    await page.goto(info.origin + '/author/drafts/' + ready.review_draft_id)
+    step = 'restore the author journal for the same material'
+    const original = intakePath + '/' + receipt.request_key
+    await page.evaluate(async ({ owner, receipt }) => {
+      const { reserveReviewIntake } = await import('/journal-test/journal-harness.js')
+      const { request_key, draft_id, reference_request_id, import_revision, content_version } = receipt
+      await reserveReviewIntake(owner, { version: content_version, intent: { request_key, draft_id, reference_request_id, import_revision } })
+    }, { owner: ready.subject_id, receipt })
+    step = 'open the matching author journal entry'
+    await page.getByRole('button', { name: '检查会话并打开草稿' }).click()
+    await page.getByRole('button', { name: '查看本机送审记录' }).click()
+    const find = page.getByRole('button', { name: '查看该报告的退回理由' })
+    await find.waitFor()
+    assert.deepEqual(calls, [])
+    step = 'read the private return status using the original intake key'
+    const [readback] = await Promise.all([
+      page.waitForResponse(r => r.url() === info.origin + original + '/return', { timeout: 8000 }),
+      find.click(),
+    ])
+    status = readback.status()
+    assert.equal(status, 200)
+    const returned = await readback.json()
+    assert.deepEqual(Object.keys(returned).sort(), ['evidence_sha256', 'import_revision', 'reason', 'returned_at', 'review_id'])
+    await page.getByText(`送审 ID：${receipt.id}。已退回。`, { exact: true }).waitFor()
+    const reason = page.getByText('退回理由：请更新样例解释。', { exact: true })
+    await reason.waitFor()
+    assert.deepEqual(calls, [['GET', original, ready.subject_id], ['GET', original + '/return', ready.subject_id]])
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+    const screenshot = 'author-return-narrow.png'
+    await page.screenshot({ path: path.join(output, screenshot), fullPage: true })
+    report.screenshots.push(screenshot)
+    await page.reload()
+    await page.getByRole('button', { name: '检查会话并打开草稿' }).waitFor()
+    assert.equal(await reason.count(), 0)
+    assert.equal(calls.length, 2)
+    assert.deepEqual(errors, [])
   } finally { await context.close() }
 }
 
@@ -276,8 +402,14 @@ try {
   await exercise(browser, { width: 1280, height: 960 }, false, true)
   passed('the author with reviewer role gets an empty list and cannot read their materials')
   phase = 'author intake'
-  await authorIntake(browser)
+  const authorSession = await authorIntake(browser)
   passed('author sends once and reload recovers the original review ID after a new reference request')
+  phase = 'review return'
+  await exercise(browser, { width: 390, height: 844 }, true, false, false, true)
+  passed('reviewer returns once and recovers a lost decision by the original key after a missing receipt')
+  phase = 'author return'
+  await authorReturn(browser, authorSession)
+  passed('author sees the matching return reason through the original intake and reload clears it')
   report.success = true
 } catch {
   console.error(`FAIL ${phase}: ${step}; material HTTP status: ${status ?? 'none'}`)

@@ -1,4 +1,5 @@
 import { validDraftID } from './privateDraft'
+import { validReturnReason } from './reviewReturnReason'
 
 export interface ImportSource { source_id: string; title: string; version: string; import_revision: string }
 export interface ImportReceipt {
@@ -118,4 +119,16 @@ export async function requestReviewIntake(
     typeof data.created_at !== 'string' || !/^\d{4}-\d\d-\d\dT/.test(data.created_at) ||
     !Number.isFinite(Date.parse(data.created_at))) throw new ImportError()
   return data.id
+}
+
+export async function readAuthorReviewReturn(
+  owner: string, intent: ReviewIntakeIntent, version: string, signal: AbortSignal,
+) {
+  const id = await requestReviewIntake('read', owner, intent, version, signal)
+  const data = await request(owner, `/review-submissions/${intent.request_key}/return`, signal)
+  if (!object(data) || Object.keys(data).length !== 5 || data.review_id !== id ||
+    data.import_revision !== intent.import_revision || !validRevision(data.evidence_sha256) ||
+    !validReturnReason(data.reason) || typeof data.returned_at !== 'string' ||
+    !/^\d{4}-\d\d-\d\dT/.test(data.returned_at) || !Number.isFinite(Date.parse(data.returned_at))) throw new ImportError()
+  return { id, reason: data.reason }
 }
