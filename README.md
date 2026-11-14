@@ -781,6 +781,16 @@ python3 scripts/assess-m1-restore.py '/绝对路径/恢复观测.json' '/绝对�
 
 退出码 `0` 表示观察文件摘要匹配且记录满足计时与完整性条件、可供人工复核，`1` 表示记录有未通过项，`2` 表示输入无效、证据缺失或摘要不一致。命令不执行恢复、不验证备份目录内容，也不替代负责人对故障域与原始记录的复核。
 
+### 核对 P6 混合训练记录
+
+将三轮脱敏逐请求观测按[混合训练记录约定](docs/delivery-evidence/p6-trial-acceptance.md#混合训练记录核对)保存后运行：
+
+```sh
+python3 -B scripts/assess-p6-mixed-load.py "$MIXED_LOAD_RECORD"
+```
+
+命令只读核对已记录的负载、时延和接收对账，不发请求；本地合成记录通过不代表试用容量达标。
+
 ### 浏览器账号专项
 
 账号页面与 API 必须由同一 HTTPS Origin 提供；当前默认 Compose/Vite HTTP 入口会阻止账号请求。不要通过关闭 Secure Cookie/来源检查或启用跨源代理来让密码表单工作。实际流程及限制见[浏览器账号](docs/account-browser.md)。
