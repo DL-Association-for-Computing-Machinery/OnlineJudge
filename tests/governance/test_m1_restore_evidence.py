@@ -44,10 +44,10 @@ class RestoreEvidenceTest(unittest.TestCase):
         self.manifest.write_text(json.dumps({"format": "oj.logical-backup.v1", "captured_at": captured}))
         self.record["manifest_sha256"] = hashlib.sha256(self.manifest.read_bytes()).hexdigest()
 
-    def invoke(self):
+    def invoke(self, *args):
         self.record_file.write_text(json.dumps(self.record))
         return subprocess.run([sys.executable, str(SCRIPT), str(self.record_file), str(self.manifest),
-                               str(self.observations)],
+                               str(self.observations), *args],
                               check=False, capture_output=True, text=True, timeout=5)
 
     def test_exact_limits_are_eligible_for_review(self):
@@ -115,3 +115,58 @@ class RestoreEvidenceTest(unittest.TestCase):
         result = self.invoke()
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertEqual(json.loads(result.stdout)["failures"], ["old_credentials_checked_after_restore"])
+
+    def p6_fixture(self):
+        self.record.update(format="oj.p6-restore-evidence.v1", origin_scope="local")
+        for name, at in (("offsite_copy_verified", self.record["offsite_verified_at"]),
+                         ("source_still_isolated", "2026-11-13T16:01:00Z")):
+            raw = f"synthetic P6 observation: {name}\n".encode()
+            (self.observations / (name + ".txt")).write_bytes(raw)
+            self.record["checks"][name] = dict(at=at, passed=True, evidence_sha256=hashlib.sha256(raw).hexdigest())
+        return dict(format="oj.p6-restore-topology.v1", registered_at="2026-11-12T12:30:00Z", domains={
+            f"{name}-host": dict(host_domain=f"{name}-physical", storage_domain=f"{name}-storage")
+            for name in ("source", "backup", "restore")
+        })
+
+    def p6_args(self, doc):
+        topology = self.record_file.with_name("topology.json")
+        topology.write_text(json.dumps(doc))
+        digest = hashlib.sha256(topology.read_bytes()).hexdigest()
+        self.record["topology_sha256"] = digest
+        return ("--topology", str(topology), "--topology-sha256", digest)
+
+    def test_p6_requires_topology_and_isolation_through_rejudge(self):
+        args = self.p6_args(self.p6_fixture())
+        self.assertEqual(self.invoke().returncode, 2)
+        result = self.invoke(*args)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertEqual(report["origin_scope"], "local")
+        self.assertEqual(report["rto_seconds"], 14_400)
+        self.record["checks"]["source_still_isolated"]["at"] = "2026-11-13T15:59:59Z"
+        self.record["checks"]["offsite_copy_verified"]["at"] = "2026-11-12T13:00:01Z"
+        result = self.invoke(*args)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(json.loads(result.stdout)["failures"],
+                         ["offsite_observation_time_mismatch", "source_isolation_end_too_early"])
+
+    def test_p6_different_labels_do_not_hide_shared_host_or_storage(self):
+        topology = self.p6_fixture()
+        topology["domains"]["backup-host"]["storage_domain"] = "SOURCE-STORAGE"
+        topology["domains"]["restore-host"]["host_domain"] = "SOURCE-PHYSICAL"
+        result = self.invoke(*self.p6_args(topology))
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(json.loads(result.stdout)["failures"],
+                         ["source_host_domain_shared", "source_storage_domain_shared"])
+
+    def test_p6_rejects_edited_or_late_topology_and_missing_offsite_proof(self):
+        topology = self.p6_fixture()
+        args = self.p6_args(topology)
+        with Path(args[1]).open("a") as stream:
+            stream.write("\n")
+        self.assertEqual(self.invoke(*args).returncode, 2)
+        topology["registered_at"] = "2026-11-12T13:00:01Z"
+        self.assertEqual(self.invoke(*self.p6_args(topology)).returncode, 2)
+        topology["registered_at"] = "2026-11-12T12:30:00Z"
+        (self.observations / "offsite_copy_verified.txt").unlink()
+        self.assertEqual(self.invoke(*self.p6_args(topology)).returncode, 2)

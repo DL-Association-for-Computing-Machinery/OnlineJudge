@@ -781,6 +781,15 @@ python3 scripts/assess-m1-restore.py '/绝对路径/恢复观测.json' '/绝对�
 
 退出码 `0` 表示观察文件摘要匹配且记录满足计时与完整性条件、可供人工复核，`1` 表示记录有未通过项，`2` 表示输入无效、证据缺失或摘要不一致。命令不执行恢复、不验证备份目录内容，也不替代负责人对故障域与原始记录的复核。
 
+P6 整阶段验收使用下列命令，并从演练前独立保存的记录取得拓扑摘要：
+
+```sh
+python3 -B scripts/assess-m1-restore.py "$RESTORE_RECORD" "$BACKUP_MANIFEST" "$RESTORE_OBSERVATIONS" \
+  --topology "$RESTORE_TOPOLOGY" --topology-sha256 "$PREREGISTERED_TOPOLOGY_SHA256"
+```
+
+P6 格式要求七份观察，增加异地副本核验和复判结束后源端仍隔离的证据。沿用相同退出码，`local` 预演结果不能充当现场证据。
+
 ### 核对 P6 混合训练记录
 
 将三轮脱敏逐请求观测按[混合训练记录约定](docs/delivery-evidence/p6-trial-acceptance.md#混合训练记录核对)保存后运行：
