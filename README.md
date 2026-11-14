@@ -894,6 +894,16 @@ python3 -B scripts/trial_app_bundle.py verify --manifest-sha256 "$TRUSTED_MANIFE
 
 核验成功输出构建方声明的 Git 提交；不执行程序，也不替代构建来源审查。封存失败时，未写出清单的输出目录不可交付，复测使用新目录。此包只覆盖[试用离线交付](docs/architecture/operations-design.md#5-发布与回滚)的应用部分；完整发布还需封存运行依赖镜像、配置模板和安装恢复说明。密钥与真实配置单独交接。
 
+### 试用同源 HTTPS 入口
+
+用[独立 Nginx 模板](deploy/trial/nginx.conf.example)准备试用入口。将 `oj.example.invalid` 的所有出现处替换为同一个公开域名；本模板对应公开端口 443，映射至 Nginx 的 8443。把已核验应用制品的 `site/` 以只读方式挂载至 `/srv/oj/site`；应让 Nginx 运行账号读取安装后的文件，同时保持原接收包不变。
+
+- Nginx 与会话 API 共用回环网络空间，API 只监听 `127.0.0.1:9443`，不对客户端暴露。若采用不同网络空间或在 Nginx 前再加代理，先为实际拓扑重新核对隔离和来源地址。
+- Nginx 使用公开证书和独立的代理客户端证书；后端 API 服务端证书的 DNS SAN 为 `oj-api.internal`。按模板挂载公开证书链、验证 API 的 CA 以及代理证书链与私钥，证书和私钥由维护者另行安装。
+- 会话 API 设 `mode: "proxy"`，`origin` 为对应的公开 HTTPS Origin，配置验证代理客户端证书的 CA，并在 `proxy_fingerprints` 登记代理客户端叶证书 DER 的 SHA-256。不要用浏览器证书、CA 指纹或 Worker 证书代替。详见[单跳受信反代](docs/architecture/session-design.md#714-单跳受信反向代理)。
+
+切换前先用安装后的配置执行 `nginx -t`，再从信任公开 CA 的干净客户端检查静态资源、`/api/v1/readyz`、登录及退出；错误公开 Host 和错误后端证书必须被拒绝。模板关闭访问日志以免记录敏感请求，现场的值守采样与告警另行配置。此模板不改变默认 Compose，也不配置校内 DNS、证书分发或发布服务。
+
 ### 专用 Ubuntu VM 判题实验
 
 仅供无宿主共享目录的本地 Ubuntu 24.04 arm64 实验 VM。固定 Linux `6.8.0-106-generic`、Apple 虚拟化、go-judge/GCC 镜像及原生 Docker Unix socket。提交 API、控制器和 Worker 同时显式设置 `OJ_EXPERIMENT_MATERIAL_VERSION=m0-sum-ubuntu-arm64-v1`；运行和恢复只用 VM 内同一专用 root 账号的主槽。错误版本在领取前返回 412，不消耗尝试。禁止双槽、参考执行及浏览器模式；Desktop 默认仍用 `m0-sum-v3`。
