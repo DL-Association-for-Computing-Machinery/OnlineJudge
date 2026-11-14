@@ -36,6 +36,9 @@ func run(parent context.Context, args []string, out, diagnostics io.Writer) erro
 	if len(args) > 0 && args[0] == "aplusb-target-handoff" {
 		return aplusbTargetHandoff(parent, args[1:], out, diagnostics)
 	}
+	if len(args) > 0 && args[0] == "review-aplusb-admission" {
+		return reviewAPlusBAdmission(parent, args[1:], out, diagnostics)
+	}
 	if len(args) > 0 && args[0] == "aplusb-judge-manifest" {
 		return aplusbJudgeManifest(parent, args[1:], out, diagnostics)
 	}

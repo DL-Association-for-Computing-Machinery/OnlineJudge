@@ -135,4 +135,20 @@ checker-candidate aplusb-target-handoff --mode receipt \
 
 通过可信渠道分别核对两份摘要和预期目标；不要从收到的回执自取预期值。回执固定来源锁、内容版本、完整导入修订、正式参考档位、正式计划、检查器候选、判题与运输清单、运行档位及三份报告摘要，不包含题包、源码、报告原文或测试点标识。回读只校验回执字节和绑定，无须持有原报告；它没有签名、实际运行时间、节点或构建证明，不会移除 `checker_admission_missing` 或 `target_runtime_missing`。既有 `reports` 命令未设 `--receipt-out` 时仍返回原摘要 JSON。
 
+#### 生产检查器与目标节点记录复核
+
+[离线复核命令](../README.md#核对-ab-现场准入记录)将已经封存的回执、独立的节点观察、独立的生产检查器观察绑定到同一 A+B 17 点修订和预期 Worker 二进制字节摘要。负责复核的维护者先在独立渠道核对真实记录、记录人及其权限、观察时间、节点身份、制品来源与摘要；不能从收到的文件直接取预期摘要。检查器观察还须以不同的底层记录支持生产处理行为，不能复用目标观察原记录或仅复述 AC／WA／OLE 归档。
+
+观察文件分别使用 `oj.aplusb-target-observation.v1` 与 `oj.aplusb-checker-observation.v1`。两者只接受下表顺序的字段、紧凑 JSON 和一个末尾 LF；每个文件至多 4096 字节，须为由复核者控制的 0400 或 0600 普通文件。字段必须完整；摘要为 64 位小写十六进制，Git 修订为 40 位。各行列出的字段顺序同时规定各自对象的编码。
+
+| 对象 | 字段（编码顺序） |
+| --- | --- |
+| 目标观察 | `schema`、`material`、`target`、`worker_artifact_sha256`、`build_provenance_sha256`、`handoff_sha256`、`receipt_sha256`、`ac_wa_ole_report_sha256`（固定 AC、WA、OLE 顺序）、`observation`、`worker_and_revision_observed`、`node_and_runtime_observed`、`isolation_checked`、`stop_confirmed` |
+| 检查器观察 | `schema`、`material`、`target`、`worker_artifact_sha256`、`checker_version`、`output_bytes`、`token_bytes`、`target_observation_sha256`、`observation`、`reference_accepted`、`wrong_output_rejected`、`bounded_capture_verified`、`fault_classification_verified` |
+| `material` | `source_id`、`source_lock_sha256`、`content_version`、`import_revision`、`reference_profile_sha256`、`formal_plan_sha256`、`candidate_sha256` |
+| `target` | `node`、`revision`、`runtime_profile_sha256`、`slot` |
+| `observation` | `observer`（经维护者核实的记录人标识，1–64 位字母、数字、下划线或连字符）、`observed_at`（UTC，`YYYY-MM-DDTHH:MM:SSZ`）、`evidence_sha256`（另存的脱敏原始记录摘要） |
+
+两类观察的布尔核对项均须为 `true`，检查器必须匹配候选的 `lc-wcmp-tokens-v1`、262144 字节及每 token 12 字节限额。程序绑定观察和证据摘要，不以文件时间和自报字段证明新鲜性，不读取二进制、原始观察、私有题包或源码。成功输出 `scope: "review-input-only"` 和固定绑定以供人工回读，不接触目标节点、数据库或批准状态。任何文件缺失或错配均失败，不返回部分摘要。当前无现场验收，两个准入阻断保留，撤下命令即可回退。
+
 现有草稿仍为 `configured-not-validated` / `not-run`，`production_profile` 和 `limits` 仍为 null。目标机器实测还须验证显式预算下的真实参考/错误程序、受限编译执行、输出采集及故障分类，然后由有权限的验证、非作者审核及原子发布流程使用准确的候选摘要。离线预检只验证冻结答案，没有连接 Worker 或数据库，也不解除发布阻断。
