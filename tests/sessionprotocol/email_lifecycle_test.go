@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/httpapi"
@@ -128,11 +129,15 @@ func TestIsolatedEmailLifecycle(t *testing.T) {
 			t.Fatal("request exposed outcome or issued session")
 		}
 	}
-	confirm := func(e *loginEndpoint, path, token, newPassword string, want int) {
+	confirmationBody := func(token, newPassword string) string {
 		t.Helper()
 		body, err := json.Marshal(map[string]string{"token": token, "new_password": newPassword})
 		must(t, err)
-		r := loginCall(e, path, string(body), nil, nil)
+		return string(body)
+	}
+	confirm := func(e *loginEndpoint, path, token, newPassword string, want int) {
+		t.Helper()
+		r := loginCall(e, path, confirmationBody(token, newPassword), nil, nil)
 		if r.err != nil || r.status != want || len(r.cookies) != 0 {
 			t.Fatalf("confirmation status = %d; want %d, with no cookie", r.status, want)
 		}
@@ -144,7 +149,6 @@ func TestIsolatedEmailLifecycle(t *testing.T) {
 		}), want)
 	}
 	const first = "synthetic isolated activation password"
-	const second = "synthetic isolated replacement password"
 	request(x, register, signupBody)
 	token := receive(ctx)
 	waitLifecycleMail(t, ctx, f.pools[0], 1)
@@ -164,30 +168,57 @@ func TestIsolatedEmailLifecycle(t *testing.T) {
 	checkSession(y, old, 200)
 	confirm(x, reset, replacement, "synthetic blocked password", 400)
 	checkSession(y, old, 200)
-	confirm(x, reset, replacement, second, 204)
-	confirm(y, reset, replacement, second, 400)
+	// Hold the account row until both API transactions reach the consume lock.
+	// Starting both requests together alone would also allow a sequential run.
+	resetHold, resetHolder := holdLifecycleAccount(t, ctx, f.pools[0], p.ID)
+	passwords := [2]string{"synthetic isolated replacement alpha", "synthetic isolated replacement beta"}
+	endpoints := [2]*loginEndpoint{x, y}
+	type confirmationResult struct {
+		index    int
+		response loginResponse
+	}
+	results := make(chan confirmationResult, len(endpoints))
+	for i, endpoint := range endpoints {
+		body := confirmationBody(replacement, passwords[i])
+		go func() {
+			results <- confirmationResult{i, loginCall(endpoint, reset, body, nil, nil)}
+		}()
+	}
+	waitLifecycleAccountBlocked(t, ctx, f.pools[0], resetHolder, c.Database.ApplicationName, other.Database.ApplicationName)
+	must(t, resetHold.Rollback(ctx))
+	winner := -1
+	for range endpoints {
+		result := <-results
+		want := 400
+		if result.response.status == 204 && winner == -1 {
+			winner = result.index
+			want = 204
+		}
+		loginStatus(t, result.response, want)
+		if len(result.response.headers.Values("Set-Cookie")) != 0 {
+			t.Fatal("reset confirmation changed the session cookie")
+		}
+	}
+	if winner == -1 {
+		t.Fatal("neither API confirmed the password reset")
+	}
 	checkSession(x, old, 401)
 	checkSession(y, old, 401)
-	body, err := json.Marshal(map[string]string{"email": address, "password": first})
-	must(t, err)
-	r := loginCall(x, "/api/v1/session/login/begin", string(body), nil, nil)
-	if r.err != nil || r.status != 401 {
-		t.Fatalf("old password status = %d; want 401", r.status)
+	for _, rejected := range []string{first, passwords[1-winner]} {
+		body, err := json.Marshal(map[string]string{"email": address, "password": rejected})
+		must(t, err)
+		loginStatus(t, loginCall(x, "/api/v1/session/login/begin", string(body), nil, nil), 401)
 	}
-	checkSession(x, entryCredential(t, y, p, second), 200)
+	checkSession(x, entryCredential(t, y, p, passwords[winner]), 200)
 	// Move the fixture timestamps together past the resend interval to
 	// distinguish the independent budget from the normal resend gate.
 	_, err = f.pools[0].Exec(ctx, `UPDATE identity_email_tokens
 		SET issued_at=issued_at-interval '61 seconds', expires_at=expires_at-interval '61 seconds'
 		WHERE subject_id=$1 AND purpose=$2`, p.ID, string(emailtoken.Recovery))
 	must(t, err)
-	hold, err := f.pools[0].Begin(ctx)
-	must(t, err)
-	defer func() { _ = hold.Rollback(ctx) }()
-	var holder int32
-	must(t, hold.QueryRow(ctx, "SELECT pg_backend_pid() FROM identity_credentials WHERE id=$1 FOR UPDATE", p.ID).Scan(&holder))
+	hold, holder := holdLifecycleAccount(t, ctx, f.pools[0], p.ID)
 	request(x, recover, signupBody)
-	waitLifecycleIntakeBlocked(t, ctx, f.pools[0], c.Database.ApplicationName, holder)
+	waitLifecycleAccountBlocked(t, ctx, f.pools[0], holder, c.Database.ApplicationName)
 	short, stopClose := context.WithTimeout(ctx, 30*time.Millisecond)
 	err = apiA.Close(short)
 	stopClose()
@@ -207,23 +238,40 @@ func TestIsolatedEmailLifecycle(t *testing.T) {
 	}
 }
 
-func waitLifecycleIntakeBlocked(t *testing.T, ctx context.Context, pool *pgxpool.Pool, application string, holder int32) {
+func holdLifecycleAccount(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id string) (pgx.Tx, int32) {
+	t.Helper()
+	tx, err := pool.Begin(ctx)
+	must(t, err)
+	t.Cleanup(func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_ = tx.Rollback(cleanup)
+	})
+	var holder int32
+	must(t, tx.QueryRow(ctx, "SELECT pg_backend_pid() FROM identity_credentials WHERE id=$1 FOR UPDATE", id).Scan(&holder))
+	return tx, holder
+}
+
+func waitLifecycleAccountBlocked(t *testing.T, ctx context.Context, pool *pgxpool.Pool, holder int32, applications ...string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(ctx, 750*time.Millisecond)
 	defer cancel()
 	tick := time.NewTicker(5 * time.Millisecond)
 	defer tick.Stop()
 	for {
-		var blocked bool
-		must(t, pool.QueryRow(ctx, `SELECT EXISTS (
-			SELECT 1 FROM pg_stat_activity WHERE application_name=$1 AND $2=ANY(pg_blocking_pids(pid))
-		)`, application, holder).Scan(&blocked))
-		if blocked {
+		var blocked int
+		// A second waiter can be queued behind the first as well as the holder.
+		must(t, pool.QueryRow(ctx, `WITH RECURSIVE waiting(pid, application_name, blockers) AS MATERIALIZED (
+			SELECT pid, application_name, pg_blocking_pids(pid) FROM pg_stat_activity WHERE application_name=ANY($1)
+		), blocked(pid) AS (
+			SELECT $2::int UNION SELECT w.pid FROM waiting w JOIN blocked b ON b.pid=ANY(w.blockers)
+		) SELECT count(DISTINCT w.application_name) FROM waiting w JOIN blocked b USING (pid)`, applications, holder).Scan(&blocked))
+		if blocked == len(applications) {
 			return
 		}
 		select {
 		case <-ctx.Done():
-			t.Fatal("background issuance never reached the locked account")
+			t.Fatal("not all API transactions reached the locked account")
 		case <-tick.C:
 		}
 	}
