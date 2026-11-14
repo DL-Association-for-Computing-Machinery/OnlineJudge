@@ -124,6 +124,10 @@ func (s *Store) accept(ctx context.Context, subject, scope, key string, req subm
 			return submission.Receipt{}, false, err
 		}
 	}
+	return s.acceptInTx(ctx, tx, subject, scope, key, req, fingerprint)
+}
+
+func (s *Store) acceptInTx(ctx context.Context, tx pgx.Tx, subject, scope, key string, req submission.Request, fingerprint string) (submission.Receipt, bool, error) {
 	result, created, err := s.enqueue(ctx, submissiondb.New(tx), subject, scope, key, req, fingerprint)
 	if err != nil {
 		return submission.Receipt{}, false, err

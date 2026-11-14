@@ -2,6 +2,31 @@
 
 在本机隔离环境使用合成账号和临时依赖。实际判题、审核与发布证据见[验收导航](README.md)。
 
+### 单 API 多题训练
+
+先通过现有维护流程分别发布题目，并把封存题面保存到同一个受信对象根。独立训练实例使用 `published_training`，不配置 `private_drafts` 或旧的 `local_training_intake`；同时开启 `training_history` 和 `training_submission_detail`。仅接受回环监听、回环 HTTPS origin 和本机 Unix socket 数据库。示例中的版本后缀和 SHA-256 换成受信执行清单的值：
+
+```json
+{
+  "published_training": {
+    "material_root": "/absolute/path/to/sealed-statements",
+    "max_in_flight": 2,
+    "manifest_pins": [
+      { "version": "aplusb-<judge-sha256>", "sha256": "<transport-manifest-sha256>" },
+      { "version": "local-text-<judge-sha256>", "sha256": "<transport-manifest-sha256>" }
+    ]
+  },
+  "training_history": true,
+  "training_submission_detail": true
+}
+```
+
+两种本机提交模式默认接受 GNU++17、C17 和 GNU++20。Java 21 和 Python 3.14 继续分别由 `local_java21` 和 `local_python3` 开启；先在对应队列上准备支持这些语言的 Worker，并同步前端语言开关。
+
+上述片段并入正常 API 配置。材料 pin 最多十项；只能为已批准、已发布且版本和摘要完全匹配的题目提交。两个队列可在同一 API 上同时接收；各控制端和 Worker 继续使用各自的显式材料配置。若只有一个独占 Ubuntu 槽，可排空首个 Worker 并确认槽停止后启动另一个，API 不需要重启。浏览器专项 [multi-publication-training-qa.mjs](../../tests/browser/multi-publication-training-qa.mjs) 从同一账号提交 A+B 和并查集，回读原源码和两笔判定；使用现有 Playwright 参数，另传 `OJ_BROWSER_UNION_FIND_SOURCE`。夹具模式通过 `OJ_BROWSER_PUBLISHED_TRAINING_ROOT` 指定新建的题面根，读取 `/workspace/publication-pins.json`，并从 `/local-evidence` 和 `/local-text-evidence` 读取各自已验题证据；后者的准入文件应指向相应的挂载路径。
+
+2026-11-15 在本机 Ubuntu VM 用临时 PostgreSQL 和 Redis 联验：同一普通账号在浏览器提交 A+B 与并查集，两笔 GNU++17 提交先同时进入各自的材料队列，再由各自的真实 Worker 依次使用同一个断网沙箱槽，均判为 AC。核对了两条完成记录的 Worker 节点、材料版本和摘要；API 的 PID 和启动时间始终一致。本人可回读判定和原源码，其他账号无法读取；同题同键重试返回原回执，跨题复用请求键和提交过期发布版本均被拒绝。此轮复用既有验题证据，未重跑正式参考验证或并行 Worker。
+
 ### 本机已发布 A+B 浏览器联验
 
 在[专用 Ubuntu VM](isolated-checks.md#专用-ubuntu-vm-判题实验)内使用一次性 PostgreSQL、Redis 和 P4 的[本地执行准入](delivery-evidence/p4-trial-publication.md#mac-ubuntu-vm-本地完整流程)。普通 API 的 `local_training_intake: true` 要求同时开启 `training_history`、`training_submission_detail`、本地执行及题库；缺项拒绝启动。此开关默认关闭，仅用于回环 HTTPS 和本地 PostgreSQL Unix socket。

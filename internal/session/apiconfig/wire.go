@@ -1,37 +1,41 @@
 package apiconfig
 
-import "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
+import (
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
+	sessionruntime "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/runtime"
+)
 
 type document struct {
-	Version                  int                    `json:"version"`
-	Mode                     string                 `json:"mode"`
-	Namespace                string                 `json:"namespace"`
-	SecretsFile              string                 `json:"secrets_file"`
-	Origin                   string                 `json:"origin"`
-	LoginWindow              string                 `json:"login_window"`
-	StartupTimeout           string                 `json:"startup_timeout"`
-	HTTPTimeout              string                 `json:"http_timeout"`
-	Database                 *databaseWire          `json:"database"`
-	Redis                    *redisWire             `json:"redis"`
-	Password                 *passwordWire          `json:"password"`
-	LoginLimits              *limitsWire            `json:"login_limits"`
-	EmailLimits              *emailLimitsWire       `json:"email_limits"`
-	EmailConfirmation        *emailConfirmationWire `json:"email_confirmation"`
-	EmailIntake              *emailIntakeWire       `json:"email_intake"`
-	ProxyFingerprints        []string               `json:"proxy_fingerprints"`
-	TLS                      *Material              `json:"tls"`
-	Server                   *serverWire            `json:"server"`
-	PasswordChange           *passwordChangeWire    `json:"password_change"`
-	PrivateDrafts            *privateDraftsWire     `json:"private_drafts"`
-	TrainingHistory          bool                   `json:"training_history"`
-	TrainingSubmissionDetail bool                   `json:"training_submission_detail"`
-	LocalTrainingIntake      bool                   `json:"local_training_intake"`
-	LocalJava21              bool                   `json:"local_java21"`
-	LocalPython3             bool                   `json:"local_python3"`
-	SessionDevices           bool                   `json:"session_devices"`
-	SessionRotation          bool                   `json:"session_rotation"`
-	ManagementSessions       bool                   `json:"management_sessions"`
-	ManagementRoleChanges    bool                   `json:"management_role_changes"`
+	Version                  int                                     `json:"version"`
+	Mode                     string                                  `json:"mode"`
+	Namespace                string                                  `json:"namespace"`
+	SecretsFile              string                                  `json:"secrets_file"`
+	Origin                   string                                  `json:"origin"`
+	LoginWindow              string                                  `json:"login_window"`
+	StartupTimeout           string                                  `json:"startup_timeout"`
+	HTTPTimeout              string                                  `json:"http_timeout"`
+	Database                 *databaseWire                           `json:"database"`
+	Redis                    *redisWire                              `json:"redis"`
+	Password                 *passwordWire                           `json:"password"`
+	LoginLimits              *limitsWire                             `json:"login_limits"`
+	EmailLimits              *emailLimitsWire                        `json:"email_limits"`
+	EmailConfirmation        *emailConfirmationWire                  `json:"email_confirmation"`
+	EmailIntake              *emailIntakeWire                        `json:"email_intake"`
+	ProxyFingerprints        []string                                `json:"proxy_fingerprints"`
+	TLS                      *Material                               `json:"tls"`
+	Server                   *serverWire                             `json:"server"`
+	PasswordChange           *passwordChangeWire                     `json:"password_change"`
+	PrivateDrafts            *privateDraftsWire                      `json:"private_drafts"`
+	TrainingHistory          bool                                    `json:"training_history"`
+	TrainingSubmissionDetail bool                                    `json:"training_submission_detail"`
+	LocalTrainingIntake      bool                                    `json:"local_training_intake"`
+	PublishedTraining        *sessionruntime.PublishedTrainingConfig `json:"published_training"`
+	LocalJava21              bool                                    `json:"local_java21"`
+	LocalPython3             bool                                    `json:"local_python3"`
+	SessionDevices           bool                                    `json:"session_devices"`
+	SessionRotation          bool                                    `json:"session_rotation"`
+	ManagementSessions       bool                                    `json:"management_sessions"`
+	ManagementRoleChanges    bool                                    `json:"management_role_changes"`
 }
 
 type emailIntakeWire struct {

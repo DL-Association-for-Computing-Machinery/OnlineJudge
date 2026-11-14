@@ -4,7 +4,7 @@ info:
   version: 0.4.0
   description: >-
     普通会话 HTTPS 下的可选能力。列表和详情分别由 training_history 和 training_submission_detail 启用；
-    local_training_intake 仅为显式配置并已准入的本机执行队列启用提交及原键回执。
+    local_training_intake 为旧单队列模式；published_training 可让同一本机 API 为多份显式固定的已发布材料启用提交和原键回执。
     沿用普通会话的固定 Host、直连 TLS 或单跳 mTLS 代理。响应不缓存、不设置 Cookie。
 security:
   - ordinarySession: []

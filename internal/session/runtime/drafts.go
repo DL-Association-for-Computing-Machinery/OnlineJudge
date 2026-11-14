@@ -19,6 +19,7 @@ import (
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemvalidation"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/httptransport"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/session/redisstore"
+	submissionpg "github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/submission/postgres"
 )
 
 // PrivateDraftsConfig enables trusted snapshot imports, owner import receipts
@@ -84,7 +85,7 @@ func (c PrivateDraftsConfig) Validate() error {
 }
 
 type draftCapabilities struct {
-	localIntake httptransport.TrainingSubmit
+	localScope  publicationScope
 	importer    *problem.Importer
 	catalog     *httptransport.CatalogReader
 	references  *problemreference.Service
@@ -184,34 +185,20 @@ func openDrafts(ctx context.Context, c PrivateDraftsConfig, sessions *redisstore
 			return nil, nil, ErrStartup
 		}
 		if enableLocalIntake {
-			result.localIntake, err = localTrainingSubmit(ctx, pool, reviewer, admission)
+			_, version, _ := admission.Binding()
+			queue, err := submissionpg.New(pool, version, admission.Manifest())
 			if err != nil {
 				return nil, nil, ErrStartup
 			}
+			if err := queue.CheckRegisteredMaterial(ctx); err != nil {
+				return nil, nil, ErrStartup
+			}
+			result.localScope = legacyPublicationScope(admission)
 		}
 	}
 	if c.PublicCatalog {
-		result.catalog = &httptransport.CatalogReader{
-			List: func(ctx context.Context, after, query string) ([]httptransport.CatalogEntry, string, error) {
-				entries, next, err := reviewer.ListPublished(ctx, after, query)
-				if err != nil {
-					return nil, "", err
-				}
-				out := make([]httptransport.CatalogEntry, 0, len(entries))
-				for _, e := range entries {
-					out = append(out, httptransport.CatalogEntry{ID: e.ID, Version: e.Version, Title: e.Title})
-				}
-				return out, next, nil
-			},
-			Detail: func(ctx context.Context, id string) (problem.PublicationStatement, error) {
-				release, err := importer.AcquireMaterialSlot()
-				if err != nil {
-					return problem.PublicationStatement{}, err
-				}
-				defer release()
-				return reviewer.ReadPublished(ctx, materials, id)
-			},
-		}
+		reader := catalogReader(pool, c.hasLocalExecution(), materials, importer.AcquireMaterialSlot)
+		result.catalog = &reader
 	}
 	if c.ReviewAccess {
 		result.evidence, err = problemreference.NewReviewAccess(sessions, reviewer)
