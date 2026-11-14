@@ -8,6 +8,7 @@ assert.match(ready.url, /^https:\/\/127\.0\.0\.1:\d+$/)
 const { chromium } = await import(pathToFileURL(process.env.OJ_PLAYWRIGHT_MODULE))
 const browser = await chromium.launch({ executablePath: process.env.OJ_CHROMIUM_EXECUTABLE })
 const output = process.env.OJ_BROWSER_QA_OUTPUT
+const decimal = process.env.OJ_BROWSER_DECIMAL_SPAN === '1'
 const endpoint = ready.url + '/api/v1/training/submissions'
 const title = process.env.OJ_BROWSER_TRAINING_TITLE ?? '并查集'
 const ac = `#include <iostream>
@@ -27,6 +28,20 @@ int main() {
 `
 const wa = 'int main() {}\n'
 const ole = "#include <iostream>\nint main(){for(int i=0;i<5000;i++) std::cout << '1';}\n"
+const decimalSpan = body => `#include <algorithm>
+#include <iostream>
+int main(){int n,x;std::cin>>n>>x;int a=x,b=x;while(--n){std::cin>>x;a=std::min(a,x);b=std::max(b,x);}int v=b-a;${body}}
+`
+const decimalVariants = [
+  [decimalSpan('std::cout<<"range "<<v<<"e-1\\n";'), 'AC'],
+  [decimalSpan('std::cout<<"range "<<v*10+1<<"e-2\\n";'), 'AC'],
+  [decimalSpan('std::cout<<"range "<<(v>=100?v*1000+v:v*1000)<<"e-4\\n";'), 'AC'],
+  [decimalSpan('std::cout<<"range "<<(v>=100?v*1000+v+1:v*1000)<<"e-4\\n";'), 'WA'],
+  [decimalSpan('std::cout<<"range "<<v*100+11<<"e-3\\n";'), 'WA'],
+  [decimalSpan('std::cout<<"RANGE NaN\\n";'), 'WA'],
+  [decimalSpan('for(int i=0;i<400000;i++)std::cout<<"1";'), 'OLE'],
+  [wa, 'WA'],
+]
 
 async function login(context, email) {
   const page = await context.newPage()
@@ -82,13 +97,16 @@ try {
   unblock()
   await other.getByText('没有可显示的训练提交。', { exact: true }).waitFor()
   const sourceAC = process.env.OJ_BROWSER_TRAINING_AC_FILE ? await readFile(process.env.OJ_BROWSER_TRAINING_AC_FILE, 'utf8') : ac
-  const variants = [[sourceAC, 'AC']]
+  const variants = decimal ? decimalVariants : [[sourceAC, 'AC']]
   const spj = process.env.OJ_BROWSER_SPJ_ALTERNATE_FILE
   if (spj) {
     variants.push([await readFile(process.env.OJ_BROWSER_SPJ_ALTERNATE_FILE, 'utf8'), 'AC'])
   }
-  variants.push([wa, 'WA'])
-  if (!spj) variants.push([ole, 'OLE'])
+  assert(!spj || !decimal)
+  if (!decimal) {
+    variants.push([wa, 'WA'])
+    if (!spj) variants.push([ole, 'OLE'])
+  }
   for (const [source, verdict] of variants) {
     if (records.length) await page.goto(problem)
     await page.getByRole('heading', { name: title, exact: true }).waitFor()
@@ -123,7 +141,7 @@ try {
   await logout(page)
   await writeFile(join(output, 'local-text-qa.json'), JSON.stringify({ records, separateAccount: true, wrongVersionRejected: true,
     keyboardFocus: true, sampleCopy: true, historyFailureLoadingEmpty: true, narrowViewport: true }) + '\n')
-  console.log('PASS published ' + (spj ? 'SPJ → actual Worker AC, AC and WA' : 'local text → actual Worker AC, WA and OLE') + ' → owner only')
+  console.log('PASS published ' + (spj ? 'SPJ' : decimal ? 'decimal' : 'local text') + ' → actual Worker → owner only: ' + records.map(row => row.verdict).join(', '))
 } finally {
   await browser.close()
 }

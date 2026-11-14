@@ -320,6 +320,15 @@ func (p *Prepared) ReadLocalTextQualityFile(ctx context.Context, name string, ma
 
 // DeclaresLocalSPJ reports whether the immutable package includes a checker.
 func (p *Prepared) DeclaresLocalSPJ() (bool, error) {
+	return p.declaresQualityFile("checker.cpp")
+}
+
+// DeclaresLocalDecimal reports whether the immutable package enables tolerance.
+func (p *Prepared) DeclaresLocalDecimal() (bool, error) {
+	return p.declaresQualityFile("decimal.json")
+}
+
+func (p *Prepared) declaresQualityFile(name string) (bool, error) {
 	if p == nil {
 		return false, ErrInvalid
 	}
@@ -327,7 +336,7 @@ func (p *Prepared) DeclaresLocalSPJ() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	_, present := d.Provenance.OriginalFiles["source/"+d.Provenance.SourcePath+"/quality/checker.cpp"]
+	_, present := d.Provenance.OriginalFiles["source/"+d.Provenance.SourcePath+"/quality/"+name]
 	return present, nil
 }
 

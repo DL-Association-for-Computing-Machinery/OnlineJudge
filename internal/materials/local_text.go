@@ -41,9 +41,11 @@ func ParseLocalText(raw []byte, expected string) (TextTransportManifest, error) 
 func (m TextTransportManifest) validLocalChecker() bool {
 	switch m.Checker {
 	case judging.LibraryCheckerTextVersion:
-		return m.CheckerArtifact == "" && (judging.TextLimits{Bytes: APlusBOutputBytes, TokenBytes: m.TokenBytes}).Valid()
+		return m.Decimal == nil && m.CheckerArtifact == "" && (judging.TextLimits{Bytes: APlusBOutputBytes, TokenBytes: m.TokenBytes}).Valid()
+	case judging.DecimalVersion:
+		return m.Decimal != nil && m.Decimal.Valid() && m.TokenBytes == 0 && m.CheckerArtifact == ""
 	case LocalSPJChecker:
-		return m.TokenBytes == 0 && digestPattern.MatchString(m.CheckerArtifact) && len(m.Tests) <= LocalSPJPoints
+		return m.Decimal == nil && m.TokenBytes == 0 && digestPattern.MatchString(m.CheckerArtifact) && len(m.Tests) <= LocalSPJPoints
 	default:
 		return false
 	}

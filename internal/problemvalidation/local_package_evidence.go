@@ -54,7 +54,7 @@ func verifyPackageQuality(ctx context.Context, p *problem.Prepared, plan problem
 	expected := q.report(plan)
 	if err != nil || !bytes.Equal(raw, append(encoded, '\n')) || !r.StopConfirmed || r.Schema != expected.Schema ||
 		r.ImportRevision != expected.ImportRevision || r.Plan != expected.Plan || r.Profile != expected.Profile ||
-		r.Config != expected.Config || r.Inputs != expected.Inputs || r.SamplePoints != expected.SamplePoints ||
+		r.Config != expected.Config || r.DecimalBinding != expected.DecimalBinding || r.Inputs != expected.Inputs || r.SamplePoints != expected.SamplePoints ||
 		r.Controls != expected.Controls || r.OracleCases != expected.OracleCases || r.Criteria != expected.Criteria || len(r.Wrong) != 4 {
 		return out, ErrCheckerTrialEvidence
 	}

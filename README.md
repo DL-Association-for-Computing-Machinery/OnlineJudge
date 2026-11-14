@@ -211,6 +211,8 @@ OJ_SANDBOX_EXPERIMENT=1 worker validate-package-quality \
 
 合成验收题包可用 `python3 tests/fixtures/local-text/build-span-fixture.py "$NEW_PRIVATE_DIRECTORY"` 生成。它只供隔离测试，源锁沿用现有包格式，不代表上游发布。审核与训练浏览器脚本见 `tests/browser/local-package-review-qa.mjs` 和 `tests/browser/local-text-training-qa.mjs`。
 
+本机浮点题在完整包审核中用 `quality/decimal.json` 显式开启，不与 SPJ 混用。配置为单行 JSON 加换行，键按字母排序，例如 `{"absolute":"0.01","relative":"0.001","text":["RANGE"]}`。容差是十进制字符串，至少一项；`text` 是排序后的标准答案文字标签，可省略，`case_sensitive:true` 启用 ASCII 大小写敏感。参考试跑和独立标程对照仍要求文本一致，四类错解用实际浮点规则检查。用合成题包脚本的 `--decimal` 可复测；比较规则见[判题设计](docs/architecture/judging-design.md#3-显式浮点容差)。
+
 本机 Testlib SPJ 在同一审核流程中增加检查器证据和制品 pin。带 `quality/checker.cpp` 的题包必须附 SPJ 报告才可准入；专用 Worker 此时使用组合镜像和 `OJ_LOCAL_SPJ_CHECKER_FILE`。用上文的浏览器专项复测数列极差时，设 `OJ_BROWSER_SPJ_SPAN=1`、`OJ_BROWSER_TRAINING_LANGUAGE=gnu++17`；另可用 `OJ_C17_PHASE=budget` 验证单个 Worker 连续判四份完整提交。预算与故障接管实测见 [P7 Testlib SPJ](docs/delivery-evidence/p7-testlib-spj.md)。
 
 ### A+B 租约链路联验

@@ -207,6 +207,9 @@ func (r *Runner) Judge(ctx context.Context, d materials.Descriptor, blobs map[st
 }
 
 func (m manifest) compare(answer, output []byte) (bool, error) {
+	if m.decimal != nil {
+		return judging.CompareDecimal(answer, output, *m.decimal)
+	}
 	if m.tokenBytes == 0 {
 		return judging.CompareText(answer, output, m.CaseSensitive)
 	}

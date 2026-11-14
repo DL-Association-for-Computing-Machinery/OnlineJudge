@@ -28,6 +28,7 @@ type manifest struct {
 	Environment   experiment.ExecutionProfile `json:"execution_environment"`
 	Tests         []test                      `json:"tests"`
 	tokenBytes    int
+	decimal       *judging.DecimalPolicy
 }
 type test struct {
 	ID     string `json:"id"`
@@ -53,7 +54,7 @@ func prepare(ctx context.Context, d materials.Descriptor, blobs map[string][]byt
 		if err != nil {
 			return m, bad
 		}
-		m = manifest{Version: p.Version, Language: p.Language, Origin: p.Origin, Checker: p.Checker, Environment: fixture.ProfileForLanguage(d.Language), tokenBytes: p.TokenBytes}
+		m = manifest{Version: p.Version, Language: p.Language, Origin: p.Origin, Checker: p.Checker, Environment: fixture.ProfileForLanguage(d.Language), tokenBytes: p.TokenBytes, decimal: p.Decimal}
 		for _, point := range p.Tests {
 			m.Tests = append(m.Tests, test{ID: point.ID, Input: point.Input, Answer: point.Answer})
 		}
@@ -87,6 +88,10 @@ func prepare(ctx context.Context, d materials.Descriptor, blobs map[string][]byt
 		// Corrupt later reference material must not be hidden by an earlier WA.
 		if m.Checker == materials.LocalSPJChecker {
 			if len(blobs[t.Input]) > experiment.SPJObjectBytes || len(blobs[t.Answer]) > experiment.SPJObjectBytes {
+				return m, bad
+			}
+		} else if m.decimal != nil {
+			if judging.ValidateDecimalReference(blobs[t.Answer], *m.decimal) != nil {
 				return m, bad
 			}
 		} else if m.tokenBytes != 0 {
