@@ -121,7 +121,8 @@ class MixedLoadTests(unittest.TestCase):
         first = json.loads(result.stdout)["rounds"][0]["independent_acceptance"]
         self.assertEqual(first, dict(sha256=hashlib.sha256(json.dumps(exports[0]).encode()).hexdigest(),
                                      accepted=90, unreconciled_database_receipts=0,
-                                     client_receipts_missing_from_database=0, material_mismatches=0))
+                                     client_receipts_missing_from_database=0, material_mismatches=0,
+                                     acceptance_time_mismatches=0))
         result = self.assess(doc, exports[::-1])
         self.assertEqual(result.returncode, 2)
         self.assertEqual(result.stdout, "")
@@ -139,6 +140,35 @@ class MixedLoadTests(unittest.TestCase):
             self.assertEqual(row["failures"], ["independent_acceptance_reconciliation"])
             self.assertEqual(row["independent_acceptance"][field], 1)
         self.assertNotIn("committed-without-client-reply", result.stdout)
+
+    def test_independent_receipt_must_fit_client_and_queue_timeline(self):
+        doc = record()
+        doc["origin_scope"] = "trial"
+        exports = [acceptance(round_) for round_ in doc["rounds"]]
+        for index, delta in enumerate((-1, 1001, 21)):
+            round_ = doc["rounds"][index]
+            post = round_["submissions"][1]
+            if index == 1:
+                post["queue_ms"] = 2000
+            exports[index]["accepted"][1]["accepted_at"] = utc(
+                round_["run_started_utc_ms"] + post["start_ms"] + delta)
+        result = self.assess(doc, exports)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        for round_ in json.loads(result.stdout)["rounds"]:
+            self.assertEqual(round_["failures"], ["independent_acceptance_reconciliation"])
+            self.assertEqual(round_["independent_acceptance"]["acceptance_time_mismatches"], 1)
+
+    def test_independent_receipt_in_last_millisecond_of_client_window_passes(self):
+        doc = record()
+        doc["origin_scope"] = "trial"
+        exports = [acceptance(round_) for round_ in doc["rounds"]]
+        for round_, export in zip(doc["rounds"], exports):
+            post = round_["submissions"][1]
+            post["queue_ms"] = post["confirmation_ms"]
+            boundary = round_["run_started_utc_ms"] + post["start_ms"] + post["confirmation_ms"]
+            export["accepted"][1]["accepted_at"] = utc(boundary).removesuffix("Z") + "999Z"
+        result = self.assess(doc, exports)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_exact_window_and_duplicate_receipt_are_checked(self):
         doc = record()

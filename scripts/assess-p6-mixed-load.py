@@ -51,6 +51,7 @@ def assess_round(record, versions, independent=None):
 
     bursts = [set(), set(), set()]
     requests, accepted_versions, accepted = set(), {}, {}
+    acceptance_windows = {}
     terminal_ms, queue_ms, confirmation_ms = [], [], []
     counts = {tier: 0 for tier in sorted(TIERS)}
     by_version = dict.fromkeys(versions, 0)
@@ -77,6 +78,7 @@ def assess_round(record, versions, independent=None):
             failures.append("duplicate_submission")
         accepted_versions[ident] = version
         accepted[key] = ident
+        acceptance_windows[ident] = (start, start + elapsed)
         confirmation_ms.append(elapsed)
         if row["terminal_ms"] is None:
             if row["verdict"] is not None or row["queue_ms"] is not None:
@@ -84,6 +86,7 @@ def assess_round(record, versions, independent=None):
             continue
         terminal = number(row["terminal_ms"], 0, WINDOW)
         queue = number(row["queue_ms"], 0, terminal)
+        acceptance_windows[ident] = (start, start + min(elapsed, queue))
         queue_ms.append(queue)
         if row["verdict"] not in ("AC", "WA", "CE", "RE", "TLE", "MLE", "OLE", "SE"):
             raise ValueError("unsupported verdict")
@@ -103,15 +106,21 @@ def assess_round(record, versions, independent=None):
     if independent is not None:
         receipts, digest = independent
         database = {ident: receipt.version for ident, receipt in receipts.items()}
+        common = accepted_versions.keys() & database.keys()
+        time_mismatches = sum(
+            not acceptance_windows[ident][0] <= receipts[ident].offset_ms <= acceptance_windows[ident][1]
+            for ident in common
+        )
         evidence = {
             "sha256": digest,
             "accepted": len(database),
             "unreconciled_database_receipts": len(database.keys() - accepted_versions.keys()),
             "client_receipts_missing_from_database": len(accepted_versions.keys() - database.keys()),
             "material_mismatches": sum(accepted_versions[ident] != database[ident]
-                                      for ident in accepted_versions.keys() & database.keys()),
+                                      for ident in common),
+            "acceptance_time_mismatches": time_mismatches,
         }
-        if database != accepted_versions:
+        if database != accepted_versions or time_mismatches:
             failures.append("independent_acceptance_reconciliation")
     if any(len(burst) != 30 for burst in bursts) or not all(counts.values()):
         failures.append("submission_schedule_or_material_mix")
