@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { useCurrentAccount } from '../account/context'
 import { subscribePrivateInvalidation } from '../account/privateInvalidation'
-import { readAuthorReviewReturn, requestReviewIntake } from '../services/draftManagement'
+import { readAuthorReviewReturn, readAuthorSolution, requestReviewIntake } from '../services/draftManagement'
 import { listReviewIntakes, type SavedReviewIntake } from './reviewIntakeJournal'
 
 const pageSize = 20
-type Page = { entries: SavedReviewIntake[]; next: string; notice: string; busy: boolean; returned?: { id: string; reason: string } }
+type Preview = { entry: SavedReviewIntake; view: Awaited<ReturnType<typeof readAuthorSolution>> }
+type Page = {
+  entries: SavedReviewIntake[]; next: string; notice: string; busy: boolean
+  returned?: { id: string; reason: string }; preview?: Preview
+}
 const empty: Page = { entries: [], next: '', notice: '', busy: false }
 
 export function ReviewIntakeHistory({ draft, version }: { draft: string; version: string }) {
@@ -29,7 +33,7 @@ export function ReviewIntakeHistory({ draft, version }: { draft: string; version
     }
   }, [account])
 
-  async function run(action: { after: string } | { entry: SavedReviewIntake; operation: 'receipt' | 'return' }) {
+  async function run(action: { after: string } | { entry: SavedReviewIntake; operation: 'receipt' | 'return' | 'solution' }) {
     const state = account.getSnapshot()
     const session = state.session
     if (active.current || state.busy || state.status !== 'authenticated' || !session) return
@@ -39,7 +43,8 @@ export function ReviewIntakeHistory({ draft, version }: { draft: string; version
     const abort = new AbortController()
     active.current = abort
     const current = () => active.current === abort && validSession()
-    setPage({ ...page, returned: undefined, notice: '', busy: true })
+    const base = { ...page, returned: undefined, preview: undefined, busy: false }
+    setPage({ ...base, notice: '', busy: true })
     try {
       if ('after' in action) {
         const rows = await listReviewIntakes(session.subject_id, draft, action.after)
@@ -53,16 +58,21 @@ export function ReviewIntakeHistory({ draft, version }: { draft: string; version
         if (intent.draft_id !== draft || action.entry.version !== version) throw new Error('Review journal does not match draft')
         if (action.operation === 'return') {
           const returned = await readAuthorReviewReturn(session.subject_id, intent, version, abort.signal)
-          if (current()) setPage({ ...page, returned, notice: `送审 ID：${returned.id}。已退回。`, busy: false })
+          if (current()) setPage({ ...base, returned, notice: `送审 ID：${returned.id}。已退回。` })
+        } else if (action.operation === 'solution') {
+          const view = await readAuthorSolution(session.subject_id, intent, version, abort.signal)
+          if (current()) setPage({ ...base, preview: { entry: action.entry, view }, notice: '已读取此报告对应的冻结标程。' })
         } else {
           const id = await requestReviewIntake('read', session.subject_id, intent, version, abort.signal)
-          if (current()) setPage({ ...page, returned: undefined, notice: `送审 ID：${id}。此回执仅表示材料已送审。`, busy: false })
+          if (current()) setPage({ ...base, notice: `送审 ID：${id}。此回执仅表示材料已送审。` })
         }
       }
     } catch {
-      if (current()) setPage({ ...page, returned: undefined, busy: false, notice: 'operation' in action && action.operation === 'return'
-        ? '未能核实这份送审的退回记录。可能尚无退回，或服务暂不可用。'
-        : '未能核实原送审记录。请保留本机记录，暂时查不到并不表示未送审。' })
+      if (current()) setPage({ ...base, notice: 'operation' in action && action.operation === 'solution'
+        ? '无法核实此报告的冻结标程。'
+        : 'operation' in action && action.operation === 'return'
+          ? '未能核实这份送审的退回记录。可能尚无退回，或服务暂不可用。'
+          : '未能核实原送审记录。请保留本机记录，暂时查不到并不表示未送审。' })
     } finally {
       if (active.current === abort) {
         if (!current()) setPage(empty)
@@ -82,11 +92,22 @@ export function ReviewIntakeHistory({ draft, version }: { draft: string; version
         {' '}
         <button className="button button-outline" type="button" disabled={page.busy}
           onClick={() => void run({ entry, operation: 'return' })}>查看该报告的退回理由</button>
+        {' '}
+        <button className="button button-outline" type="button" disabled={page.busy}
+          onClick={() => void run({ entry, operation: 'solution' })}>查看该报告的冻结标程</button>
       </li>)}
     </ul>}
     {page.next && <button className="button button-outline" type="button" disabled={page.busy}
       onClick={() => void run({ after: page.next })}>下一页送审记录</button>}
     {page.notice && <p role="status">{page.notice}</p>}
     {page.returned && <p className="review-return-reason">退回理由：{page.returned.reason}</p>}
+    {page.preview && <section className="reference-result" aria-labelledby="author-solution-title">
+      <h3 id="author-solution-title">冻结标程</h3>
+      <p>送审 ID：<code>{page.preview.view.id}</code></p>
+      <div className="sample"><pre><code>{page.preview.view.solution.source}</code></pre></div>
+      {page.preview.view.solution.dependencies?.map(dep => <details key={dep.name} className="sample">
+        <summary>{dep.name}</summary><pre><code>{dep.source}</code></pre>
+      </details>)}
+    </section>}
   </section>
 }
