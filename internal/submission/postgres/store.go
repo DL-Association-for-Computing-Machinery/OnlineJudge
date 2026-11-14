@@ -99,6 +99,9 @@ func (s *Store) CheckRegisteredMaterial(ctx context.Context) error {
 // Accept atomically persists source and task, or returns the original receipt.
 // A commit error remains ambiguous: callers must query/retry with the same key.
 func (s *Store) Accept(ctx context.Context, subject, scope, key string, req submission.Request) (submission.Receipt, bool, error) {
+	if req.Language != submission.LanguageGNUCPP17 {
+		return submission.Receipt{}, false, submission.ErrInvalid
+	}
 	return s.accept(ctx, subject, scope, key, req, submission.Digest(req), nil)
 }
 

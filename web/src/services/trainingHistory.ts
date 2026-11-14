@@ -6,10 +6,13 @@ const verdicts = ['AC', 'WA', 'CE', 'RE', 'TLE', 'MLE', 'OLE', 'SE']
 const maxSourceBytes = 65_536
 const encoder = new TextEncoder()
 
+export type TrainingLanguage = 'gnu++17' | 'c17'
+export const trainingLanguageLabel: Record<TrainingLanguage, string> = { 'gnu++17': 'GNU++17', c17: 'C17' }
+
 export interface SubmissionSummary {
   id: string
   material_version: string
-  language: 'gnu++17'
+  language: TrainingLanguage
   created_at: string
   state: 'queued' | 'running' | 'finished' | 'failed'
   verdict: string | null
@@ -49,7 +52,7 @@ export function decodeHistoryPage(value: unknown): HistoryPage {
 export function decodeSummary(row: unknown): SubmissionSummary {
   if (!isRecord(row) || Object.keys(row).length !== 6 || typeof row.id !== 'string' || !idPattern.test(row.id) ||
     typeof row.material_version !== 'string' || row.material_version === '' || encoder.encode(row.material_version).length > 128 ||
-    row.language !== 'gnu++17' || typeof row.created_at !== 'string' || !timePattern.test(row.created_at) ||
+    (row.language !== 'gnu++17' && row.language !== 'c17') || typeof row.created_at !== 'string' || !timePattern.test(row.created_at) ||
     !Number.isFinite(Date.parse(row.created_at)) ||
     (row.state === 'finished' ? typeof row.verdict !== 'string' || !verdicts.includes(row.verdict) :
       (row.state !== 'queued' && row.state !== 'running' && row.state !== 'failed') || row.verdict !== null)) throw new HistoryError()

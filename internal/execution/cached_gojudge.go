@@ -26,6 +26,7 @@ type CachedGoJudge struct {
 	limits                     experiment.ReferenceFilesProfile
 	runtime                    experiment.ExecutionProfile
 	reference                  bool
+	c17                        bool
 	busy                       atomic.Bool
 	verified, compiled, failed bool
 	executable                 string
@@ -68,7 +69,11 @@ func NewReferenceGoJudgeForTier(transport http.RoundTripper, verify func(context
 func NewAPlusBCacheFactory(transport http.RoundTripper, verify func(context.Context, experiment.ExecutionProfile) error, files FileTransport, fixture experiment.WorkerFixture) func() *CachedGoJudge {
 	tier := fixture.APlusBTier()
 	if tier == experiment.ReferenceSmall {
-		return func() *CachedGoJudge { return NewReferenceGoJudge(transport, verify, files) }
+		return func() *CachedGoJudge {
+			g := NewReferenceGoJudge(transport, verify, files)
+			g.c17 = true
+			return g
+		}
 	}
 	if tier != experiment.ReferenceAPlusBUbuntu {
 		return nil
@@ -76,6 +81,7 @@ func NewAPlusBCacheFactory(transport http.RoundTripper, verify func(context.Cont
 	return func() *CachedGoJudge {
 		// The tier has been admitted by the fixed fixture parser.
 		g, _ := NewReferenceGoJudgeForTier(transport, verify, files, tier)
+		g.c17 = true
 		return g
 	}
 }
@@ -97,7 +103,7 @@ func (g *CachedGoJudge) Verify(ctx context.Context, p experiment.ExecutionProfil
 		return tagFailure(err, "verify", "environment", "")
 	}
 	defer func() { err = g.finish(ctx, err) }()
-	if g.verified || g.files == nil || !reflect.DeepEqual(p, g.runtime) {
+	if g.verified || g.files == nil || !(reflect.DeepEqual(p, g.runtime) || g.c17 && reflect.DeepEqual(p, experiment.C17Profile(g.runtime))) {
 		return failureError("verify", "environment", "invalid_evidence", "unsupported cached sandbox profile")
 	}
 	if err = g.step(0, false); err != nil {
@@ -109,6 +115,7 @@ func (g *CachedGoJudge) Verify(ctx context.Context, p experiment.ExecutionProfil
 	if err = g.control.Verify(ctx, p); err != nil {
 		return tagFailure(cachedError(ctx, "cached sandbox verification failed", err), "verify", "environment", "")
 	}
+	g.runtime = p
 	g.verified = true
 	return nil
 }

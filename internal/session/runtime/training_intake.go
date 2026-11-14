@@ -23,8 +23,8 @@ func localTrainingSubmit(ctx context.Context, pool *pgxpool.Pool, reviews *refer
 	if err := queue.CheckRegisteredMaterial(ctx); err != nil {
 		return nil, err
 	}
-	return func(ctx context.Context, actor identity.TrainingActor, key, id, version, source string) (submission.Receipt, error) {
-		receipt, _, err := queue.AcceptPublishedTraining(ctx, actor, key, id, version, source, func(ctx context.Context, tx pgx.Tx) error {
+	return func(ctx context.Context, actor identity.TrainingActor, key, id, version, language, source string) (submission.Receipt, error) {
+		receipt, _, err := queue.AcceptPublishedTraining(ctx, actor, key, id, version, language, source, func(ctx context.Context, tx pgx.Tx) error {
 			return reviews.AllowLocalTraining(ctx, tx, id, version)
 		})
 		return receipt, err

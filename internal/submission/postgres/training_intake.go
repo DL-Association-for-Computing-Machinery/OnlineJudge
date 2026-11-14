@@ -19,7 +19,7 @@ import (
 // The caller must authorize the selected version before calling; fixture
 // registration is not publication. Use only the ordinary identity database.
 func (s *Store) AcceptTraining(ctx context.Context, actor identity.TrainingActor, key, language, source string) (submission.Receipt, bool, error) {
-	if s == nil || s.pool == nil || ctx == nil || !actor.Valid() {
+	if s == nil || s.pool == nil || ctx == nil || !actor.Valid() || language != submission.LanguageGNUCPP17 {
 		return submission.Receipt{}, false, submission.ErrInvalid
 	}
 	req := submission.Request{MaterialVersion: s.version, Language: language, Source: source}
@@ -29,11 +29,11 @@ func (s *Store) AcceptTraining(ctx context.Context, actor identity.TrainingActor
 
 // AcceptPublishedTraining binds a key to the displayed publication as well as
 // the immutable material. The supplied authorization uses the same transaction.
-func (s *Store) AcceptPublishedTraining(ctx context.Context, actor identity.TrainingActor, key, problemID, version, source string, allow func(context.Context, pgx.Tx) error) (submission.Receipt, bool, error) {
+func (s *Store) AcceptPublishedTraining(ctx context.Context, actor identity.TrainingActor, key, problemID, version, language, source string, allow func(context.Context, pgx.Tx) error) (submission.Receipt, bool, error) {
 	if s == nil || s.pool == nil || ctx == nil || !actor.Valid() || allow == nil {
 		return submission.Receipt{}, false, submission.ErrInvalid
 	}
-	req := submission.Request{MaterialVersion: s.version, Language: "gnu++17", Source: source}
+	req := submission.Request{MaterialVersion: s.version, Language: language, Source: source}
 	sum := sha256.Sum256([]byte("published-training\x00" + problemID + "\x00" + version + "\x00" + submission.Digest(req)))
 	return s.accept(ctx, actor.SubjectID, submission.PersonalTrainingScope, key, req, hex.EncodeToString(sum[:]), func(ctx context.Context, tx pgx.Tx) error {
 		if err := identitypg.LockTrainingAccount(ctx, tx, actor); err != nil {

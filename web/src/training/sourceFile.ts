@@ -1,3 +1,5 @@
+import type { TrainingLanguage } from '../services/trainingHistory'
+
 export const trainingSourceLimit = 65_536
 const encoder = new TextEncoder()
 
@@ -6,8 +8,9 @@ export function validTrainingSource(source: string) {
     encoder.encode(source).length <= trainingSourceLimit
 }
 
-export async function readTrainingSource(file: File) {
-  if (!/\.(cpp|cc|cxx)$/i.test(file.name)) throw new Error('请选择 .cpp、.cc 或 .cxx 文件。')
+export async function readTrainingSource(file: File, language: TrainingLanguage = 'gnu++17') {
+  if (language === 'c17' && !/\.c$/i.test(file.name)) throw new Error('请选择 .c 文件。')
+  if (language !== 'c17' && !/\.(cpp|cc|cxx)$/i.test(file.name)) throw new Error('请选择 .cpp、.cc 或 .cxx 文件。')
   if (file.size > trainingSourceLimit) throw new Error('源文件不能超过 64 KiB。')
   let source: string
   try {

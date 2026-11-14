@@ -41,7 +41,7 @@ func prepare(ctx context.Context, d materials.Descriptor, blobs map[string][]byt
 	var m manifest
 	bad := errors.New("unsupported or corrupt execution material")
 	if len(d.Manifest) > 16384 || len(d.Source) == 0 || len(d.Source) > submission.MaxSourceBytes || !utf8.ValidString(d.Source) || strings.ContainsRune(d.Source, 0) ||
-		d.Version != fixture.Version() || d.Language != "gnu++17" || !bytes.Equal(d.Manifest, fixture.Manifest()) || digest(d.Manifest) != d.ManifestSHA256 || digest([]byte(d.Source)) != d.SourceSHA256 {
+		d.Version != fixture.Version() || !fixture.SupportsLanguage(d.Language) || !bytes.Equal(d.Manifest, fixture.Manifest()) || digest(d.Manifest) != d.ManifestSHA256 || digest([]byte(d.Source)) != d.SourceSHA256 {
 		return m, bad
 	}
 	if fixture.UsesCachedText() {
@@ -53,7 +53,7 @@ func prepare(ctx context.Context, d materials.Descriptor, blobs map[string][]byt
 		if err != nil {
 			return m, bad
 		}
-		m = manifest{Version: p.Version, Language: p.Language, Origin: p.Origin, Environment: fixture.Profile(), tokenBytes: p.TokenBytes}
+		m = manifest{Version: p.Version, Language: p.Language, Origin: p.Origin, Environment: fixture.ProfileForLanguage(d.Language), tokenBytes: p.TokenBytes}
 		for _, point := range p.Tests {
 			m.Tests = append(m.Tests, test{ID: point.ID, Input: point.Input, Answer: point.Answer})
 		}

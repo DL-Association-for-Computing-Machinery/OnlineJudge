@@ -26,7 +26,8 @@ func (g *CachedGoJudge) prepareCompilation(source string, files []SourceFile, mu
 		if g.compilationEntry != "" || int64(len(source)) > g.limits.SourceBytes {
 			return nil, "", false
 		}
-		return []SourceFile{{Name: "main.cpp", Data: []byte(source)}}, "main.cpp", true
+		name := experiment.SingleSourceName(g.runtime)
+		return []SourceFile{{Name: name, Data: []byte(source)}}, name, true
 	}
 	if !g.reference || g.compilationEntry == "" || len(files) > 5 {
 		return nil, "", false

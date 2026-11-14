@@ -139,7 +139,8 @@ func (h *Host) Verify(ctx context.Context, p experiment.ExecutionProfile) error 
 	if err != nil {
 		return err
 	}
-	if !reflect.DeepEqual(p, want) {
+	textRuntime := h.fixture.UsesCachedText() || h.tier == experiment.ReferenceSmall || h.tier == experiment.ReferenceAPlusBUbuntu
+	if !(reflect.DeepEqual(p, want) || textRuntime && reflect.DeepEqual(p, experiment.C17Profile(want))) {
 		return errors.New("unsupported host profile")
 	}
 	s, err := h.inspect(ctx, h.id)
