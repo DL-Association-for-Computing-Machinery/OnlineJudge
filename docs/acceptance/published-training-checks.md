@@ -47,6 +47,8 @@ OJ_BROWSER_QA_INFO="$FIXTURE_READY_JSON" OJ_BROWSER_QA_OUTPUT="$QA_DIRECTORY" \
 
 正常退出用原排空流程。若进程意外退出并留隔离标记，先排空另一个 Worker，确认旧宿主控制操作全部结束，再用该槽的 `OJ_UBUNTU_TEXT_DUAL_SLOT` 和历史完整容器 ID 执行 `worker recover-aplusb-ubuntu`。恢复命令独占本机执行锁；原容器 ID 或停止状态无法确认时保留隔离。
 
+专用 Ubuntu 文本判题槽按判题尝试计宿主文件传输预算（128 MiB、512 次）。Worker 串行完成并清理前一笔后才能重置账本，活动或已关闭的槽拒绝重置。连续完整判题和双队列证据见 [P6 本机复验](delivery-evidence/p6-trial-acceptance.md#连续完整判题修复复验)。
+
 同一夹具、参数和已发布题可将脚本替换为 `tests/browser/published-training-drafts-qa.mjs`，验证本地草稿、冲突及退出。该专项不发判题请求，不占用 Worker 槽。
 
 ### 本机文本题验题与提交

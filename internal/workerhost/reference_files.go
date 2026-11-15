@@ -14,11 +14,11 @@ import (
 )
 
 // ResetFileAttemptBudget starts accounting for a new attempt in an exclusively
-// owned slot. The caller must have finished cleanup for the previous attempt.
+// owned Ubuntu text slot. The caller must have finished cleanup successfully.
 func (h *Host) ResetFileAttemptBudget() error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if h.tier != experiment.ReferenceAPlusBUbuntu || !h.python3 || h.closed || h.fileBusy.Load() || len(h.active) != 0 {
+	if h.tier != experiment.ReferenceAPlusBUbuntu || h.closed || h.fileBusy.Load() || len(h.active) != 0 {
 		return errors.New("sandbox is not idle for a new file attempt")
 	}
 	h.fileOps, h.filePayload = 0, 0

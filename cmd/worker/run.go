@@ -187,12 +187,12 @@ func runSlot(ctx context.Context, c config, logger *slog.Logger, lock *slotLock,
 	}
 	cancel()
 	var executor worker.Executor = runner
-	if c.fixture.UsesSPJ() {
+	if c.fixture.UsesCachedText() && c.fixture.APlusBTier() == experiment.ReferenceAPlusBUbuntu {
 		budget, ok := host.(interface{ ResetFileAttemptBudget() error })
 		if !ok {
-			return errors.New("SPJ requires per-attempt file accounting")
+			return errors.New("Ubuntu cached text requires per-attempt file accounting")
 		}
-		executor = spjAttemptExecutor{runner, budget.ResetFileAttemptBudget}
+		executor = fileAttemptExecutor{runner, budget.ResetFileAttemptBudget}
 	}
 	w, err := worker.New(acquirer, acquirer, executor, reporter)
 	if err != nil {
