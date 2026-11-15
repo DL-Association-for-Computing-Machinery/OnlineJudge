@@ -190,7 +190,7 @@ func runSlot(ctx context.Context, c config, logger *slog.Logger, lock *slotLock,
 	if c.fixture.UsesCachedText() && c.fixture.APlusBTier() == experiment.ReferenceAPlusBUbuntu {
 		budget, ok := host.(interface{ ResetFileAttemptBudget() error })
 		if !ok {
-			return errors.New("Ubuntu cached text requires per-attempt file accounting")
+			return errors.New("per-attempt file accounting is required for Ubuntu cached text")
 		}
 		executor = fileAttemptExecutor{runner, budget.ResetFileAttemptBudget}
 	}
