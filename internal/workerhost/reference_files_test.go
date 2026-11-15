@@ -15,7 +15,19 @@ import (
 )
 
 func TestNewFileAttemptRefreshesOnlyIdleSandboxBudget(t *testing.T) {
-	h := &Host{tier: experiment.ReferenceAPlusBUbuntu, python3: true, active: make(map[uint64]context.CancelFunc)}
+	for _, mode := range []struct {
+		name         string
+		java, python bool
+	}{{"native", false, false}, {"java", true, false}, {"python", false, true}} {
+		t.Run(mode.name, func(t *testing.T) {
+			h := &Host{tier: experiment.ReferenceAPlusBUbuntu, java21: mode.java, python3: mode.python, active: make(map[uint64]context.CancelFunc)}
+			checkFileAttemptBudget(t, h)
+		})
+	}
+}
+
+func checkFileAttemptBudget(t *testing.T, h *Host) {
+	t.Helper()
 	_, profile, err := h.configuration()
 	if err != nil {
 		t.Fatal(err)
@@ -51,6 +63,44 @@ func TestNewFileAttemptRefreshesOnlyIdleSandboxBudget(t *testing.T) {
 	defer done()
 	if h.fileOps != 1 || h.filePayload != 1 {
 		t.Fatal("new attempt did not account for its first transfer")
+	}
+}
+
+func TestUbuntuFilePayloadLimitIsPerAttempt(t *testing.T) {
+	h := &Host{tier: experiment.ReferenceAPlusBUbuntu, active: make(map[uint64]context.CancelFunc)}
+	_, profile, err := h.configuration()
+	if err != nil {
+		t.Fatal(err)
+	}
+	charge := func(bytes int64) {
+		t.Helper()
+		_, done, err := h.fileContext(context.Background(), bytes)
+		if err != nil {
+			t.Fatal(err)
+		}
+		done()
+	}
+	for range 2 {
+		if err := h.ResetFileAttemptBudget(); err != nil {
+			t.Fatal(err)
+		}
+		for remaining := profile.PayloadBytes; remaining > 0; {
+			bytes := min(remaining, profile.FileBytes)
+			charge(bytes)
+			remaining -= bytes
+		}
+		if _, _, err := h.fileContext(context.Background(), 1); err == nil {
+			t.Fatal("exceeded the payload limit in the same attempt")
+		}
+	}
+}
+
+func TestNonUbuntuHostsCannotResetFileAttemptBudget(t *testing.T) {
+	for _, tier := range []experiment.ReferenceTier{0, experiment.ReferenceSmall, experiment.ReferenceMedium} {
+		h := &Host{tier: tier, fileOps: 1, filePayload: 42}
+		if err := h.ResetFileAttemptBudget(); err == nil || h.fileOps != 1 || h.filePayload != 42 {
+			t.Fatalf("tier %d unexpectedly refreshed its budget", tier)
+		}
 	}
 }
 
