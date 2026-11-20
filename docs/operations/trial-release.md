@@ -156,7 +156,7 @@ python3 -B scripts/assess-p6-mixed-load.py "$MIXED_LOAD_RECORD" \
 
 本地可先运行 `python3 scripts/test-session-protocol.py --suite training-overload`。它在新建临时 PostgreSQL、Redis 和普通会话 HTTPS API 中用四个合成账号做三轮：全局额度包含一笔排队和一笔运行任务，新账号受控拒绝，原键保持同一回执；排空后重试被拒绝的原键并接收另一个新键，通过真实 HTTPS 读回四个终态。入队使用存储边界，终态由夹具受控上报；正式提交 HTTP、真实 Worker 及现场资源须另验。
 
-按[过载恢复记录约定](../acceptance/delivery-evidence/p6-trial-acceptance.md#过载恢复记录核对)留存三轮的客户端记录和独立采集的服务端账本：
+按[过载恢复记录约定](../acceptance/delivery-evidence/p6-trial-acceptance.md#过载恢复记录核对)留存三轮的 `oj.p6-overload.v2` 客户端记录和独立采集的服务端账本。客户端保留正式提交接口返回的 `200` 和 `429 TRAINING_BACKLOG_LIMIT` 状态及错误码。用以下命令核对收件和恢复结果。
 
 ```sh
 python3 -B scripts/assess-p6-overload.py "$OVERLOAD_CLIENT_RECORD" "$OVERLOAD_SERVER_LEDGER" \
