@@ -11,7 +11,7 @@ import unittest
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts/assess-p6-overload.py"
 
 
-def records():
+def records(legacy=False):
     def request(key, sent, done, status, ident=None, code=None):
         return dict(key=key, request_sha256="a" * 64, started_ms=sent, finished_ms=done,
                     status=status, code=code, id=ident)
@@ -21,15 +21,18 @@ def records():
                     read_ms=terminal + 5, verdict=verdict)
 
     identity = dict(release_sha256="b" * 64, topology_sha256="c" * 64, config_sha256="d" * 64)
-    client = dict(schema="oj.p6-overload.v1", origin_scope="local", global_limit=2, rounds=[], **identity)
+    schema = "oj.p6-overload.v1" if legacy else "oj.p6-overload.v2"
+    first_status = 202 if legacy else 200
+    backlog_code = "BACKLOG_LIMIT" if legacy else "TRAINING_BACKLOG_LIMIT"
+    client = dict(schema=schema, origin_scope="local", global_limit=2, rounds=[], **identity)
     server = dict(schema="oj.p6-overload-ledger.v1", rounds=[], **identity)
     for i in range(3):
         rid = f"round-{i}"
         client["rounds"].append(dict(id=rid, started_utc_ms=1 + i * 320_000, stopped_ms=100, ended_ms=320_000,
-            attempts=[request("a", 1, 3, 202, "id-a"), request("b", 4, 6, 202, "id-b"),
-                      request("c", 20, 25, 429, code="BACKLOG_LIMIT"), request("a", 30, 31, 200, "id-a"),
-                      request("e", 40, 45, 429, code="BACKLOG_LIMIT"),
-                      request("c", 201, 210, 202, "id-c"), request("d", 300_000, 300_100, 202, "id-d")]))
+            attempts=[request("a", 1, 3, first_status, "id-a"), request("b", 4, 6, first_status, "id-b"),
+                      request("c", 20, 25, 429, code=backlog_code), request("a", 30, 31, 200, "id-a"),
+                      request("e", 40, 45, 429, code=backlog_code),
+                      request("c", 201, 210, first_status, "id-c"), request("d", 300_000, 300_100, first_status, "id-d")]))
         server["rounds"].append(dict(id=rid, saturated_ms=10, unfinished=2, drain_ms=200, oom_kills=0,
             abnormal_exits=0, peaks=dict(cpu_millicores=1000, memory_bytes=100, disk_bytes=100, connections=4),
             ledger=[accepted("a", "id-a", 2, 150, "AC"), accepted("b", "id-b", 5, 200, "WA"),
@@ -76,7 +79,9 @@ class OverloadTests(unittest.TestCase):
                                   capture_output=True, text=True, timeout=10)
 
     def test_three_rounds_pass_at_exact_recovery_deadline(self):
-        result = self.assess(*records())
+        client, server = records()
+        client["rounds"][0]["attempts"].reverse()
+        result = self.assess(client, server)
         self.assertEqual(result.returncode, 0, result.stderr)
         report = json.loads(result.stdout)
         self.assertEqual(report["scope"], "recorded_overload_only")
@@ -86,12 +91,39 @@ class OverloadTests(unittest.TestCase):
             self.assertEqual(round_["drain_after_stop_ms"], 100)
             self.assertEqual(round_["accepted"], 4)
             self.assertIsNone(round_["independent_acceptance"])
+            self.assertEqual(round_["timings"]["created"]["samples"], 4)
+            self.assertEqual(round_["timings"]["replayed"]["samples"], 1)
             self.assertEqual(round_["timings"]["rejected"]["p95_ms"], 5)
+
+    def test_legacy_contract_is_supported_for_local_records_only(self):
+        client, server = records(legacy=True)
+        self.assertEqual(self.assess(client, server).returncode, 0)
+        client["origin_scope"] = "trial"
+        self.assertEqual(self.assess(client, server, exports=observations(client, server)).returncode, 2)
+
+    def test_formal_records_reject_legacy_responses(self):
+        client, server = records()
+        client["rounds"][0]["attempts"][1]["status"] = 202
+        client["rounds"][0]["attempts"][2]["code"] = "BACKLOG_LIMIT"
+        result = self.assess(client, server)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        failures = json.loads(result.stdout)["rounds"][0]["failures"]
+        self.assertIn("unexpected_response", failures)
+        self.assertIn("submission_reconciliation", failures)
+
+    def test_first_200_must_cover_database_acceptance(self):
+        client, server = records()
+        client["rounds"][0]["attempts"].pop(0)
+        result = self.assess(client, server)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["rounds"][0]["failures"], [
+            "missing_replay_during_pressure", "submission_reconciliation",
+        ])
 
     def test_early_write_and_hidden_acceptance_cannot_pass_reconciliation(self):
         client, server = records()
         ledger = server["rounds"][1]["ledger"]
-        ledger[2]["accepted_ms"] = 23  # Before 429 completes, not during the subsequent 202.
+        ledger[2]["accepted_ms"] = 23  # Before 429 completes, not during the subsequent successful POST.
         ledger.append(dict(ledger[2], key="e", id="id-e", accepted_ms=44))
         result = self.assess(client, server)
         self.assertEqual(result.returncode, 1, result.stderr)

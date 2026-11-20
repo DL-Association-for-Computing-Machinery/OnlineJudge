@@ -15,6 +15,8 @@ DAY_MS = 86_400_000
 RECOVERY_MS = 300_000
 MAX_ROWS = 20_000
 VERDICTS = ("AC", "WA", "CE", "RE", "TLE", "MLE", "OLE", "SE")
+LEGACY_SCHEMA = "oj.p6-overload.v1"
+TRAINING_SCHEMA = "oj.p6-overload.v2"
 
 
 def rows(value):
@@ -23,7 +25,7 @@ def rows(value):
     return value
 
 
-def assess_round(client, server, limit, observations, index, seen):
+def assess_round(client, server, limit, observations, index, seen, legacy):
     exact(client, "id started_utc_ms stopped_ms ended_ms attempts")
     exact(server, "id saturated_ms unfinished drain_ms ledger peaks oom_kills abnormal_exits")
     round_id = label(client["id"])
@@ -105,6 +107,7 @@ def assess_round(client, server, limit, observations, index, seen):
     latencies = {code: [] for code in ("created", "replayed", "rejected", "unexpected")}
     unexpected = 0
     no_response = 0
+    backlog_code = "BACKLOG_LIMIT" if legacy else "TRAINING_BACKLOG_LIMIT"
     for item in rows(client["attempts"]):
         exact(item, "key request_sha256 started_ms finished_ms status code id")
         key = label(item["key"])
@@ -116,15 +119,16 @@ def assess_round(client, server, limit, observations, index, seen):
             label(item["code"])
         if item["id"] is not None:
             label(item["id"])
-        if status in (200, 202) and item["code"] is None and item["id"] is not None:
-            outcome = "created" if status == 202 else "replayed"
-        elif status == 429 and item["code"] == "BACKLOG_LIMIT" and item["id"] is None:
+        if status == 200 and item["code"] is None and item["id"] is not None:
+            outcome = "replayed" if legacy else "receipt"
+        elif legacy and status == 202 and item["code"] is None and item["id"] is not None:
+            outcome = "created"
+        elif status == 429 and item["code"] == backlog_code and item["id"] is None:
             outcome = "rejected"
         else:
             outcome = "unexpected"
             unexpected += 1
             no_response += status is None
-        latencies[outcome].append(done - sent)
         attempts.setdefault(key, []).append((sent, done, outcome, item))
     if unexpected:
         failures.add("unexpected_response")
@@ -141,6 +145,10 @@ def assess_round(client, server, limit, observations, index, seen):
         created = False
         rejected_under_pressure = False
         for sent, done, outcome, item in events:
+            # The training API returns the same status for first acceptance and replay.
+            if outcome == "receipt":
+                outcome = "replayed" if created else "created"
+            latencies[outcome].append(done - sent)
             if outcome == "rejected":
                 if created or (persisted and persisted["accepted_ms"] < done):
                     failures.add("rejection_wrote_or_rejected_replay")
@@ -189,8 +197,11 @@ def assess_round(client, server, limit, observations, index, seen):
 def assess(client, server, server_digest, observations=()):
     exact(client, "schema origin_scope release_sha256 topology_sha256 config_sha256 ledger_sha256 global_limit rounds")
     exact(server, "schema release_sha256 topology_sha256 config_sha256 rounds")
-    if (client["schema"] != "oj.p6-overload.v1" or server["schema"] != "oj.p6-overload-ledger.v1"
-            or client["origin_scope"] not in ("local", "trial") or client["ledger_sha256"] != server_digest):
+    schema, scope = client["schema"], client["origin_scope"]
+    legacy = schema == LEGACY_SCHEMA
+    if (schema not in (LEGACY_SCHEMA, TRAINING_SCHEMA) or server["schema"] != "oj.p6-overload-ledger.v1"
+            or scope not in ("local", "trial") or (legacy and scope != "local")
+            or client["ledger_sha256"] != server_digest):
         raise ValueError("unsupported scope or ledger digest mismatch")
     if len(observations) not in (0, 3) or (client["origin_scope"] == "trial" and len(observations) != 3):
         raise ValueError("expected three independent observations for trial")
@@ -202,7 +213,7 @@ def assess(client, server, server_digest, observations=()):
     if len(client_rounds) != 3 or len(server_rounds) != 3:
         raise ValueError("expected three complete rounds")
     seen = set()
-    rounds = sorted((assess_round(a, b, limit, observations, index, seen)
+    rounds = sorted((assess_round(a, b, limit, observations, index, seen, legacy)
                      for index, (a, b) in enumerate(zip(client_rounds, server_rounds))),
                     key=lambda result: result[0])
     if (len({report["id"] for _, _, report in rounds}) != 3
