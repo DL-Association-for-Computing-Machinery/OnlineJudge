@@ -75,14 +75,14 @@ type materialFiles struct {
 	judge, private int64
 }
 
-func (m *materialFiles) copy(store, digest string, expectedSize int64, transfer func(io.Writer) (int64, error)) error {
+func (m *materialFiles) copy(store, digest string, expectedSize, maxSize int64, transfer func(io.Writer) (int64, error)) error {
 	path := filepath.Join(m.output, store, digest)
 	file, err := createFile(path)
 	if errors.Is(err, os.ErrExist) {
 		// The output directory is new and private. Every previous successful
-		// writer verified the bytes; a repeated private digest must agree in size.
+		// writer verified the bytes. Another reference can have a stricter limit.
 		info, err := os.Lstat(path)
-		if err != nil || info.Mode() != 0600 || (expectedSize >= 0 && info.Size() != expectedSize) {
+		if err != nil || info.Mode() != 0600 || info.Size() > maxSize || (expectedSize >= 0 && info.Size() != expectedSize) {
 			return errors.New("backup repeated file identity disagrees")
 		}
 		return nil

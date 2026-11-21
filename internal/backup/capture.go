@@ -96,7 +96,7 @@ func Capture(ctx context.Context, cfg CaptureConfig) (Manifest, error) {
 	if err := db.CheckSchema(ctx, tx); err != nil {
 		return zero, errors.New("backup requires a compatible application schema in public")
 	}
-	judge, err := materials.OpenLocal(cfg.JudgeRoot)
+	judge, err := materials.OpenLocalText(cfg.JudgeRoot)
 	if err != nil {
 		return zero, errors.New("backup judge material root unavailable")
 	}
@@ -116,13 +116,13 @@ func Capture(ctx context.Context, cfg CaptureConfig) (Manifest, error) {
 	m.Inventory, err = writeIdentity(cfg.Output, inventoryName, func(w io.Writer) error {
 		files := materialFiles{output: cfg.Output, index: json.NewEncoder(w)}
 		m.References, err = restorecheck.CheckMaterialReferences(ctx, tx,
-			func(ctx context.Context, digest string) error {
-				return files.copy(judgeDir, digest, -1, func(w io.Writer) (int64, error) {
-					return judge.CopyVerified(ctx, digest, w)
+			func(ctx context.Context, digest string, maxBytes int64) error {
+				return files.copy(judgeDir, digest, -1, maxBytes, func(w io.Writer) (int64, error) {
+					return judge.CopyVerifiedWithin(ctx, digest, maxBytes, w)
 				})
 			},
 			func(ctx context.Context, object materialstore.Object) error {
-				return files.copy(privateDir, object.SHA256, object.Size, func(w io.Writer) (int64, error) {
+				return files.copy(privateDir, object.SHA256, object.Size, object.Size, func(w io.Writer) (int64, error) {
 					return object.Size, private.CopyVerified(ctx, object, w)
 				})
 			})

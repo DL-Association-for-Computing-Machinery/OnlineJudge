@@ -2,6 +2,7 @@ package materials
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,14 +23,17 @@ func TestLocalTextReaderDoesNotWidenLegacy(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = local.Close() }()
-	for _, n := range []int{MaxFileBytes + 1, LocalTextFileBytes, LocalTextFileBytes + 1} {
+	for _, n := range []int{MaxFileBytes, MaxFileBytes + 1, LocalTextFileBytes, LocalTextFileBytes + 1} {
 		data := bytes.Repeat([]byte("x"), n)
 		hash := checksum(data)
 		if err := os.WriteFile(filepath.Join(dir, hash), data, 0600); err != nil {
 			t.Fatal(err)
 		}
-		if legacy.Verify(t.Context(), hash) == nil {
-			t.Fatalf("legacy accepted %d bytes", n)
+		if _, err := legacy.CopyVerifiedWithin(t.Context(), hash, LocalTextFileBytes, io.Discard); (err == nil) != (n <= MaxFileBytes) {
+			t.Fatalf("unexpected legacy limit for %d bytes", n)
+		}
+		if _, err := local.CopyVerifiedWithin(t.Context(), hash, MaxFileBytes, io.Discard); (err == nil) != (n <= MaxFileBytes) {
+			t.Fatalf("unexpected per-reference limit for %d bytes", n)
 		}
 		if (local.Verify(t.Context(), hash) == nil) != (n <= LocalTextFileBytes) {
 			t.Fatalf("unexpected local limit for %d bytes", n)
