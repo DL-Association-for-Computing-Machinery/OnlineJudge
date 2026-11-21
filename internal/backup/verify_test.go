@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materials"
 )
 
 func TestVerifyTransfer(t *testing.T) {
@@ -96,6 +98,27 @@ func TestVerifyTransfer(t *testing.T) {
 				t.Fatalf("unexpected verification receipt: %+v", got)
 			}
 		})
+	}
+}
+
+func TestVerifyTransferLocalTextSizeBoundary(t *testing.T) {
+	for _, size := range []int{materials.LocalTextFileBytes, materials.LocalTextFileBytes + 1} {
+		f := newTransferFixture(t)
+		transferMust(t, os.Remove(filepath.Join(f.root, judgeDir, f.object)))
+		data := make([]byte, size)
+		identity := testIdentity(data)
+		f.write(t, filepath.Join(judgeDir, identity.SHA256), data)
+		f.entries[0] = inventoryEntry{Store: judgeDir, SHA256: identity.SHA256, Bytes: identity.Bytes}
+		f.seal(t)
+		receipt, err := VerifyTransfer(t.Context(), f.root, f.trusted)
+		if size == materials.LocalTextFileBytes {
+			transferMust(t, err)
+			if receipt.JudgeFiles != 1 {
+				t.Fatal("verified package omitted its judge file")
+			}
+		} else if err == nil || !strings.Contains(err.Error(), "store, size or count invalid") || receipt != (TransferReceipt{}) {
+			t.Fatalf("oversized judge file was not refused: %+v (%v)", receipt, err)
+		}
 	}
 }
 

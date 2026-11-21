@@ -23,6 +23,8 @@ import (
 
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/backup"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/experiment"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/judging"
+	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materials"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/materialstore"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problem"
 	"github.com/DL-Association-for-Computing-Machinery/OnlineJudge/internal/problemreference"
@@ -154,6 +156,78 @@ func TestCaptureLogicalBackupMatchesExportedSnapshot(t *testing.T) {
 		if _, err := os.Stat(dir); !os.IsNotExist(err) {
 			t.Fatal("invalid passfile created a backup directory")
 		}
+	}
+}
+
+func TestCaptureRestoresLargeLocalTextMaterial(t *testing.T) {
+	f := newBacklogFixture(t)
+	archive, schema := dumpSubmissionFixture(t, f, t.TempDir())
+	source := newSubmissionRestoreTarget(t, f.ctx, schema, archive)
+	_, err := source.Exec(f.ctx, `ALTER SCHEMA public RENAME TO original_public`)
+	must(t, err)
+	_, err = source.Exec(f.ctx, `ALTER SCHEMA `+pgx.Identifier{schema}.Sanitize()+` RENAME TO public`)
+	must(t, err)
+	config := source.Config()
+	config.ConnConfig.RuntimeParams["search_path"] = "public"
+	passfile := requireBackupPassword(t, f.ctx, source, config)
+	source, err = pgxpool.NewWithConfig(f.ctx, config)
+	must(t, err)
+	t.Cleanup(source.Close)
+	judge, private := t.TempDir(), t.TempDir()
+	must(t, os.Chmod(private, 0700))
+	must(t, experiment.WriteMaterials(judge))
+	large := bytes.Repeat([]byte("1"), materials.MaxFileBytes+1)
+	largeHash := materialHash(large)
+	must(t, os.WriteFile(filepath.Join(judge, largeHash), large, 0600))
+	judgingSHA := strings.Repeat("a", 64)
+	local := materials.TextTransportManifest{
+		Origin: materials.LocalTextOrigin, Language: "gnu++17", Checker: judging.LibraryCheckerTextVersion,
+		JudgeSHA256: judgingSHA, RuntimeSHA256: strings.Repeat("b", 64), Version: "local-text-" + judgingSHA, TokenBytes: 256,
+		Tests: []materials.TextTransportPoint{{ID: "large", Input: largeHash, Answer: materialHash([]byte("3\n"))}},
+	}
+	store, err := submissionpg.New(source, local.Version, local.Canonical())
+	must(t, err)
+	must(t, store.RegisterFixture(f.ctx))
+	completed := filepath.Join(t.TempDir(), "completed")
+	receipt, err := captureBackupCLI(t, f.ctx, source, judge, private, completed, os.Getenv("PATH"), passfile).CombinedOutput()
+	if err != nil {
+		t.Fatalf("could not capture admitted local-text input: %s (%v)", receipt, err)
+	}
+	var sealed backup.Manifest
+	must(t, json.Unmarshal(receipt, &sealed))
+	verifyReceivedBackup(t, f.ctx, completed, materialHash(receipt), sealed)
+	got, err := os.ReadFile(filepath.Join(completed, "judge", largeHash))
+	must(t, err)
+	if !bytes.Equal(got, large) {
+		t.Fatal("backup changed the admitted local-text input")
+	}
+	target := newSubmissionRestoreTarget(t, f.ctx, "public", filepath.Join(completed, "postgres.dump"))
+	check := func() error {
+		_, err := restorecheck.VerifyMaterials(f.ctx, target, target.Config().ConnConfig.Database,
+			filepath.Join(completed, "judge"), filepath.Join(completed, "private"))
+		return err
+	}
+	must(t, check())
+
+	// The same digest can appear in a valid local-text inventory and an invalid
+	// legacy inventory. Deduplication must enforce both bounds.
+	const legacyVersion = "legacy-large-backup-fixture"
+	legacy := strings.ReplaceAll(string(experiment.Manifest()), experiment.Version, legacyVersion)
+	legacy = strings.Replace(legacy, materialHash([]byte("1 2\n")), largeHash, 1)
+	for _, pool := range []*pgxpool.Pool{source, target} {
+		store, err := submissionpg.New(pool, legacyVersion, []byte(legacy))
+		must(t, err)
+		must(t, store.RegisterFixture(f.ctx))
+	}
+	failed := filepath.Join(t.TempDir(), "failed")
+	if _, err := captureBackupCLI(t, f.ctx, source, judge, private, failed, os.Getenv("PATH"), passfile).CombinedOutput(); err == nil {
+		t.Fatal("backup accepted an oversized legacy reference to a local-text file")
+	}
+	if _, err := os.Stat(filepath.Join(failed, "manifest.json")); !os.IsNotExist(err) {
+		t.Fatal("invalid legacy material left a completion manifest")
+	}
+	if err := check(); err == nil || !strings.Contains(err.Error(), largeHash) {
+		t.Fatalf("restore did not reject the oversized legacy reference: %v", err)
 	}
 }
 

@@ -70,6 +70,14 @@ func (s *Local) Verify(ctx context.Context, hash string) error {
 // CopyVerified streams a digest-named file to a staging writer. The caller
 // must discard the staged bytes on error; only success verifies the digest.
 func (s *Local) CopyVerified(ctx context.Context, hash string, destination io.Writer) (int64, error) {
+	return s.CopyVerifiedWithin(ctx, hash, s.limit, destination)
+}
+
+// CopyVerifiedWithin applies a smaller per-reference limit when restoring a mixed material store.
+func (s *Local) CopyVerifiedWithin(ctx context.Context, hash string, maxBytes int64, destination io.Writer) (int64, error) {
+	if maxBytes <= 0 {
+		return 0, ErrUnavailable
+	}
 	if err := s.acquire(ctx); err != nil {
 		return 0, err
 	}
@@ -79,7 +87,7 @@ func (s *Local) CopyVerified(ctx context.Context, hash string, destination io.Wr
 		return 0, err
 	}
 	defer func() { _ = source.Close() }()
-	return verify(ctx, source, destination, hash, s.limit)
+	return verify(ctx, source, destination, hash, min(s.limit, maxBytes))
 }
 
 // Open verifies bytes before releasing any response and never serves a mutable

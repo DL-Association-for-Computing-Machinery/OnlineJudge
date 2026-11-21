@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
 	"time"
 
@@ -56,7 +57,7 @@ func VerifyMaterials(ctx context.Context, pool *pgxpool.Pool, database, judgeRoo
 	if err := db.CheckSchema(ctx, tx); err != nil {
 		return zero, errors.New("restored material database schema check failed")
 	}
-	judge, err := materials.OpenLocal(judgeRoot)
+	judge, err := materials.OpenLocalText(judgeRoot)
 	if err != nil {
 		return zero, errors.New("restored judge material root unavailable")
 	}
@@ -66,7 +67,10 @@ func VerifyMaterials(ctx context.Context, pool *pgxpool.Pool, database, judgeRoo
 		return zero, errors.New("restored private material root unavailable")
 	}
 	defer func() { _ = private.Close() }()
-	summary, err := CheckMaterialReferences(ctx, tx, judge.Verify, private.Verify)
+	summary, err := CheckMaterialReferences(ctx, tx, func(ctx context.Context, digest string, maxBytes int64) error {
+		_, err := judge.CopyVerifiedWithin(ctx, digest, maxBytes, io.Discard)
+		return err
+	}, private.Verify)
 	if err != nil {
 		return zero, err
 	}
@@ -79,7 +83,7 @@ func VerifyMaterials(ctx context.Context, pool *pgxpool.Pool, database, judgeRoo
 // CheckMaterialReferences validates the database inventory in the caller's
 // repeatable-read snapshot. Each visitor verifies or stages exact file bytes;
 // a nil error must mean the referenced file was verified.
-func CheckMaterialReferences(ctx context.Context, tx pgx.Tx, judge func(context.Context, string) error,
+func CheckMaterialReferences(ctx context.Context, tx pgx.Tx, judge func(context.Context, string, int64) error,
 	private func(context.Context, materialstore.Object) error) (MaterialSummary, error) {
 	var summary, zero MaterialSummary
 	if err := verifyJudgeMaterials(ctx, tx, judge, &summary); err != nil {
@@ -105,14 +109,18 @@ func CheckMaterialReferences(ctx context.Context, tx pgx.Tx, judge func(context.
 
 func absoluteClean(path string) bool { return filepath.IsAbs(path) && path == filepath.Clean(path) }
 
-func verifyJudgeMaterials(ctx context.Context, tx pgx.Tx, verify func(context.Context, string) error, summary *MaterialSummary) error {
+func verifyJudgeMaterials(ctx context.Context, tx pgx.Tx, verify func(context.Context, string, int64) error, summary *MaterialSummary) error {
 	rows, err := tx.Query(ctx, `SELECT version_id, manifest_sha256,
 		CASE WHEN octet_length(manifest::text)<=32768 THEN manifest END FROM submission_materials`)
 	if err != nil {
 		return errors.New("restored judge material inventory unavailable")
 	}
 	defer rows.Close()
-	recent := make(map[string]struct{})
+	type judgeReference struct {
+		digest string
+		limit  int64
+	}
+	recent := make(map[judgeReference]struct{})
 	for rows.Next() {
 		var version, digest string
 		var raw []byte
@@ -127,12 +135,17 @@ func verifyJudgeMaterials(ctx context.Context, tx pgx.Tx, verify func(context.Co
 		if err != nil {
 			return errors.New("restored judge manifest invalid")
 		}
+		limit := int64(materials.MaxFileBytes)
+		if _, err := materials.ParseLocalText(canonical, digest); err == nil {
+			limit = materials.LocalTextFileBytes
+		}
 		for _, file := range files {
-			if _, ok := recent[file]; !ok {
-				if err := verify(ctx, file); err != nil {
+			ref := judgeReference{digest: file, limit: limit}
+			if _, ok := recent[ref]; !ok {
+				if err := verify(ctx, file, limit); err != nil {
 					return fmt.Errorf("restored judge file %s failed verification", file)
 				}
-				remember(recent, file)
+				remember(recent, ref)
 			}
 			summary.JudgeReferences++
 		}

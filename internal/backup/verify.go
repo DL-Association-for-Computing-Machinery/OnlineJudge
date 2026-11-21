@@ -152,7 +152,7 @@ func verifyInventory(ctx context.Context, root *os.Root, manifest Manifest) erro
 			var scope uint8
 			var store *os.Root
 			switch {
-			case item.Store == judgeDir && item.Bytes <= materials.MaxFileBytes && judges < manifest.JudgeFiles:
+			case item.Store == judgeDir && item.Bytes <= materials.LocalTextFileBytes && judges < manifest.JudgeFiles:
 				scope, store = judgeScope, judge
 				judges++
 			case item.Store == privateDir && item.Bytes <= 128<<20 && privates < manifest.PrivateFiles:
